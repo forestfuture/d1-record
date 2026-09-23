@@ -1,0 +1,68 @@
+{
+  "name": "d1-record",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A Rails-inspired Active Record for Cloudflare Workers and D1.",
+  "keywords": [
+    "active-record",
+    "cloudflare",
+    "d1",
+    "orm",
+    "sqlite",
+    "workers"
+  ],
+  "homepage": "https://github.com/christopherstyles/d1-record#readme",
+  "bugs": {
+    "url": "https://github.com/christopherstyles/d1-record/issues"
+  },
+  "license": "MIT",
+  "author": "Chris Styles <christopherstyles@users.noreply.github.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/christopherstyles/d1-record.git"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "dev": "vp pack --watch",
+    "test": "vp test",
+    "check": "vp check",
+    "prepublishOnly": "vp run build",
+    "prepare": "vp config"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/core": "^0.18.5",
+    "@cloudflare/workers-types": "^5.20260922.1",
+    "@types/node": "^24.13.6",
+    "miniflare": "^4.20260730.0",
+    "publint": "^0.3.24",
+    "typescript": "^7.0.2",
+    "vite-plus": "catalog:"
+  },
+  "peerDependencies": {
+    "@cloudflare/workers-types": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "@cloudflare/workers-types": {
+      "optional": true
+    }
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.6.0",
+      "onFail": "download"
+    }
+  }
+}
