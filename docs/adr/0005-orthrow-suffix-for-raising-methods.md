@@ -1,0 +1,3 @@
+# Throwing variants use the `OrThrow` suffix
+
+Rails uses `!` for methods that raise (`save!`, `create!`), and JavaScript identifiers can't contain `!`. The brief suggested a `Now` suffix. We use `OrThrow` instead (`saveOrThrow`, `createOrThrow`, `updateOrThrow`, `destroyOrThrow`, `findByOrThrow`), because it says what the method does and "Now" suggests timing rather than failure. The pair's return values follow Rails. The non-throwing method signals expected refusal (validation failure or a callback `abort()`) with `false`, or with an unsaved record in the case of `create`. Database-constraint errors and misuse are always thrown, by both methods.
