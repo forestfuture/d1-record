@@ -5,7 +5,7 @@ A Rails-inspired Active Record library for Cloudflare Workers backed by Cloudfla
 ## Language
 
 **Model**:
-A class that extends the library's `Model` base class and describes one D1 table: its columns, validations, callbacks, associations and scopes.
+A class created with `Model({...attributes})` that describes one D1 table: its attributes, validations, callbacks, associations and scopes.
 _Avoid_: Record (as the base class), entity, schema
 
 **Record**:

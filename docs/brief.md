@@ -1,6 +1,6 @@
 # Build Brief: a Rails-inspired Active Record for Cloudflare D1
 
-> **Updated 2026-09-23** to reflect the decisions recorded in `docs/adr/` (0001–0006). The detailed behavior is specified in `docs/contract.md`, and the vocabulary in `CONTEXT.md`. Where this brief and those documents differ, they take precedence.
+> **Updated 2026-09-23** to reflect the decisions recorded in `docs/adr/` (0001–0007). The detailed behavior is specified in `docs/contract.md`, and the vocabulary in `CONTEXT.md`. Where this brief and those documents differ, they take precedence.
 
 ## Your mission
 
@@ -50,14 +50,20 @@ Design APIs around these truths. Do not hide them behind misleading Rails-shaped
 
 The library should support class-based models with light configuration and normal JavaScript/TypeScript objects.
 
-A **Model** is a class that extends the library's `Model` base class. A **Record** is one instance of a Model: one row, saved or not yet saved. The base class is not called `Record`, because importing a value named `Record` would hide TypeScript's global `Record<K, V>` type (ADR-0001).
+A **Model** is a class created with `Model({...attributes})`. A **Record** is one instance of a Model: one row, saved or not yet saved. The base class is not called `Record`, because importing a value named `Record` would hide TypeScript's global `Record<K, V>` type (ADR-0001).
 
-Attributes are camelCase in JavaScript and map automatically to snake_case columns in D1 (ADR-0004). Scopes and associations are declared as typed static fields so that chained calls such as `db.model(User).active()` are type-checked. Attributes, validations and callbacks are declared in a `static {}` block.
+Attributes are camelCase in JavaScript and map automatically to snake_case columns in D1 (ADR-0004). Attributes are declared once, in the object passed to `Model({...})`, and TypeScript infers the record's properties from it (ADR-0007). Scopes and associations are declared as typed static fields so that chained calls such as `db.model(User).active()` are type-checked. Validations and callbacks are declared in a `static {}` block.
 
 ```ts
-import { Model, column, sql, type BelongsTo, type HasMany } from "d1-record";
+import { Model, sql, type BelongsTo, type HasMany } from "d1-record";
 
-export class User extends Model {
+export class User extends Model({
+  id: { type: "integer", null: false },
+  email: { type: "string", null: false },
+  isActive: "boolean", // column: is_active
+  createdAt: "datetime", // column: created_at
+  updatedAt: "datetime",
+}) {
   static tableName = "users";
 
   static associations = this.defineAssociations({
@@ -68,29 +74,23 @@ export class User extends Model {
     active: (q) => q.where({ isActive: true }),
     recent: (q) => q.order({ createdAt: "desc" }),
     createdAfter: (q, since: Date) =>
-      q.where(sql`${column("createdAt")} > ${since}`),
+      q.where(sql`created_at > ${since}`),
   });
 
-  declare id: number;
-  declare email: string;
-  declare isActive: boolean;
-  declare createdAt: Date;
-  declare updatedAt: Date;
   declare posts: HasMany<Post>;
 
   static {
-    this.attribute("id", "integer");
-    this.attribute("email", "string");
-    this.attribute("isActive", "boolean"); // column: is_active
-    this.attribute("createdAt", "datetime"); // column: created_at
-    this.attribute("updatedAt", "datetime");
-
     this.validates("email", { presence: true, format: /@/ });
     this.validates("email", { uniqueness: true });
   }
 }
 
-export class Post extends Model {
+export class Post extends Model({
+  id: { type: "integer", null: false },
+  userId: { type: "integer", null: false }, // column: user_id
+  title: { type: "string", null: false },
+  published: "boolean",
+}) {
   static tableName = "posts";
 
   static associations = this.defineAssociations({
@@ -101,18 +101,9 @@ export class Post extends Model {
     published: (q) => q.where({ published: true }),
   });
 
-  declare id: number;
-  declare userId: number;
-  declare title: string;
-  declare published: boolean;
   declare author: BelongsTo<User>;
 
   static {
-    this.attribute("id", "integer");
-    this.attribute("userId", "integer"); // column: user_id
-    this.attribute("title", "string");
-    this.attribute("published", "boolean");
-
     this.validates("title", { presence: true });
   }
 }
@@ -189,7 +180,7 @@ Implement at least:
 
 Each modifier returns a new relation. Constructing or chaining a relation must not query D1. Terminal operations execute it.
 
-Object-style APIs accept only attribute names declared on the model, and an unknown key throws `UnknownAttribute`. Never turn arbitrary object keys into unescaped SQL identifiers. Inside an `sql` fragment, every `${…}` is a bound value, and `column("attrName")` is the only way to name a column safely.
+Object-style APIs accept only attribute names declared on the model, and an unknown key throws `UnknownAttribute`. Never turn arbitrary object keys into unescaped SQL identifiers. Inside an `sql` fragment, every `${…}` is a bound value. Column names are written as SQL text, or looked up from an attribute with `column("attrName")`.
 
 ### Scopes
 
@@ -243,7 +234,7 @@ Use JavaScript-compatible names. `isChanged()` is preferable to trying to reprod
 Start small and make it reliable.
 
 ```ts
-class User extends Model {
+class User extends Model({ email: "string", age: "integer" }) {
   static {
     this.validates("email", { presence: true, uniqueness: true });
     this.validates("age", { numericality: { greaterThanOrEqualTo: 13 } });

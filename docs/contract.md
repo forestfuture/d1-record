@@ -7,7 +7,7 @@ The public behavior agreed during design, which the tests must prove. It's writt
 - Vite+ `1.0.0-rc.0`, pinned exactly (moving to 1.0.0 once released). pnpm 12.6.0 through `devEngines`. Node 24 LTS through `.node-version`.
 - Single package `d1-record`, ESM-only, target ES2022, `.d.ts` emitted, attw `esm-only` profile and publint on every `vp pack`. `"private": true` until we decide to publish. MIT license.
 - `src/` is type-checked with `@cloudflare/workers-types` and no Node types. `tests/tsconfig.json` adds Node types.
-- Two Vitest projects. `unit` (`tests/unit/**`) runs against a fake executor that records queries. `integration` (`tests/integration/**`) gets a fresh in-memory Miniflare D1 per file, with the schema created from `tests/fixtures/schema.sql` (`tests/support/d1.ts`, Miniflare 4). See ADR-0002.
+- Two Vitest projects. `unit` (`tests/unit/**`) is for logic that needs no database. There's no fake executor: tests that involve D1 use the real Miniflare D1 and watch queries through the public `onQuery` hook. `integration` (`tests/integration/**`) gets a fresh in-memory Miniflare D1 per file, with the schema created from `tests/fixtures/schema.sql` (`tests/support/d1.ts`, Miniflare 4). See ADR-0002.
 - Pre-commit hooks lint and format staged files. GitHub Actions runs `vp install`, `vp check`, `vp test` and `vp pack` on push to `main`.
 
 ## Connecting
@@ -27,24 +27,24 @@ const models = db.models({ User, Post }); // convenience: models.User has the sa
 ## Declaring a Model
 
 ```ts
-class User extends Model {
+class User extends Model({
+  id: { type: "string", null: false, default: () => crypto.randomUUID() },
+  email: { type: "string", null: false },
+  isActive: "boolean", // column: is_active
+  htmlUrl: "string", // column: html_url (acronyms are handled)
+  legacyId: { type: "integer", column: "person_identifier" },
+  createdAt: "datetime",
+  updatedAt: "datetime",
+}) {
   static tableName = "users"; // required; no inference
   static primaryKey = "id"; // default
 
-  declare id: string;
-  declare email: string;
-  declare createdAt: Date;
-
   static scopes = this.defineScopes({
     active: (q) => q.where({ isActive: true }),
-    createdAfter: (q, since: Date) => q.where(sql`${column("createdAt")} > ${since}`),
+    createdAfter: (q, since: Date) => q.where(sql`created_at > ${since}`),
   });
 
   static {
-    this.attribute("id", "string", { default: () => crypto.randomUUID() });
-    this.attribute("email", "string");
-    this.attribute("htmlUrl", "string", { column: "html_url" });
-    this.attribute("createdAt", "datetime");
     this.validates("email", { presence: true, uniqueness: true });
     this.beforeSave((u) => {
       u.email = u.email.toLowerCase();
@@ -53,17 +53,20 @@ class User extends Model {
 }
 ```
 
-- Attributes are camelCase and map automatically to snake_case columns, with a per-attribute `column` override (ADR-0004).
-- Attribute properties are prototype accessors typed with `declare`. A class field that hides an accessor (`email!: string`) is detected the first time the Model is used, and throws.
-- Types: `string`, `integer`, `real`, `boolean` (0/1), `datetime` (a `Date`, stored as ISO-8601 TEXT), `json` (stored as TEXT). Attributes can be null by default.
+- Attributes are declared once, in the object passed to `Model({...})`, and TypeScript infers the instance properties from it: no `declare`, no second declaration (ADR-0007). An entry is either a type name or `{ type, column?, null?, default? }`.
+- Attributes are camelCase and map automatically to snake_case columns (ADR-0004), using Rails' `underscore` rule, which treats a run of capitals as one word: `createdAt` → `created_at`, `externalAccountId` → `external_account_id`, `htmlURL` → `html_url`, `userID` → `user_id`, `sha256Hash` → `sha256_hash`. `column` overrides the mapping for one attribute.
+- Types: `string`, `integer`, `real`, `boolean` (0/1), `datetime` (a `Date`, stored as ISO-8601 TEXT), `json` (stored as TEXT). As in SQLite, an attribute can be null unless it's declared `null: false`, and its TypeScript type includes `| null` to match.
+- Attribute properties are prototype accessors. A class field that hides one (e.g. `email!: string` in the class body) is detected the first time the Model is used, and throws.
+- SQL fragments are SQL, so they use column names (``sql`created_at > ${since}` ``), or `column("createdAt")` to look the column up from the attribute (ADR-0006).
 - Defaults are evaluated at `build()`, so app-generated keys (UUID, CUID, ULID) exist before saving and can be used to link rows inside one `batch()`.
 - If the database generates the primary key, `RETURNING *` fills it in on insert.
 - Timestamps are on when `createdAt`/`updatedAt` are declared as `datetime` attributes. They're set in JavaScript just before the write is compiled. Explicit values on create are kept.
-- Keys that aren't declared attributes throw `UnknownAttribute` in `build`, `create`, `update` and `where`.
+- Keys that aren't declared attributes throw `UnknownAttribute` in `build`, `create`, `update` and `where`, and are compile errors where the types can see them.
 
-## Inheritance and serialization
+## Inheritance, shared behavior and serialization
 
-- A subclass inherits a copy of its parent's attributes, validations, callbacks, scopes and associations. Declaring more on the child never changes the parent. An abstract base (`static abstract = true`) has no `tableName`. Single-table inheritance is out of scope.
+- A subclass (`class Admin extends User`) inherits a copy of its parent's attributes, validations, callbacks, scopes and associations. Declaring more on the child never changes the parent. Single-table inheritance is out of scope.
+- Share behavior between Models with plain functions called from `static {}` (e.g. `audited(this)`), not with an app-wide base class. A `.with({...})` helper for adding attributes to a subclass of a shared base can be added later if needed.
 - `attributes()` returns a plain object of loaded camelCase attributes with JavaScript values. `toJSON()` returns the same object, but with a `Date` as an ISO string, so `Response.json(user)` works. Associations are never included automatically.
 
 ## Change tracking
@@ -75,7 +78,7 @@ class User extends Model {
 ## Associations
 
 ```ts
-class User extends Model {
+class User extends Model({ id: { type: "integer", null: false } }) {
   static associations = this.defineAssociations({
     posts: this.hasMany(() => Post, { foreignKey: "userId" }),
     profile: this.hasOne(() => Profile, { foreignKey: "userId" }),
@@ -86,7 +89,7 @@ class User extends Model {
 ```
 
 - `belongsTo`, `hasMany` and `hasOne`. `foreignKey` is always explicit and names an attribute. `primaryKey` defaults to the target Model's primary key.
-- Each instance accessor needs a matching `declare`. Without one, TypeScript reports a missing-property error. A shipped type test checks that `declare`s match `associations`.
+- Each association accessor still needs a matching `declare` (attributes don't; see ADR-0007). Without one, TypeScript reports a missing-property error. A shipped type test checks that `declare`s match `associations`.
 - `await post.author()` resolves to `User | null`, and `await user.profile()` to `Profile | null`. `user.posts()` returns a Relation that supports scopes and every Relation method.
 - Preloaded associations resolve without a query: `await user.posts().toArray()` and `await post.author()`. Chaining further (`user.posts().published()`) queries as normal.
 - `user.loaded("posts")` returns preloaded data synchronously and throws `AssociationNotLoaded` if it wasn't preloaded.
