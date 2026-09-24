@@ -41,4 +41,12 @@ describe("model declaration", () => {
     // @ts-expect-error columns aren't attributes: the attribute would be `createdAt`
     expect(() => users.where({ created_at: null })).toThrow(/User.*"created_at"/);
   });
+
+  test("an attribute named like a record method is rejected when first used", () => {
+    class Clashing extends Model({ attributes: "json" }) {
+      static tableName = "users";
+    }
+
+    expect(() => connect(binding).model(Clashing)).toThrow(/Clashing.*"attributes"/);
+  });
 });
