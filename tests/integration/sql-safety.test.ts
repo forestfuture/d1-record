@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model, sql, type QueryEvent } from "../../src/index.ts";
+import { column, connect, Model, sql, type QueryEvent } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
@@ -58,5 +58,19 @@ describe("SQL safety", () => {
     expect(matched.map((user) => user.id)).toEqual([2]);
     expect(injected).toEqual([]);
     expect(queries[1]?.sql).not.toContain(injection);
+  });
+
+  test("column() names an attribute's column inside an sql fragment", async () => {
+    const queries: QueryEvent[] = [];
+    const db = connect(binding, { onQuery: (event) => queries.push(event) });
+    const since = new Date(Date.UTC(2026, 1, 1));
+
+    const users = await db
+      .model(User)
+      .where(sql`${column("createdAt")} > ${since}`)
+      .toArray();
+
+    expect(users.map((user) => user.id)).toEqual([2]);
+    expect(queries[0]?.sql).toContain('"created_at" > ?');
   });
 });
