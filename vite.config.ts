@@ -16,8 +16,6 @@ export default defineConfig({
     publint: true,
   },
   test: {
-    // TODO(#1): remove once the first unit tests land.
-    passWithNoTests: true,
     projects: [
       {
         extends: true,
