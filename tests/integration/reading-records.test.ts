@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model, type QueryEvent } from "../../src/index.ts";
+import { connect, Model, Relation, type QueryEvent } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
@@ -77,5 +77,16 @@ describe("reading records", () => {
     const models = connect(binding).models({ User });
 
     expect((await models.User.toArray()).map((user) => user.email)).toEqual(["a@example.com"]);
+  });
+
+  test("a relation isn't awaitable, so returning one from an async function never runs it", async () => {
+    const queries: QueryEvent[] = [];
+    const db = connect(binding, { onQuery: (event) => queries.push(event) });
+    const build = async () => db.model(User).where({ email: "a@example.com" });
+
+    const relation = await build();
+
+    expect(relation).toBeInstanceOf(Relation);
+    expect(queries).toHaveLength(0);
   });
 });
