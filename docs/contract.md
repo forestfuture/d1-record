@@ -172,6 +172,14 @@ this.beforeSave((account) => {
 - `record.abortReason` holds the reason. It's cleared at the start of each `isValid()`, `save()` and `destroy()`, and never copied into `errors`.
 - An `abort()` in `afterSave`, `afterCreate`, `afterUpdate` or `afterDestroy` becomes `AbortAfterPersistence`, which records the callback name, the reason and the original `CallbackAbort` as `cause`. The persisted or destroyed state stays as it is.
 
+## Lifecycle state
+
+| State                                            | `isNewRecord()` | `isPersisted()` | `isDestroyed()` |
+| ------------------------------------------------ | --------------- | --------------- | --------------- |
+| New (from `build()`, or after a failed `create`) | `true`          | `false`         | `false`         |
+| Persisted (loaded, or after a successful save)   | `false`         | `true`          | `false`         |
+| Destroyed (after a successful `destroy()`)       | `false`         | `false`         | `true`          |
+
 ## Destroyed records
 
 - A record is marked destroyed only after the D1 `DELETE` succeeds, and before `afterDestroy` runs. If `afterDestroy` throws, the row stays deleted and the record stays destroyed.
