@@ -1,4 +1,4 @@
-import { InvalidModel } from "./errors.ts";
+import { InvalidModel, UnknownAttribute } from "./errors.ts";
 import { underscore } from "./naming.ts";
 import { readValue } from "./types.ts";
 
@@ -40,6 +40,12 @@ export type AttributeProperties<A extends AttributeSpecs> = {
 
 const values = Symbol("values");
 
+/** Type-only key carrying a record's declared attribute types; never set at runtime. */
+export declare const attributeTypes: unique symbol;
+
+/** The declared attributes of a record type, excluding methods and getters. */
+export type AttributesOf<M> = M extends { readonly [attributeTypes]?: infer A } ? A : never;
+
 export class ModelBase {
   static tableName: string;
   static attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map();
@@ -68,7 +74,9 @@ function define(name: string, spec: AttributeSpec): AttributeDefinition {
  */
 export function Model<const A extends AttributeSpecs>(
   specs: A,
-): (new () => ModelBase & AttributeProperties<A>) & Omit<typeof ModelBase, "prototype"> {
+): (new () => ModelBase &
+  AttributeProperties<A> & { readonly [attributeTypes]?: AttributeProperties<A> }) &
+  Omit<typeof ModelBase, "prototype"> {
   class DefinedModel extends ModelBase {
     static override attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map(
       Object.entries(specs).map(([name, spec]) => [name, define(name, spec)]),
@@ -117,4 +125,13 @@ export function verifyModel(model: ModelClass): void {
     }
   }
   verified.add(model);
+}
+
+/** Looks up a declared attribute; throws `UnknownAttribute` for any other name. */
+export function attributeOf(model: ModelClass, name: string): AttributeDefinition {
+  const attribute = model.attributeDefinitions.get(name);
+  if (attribute === undefined) {
+    throw new UnknownAttribute(`${model.name} has no attribute "${name}"`);
+  }
+  return attribute;
 }
