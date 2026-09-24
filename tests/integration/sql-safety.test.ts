@@ -73,4 +73,13 @@ describe("SQL safety", () => {
     expect(users.map((user) => user.id)).toEqual([2]);
     expect(queries[0]?.sql).toContain('"created_at" > ?');
   });
+
+  test("where rejects a plain string, even one that looks harmless", () => {
+    const users = connect(binding).model(User);
+
+    // @ts-expect-error plain strings are not SQL fragments (ADR-0006)
+    expect(() => users.where(`email = '${injection}'`)).toThrow(TypeError);
+    // @ts-expect-error plain strings are not SQL fragments (ADR-0006)
+    expect(() => users.where("email IS NOT NULL")).toThrow(/sql`/);
+  });
 });

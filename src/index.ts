@@ -3,4 +3,4 @@ export type { QueryEvent, QueryListener } from "./executor.ts";
 export { Model } from "./model.ts";
 export type { AttributeSpec, AttributeSpecs, AttributeType } from "./model.ts";
 export { Relation } from "./relation.ts";
-export { column, ColumnReference, SafeSql, sql } from "./sql.ts";
+export { column, sql, type ColumnReference, type SafeSql } from "./sql.ts";

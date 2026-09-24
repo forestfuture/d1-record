@@ -15,6 +15,11 @@ export class Relation<M extends ModelBase> {
   }
 
   where(conditions: Condition): Relation<M> {
+    if (typeof conditions !== "object" || conditions === null || Array.isArray(conditions)) {
+      throw new TypeError(
+        "where() takes an object of attribute values or an sql`…` fragment; plain strings are not accepted",
+      );
+    }
     return new Relation(this.#executor, this.#model, [...this.#conditions, conditions]);
   }
 
