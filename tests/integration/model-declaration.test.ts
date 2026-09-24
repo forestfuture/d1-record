@@ -20,4 +20,13 @@ describe("model declaration", () => {
     expect(use).toThrow(/Nameless.*tableName/);
     expect(use).toThrow(D1RecordError);
   });
+
+  test("a class field that would hide an attribute's accessor is rejected when first used", () => {
+    class Shadowed extends Model({ email: "string" }) {
+      static tableName = "users";
+      email!: string | null; // should have been left to Model({...})
+    }
+
+    expect(() => connect(binding).model(Shadowed)).toThrow(/Shadowed.*"email"/);
+  });
 });
