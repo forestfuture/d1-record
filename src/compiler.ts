@@ -1,5 +1,5 @@
-import type { ModelBase, ModelClass } from "./model.ts";
-import { SafeSql } from "./sql.ts";
+import type { AttributeDefinition, ModelBase, ModelClass } from "./model.ts";
+import { ColumnReference, SafeSql } from "./sql.ts";
 import { writeValue } from "./types.ts";
 
 export interface CompiledQuery {
@@ -24,12 +24,11 @@ export function compileSelect({ model, conditions }: SelectQuery): CompiledQuery
   const predicates: string[] = [];
   for (const condition of conditions) {
     if (condition instanceof SafeSql) {
-      predicates.push(`(${compileFragment(condition, params)})`);
+      predicates.push(`(${compileFragment(condition, model, params)})`);
       continue;
     }
     for (const [name, value] of Object.entries(condition)) {
-      const attribute = model.attributeDefinitions.get(name);
-      if (attribute === undefined) throw new Error(`Unknown attribute "${name}"`);
+      const attribute = attributeOf(model, name);
       predicates.push(`${quoteIdentifier(attribute.column)} = ?`);
       params.push(writeValue(attribute.type, value));
     }
@@ -40,11 +39,20 @@ export function compileSelect({ model, conditions }: SelectQuery): CompiledQuery
 }
 
 /** Appends the fragment's values to `params` and returns its SQL text. */
-function compileFragment(fragment: SafeSql, params: unknown[]): string {
+function compileFragment(
+  fragment: SafeSql,
+  model: ModelClass<ModelBase>,
+  params: unknown[],
+): string {
   let text = fragment.strings[0] ?? "";
   fragment.values.forEach((value, index) => {
-    params.push(bindable(value));
-    text += `?${fragment.strings[index + 1] ?? ""}`;
+    if (value instanceof ColumnReference) {
+      text += quoteIdentifier(attributeOf(model, value.attribute).column);
+    } else {
+      params.push(bindable(value));
+      text += "?";
+    }
+    text += fragment.strings[index + 1] ?? "";
   });
   return text;
 }
@@ -54,4 +62,10 @@ function bindable(value: unknown): unknown {
   if (value instanceof Date) return value.toISOString();
   if (typeof value === "boolean") return value ? 1 : 0;
   return value;
+}
+
+function attributeOf(model: ModelClass<ModelBase>, name: string): AttributeDefinition {
+  const attribute = model.attributeDefinitions.get(name);
+  if (attribute === undefined) throw new Error(`Unknown attribute "${name}"`);
+  return attribute;
 }

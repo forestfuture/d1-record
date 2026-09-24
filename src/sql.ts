@@ -17,3 +17,18 @@ export class SafeSql {
 export function sql(strings: TemplateStringsArray, ...values: unknown[]): SafeSql {
   return new SafeSql([...strings], values);
 }
+
+/** A reference to an attribute's column, resolved against the query's Model when compiled. */
+export class ColumnReference {
+  readonly attribute: string;
+
+  /** @internal Use `column()` instead. */
+  constructor(attribute: string) {
+    this.attribute = attribute;
+  }
+}
+
+/** Names the column of `attribute` inside an `sql` fragment, quoted and mapped (ADR-0004). */
+export function column(attribute: string): ColumnReference {
+  return new ColumnReference(attribute);
+}
