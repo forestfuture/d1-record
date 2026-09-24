@@ -47,4 +47,17 @@ describe("reading records", () => {
     await relation.toArray();
     expect(queries).toHaveLength(1);
   });
+
+  test("where filters by attribute equality without changing the relation it came from", async () => {
+    await binding
+      .prepare("INSERT INTO users (id, email) VALUES (1, 'a@example.com'), (2, 'b@example.com')")
+      .run();
+    const db = connect(binding);
+    const all = db.model(User);
+
+    const filtered = all.where({ email: "b@example.com" });
+
+    expect((await filtered.toArray()).map((user) => user.id)).toEqual([2]);
+    expect(await all.toArray()).toHaveLength(2);
+  });
 });
