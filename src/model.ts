@@ -1,3 +1,4 @@
+import { InvalidModel } from "./errors.ts";
 import { underscore } from "./naming.ts";
 import { readValue } from "./types.ts";
 
@@ -96,4 +97,15 @@ export function hydrate<M extends ModelBase>(
     record[values][name] = readValue(type, row[column]);
   }
   return record;
+}
+
+const verified = new WeakSet<object>();
+
+/** Checks a Model's declaration the first time it's used; throws `InvalidModel`. */
+export function verifyModel(model: ModelClass): void {
+  if (verified.has(model)) return;
+  if (typeof model.tableName !== "string" || model.tableName === "") {
+    throw new InvalidModel(`${model.name} has no tableName; add \`static tableName = "…"\``);
+  }
+  verified.add(model);
 }
