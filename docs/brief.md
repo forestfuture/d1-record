@@ -1,5 +1,7 @@
 # Build Brief: a Rails-inspired Active Record for Cloudflare D1
 
+> **Updated 2026-09-23** to reflect the decisions recorded in `docs/adr/` (0001–0006). The detailed behavior is specified in `docs/contract.md`, and the vocabulary in `CONTEXT.md`. Where this brief and those documents differ, they take precedence.
+
 ## Your mission
 
 Build a new, production-minded Active Record implementation for **Cloudflare Workers and Cloudflare D1 only**.
@@ -29,7 +31,7 @@ The desired outcome is code that reads like domain code, not query-construction 
 1. **Rails conventions over Rails imitation.** Match the conceptual API and expected behavior where it improves intuition; adapt names and control flow where JavaScript requires it.
 2. **D1-native by design.** Compile directly to SQLite SQL and execute through the `D1Database` binding. Do not place Drizzle or another ORM under the runtime library.
 3. **Async is explicit.** Query execution and persistence return promises. A relation remains lazy until a terminal operation is awaited.
-4. **Safety by default.** Values must always be parameter-bound. Identifiers and SQL fragments must be explicitly constructed or whitelisted by the library, never interpolated from ordinary values.
+4. **Safety by default.** Values must always be parameter-bound. Identifiers and SQL fragments must be explicitly constructed or whitelisted by the library, never interpolated from ordinary values. Hand-written SQL is accepted only through the `sql` tagged template (ADR-0006).
 5. **Small, understandable internals.** Prefer a small immutable relation/query AST and SQL compiler over a broad generic ORM framework.
 6. **Behavior is the contract.** Test public behavior against real D1-compatible execution, not only mocked query strings.
 7. **No premature type-system project.** Supply useful types, but never sacrifice a clear API or runtime correctness to achieve clever inference.
@@ -48,52 +50,90 @@ Design APIs around these truths. Do not hide them behind misleading Rails-shaped
 
 The library should support class-based models with light configuration and normal JavaScript/TypeScript objects.
 
-```ts
-import { Record, hasMany, belongsTo } from "d1-record";
+A **Model** is a class that extends the library's `Model` base class. A **Record** is one instance of a Model: one row, saved or not yet saved. The base class is not called `Record`, because importing a value named `Record` would hide TypeScript's global `Record<K, V>` type (ADR-0001).
 
-export class User extends Record {
+Attributes are camelCase in JavaScript and map automatically to snake_case columns in D1 (ADR-0004). Scopes and associations are declared as typed static fields so that chained calls such as `db.model(User).active()` are type-checked. Attributes, validations and callbacks are declared in a `static {}` block.
+
+```ts
+import { Model, column, sql, type BelongsTo, type HasMany } from "d1-record";
+
+export class User extends Model {
   static tableName = "users";
 
-  static posts = hasMany(() => Post, { foreignKey: "user_id" });
+  static associations = this.defineAssociations({
+    posts: this.hasMany(() => Post, { foreignKey: "userId" }),
+  });
+
+  static scopes = this.defineScopes({
+    active: (q) => q.where({ isActive: true }),
+    recent: (q) => q.order({ createdAt: "desc" }),
+    createdAfter: (q, since: Date) =>
+      q.where(sql`${column("createdAt")} > ${since}`),
+  });
+
+  declare id: number;
+  declare email: string;
+  declare isActive: boolean;
+  declare createdAt: Date;
+  declare updatedAt: Date;
+  declare posts: HasMany<Post>;
 
   static {
+    this.attribute("id", "integer");
+    this.attribute("email", "string");
+    this.attribute("isActive", "boolean"); // column: is_active
+    this.attribute("createdAt", "datetime"); // column: created_at
+    this.attribute("updatedAt", "datetime");
+
     this.validates("email", { presence: true, format: /@/ });
     this.validates("email", { uniqueness: true });
-
-    this.scope("active", (q) => q.where({ active: true }));
-    this.scope("recent", (q) => q.order({ created_at: "desc" }));
-    this.scope("createdAfter", (q, since: string) =>
-      q.where("created_at > ?", since),
-    );
   }
 }
 
-export class Post extends Record {
+export class Post extends Model {
   static tableName = "posts";
 
-  static author = belongsTo(() => User, { foreignKey: "user_id" });
+  static associations = this.defineAssociations({
+    author: this.belongsTo(() => User, { foreignKey: "userId" }),
+  });
+
+  static scopes = this.defineScopes({
+    published: (q) => q.where({ published: true }),
+  });
+
+  declare id: number;
+  declare userId: number;
+  declare title: string;
+  declare published: boolean;
+  declare author: BelongsTo<User>;
 
   static {
+    this.attribute("id", "integer");
+    this.attribute("userId", "integer"); // column: user_id
+    this.attribute("title", "string");
+    this.attribute("published", "boolean");
+
     this.validates("title", { presence: true });
-    this.scope("published", (q) => q.where({ published: true }));
   }
 }
 ```
 
-Workers must associate models with the D1 binding in a request-safe manner. One acceptable shape is an explicit database context passed at the application edge:
+Workers must associate models with the D1 binding in a request-safe manner. The only supported shape is an explicit **Database**, created at the application edge for each request (ADR-0003):
 
 ```ts
+import { connect } from "d1-record";
+
 export default {
   async fetch(request: Request, env: Env) {
-    const db = Record.connect(env.DB);
+    const db = connect(env.DB);
 
     const user = await db.model(User).find(42);
-    return Response.json(user.attributes());
+    return Response.json(user); // toJSON() returns the attributes
   },
 };
 ```
 
-An alternative `User.using(env.DB)` API is acceptable if it cannot leak bindings across concurrent Worker requests. Do **not** put mutable request-specific database state on a global model class.
+There is no `User.using(env.DB)` or `User.find(42)`: a binding or session must never be stored on a Model class, where it could leak between concurrent requests. `db.models({ User, Post })` is a convenience that returns the same request-bound facades (`models.User.find(42)`).
 
 ## Required API and expected behavior
 
@@ -104,19 +144,19 @@ const user = await db.model(User).find(42);                 // throws RecordNotF
 const maybeUser = await db.model(User).findBy({ email });   // null when absent
 const firstUser = await db.model(User).first();             // model or null
 const lastUser = await db.model(User).last();               // model or null
-const exists = await db.model(User).exists({ active: true });
+const exists = await db.model(User).exists({ isActive: true });
 
 const draft = db.model(User).build({ email: "person@example.com" });
 const created = await db.model(User).create({ email: "person@example.com" });
-const createdNow = await db.model(User).createNow({ email: "person@example.com" });
+const createdOrThrow = await db.model(User).createOrThrow({ email: "person@example.com" });
 ```
 
 Desired semantics:
 
-- `build` creates an unsaved record; `newRecord()` is true.
+- `build` creates an unsaved record; `isNewRecord()` is true.
 - `create` returns an unsaved invalid record when validation fails; errors are available on it.
-- `createNow` throws `RecordInvalid` when validation fails.
-- `find` throws `RecordNotFound` for an absent primary key; `findBy` returns `null`.
+- `createOrThrow` throws `RecordInvalid` when validation fails.
+- `find` throws `RecordNotFound` for an absent primary key; `findBy` returns `null`; `findByOrThrow` throws `RecordNotFound`.
 - Hydrated records are persisted and clean. Their primary key and timestamps, where configured, are available after a successful insert.
 
 ### Relations: lazy, immutable, composable
@@ -125,7 +165,7 @@ Desired semantics:
 const relation = db.model(User)
   .where({ role: "admin" })
   .whereNot({ suspended: true })
-  .order({ created_at: "desc" })
+  .order({ createdAt: "desc" })
   .limit(20)
   .offset(40);
 
@@ -138,18 +178,18 @@ const selected = await relation.select("id", "email").toArray();
 
 Implement at least:
 
-- `where`, including object equality conditions and carefully parameterized SQL predicates;
+- `where`, including object equality conditions and SQL fragments built with the `sql` tagged template (plain strings are rejected; ADR-0006);
 - `whereNot`;
 - `order`, `limit`, `offset`;
 - `select`, `distinct`;
 - `first`, `last`, `take`, `toArray`, `count`, `exists`, `pluck`;
-- `find`, `findBy`, and `findByNow` where sensible;
+- `find`, `findBy`, and `findByOrThrow`;
 - `or` and `merge` for compatible relations;
 - `none` as an empty, composable relation.
 
 Each modifier returns a new relation. Constructing or chaining a relation must not query D1. Terminal operations execute it.
 
-Only permit column names known to the model/schema or explicitly safe identifiers in object-style APIs. Never turn arbitrary object keys into unescaped SQL identifiers.
+Object-style APIs accept only attribute names declared on the model, and an unknown key throws `UnknownAttribute`. Never turn arbitrary object keys into unescaped SQL identifiers. Inside an `sql` fragment, every `${…}` is a bound value, and `column("attrName")` is the only way to name a column safely.
 
 ### Scopes
 
@@ -161,11 +201,11 @@ await db.model(User).active().recent().toArray();
 await db.model(User)
   .where({ role: "admin" })
   .active()
-  .createdAfter("2026-01-01")
+  .createdAfter(new Date("2026-01-01"))
   .toArray();
 ```
 
-The same registered scope should be callable from a model relation, not merely from the root model. Parameterized scopes receive the current relation and their arguments. Their dynamic values must be evaluated when called, rather than at class-definition time.
+Scopes are declared with `static scopes = this.defineScopes({ … })` so that TypeScript can infer them. The same registered scope should be callable from a model relation, not merely from the root model. Parameterized scopes receive the current relation and their arguments. Their dynamic values must be evaluated when called, rather than at class-definition time.
 
 Implement `defaultScope` and `unscoped` only if their interaction rules are fully documented and tested. If implementation pressure forces a choice, defer default scopes rather than ship surprising behavior.
 
@@ -180,8 +220,8 @@ user.changedAttributes();          // { email: "old@example.com" }
 user.isChanged();                  // true, or an idiomatic equivalent
 
 await user.save();
-await user.update({ active: false });
-await user.updateNow({ active: false });
+await user.update({ isActive: false });
+await user.updateOrThrow({ isActive: false });
 await user.reload();
 await user.destroy();
 ```
@@ -191,10 +231,10 @@ Required behavior:
 - Saving a new valid record issues an insert; saving a dirty persisted record updates only changed writable columns.
 - Saving an unchanged persisted record does not issue a meaningless update unless timestamp semantics explicitly require one.
 - A failed validation performs no write and preserves errors and dirty state.
-- A successful save clears dirty state and updates `updated_at` when timestamps are configured.
+- A successful save clears dirty state and updates `updatedAt` when timestamps are configured.
 - `destroy` removes the row and marks the in-memory instance destroyed; attempts to persist a destroyed record have clear, tested behavior.
 - `reload` replaces persisted attributes and clears dirty state.
-- Bang methods (suffixed with "Now" because "!" is a Ruby idiom and doesn't work in Javascript/Typescript) throw meaningful domain errors; non-bang methods return a useful failure result/boolean consistently.
+- Rails' bang methods (`save!`, `create!`) are named with an `OrThrow` suffix, because `!` can't appear in a JavaScript identifier (ADR-0005). They throw meaningful domain errors: `saveOrThrow`, `createOrThrow`, `updateOrThrow`, `destroyOrThrow`, `findByOrThrow`. The non-throwing methods follow Rails' return values: `false` (or an unsaved record, for `create`) only for a validation failure or a callback `abort()`. Database constraint errors are always thrown.
 
 Use JavaScript-compatible names. `isChanged()` is preferable to trying to reproduce Ruby's `changed?` exactly. It is acceptable to support aliases such as `isChanged()` if they improve discoverability, but keep one canonical API.
 
@@ -203,7 +243,7 @@ Use JavaScript-compatible names. `isChanged()` is preferable to trying to reprod
 Start small and make it reliable.
 
 ```ts
-class User extends Record {
+class User extends Model {
   static {
     this.validates("email", { presence: true, uniqueness: true });
     this.validates("age", { numericality: { greaterThanOrEqualTo: 13 } });
@@ -217,12 +257,12 @@ Implement a cohesive initial set:
 
 - `presence`, `inclusion`, `format`, `length`, `numericality`, and `uniqueness` validations;
 - an inspectable `errors` collection, including `errors.add`, `errors.get(field)`, and a full error list;
-- `valid()`/`validate()`;
+- `await record.isValid()` as the single validation entry point (async, because uniqueness checks query D1);
 - `beforeValidation`, `afterValidation`, `beforeSave`, `afterSave`, `beforeCreate`, `afterCreate`, `beforeUpdate`, `afterUpdate`, `beforeDestroy`, and `afterDestroy` only when their timing is unambiguous.
 
 Database constraints remain the final authority. A uniqueness validation is a friendly preflight and must not be advertised as race-safe. Convert recognizable D1 constraint failures into useful library errors where possible.
 
-Callbacks should be deterministic and asynchronous-aware. Document whether an `after*` callback is run only after a successful D1 write; that should be the default.
+Callbacks should be deterministic and asynchronous-aware. A pre-write callback cancels the save with `throw abort(reason)`, never by returning `false`. `after*` callbacks run only after a successful persistence lifecycle, and nothing rolls back if they throw.
 
 ### Associations and eager loading
 
@@ -237,14 +277,14 @@ const users = await db.model(User)
   .toArray();
 
 for (const user of users) {
-  user.posts(); // must use the preloaded association, not cause N+1 queries
+  user.loaded("posts"); // synchronous: uses the preloaded association, never queries
 }
 ```
 
 Initial association support:
 
 - `belongsTo`, `hasMany`, and `hasOne`;
-- explicit foreign key and primary key configuration;
+- explicit foreign key (an attribute name, such as `userId`) and primary key configuration;
 - lazy loading through an async accessor;
 - `includes`/preloading that performs bounded queries rather than N+1 queries;
 - association relations that support normal scopes and relation methods.
@@ -280,7 +320,7 @@ For replica-aware configurations, retain a primary route for writes and immediat
 
 Use a small set of focused internal concepts:
 
-1. **Database context** — request-safe wrapper around `D1Database`, with primary/session routing where applicable.
+1. **Database** — request-safe wrapper around `D1Database`, created with `connect(env.DB)`, with session routing where configured.
 2. **Model metadata** — table name, primary key, configured columns, timestamps, validations, callbacks, associations, and registered scopes.
 3. **Record instance** — attributes, persisted snapshot, dirty tracking, errors, lifecycle state, and persistence methods.
 4. **Immutable Relation** — model plus a query AST (predicates, ordering, selections, joins/preload plan, pagination).
@@ -309,7 +349,7 @@ Test SQL compilation and API state without a database:
 
 ### Integration tests
 
-Run against a D1-compatible local Worker environment (for example Miniflare/Wrangler test tooling) and maintain a small remote D1 smoke suite where practical.
+Run against a real D1-compatible database: Miniflare's D1, driven from Node by `vp test` (ADR-0002; `@cloudflare/vitest-pool-workers` doesn't yet support the Vitest 5 bundled with Vite+). Maintain a small remote D1 smoke suite where practical.
 
 At minimum, prove:
 

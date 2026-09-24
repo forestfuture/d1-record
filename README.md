@@ -26,7 +26,7 @@ export default {
 - [`CONTEXT.md`](CONTEXT.md): the domain glossary (Model, Record, Relation, Scope, …).
 - [`docs/contract.md`](docs/contract.md): the agreed public behavior, which the tests must prove.
 - [`docs/adr/`](docs/adr/): architecture decisions and why they were made.
-- [`docs/brief.md`](docs/brief.md): the original build brief.
+- [`docs/brief.md`](docs/brief.md): the build brief, updated to match the ADRs.
 
 ## Development
 
