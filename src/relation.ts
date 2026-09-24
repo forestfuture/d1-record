@@ -1,4 +1,4 @@
-import { compileSelect } from "./compiler.ts";
+import { compileSelect, type Condition } from "./compiler.ts";
 import type { Executor } from "./executor.ts";
 import { hydrate, type ModelBase, type ModelClass } from "./model.ts";
 
@@ -6,19 +6,15 @@ import { hydrate, type ModelBase, type ModelClass } from "./model.ts";
 export class Relation<M extends ModelBase> {
   readonly #executor: Executor;
   readonly #model: ModelClass<M>;
-  readonly #conditions: readonly Record<string, unknown>[];
+  readonly #conditions: readonly Condition[];
 
-  constructor(
-    executor: Executor,
-    model: ModelClass<M>,
-    conditions: readonly Record<string, unknown>[] = [],
-  ) {
+  constructor(executor: Executor, model: ModelClass<M>, conditions: readonly Condition[] = []) {
     this.#executor = executor;
     this.#model = model;
     this.#conditions = conditions;
   }
 
-  where(conditions: Record<string, unknown>): Relation<M> {
+  where(conditions: Condition): Relation<M> {
     return new Relation(this.#executor, this.#model, [...this.#conditions, conditions]);
   }
 
