@@ -1,3 +1,5 @@
+import { readValue } from "./types.ts";
+
 export type AttributeType = "string" | "integer" | "real" | "boolean" | "datetime" | "json";
 
 export type AttributeSpec = AttributeType | { type: AttributeType; null?: boolean };
@@ -27,6 +29,10 @@ export type AttributeProperties<A extends AttributeSpecs> = {
 };
 
 const values = Symbol("values");
+
+function typeOf(spec: AttributeSpec): AttributeType {
+  return typeof spec === "string" ? spec : spec.type;
+}
 
 export class ModelBase {
   static tableName: string;
@@ -68,8 +74,8 @@ export function hydrate<M extends ModelBase>(
   row: Record<string, unknown>,
 ): M {
   const record = new model();
-  for (const name of Object.keys(model.attributeSpecs)) {
-    record[values][name] = row[name];
+  for (const [name, spec] of Object.entries(model.attributeSpecs)) {
+    record[values][name] = readValue(typeOf(spec), row[name]);
   }
   return record;
 }
