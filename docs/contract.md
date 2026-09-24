@@ -56,7 +56,7 @@ class User extends Model({
 - Attributes are declared once, in the object passed to `Model({...})`, and TypeScript infers the instance properties from it: no `declare`, no second declaration (ADR-0007). An entry is either a type name or `{ type, column?, null?, default? }`.
 - Attributes are camelCase and map automatically to snake_case columns (ADR-0004), using Rails' `underscore` rule, which treats a run of capitals as one word: `createdAt` → `created_at`, `externalAccountId` → `external_account_id`, `htmlURL` → `html_url`, `userID` → `user_id`, `sha256Hash` → `sha256_hash`. `column` overrides the mapping for one attribute.
 - Types: `string`, `integer`, `real`, `boolean` (0/1), `datetime` (a `Date`, stored as ISO-8601 TEXT), `json` (stored as TEXT). As in SQLite, an attribute can be null unless it's declared `null: false`, and its TypeScript type includes `| null` to match.
-- Attribute properties are prototype accessors. A class field that hides one (e.g. `email!: string` in the class body) is detected the first time the Model is used, and throws.
+- Attribute properties are prototype accessors. The first time a Model is used, `db.model(X)` throws `InvalidModel` if it has no `tableName`, if a class field hides an accessor (e.g. `email!: string` in the class body), or if an attribute is named like a record method (`attributes`, `save`, `constructor`, …). Rename such an attribute and map it with `{ column }`.
 - SQL fragments are SQL, so they use column names (``sql`created_at > ${since}` ``), or `column("createdAt")` to look the column up from the attribute (ADR-0006).
 - Defaults are evaluated at `build()`, so app-generated keys (UUID, CUID, ULID) exist before saving and can be used to link rows inside one `batch()`.
 - If the database generates the primary key, `RETURNING *` fills it in on insert.
@@ -194,7 +194,7 @@ this.beforeSave((account) => {
 - Every modifier returns a new Relation. Building a Relation never queries D1.
 - `where({ x: null })` → `"x" IS NULL`. `where({ x: [1, 2] })` → `"x" IN (?, ?)`. `where({ x: [] })` → `1 = 0`. `whereNot({ x: [] })` → `1 = 1`. `where({ x: [1, null] })` → `("x" IN (?) OR "x" IS NULL)`.
 - `whereNot` wraps the whole condition: `whereNot({ a, b })` → `NOT ("a" = ? AND "b" = ?)`. Following SQL semantics, `whereNot({ role: "admin" })` also excludes NULL roles. `whereNot({ role: null })` → `"role" IS NOT NULL`.
-- Hand-written conditions must be `sql` tagged templates (ADR-0006): ``where(sql`${column("createdAt")} > ${since}`)``. Plain strings are rejected.
+- Hand-written conditions must be `sql` tagged templates (ADR-0006): ``where(sql`${column("createdAt")} > ${since}`)``. Plain strings are rejected with a `TypeError` (and are compile errors). Values interpolated into a fragment have no declared type, so a `Date` is bound as ISO text and a boolean as 1/0, matching how attributes are stored.
 - `first()` and `last()` with no order sort by the primary key ascending or descending. `last()` reverses every direction of an explicit order. `take()` adds no ordering.
 - `find()`, `findBy()` and `findByOrThrow()` keep the Relation's where conditions and scopes, ignore its order, limit, offset and `select()`, and always load full rows.
 - `or()`: same Model, and the same select, order, limit and offset. Only where conditions may differ, and each side is wrapped in parentheses. Otherwise it throws `IncompatibleRelation`.
@@ -230,5 +230,5 @@ this.beforeSave((account) => {
 Everything extends `D1RecordError`:
 
 - **Lifecycle:** `RecordNotFound`, `RecordInvalid` (`.record`), `RecordNotSaved`, `RecordNotDestroyed`, `RecordDestroyed`, `AbortAfterPersistence`
-- **Usage:** `UnknownAttribute`, `MissingAttribute`, `IncompatibleRelation`, `AssociationNotLoaded`, `NoDatabase`
+- **Usage:** `InvalidModel` (a problem in a Model's declaration, detected the first time it's used), `UnknownAttribute`, `MissingAttribute`, `IncompatibleRelation`, `AssociationNotLoaded`, `NoDatabase`
 - **Constraints:** `RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation`, `CheckViolation`

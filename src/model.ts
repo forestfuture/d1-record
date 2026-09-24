@@ -115,6 +115,14 @@ export function verifyModel(model: ModelClass): void {
   if (typeof model.tableName !== "string" || model.tableName === "") {
     throw new InvalidModel(`${model.name} has no tableName; add \`static tableName = "…"\``);
   }
+  for (const name of model.attributeDefinitions.keys()) {
+    if (name in ModelBase.prototype) {
+      throw new InvalidModel(
+        `${model.name} declares an attribute "${name}", which is the name of a record method; ` +
+          "rename the attribute and map it with { column }",
+      );
+    }
+  }
   const probe = new model();
   for (const name of model.attributeDefinitions.keys()) {
     if (Object.hasOwn(probe, name)) {
