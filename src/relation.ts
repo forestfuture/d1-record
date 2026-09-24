@@ -1,3 +1,4 @@
+import { compileSelect } from "./compiler.ts";
 import type { Executor } from "./executor.ts";
 import { hydrate, type ModelBase, type ModelClass } from "./model.ts";
 
@@ -22,7 +23,8 @@ export class Relation<M extends ModelBase> {
   }
 
   async toArray(): Promise<M[]> {
-    const rows = await this.#executor.all(`SELECT * FROM "${this.#model.tableName}"`, []);
+    const { sql, params } = compileSelect({ model: this.#model, conditions: this.#conditions });
+    const rows = await this.#executor.all(sql, params);
     return rows.map((row) => hydrate(this.#model, row));
   }
 }
