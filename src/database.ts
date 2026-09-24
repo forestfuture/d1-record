@@ -1,5 +1,5 @@
 import { Executor, type QueryListener } from "./executor.ts";
-import type { ModelBase, ModelClass } from "./model.ts";
+import { verifyModel, type ModelBase, type ModelClass } from "./model.ts";
 import { Relation } from "./relation.ts";
 
 export interface ConnectOptions {
@@ -16,6 +16,7 @@ export class Database {
   }
 
   model<M extends ModelBase>(model: ModelClass<M>): Relation<M> {
+    verifyModel(model);
     return new Relation(this.#executor, model);
   }
 }
