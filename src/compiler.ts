@@ -1,4 +1,4 @@
-import type { AttributeDefinition, ModelBase, ModelClass } from "./model.ts";
+import { attributeOf, type ModelBase, type ModelClass } from "./model.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
 import { writeValue } from "./types.ts";
 
@@ -62,10 +62,4 @@ function bindable(value: unknown): unknown {
   if (value instanceof Date) return value.toISOString();
   if (typeof value === "boolean") return value ? 1 : 0;
   return value;
-}
-
-function attributeOf(model: ModelClass<ModelBase>, name: string): AttributeDefinition {
-  const attribute = model.attributeDefinitions.get(name);
-  if (attribute === undefined) throw new Error(`Unknown attribute "${name}"`);
-  return attribute;
 }
