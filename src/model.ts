@@ -30,7 +30,7 @@ export type AttributeProperties<A extends AttributeSpecs> = {
 
 const values = Symbol("values");
 
-function typeOf(spec: AttributeSpec): AttributeType {
+export function typeOf(spec: AttributeSpec): AttributeType {
   return typeof spec === "string" ? spec : spec.type;
 }
 

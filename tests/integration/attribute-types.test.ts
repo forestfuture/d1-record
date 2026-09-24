@@ -58,4 +58,23 @@ describe("attribute types", () => {
       sample?.settings,
     ]).toEqual([null, null, null, null, null, null]);
   });
+
+  test("where converts values to their stored form", async () => {
+    await binding
+      .prepare(
+        `INSERT INTO samples (id, enabled, stamp) VALUES
+           (1, 1, '2026-01-02T03:04:05.000Z'),
+           (2, 0, '2026-06-07T08:09:10.000Z')`,
+      )
+      .run();
+    const samples = connect(binding).model(Sample);
+
+    const enabled = await samples.where({ enabled: true }).toArray();
+    const stamped = await samples
+      .where({ stamp: new Date(Date.UTC(2026, 5, 7, 8, 9, 10)) })
+      .toArray();
+
+    expect(enabled.map((sample) => sample.id)).toEqual([1]);
+    expect(stamped.map((sample) => sample.id)).toEqual([2]);
+  });
 });

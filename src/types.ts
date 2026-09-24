@@ -3,19 +3,28 @@ import type { AttributeType } from "./model.ts";
 interface Converter {
   /** D1 value → JavaScript value. Never called with null. */
   read(value: unknown): unknown;
+  /** JavaScript value → D1 value. Never called with null. */
+  write(value: unknown): unknown;
 }
 
 const identity = (value: unknown) => value;
 
 const converters: Record<AttributeType, Converter> = {
-  string: { read: identity },
-  integer: { read: identity },
-  real: { read: identity },
-  boolean: { read: (value) => value === 1 },
-  datetime: { read: (value) => new Date(value as string) },
-  json: { read: (value) => JSON.parse(value as string) },
+  string: { read: identity, write: identity },
+  integer: { read: identity, write: identity },
+  real: { read: identity, write: identity },
+  boolean: { read: (value) => value === 1, write: (value) => (value ? 1 : 0) },
+  datetime: {
+    read: (value) => new Date(value as string),
+    write: (value) => (value as Date).toISOString(),
+  },
+  json: { read: (value) => JSON.parse(value as string), write: (value) => JSON.stringify(value) },
 };
 
 export function readValue(type: AttributeType, value: unknown): unknown {
   return value === null || value === undefined ? null : converters[type].read(value);
+}
+
+export function writeValue(type: AttributeType, value: unknown): unknown {
+  return value === null || value === undefined ? null : converters[type].write(value);
 }
