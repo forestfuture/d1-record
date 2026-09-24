@@ -107,5 +107,14 @@ export function verifyModel(model: ModelClass): void {
   if (typeof model.tableName !== "string" || model.tableName === "") {
     throw new InvalidModel(`${model.name} has no tableName; add \`static tableName = "…"\``);
   }
+  const probe = new model();
+  for (const name of model.attributeDefinitions.keys()) {
+    if (Object.hasOwn(probe, name)) {
+      throw new InvalidModel(
+        `${model.name} declares a class field "${name}" that hides the attribute's accessor; ` +
+          "remove it (attributes are declared in Model({...}))",
+      );
+    }
+  }
   verified.add(model);
 }
