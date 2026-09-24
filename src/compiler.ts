@@ -1,4 +1,4 @@
-import { typeOf, type ModelBase, type ModelClass } from "./model.ts";
+import type { ModelBase, ModelClass } from "./model.ts";
 import { writeValue } from "./types.ts";
 
 export interface CompiledQuery {
@@ -21,10 +21,10 @@ export function compileSelect({ model, conditions }: SelectQuery): CompiledQuery
   const predicates: string[] = [];
   for (const condition of conditions) {
     for (const [name, value] of Object.entries(condition)) {
-      const spec = model.attributeSpecs[name];
-      if (spec === undefined) throw new Error(`Unknown attribute "${name}"`);
-      predicates.push(`${quoteIdentifier(name)} = ?`);
-      params.push(writeValue(typeOf(spec), value));
+      const attribute = model.attributeDefinitions.get(name);
+      if (attribute === undefined) throw new Error(`Unknown attribute "${name}"`);
+      predicates.push(`${quoteIdentifier(attribute.column)} = ?`);
+      params.push(writeValue(attribute.type, value));
     }
   }
   let sql = `SELECT * FROM ${quoteIdentifier(model.tableName)}`;

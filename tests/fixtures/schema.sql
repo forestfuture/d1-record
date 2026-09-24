@@ -28,3 +28,14 @@ CREATE TABLE samples (
   stamp TEXT,
   settings TEXT
 );
+
+-- Columns exercising the camelCase → snake_case naming rule.
+CREATE TABLE accounts (
+  id INTEGER PRIMARY KEY,
+  is_active INTEGER,
+  external_account_id TEXT,
+  html_url TEXT,
+  user_id INTEGER,
+  sha256_hash TEXT,
+  person_identifier TEXT
+);
