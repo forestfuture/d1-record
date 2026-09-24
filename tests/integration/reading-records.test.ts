@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model } from "../../src/index.ts";
+import { connect, Model, type QueryEvent } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
@@ -35,5 +35,16 @@ describe("reading records", () => {
       [1, "a@example.com"],
       [2, "b@example.com"],
     ]);
+  });
+
+  test("a relation runs no query until a terminal operation, then exactly one", async () => {
+    const queries: QueryEvent[] = [];
+    const db = connect(binding, { onQuery: (event) => queries.push(event) });
+
+    const relation = db.model(User).where({ email: "a@example.com" });
+    expect(queries).toHaveLength(0);
+
+    await relation.toArray();
+    expect(queries).toHaveLength(1);
   });
 });
