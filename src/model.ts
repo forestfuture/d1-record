@@ -1,10 +1,19 @@
+import { underscore } from "./naming.ts";
 import { readValue } from "./types.ts";
 
 export type AttributeType = "string" | "integer" | "real" | "boolean" | "datetime" | "json";
 
-export type AttributeSpec = AttributeType | { type: AttributeType; null?: boolean };
+export type AttributeSpec =
+  | AttributeType
+  | { type: AttributeType; null?: boolean; column?: string };
 
 export type AttributeSpecs = Record<string, AttributeSpec>;
+
+/** An attribute's resolved metadata. */
+export interface AttributeDefinition {
+  type: AttributeType;
+  column: string;
+}
 
 type JsType<T extends AttributeType> = T extends "string"
   ? string
@@ -30,20 +39,27 @@ export type AttributeProperties<A extends AttributeSpecs> = {
 
 const values = Symbol("values");
 
-export function typeOf(spec: AttributeSpec): AttributeType {
-  return typeof spec === "string" ? spec : spec.type;
-}
-
 export class ModelBase {
   static tableName: string;
-  static attributeSpecs: AttributeSpecs = {};
+  static attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map();
 
   [values]: Record<string, unknown> = {};
+
+  /** The record's attributes as a plain object of JavaScript values. */
+  attributes(): Record<string, unknown> {
+    return { ...this[values] };
+  }
 }
 
 /** Constructor type for any Model class, used wherever the library accepts one. */
 export type ModelClass<M extends ModelBase = ModelBase> = (new () => M) &
   Omit<typeof ModelBase, "prototype">;
+
+function define(name: string, spec: AttributeSpec): AttributeDefinition {
+  return typeof spec === "string"
+    ? { type: spec, column: underscore(name) }
+    : { type: spec.type, column: spec.column ?? underscore(name) };
+}
 
 /**
  * Creates a Model base class whose records have the given attributes.
@@ -53,7 +69,9 @@ export function Model<const A extends AttributeSpecs>(
   specs: A,
 ): (new () => ModelBase & AttributeProperties<A>) & Omit<typeof ModelBase, "prototype"> {
   class DefinedModel extends ModelBase {
-    static override attributeSpecs: AttributeSpecs = { ...specs };
+    static override attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map(
+      Object.entries(specs).map(([name, spec]) => [name, define(name, spec)]),
+    );
   }
   for (const name of Object.keys(specs)) {
     Object.defineProperty(DefinedModel.prototype, name, {
@@ -74,8 +92,8 @@ export function hydrate<M extends ModelBase>(
   row: Record<string, unknown>,
 ): M {
   const record = new model();
-  for (const [name, spec] of Object.entries(model.attributeSpecs)) {
-    record[values][name] = readValue(typeOf(spec), row[name]);
+  for (const [name, { type, column }] of model.attributeDefinitions) {
+    record[values][name] = readValue(type, row[column]);
   }
   return record;
 }
