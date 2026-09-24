@@ -17,3 +17,14 @@ CREATE TABLE posts (
   created_at TEXT,
   updated_at TEXT
 );
+
+-- One column per attribute type, for conversion tests.
+CREATE TABLE samples (
+  id INTEGER PRIMARY KEY,
+  label TEXT,
+  quantity INTEGER,
+  ratio REAL,
+  enabled INTEGER,
+  stamp TEXT,
+  settings TEXT
+);

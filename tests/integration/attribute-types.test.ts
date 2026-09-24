@@ -1,0 +1,61 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
+import { connect, Model } from "../../src/index.ts";
+import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
+
+class Sample extends Model({
+  id: { type: "integer", null: false },
+  label: "string",
+  quantity: "integer",
+  ratio: "real",
+  enabled: "boolean",
+  stamp: "datetime",
+  settings: "json",
+}) {
+  static tableName = "samples";
+}
+
+describe("attribute types", () => {
+  let binding: TestDatabase;
+  let dispose: () => Promise<void>;
+
+  beforeAll(async () => {
+    ({ db: binding, dispose } = await createTestDatabase());
+  });
+  afterAll(() => dispose());
+  beforeEach(async () => {
+    await binding.prepare("DELETE FROM samples").run();
+  });
+
+  test("each type reads back from D1 as its JavaScript value", async () => {
+    await binding
+      .prepare(
+        `INSERT INTO samples (id, label, quantity, ratio, enabled, stamp, settings)
+         VALUES (1, 'hello', 42, 0.5, 1, '2026-01-02T03:04:05.000Z', '{"theme":"dark","sizes":[1,2]}')`,
+      )
+      .run();
+
+    const [sample] = await connect(binding).model(Sample).toArray();
+
+    expect(sample?.label).toBe("hello");
+    expect(sample?.quantity).toBe(42);
+    expect(sample?.ratio).toBe(0.5);
+    expect(sample?.enabled).toBe(true);
+    expect(sample?.stamp).toEqual(new Date(Date.UTC(2026, 0, 2, 3, 4, 5)));
+    expect(sample?.settings).toEqual({ theme: "dark", sizes: [1, 2] });
+  });
+
+  test("NULL reads back as null for every type", async () => {
+    await binding.prepare("INSERT INTO samples (id) VALUES (1)").run();
+
+    const [sample] = await connect(binding).model(Sample).toArray();
+
+    expect([
+      sample?.label,
+      sample?.quantity,
+      sample?.ratio,
+      sample?.enabled,
+      sample?.stamp,
+      sample?.settings,
+    ]).toEqual([null, null, null, null, null, null]);
+  });
+});
