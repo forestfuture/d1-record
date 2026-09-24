@@ -60,4 +60,22 @@ describe("reading records", () => {
     expect((await filtered.toArray()).map((user) => user.id)).toEqual([2]);
     expect(await all.toArray()).toHaveLength(2);
   });
+
+  test("a subclass reads records as instances of itself", async () => {
+    class Admin extends User {}
+    await binding.prepare("INSERT INTO users (id, email) VALUES (1, 'a@example.com')").run();
+
+    const [admin] = await connect(binding).model(Admin).toArray();
+
+    expect(admin).toBeInstanceOf(Admin);
+    expect(admin?.email).toBe("a@example.com");
+  });
+
+  test("db.models gives request-bound relations for several models", async () => {
+    await binding.prepare("INSERT INTO users (id, email) VALUES (1, 'a@example.com')").run();
+
+    const models = connect(binding).models({ User });
+
+    expect((await models.User.toArray()).map((user) => user.email)).toEqual(["a@example.com"]);
+  });
 });

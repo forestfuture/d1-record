@@ -19,6 +19,15 @@ export class Database {
     verifyModel(model);
     return new Relation(this.#executor, model);
   }
+
+  /** Request-bound relations for several models at once: `db.models({ User }).User`. */
+  models<const T extends Record<string, ModelClass<ModelBase>>>(
+    models: T,
+  ): { [K in keyof T]: Relation<InstanceType<T[K]>> } {
+    return Object.fromEntries(
+      Object.entries(models).map(([name, model]) => [name, this.model(model)]),
+    ) as { [K in keyof T]: Relation<InstanceType<T[K]>> };
+  }
 }
 
 export function connect(binding: D1Database, options?: ConnectOptions): Database {
