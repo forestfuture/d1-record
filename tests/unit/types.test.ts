@@ -50,6 +50,11 @@ describe("types", () => {
       users.where({ label: "A" });
       // @ts-expect-error email can't be null
       users.where({ email: null });
+      users.where({ id: [1, 2], isActive: [true, null] });
+      // @ts-expect-error email can't be null, so null can't be in its array either
+      users.where({ email: ["a@example.com", null] });
+      // @ts-expect-error array items must have the attribute's type
+      users.where({ id: ["1"] });
     };
     expectTypeOf(typeOnly).toBeFunction();
   });
