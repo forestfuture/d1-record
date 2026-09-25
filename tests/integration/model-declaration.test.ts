@@ -30,7 +30,7 @@ describe("model declaration", () => {
   });
 
   test("a class field that would hide an attribute's accessor is rejected when first used", () => {
-    class Shadowed extends Model({ email: "string" }) {
+    class Shadowed extends Model({ id: "integer", email: "string" }) {
       static tableName = "users";
       email!: string | null; // should have been left to Model({...})
     }
@@ -39,7 +39,7 @@ describe("model declaration", () => {
   });
 
   test("where rejects a key that isn't a declared attribute", () => {
-    class User extends Model({ email: "string" }) {
+    class User extends Model({ id: "integer", email: "string" }) {
       static tableName = "users";
     }
     const users = connect(binding).model(User);
@@ -51,7 +51,7 @@ describe("model declaration", () => {
   });
 
   test("an attribute named like a record method is rejected when first used", () => {
-    class Clashing extends Model({ attributes: "json" }) {
+    class Clashing extends Model({ id: "integer", attributes: "json" }) {
       static tableName = "users";
     }
 
@@ -59,7 +59,7 @@ describe("model declaration", () => {
   });
 
   test("column() naming an unknown attribute is rejected as soon as where is called", () => {
-    class User extends Model({ createdAt: "datetime" }) {
+    class User extends Model({ id: "integer", createdAt: "datetime" }) {
       static tableName = "users";
     }
     const users = connect(binding).model(User);
@@ -67,5 +67,18 @@ describe("model declaration", () => {
     expect(() => users.where(sql`${column("createdAtt")} > ${new Date()}`)).toThrow(
       UnknownAttribute,
     );
+  });
+
+  test("a primaryKey that isn't a declared attribute is rejected when first used", () => {
+    class Keyless extends Model({ email: "string" }) {
+      static tableName = "users";
+    }
+    class WrongKey extends Model({ uuid: "string" }) {
+      static tableName = "users";
+      static primaryKey = "id";
+    }
+
+    expect(() => connect(binding).model(Keyless)).toThrow(/Keyless.*primaryKey "id"/);
+    expect(() => connect(binding).model(WrongKey)).toThrow(InvalidModel);
   });
 });
