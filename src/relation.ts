@@ -36,6 +36,11 @@ export type OrderSpec<M> = { [K in keyof AttributesOf<M>]?: OrderDirection };
 /** Everything but the conditions: what `or` requires to match and `merge` may replace. */
 const SHAPE_CLAUSES = ["select", "order", "limit", "offset", "distinct"] as const;
 
+/** One record from the page: `limit(0)` stays empty, and `offset` is kept by the caller. */
+function atMostOne(limit: number | undefined): number {
+  return Math.min(limit ?? 1, 1);
+}
+
 /** A lazy, immutable description of a query against one Model. */
 export class Relation<M extends ModelBase> {
   readonly #executor: Executor;
@@ -161,8 +166,16 @@ export class Relation<M extends ModelBase> {
     return this.#one(this.#orderOrPrimaryKey());
   }
 
-  /** The last record: the first in the reverse of every order direction. */
+  /**
+   * The last record: the first in the reverse of every order direction. With `limit`/`offset`,
+   * the last record of that page (loaded, then taken from the end).
+   */
   async last(): Promise<M | null> {
+    const { limit, offset } = this.#query;
+    if (limit !== undefined || offset !== undefined) {
+      const page = await this.#load({ ...this.#query, order: this.#orderOrPrimaryKey() });
+      return page.at(-1) ?? null;
+    }
     const reversed = this.#orderOrPrimaryKey().map(({ attribute, direction }): OrderTerm => ({
       attribute,
       direction: direction === "asc" ? "desc" : "asc",
@@ -185,7 +198,8 @@ export class Relation<M extends ModelBase> {
   /** Whether any row matches, optionally with extra conditions. */
   async exists(conditions?: Conditions<M> | SafeSql): Promise<boolean> {
     const relation = conditions === undefined ? this : this.where(conditions);
-    const { sql, params } = compileSelect({ ...relation.#query, limit: 1 }, "1");
+    const query = { ...relation.#query, limit: atMostOne(relation.#query.limit) };
+    const { sql, params } = compileSelect(query, "1");
     return (await this.#all({ sql, params })).length > 0;
   }
 
@@ -262,7 +276,11 @@ export class Relation<M extends ModelBase> {
   }
 
   async #one(order: readonly OrderTerm[]): Promise<M | null> {
-    const [record] = await this.#load({ ...this.#query, order, limit: 1 });
+    const [record] = await this.#load({
+      ...this.#query,
+      order,
+      limit: atMostOne(this.#query.limit),
+    });
     return record ?? null;
   }
 
