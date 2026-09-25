@@ -192,9 +192,11 @@ this.beforeSave((account) => {
 ## Relations
 
 - Every modifier returns a new Relation. Building a Relation never queries D1.
+- `static primaryKey` (default `"id"`) must name a declared attribute, or `db.model(X)` throws `InvalidModel`. `find(id)` takes one id, a `string | number`. Several ids are tracked in #12.
 - `where({ x: null })` → `"x" IS NULL`. `where({ x: [1, 2] })` → `"x" IN (?, ?)`. `where({ x: [] })` → `1 = 0`. `whereNot({ x: [] })` → `1 = 1`. `where({ x: [1, null] })` → `("x" IN (?) OR "x" IS NULL)`.
 - `whereNot` wraps the whole condition: `whereNot({ a, b })` → `NOT ("a" = ? AND "b" = ?)`. Following SQL semantics, `whereNot({ role: "admin" })` also excludes NULL roles. `whereNot({ role: null })` → `"role" IS NOT NULL`.
 - Hand-written conditions must be `sql` tagged templates (ADR-0006): ``where(sql`${column("createdAt")} > ${since}`)``. Plain strings are rejected with a `TypeError` (and are compile errors). Values interpolated into a fragment have no declared type, so a `Date` is bound as ISO text and a boolean as 1/0, matching how attributes are stored.
+- `order({ createdAt: "desc", id: "asc" })` sorts by each key in turn, and repeated calls append. NULLs sort as SQLite sorts them (first in ascending order). `limit`/`offset` page, and `offset` works without a `limit`.
 - `first()` and `last()` with no order sort by the primary key ascending or descending. `last()` reverses every direction of an explicit order. `take()` adds no ordering.
 - `find()`, `findBy()` and `findByOrThrow()` keep the Relation's where conditions and scopes, ignore its order, limit, offset and `select()`, and always load full rows.
 - `or()`: same Model, and the same select, order, limit and offset. Only where conditions may differ, and each side is wrapped in parentheses. Otherwise it throws `IncompatibleRelation`.
@@ -204,13 +206,13 @@ this.beforeSave((account) => {
 
 - `toArray`, `first`, `last`, `take`, `find`, `findBy`, `findByOrThrow`.
 - `pluck("email")` resolves to converted values. `pluck("id", "email")` resolves to tuples.
-- `count()` gives `COUNT(*)`, or `COUNT(DISTINCT "email")` with `select("email").distinct()`. `count("email")` counts non-null values.
+- `count()` counts over the whole query as a subquery, so it always equals the number of rows `toArray()` would return, including `limit`, `offset`, `select` and `distinct` (with `select("role").distinct()`, NULL counts as one distinct value). `count("role")` counts non-null values, and after `distinct()` it compiles to `COUNT(DISTINCT "role")`, the distinct non-null values.
 - `exists(conds?)` issues `SELECT 1 … LIMIT 1`.
 - `none()` never touches D1: `toArray` gives `[]`, `count` gives `0`, `exists` gives `false`, `first`/`last`/`take`/`findBy` give `null`, `pluck` gives `[]`, and `find` throws `RecordNotFound`. Chaining keeps it `none()`. `none().or(r)` and `r.or(none())` both return `r`.
 
 ## Partial records
 
-- `select()` on a Model Relation accepts only declared attributes. The primary key is always selected.
+- `select()` on a Model Relation accepts only declared attributes. The primary key is always loaded too, so a partial record keeps its identity, except after `distinct()`, where adding the key would make every row distinct. Such records carry only the selected attributes.
 - Reading an unloaded attribute throws `MissingAttribute`, including when a validator or callback reads it. Setting one is allowed and makes it loaded and dirty.
 - `save()` writes only changed attributes (plus `updatedAt`), and never fills in unloaded ones. `reload()` loads the full row.
 
