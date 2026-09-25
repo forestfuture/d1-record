@@ -39,12 +39,14 @@
     "test": "vp test",
     "check": "vp check",
     "prepublishOnly": "vp run build",
-    "prepare": "vp config"
+    "prepare": "vp config",
+    "knip": "knip"
   },
   "devDependencies": {
     "@arethetypeswrong/core": "^0.18.5",
     "@cloudflare/workers-types": "^5.20260922.1",
     "@types/node": "^24.13.6",
+    "knip": "^6.38.0",
     "miniflare": "^4.20260730.0",
     "publint": "^0.3.24",
     "typescript": "^7.0.2",
