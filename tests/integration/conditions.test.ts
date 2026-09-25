@@ -132,4 +132,11 @@ describe("conditions", () => {
     expect(() => users.whereNot({ role: ["admin", undefined as never] })).toThrow(/"role".*null/);
     await expect(users.findBy({ email: body.email })).rejects.toThrow(TypeError);
   });
+
+  test("pluck needs at least one attribute", async () => {
+    const users = connect(binding).model(User);
+
+    // @ts-expect-error pluck() needs an attribute
+    await expect(users.pluck()).rejects.toThrow(TypeError);
+  });
 });
