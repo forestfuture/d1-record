@@ -36,6 +36,23 @@ export type OrderSpec<M> = { [K in keyof AttributesOf<M>]?: OrderDirection };
 /** Everything but the conditions: what `or` requires to match and `merge` may replace. */
 const SHAPE_CLAUSES = ["select", "order", "limit", "offset", "distinct"] as const;
 
+function requireConditionObject(conditions: unknown, method: string): void {
+  if (typeof conditions !== "object" || conditions === null || Array.isArray(conditions)) {
+    throw new TypeError(
+      `${method}() takes an object of attribute values or an sql\`…\` fragment; plain strings are not accepted`,
+    );
+  }
+}
+
+/** An undefined value (alone or in an array) would bind NULL into `= ?` and match nothing. */
+function rejectUndefined(value: unknown, name: string, method: string): void {
+  if (value === undefined || (Array.isArray(value) && value.includes(undefined))) {
+    throw new TypeError(
+      `${method}() got undefined for "${name}"; use null to match NULL, or leave the key out`,
+    );
+  }
+}
+
 /** `{}` adds no condition at all (common when an object is built from optional filters). */
 function isEmptyConditions(conditions: object): boolean {
   return !(conditions instanceof SafeSql) && Object.keys(conditions).length === 0;
@@ -59,14 +76,14 @@ export class Relation<M extends ModelBase> {
   }
 
   where(conditions: Conditions<M> | SafeSql): Relation<M> {
-    this.#check(conditions, "where");
+    this.#checkConditions(conditions, "where");
     if (isEmptyConditions(conditions)) return this;
     return this.#with({ conditions: [...this.#query.conditions, conditions] });
   }
 
   /** Negates the whole condition: `NOT (…)`. Rows where it is NULL are excluded too. */
   whereNot(conditions: Conditions<M> | SafeSql): Relation<M> {
-    this.#check(conditions, "whereNot");
+    this.#checkConditions(conditions, "whereNot");
     if (isEmptyConditions(conditions)) return this;
     return this.#with({ conditions: [...this.#query.conditions, new Negated(conditions)] });
   }
@@ -239,20 +256,22 @@ export class Relation<M extends ModelBase> {
     }
   }
 
-  /** Rejects plain strings and unknown attributes when the condition is written, not when it runs. */
-  #check(conditions: Conditions<M> | SafeSql, method: string): void {
-    if (typeof conditions !== "object" || conditions === null || Array.isArray(conditions)) {
-      throw new TypeError(
-        `${method}() takes an object of attribute values or an sql\`…\` fragment; plain strings are not accepted`,
-      );
+  /**
+   * Validates conditions when they're written, not when they run: rejects plain strings,
+   * unknown attributes, and undefined values (which would otherwise silently match nothing).
+   */
+  #checkConditions(conditions: Conditions<M> | SafeSql, method: string): void {
+    requireConditionObject(conditions, method);
+    if (conditions instanceof SafeSql) {
+      for (const value of conditions.values) {
+        if (value instanceof ColumnReference) attributeOf(this.#model, value.attribute);
+      }
+      return;
     }
-    const names =
-      conditions instanceof SafeSql
-        ? conditions.values.flatMap((value) =>
-            value instanceof ColumnReference ? [value.attribute] : [],
-          )
-        : Object.keys(conditions);
-    for (const name of names) attributeOf(this.#model, name);
+    for (const [name, value] of Object.entries(conditions)) {
+      attributeOf(this.#model, name);
+      rejectUndefined(value, name, method);
+    }
   }
 
   /** The one place a Relation runs SQL; a `none()` relation never reaches D1. */
