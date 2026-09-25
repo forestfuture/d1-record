@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
-import { connect, Model } from "../../src/index.ts";
+import { connect, Model, sql } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
@@ -48,5 +48,33 @@ describe("conditions", () => {
     const users = connect(binding).model(User);
 
     expect(await ids(users.where({ role: ["member", null] }))).toEqual([2, 3]);
+  });
+
+  test("whereNot follows SQL semantics, so a NULL value is excluded too", async () => {
+    const users = connect(binding).model(User);
+
+    expect(await ids(users.whereNot({ role: "admin" }))).toEqual([2]);
+  });
+
+  test("whereNot negates the whole condition, not each attribute", async () => {
+    const users = connect(binding).model(User);
+
+    // NOT (role = 'admin' AND suspended = 1): only user 4 is a suspended admin.
+    expect(await ids(users.whereNot({ role: "admin", suspended: true }))).toEqual([1, 2, 3]);
+  });
+
+  test("whereNot handles null, empty arrays, arrays with null, and sql fragments", async () => {
+    const users = connect(binding).model(User);
+
+    expect(await ids(users.whereNot({ role: null }))).toEqual([1, 2, 4]);
+    expect(await ids(users.whereNot({ id: [] }))).toEqual([1, 2, 3, 4]);
+    expect(await ids(users.whereNot({ role: ["member", null] }))).toEqual([1, 4]);
+    expect(await ids(users.whereNot(sql`id < ${3}`))).toEqual([3, 4]);
+  });
+
+  test("where and whereNot combine with AND", async () => {
+    const users = connect(binding).model(User);
+
+    expect(await ids(users.where({ role: "admin" }).whereNot({ suspended: true }))).toEqual([1]);
   });
 });
