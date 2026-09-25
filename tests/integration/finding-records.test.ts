@@ -50,4 +50,21 @@ describe("finding records", () => {
     await expect(admins.find(1)).resolves.toBeInstanceOf(User);
     await expect(admins.find(2)).rejects.toThrow(RecordNotFound);
   });
+
+  test("findBy returns the matching record, or null when there isn't one", async () => {
+    const users = connect(binding).model(User);
+
+    const found = await users.findBy({ email: "a@example.com" });
+    const missing = await users.findBy({ email: "nobody@example.com" });
+
+    expect(found?.id).toBe(1);
+    expect(missing).toBeNull();
+  });
+
+  test("findByOrThrow returns the matching record, or throws RecordNotFound", async () => {
+    const users = connect(binding).model(User);
+
+    await expect(users.findByOrThrow({ role: "member" })).resolves.toMatchObject({ id: 2 });
+    await expect(users.findByOrThrow({ role: "owner" })).rejects.toThrow(RecordNotFound);
+  });
 });

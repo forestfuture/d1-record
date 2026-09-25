@@ -41,23 +41,37 @@ export class Relation<M extends ModelBase> {
 
   /** The record with this primary key, keeping this Relation's conditions. */
   async find(id: string | number): Promise<M> {
-    const { sql, params } = compileSelect({
-      model: this.#model,
-      conditions: [...this.#conditions, { [this.#model.primaryKey]: id }],
-      limit: 1,
-    });
-    const [row] = await this.#executor.all(sql, params);
-    if (row === undefined) {
+    const record = await this.#takeOne({ [this.#model.primaryKey]: id });
+    if (record === null) {
       throw new RecordNotFound(
         `${this.#model.name} with ${this.#model.primaryKey} ${id} not found`,
       );
     }
-    return hydrate(this.#model, row);
+    return record;
+  }
+
+  /** The first record matching `conditions` (in no particular order), or null. */
+  async findBy(conditions: Partial<AttributesOf<M>> | SafeSql): Promise<M | null> {
+    return this.where(conditions).#takeOne();
+  }
+
+  /** Like `findBy`, but throws `RecordNotFound` instead of returning null. */
+  async findByOrThrow(conditions: Partial<AttributesOf<M>> | SafeSql): Promise<M> {
+    const record = await this.findBy(conditions);
+    if (record === null) throw new RecordNotFound(`${this.#model.name} not found`);
+    return record;
   }
 
   async toArray(): Promise<M[]> {
     const { sql, params } = compileSelect({ model: this.#model, conditions: this.#conditions });
     const rows = await this.#executor.all(sql, params);
     return rows.map((row) => hydrate(this.#model, row));
+  }
+
+  async #takeOne(extra?: Condition): Promise<M | null> {
+    const conditions = extra === undefined ? this.#conditions : [...this.#conditions, extra];
+    const { sql, params } = compileSelect({ model: this.#model, conditions, limit: 1 });
+    const [row] = await this.#executor.all(sql, params);
+    return row === undefined ? null : hydrate(this.#model, row);
   }
 }
