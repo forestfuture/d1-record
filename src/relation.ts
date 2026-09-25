@@ -36,6 +36,12 @@ export type OrderSpec<M> = { [K in keyof AttributesOf<M>]?: OrderDirection };
 /** Everything but the conditions: what `or` requires to match and `merge` may replace. */
 const SHAPE_CLAUSES = ["select", "order", "limit", "offset", "distinct"] as const;
 
+/** Whether a clause was set explicitly; an empty order or an unset flag counts as not set. */
+function isSet(query: SelectQuery, clause: (typeof SHAPE_CLAUSES)[number]): boolean {
+  const value = query[clause];
+  return Array.isArray(value) ? value.length > 0 : value !== undefined && value !== false;
+}
+
 function requireConditionObject(conditions: unknown, method: string): void {
   if (typeof conditions !== "object" || conditions === null || Array.isArray(conditions)) {
     throw new TypeError(
@@ -120,15 +126,14 @@ export class Relation<M extends ModelBase> {
   merge(other: Relation<M>): Relation<M> {
     this.#requireSameModel(other, "merge");
     const theirs = other.#query;
-    return this.#with({
+    const changes: Partial<SelectQuery> = {
       conditions: [...this.#query.conditions, ...theirs.conditions],
-      ...(theirs.order.length > 0 && { order: theirs.order }),
-      ...(theirs.select !== undefined && { select: theirs.select }),
-      ...(theirs.limit !== undefined && { limit: theirs.limit }),
-      ...(theirs.offset !== undefined && { offset: theirs.offset }),
-      ...(theirs.distinct === true && { distinct: true }),
       ...(theirs.none === true && { none: true }),
-    });
+    };
+    for (const clause of SHAPE_CLAUSES) {
+      if (isSet(theirs, clause)) Object.assign(changes, { [clause]: theirs[clause] });
+    }
+    return this.#with(changes);
   }
 
   /** Sorts by each key in turn; repeated calls append. */
@@ -164,7 +169,7 @@ export class Relation<M extends ModelBase> {
 
   /** The record with this primary key, keeping this Relation's conditions. */
   async find(id: string | number): Promise<M> {
-    const record = await this.#takeOne({ [this.#model.primaryKey]: id });
+    const record = await this.#findOne({ [this.#model.primaryKey]: id });
     if (record === null) {
       throw new RecordNotFound(
         `${this.#model.name} with ${this.#model.primaryKey} ${id} not found`,
@@ -175,7 +180,7 @@ export class Relation<M extends ModelBase> {
 
   /** The first record matching `conditions` (in no particular order), or null. */
   async findBy(conditions: Conditions<M> | SafeSql): Promise<M | null> {
-    return this.where(conditions).#takeOne();
+    return this.where(conditions).#findOne();
   }
 
   /** Like `findBy`, but throws `RecordNotFound` instead of returning null. */
@@ -212,14 +217,14 @@ export class Relation<M extends ModelBase> {
     return this.#one(this.#query.order);
   }
 
-  /** The number of matching rows, or of non-null values of `attribute`. */
+  /** The number of matching records, or of non-null values of `attribute`. */
   async count(attribute?: keyof AttributesOf<M> & string): Promise<number> {
     const { sql, params } = compileCount(this.#query, attribute);
     const [row] = await this.#all({ sql, params });
     return Number(row?.["count"] ?? 0);
   }
 
-  /** Whether any row matches, optionally with extra conditions. */
+  /** Whether any record matches, optionally with extra conditions. */
   async exists(conditions?: Conditions<M> | SafeSql): Promise<boolean> {
     const relation = conditions === undefined ? this : this.where(conditions);
     const query = { ...relation.#query, limit: atMostOne(relation.#query.limit) };
@@ -316,7 +321,7 @@ export class Relation<M extends ModelBase> {
   }
 
   /** One matching row by the finder rules: keeps conditions, ignores order and pagination. */
-  async #takeOne(extra?: Condition): Promise<M | null> {
+  async #findOne(extra?: Condition): Promise<M | null> {
     const conditions =
       extra === undefined ? this.#query.conditions : [...this.#query.conditions, extra];
     const [record] = await this.#load({ model: this.#model, conditions, order: [], limit: 1 });
