@@ -7,7 +7,7 @@ import {
   type ModelBase,
   type ModelClass,
 } from "./model.ts";
-import { SafeSql } from "./sql.ts";
+import { ColumnReference, SafeSql } from "./sql.ts";
 
 /** A lazy, immutable description of a query against one Model. */
 export class Relation<M extends ModelBase> {
@@ -27,9 +27,14 @@ export class Relation<M extends ModelBase> {
         "where() takes an object of attribute values or an sql`…` fragment; plain strings are not accepted",
       );
     }
-    if (!(conditions instanceof SafeSql)) {
-      for (const name of Object.keys(conditions)) attributeOf(this.#model, name);
-    }
+    // Check attribute names now, so a typo fails where it was written rather than at toArray().
+    const names =
+      conditions instanceof SafeSql
+        ? conditions.values.flatMap((value) =>
+            value instanceof ColumnReference ? [value.attribute] : [],
+          )
+        : Object.keys(conditions);
+    for (const name of names) attributeOf(this.#model, name);
     return new Relation(this.#executor, this.#model, [...this.#conditions, conditions]);
   }
 
