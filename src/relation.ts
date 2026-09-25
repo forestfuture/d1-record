@@ -91,6 +91,25 @@ export class Relation<M extends ModelBase> {
     return record;
   }
 
+  /** The first record by this Relation's order, or by primary key if it has none. */
+  async first(): Promise<M | null> {
+    return this.#one(this.#orderOrPrimaryKey());
+  }
+
+  /** The last record: the first in the reverse of every order direction. */
+  async last(): Promise<M | null> {
+    const reversed = this.#orderOrPrimaryKey().map(({ attribute, direction }): OrderTerm => ({
+      attribute,
+      direction: direction === "asc" ? "desc" : "asc",
+    }));
+    return this.#one(reversed);
+  }
+
+  /** One record in whatever order D1 returns, or null. */
+  async take(): Promise<M | null> {
+    return this.#one(this.#query.order);
+  }
+
   async toArray(): Promise<M[]> {
     return this.#load(this.#query);
   }
@@ -103,6 +122,16 @@ export class Relation<M extends ModelBase> {
     const { sql, params } = compileSelect(query);
     const rows = await this.#executor.all(sql, params);
     return rows.map((row) => hydrate(this.#model, row));
+  }
+
+  #orderOrPrimaryKey(): readonly OrderTerm[] {
+    const { order } = this.#query;
+    return order.length > 0 ? order : [{ attribute: this.#model.primaryKey, direction: "asc" }];
+  }
+
+  async #one(order: readonly OrderTerm[]): Promise<M | null> {
+    const [record] = await this.#load({ ...this.#query, order, limit: 1 });
+    return record ?? null;
   }
 
   /** One matching row by the finder rules: keeps conditions, ignores order and pagination. */

@@ -50,4 +50,31 @@ describe("ordering and pagination", () => {
     expect(ids(await byId.limit(2).offset(2).toArray())).toEqual([3, 4]);
     expect(ids(await byId.offset(3).toArray())).toEqual([4]);
   });
+
+  test("first and last use primary-key order when the relation has none", async () => {
+    const users = connect(binding).model(User);
+
+    expect((await users.first())?.id).toBe(1);
+    expect((await users.last())?.id).toBe(4);
+  });
+
+  test("last reverses every direction of an explicit order", async () => {
+    const users = connect(binding).model(User).order({ role: "asc", createdAt: "desc" });
+
+    // Ordered: 4 (admin, Apr), 2 (admin, Jan), 1 (member, Mar), 3 (member, Feb)
+    expect((await users.first())?.id).toBe(4);
+    expect((await users.last())?.id).toBe(3);
+  });
+
+  test("take returns one record without adding an order, or null", async () => {
+    const users = connect(binding).model(User);
+
+    const admin = await users.where({ role: "admin" }).take();
+    const nobody = await users.where({ role: "owner" }).take();
+
+    expect([2, 4]).toContain(admin?.id);
+    expect(nobody).toBeNull();
+    expect(await users.where({ role: "owner" }).first()).toBeNull();
+    expect(await users.where({ role: "owner" }).last()).toBeNull();
+  });
 });

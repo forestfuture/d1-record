@@ -67,4 +67,11 @@ describe("finding records", () => {
     await expect(users.findByOrThrow({ role: "member" })).resolves.toMatchObject({ id: 2 });
     await expect(users.findByOrThrow({ role: "owner" })).rejects.toThrow(RecordNotFound);
   });
+
+  test("finders ignore the relation's order, limit and offset", async () => {
+    const paged = connect(binding).model(User).order({ id: "asc" }).limit(1).offset(10);
+
+    await expect(paged.find(2)).resolves.toMatchObject({ id: 2 });
+    await expect(paged.findBy({ role: "member" })).resolves.toMatchObject({ id: 2 });
+  });
 });
