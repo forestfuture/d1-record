@@ -60,6 +60,14 @@ export class Relation<M extends ModelBase> {
     return this.#with({ order: [...this.#query.order, ...terms] });
   }
 
+  limit(count: number): Relation<M> {
+    return this.#with({ limit: count });
+  }
+
+  offset(count: number): Relation<M> {
+    return this.#with({ offset: count });
+  }
+
   /** The record with this primary key, keeping this Relation's conditions. */
   async find(id: string | number): Promise<M> {
     const record = await this.#takeOne({ [this.#model.primaryKey]: id });
