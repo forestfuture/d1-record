@@ -16,6 +16,14 @@ import {
 } from "./model.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
 
+/**
+ * Attribute conditions for `where`/`findBy`: a value, or an array meaning "any of these".
+ * `null` (alone or in an array) matches NULL, and is only allowed for nullable attributes.
+ */
+export type Conditions<M> = {
+  [K in keyof AttributesOf<M>]?: AttributesOf<M>[K] | readonly AttributesOf<M>[K][];
+};
+
 /** `{ attribute: "asc" | "desc" }`; key order sets precedence. */
 export type OrderSpec<M> = { [K in keyof AttributesOf<M>]?: OrderDirection };
 
@@ -31,7 +39,7 @@ export class Relation<M extends ModelBase> {
     this.#query = query ?? { model, conditions: [], order: [] };
   }
 
-  where(conditions: Partial<AttributesOf<M>> | SafeSql): Relation<M> {
+  where(conditions: Conditions<M> | SafeSql): Relation<M> {
     if (typeof conditions !== "object" || conditions === null || Array.isArray(conditions)) {
       throw new TypeError(
         "where() takes an object of attribute values or an sql`…` fragment; plain strings are not accepted",
@@ -80,12 +88,12 @@ export class Relation<M extends ModelBase> {
   }
 
   /** The first record matching `conditions` (in no particular order), or null. */
-  async findBy(conditions: Partial<AttributesOf<M>> | SafeSql): Promise<M | null> {
+  async findBy(conditions: Conditions<M> | SafeSql): Promise<M | null> {
     return this.where(conditions).#takeOne();
   }
 
   /** Like `findBy`, but throws `RecordNotFound` instead of returning null. */
-  async findByOrThrow(conditions: Partial<AttributesOf<M>> | SafeSql): Promise<M> {
+  async findByOrThrow(conditions: Conditions<M> | SafeSql): Promise<M> {
     const record = await this.findBy(conditions);
     if (record === null) throw new RecordNotFound(`${this.#model.name} not found`);
     return record;

@@ -1,4 +1,4 @@
-import { attributeOf, type ModelBase, type ModelClass } from "./model.ts";
+import { attributeOf, type AttributeDefinition, type ModelBase, type ModelClass } from "./model.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
 import { writeUntypedValue, writeValue } from "./conversion.ts";
 
@@ -40,23 +40,44 @@ export function compileSelect(query: SelectQuery): CompiledQuery {
 }
 
 function compileWhere({ model, conditions }: SelectQuery, params: unknown[]): string {
-  const predicates: string[] = [];
-  for (const condition of conditions) {
-    if (condition instanceof SafeSql) {
-      predicates.push(`(${compileFragment(condition, model, params)})`);
-      continue;
-    }
-    for (const [name, value] of Object.entries(condition)) {
-      const attribute = attributeOf(model, name);
-      if (value === null) {
-        predicates.push(`${quoteIdentifier(attribute.column)} IS NULL`);
-        continue;
-      }
-      predicates.push(`${quoteIdentifier(attribute.column)} = ?`);
-      params.push(writeValue(attribute.type, value));
-    }
+  if (conditions.length === 0) return "";
+  const predicates = conditions.map((condition) => compileCondition(condition, model, params));
+  return ` WHERE ${predicates.join(" AND ")}`;
+}
+
+/** One condition as a single parenthesized predicate. */
+function compileCondition(
+  condition: Condition,
+  model: ModelClass<ModelBase>,
+  params: unknown[],
+): string {
+  if (condition instanceof SafeSql) return `(${compileFragment(condition, model, params)})`;
+  const parts = Object.entries(condition).map(([name, value]) =>
+    compileEquality(attributeOf(model, name), value, params),
+  );
+  return `(${parts.join(" AND ")})`;
+}
+
+/** `attr = value`, with NULL and arrays (IN) handled the way the contract specifies. */
+function compileEquality(
+  attribute: AttributeDefinition,
+  value: unknown,
+  params: unknown[],
+): string {
+  const column = quoteIdentifier(attribute.column);
+  if (value === null) return `${column} IS NULL`;
+  if (!Array.isArray(value)) {
+    params.push(writeValue(attribute.type, value));
+    return `${column} = ?`;
   }
-  return predicates.length > 0 ? ` WHERE ${predicates.join(" AND ")}` : "";
+  const present = value.filter((item) => item !== null);
+  const parts: string[] = [];
+  if (present.length > 0) {
+    params.push(...present.map((item) => writeValue(attribute.type, item)));
+    parts.push(`${column} IN (${present.map(() => "?").join(", ")})`);
+  }
+  if (present.length < value.length) parts.push(`${column} IS NULL`);
+  return parts.length > 0 ? `(${parts.join(" OR ")})` : "1 = 0";
 }
 
 function compileOrder({ model, order }: SelectQuery): string {
