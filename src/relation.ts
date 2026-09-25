@@ -183,7 +183,14 @@ export class Relation<M extends ModelBase> {
   }
 
   async #load(query: SelectQuery): Promise<M[]> {
-    const { sql, params } = compileSelect(query);
+    // A partial record keeps its primary key, so it keeps its identity — except after
+    // distinct(), where adding the key would make every row distinct.
+    const { primaryKey } = this.#model;
+    const loaded =
+      query.select && !query.distinct
+        ? [primaryKey, ...query.select.filter((name) => name !== primaryKey)]
+        : query.select;
+    const { sql, params } = compileSelect(query, compileColumns(this.#model, loaded));
     const rows = await this.#executor.all(sql, params);
     return rows.map((row) => hydrate(this.#model, row));
   }
