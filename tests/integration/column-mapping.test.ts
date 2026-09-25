@@ -56,4 +56,14 @@ describe("column mapping", () => {
     expect(active.map((account) => account.id)).toEqual([2]);
     expect(legacy.map((account) => account.id)).toEqual([2]);
   });
+
+  test("where maps acronym attributes to their columns", async () => {
+    const accounts = connect(binding).model(Account);
+
+    const byUrl = await accounts.where({ htmlURL: "https://example.com" }).toArray();
+    const byUser = await accounts.where({ userID: 7, sha256Hash: "abc" }).toArray();
+
+    expect(byUrl.map((account) => account.id)).toEqual([1]);
+    expect(byUser.map((account) => account.id)).toEqual([1]);
+  });
 });
