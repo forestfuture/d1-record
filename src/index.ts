@@ -1,6 +1,7 @@
 export { connect, Database, type ConnectOptions, type RelationsFor } from "./database.ts";
 export {
   D1RecordError,
+  IncompatibleRelation,
   InvalidModel,
   MissingAttribute,
   RecordNotFound,
