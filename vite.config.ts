@@ -49,7 +49,7 @@ export default defineConfig({
     ],
   },
   fmt: {
-    // The original design brief is kept verbatim.
-    ignorePatterns: ["docs/brief.md"],
+    // Kept verbatim: the original design brief, and skills vendored from upstream.
+    ignorePatterns: ["docs/brief.md", ".claude/skills/**", "skills-lock.json"],
   },
 });
