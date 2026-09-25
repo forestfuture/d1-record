@@ -21,16 +21,18 @@ export class Executor {
 
   async all(sql: string, params: unknown[]): Promise<Record<string, unknown>[]> {
     const started = performance.now();
+    let result: D1Result<Record<string, unknown>>;
     try {
-      const result = await this.#binding
+      result = await this.#binding
         .prepare(sql)
         .bind(...params)
         .all<Record<string, unknown>>();
-      this.#onQuery?.({ sql, params, durationMs: performance.now() - started, meta: result.meta });
-      return result.results;
     } catch (error) {
       this.#onQuery?.({ sql, params, durationMs: performance.now() - started, error });
       throw error;
     }
+    // Reported outside the try, so a listener that throws isn't mistaken for a D1 failure.
+    this.#onQuery?.({ sql, params, durationMs: performance.now() - started, meta: result.meta });
+    return result.results;
   }
 }
