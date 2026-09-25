@@ -1,6 +1,6 @@
 import { InvalidModel, UnknownAttribute } from "./errors.ts";
 import { underscore } from "./naming.ts";
-import { readValue } from "./types.ts";
+import { readValue } from "./conversion.ts";
 
 export type AttributeType = "string" | "integer" | "real" | "boolean" | "datetime" | "json";
 
@@ -107,6 +107,8 @@ export function hydrate<M extends ModelBase>(
   return record;
 }
 
+// Module-level, but not request state (ADR-0003): it only remembers which Model
+// classes have passed verifyModel(). Concurrent requests at worst verify twice.
 const verified = new WeakSet<object>();
 
 /** Checks a Model's declaration the first time it's used; throws `InvalidModel`. */

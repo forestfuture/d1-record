@@ -1,4 +1,4 @@
-export { connect, Database, type ConnectOptions } from "./database.ts";
+export { connect, Database, type ConnectOptions, type RelationsFor } from "./database.ts";
 export { D1RecordError, InvalidModel, UnknownAttribute } from "./errors.ts";
 export type { QueryEvent, QueryListener } from "./executor.ts";
 export { Model } from "./model.ts";

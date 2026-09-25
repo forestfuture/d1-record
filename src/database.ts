@@ -2,6 +2,11 @@ import { Executor, type QueryListener } from "./executor.ts";
 import { verifyModel, type ModelBase, type ModelClass } from "./model.ts";
 import { Relation } from "./relation.ts";
 
+/** One request-bound Relation per Model, keyed like the object passed to `db.models()`. */
+export type RelationsFor<T extends Record<string, ModelClass<ModelBase>>> = {
+  [K in keyof T]: Relation<InstanceType<T[K]>>;
+};
+
 export interface ConnectOptions {
   /** Called once for every statement sent to D1. */
   onQuery?: QueryListener;
@@ -21,12 +26,10 @@ export class Database {
   }
 
   /** Request-bound relations for several models at once: `db.models({ User }).User`. */
-  models<const T extends Record<string, ModelClass<ModelBase>>>(
-    models: T,
-  ): { [K in keyof T]: Relation<InstanceType<T[K]>> } {
+  models<const T extends Record<string, ModelClass<ModelBase>>>(models: T): RelationsFor<T> {
     return Object.fromEntries(
       Object.entries(models).map(([name, model]) => [name, this.model(model)]),
-    ) as { [K in keyof T]: Relation<InstanceType<T[K]>> };
+    ) as RelationsFor<T>;
   }
 }
 

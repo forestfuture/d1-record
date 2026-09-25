@@ -1,6 +1,6 @@
 import { attributeOf, type ModelBase, type ModelClass } from "./model.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
-import { writeValue } from "./types.ts";
+import { writeUntypedValue, writeValue } from "./conversion.ts";
 
 export interface CompiledQuery {
   sql: string;
@@ -53,17 +53,10 @@ function compileFragment(
     if (value instanceof ColumnReference) {
       text += quoteIdentifier(attributeOf(model, value.attribute).column);
     } else {
-      params.push(bindable(value));
+      params.push(writeUntypedValue(value));
       text += "?";
     }
     text += fragment.strings[index + 1] ?? "";
   });
   return text;
-}
-
-/** Converts a value with no declared attribute type the way attributes are stored. */
-function bindable(value: unknown): unknown {
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value === "boolean") return value ? 1 : 0;
-  return value;
 }

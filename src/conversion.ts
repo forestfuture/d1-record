@@ -28,3 +28,14 @@ export function readValue(type: AttributeType, value: unknown): unknown {
 export function writeValue(type: AttributeType, value: unknown): unknown {
   return value === null || value === undefined ? null : converters[type].write(value);
 }
+
+/**
+ * Converts a value with no declared attribute type (e.g. one interpolated into
+ * an `sql` fragment) using the converter its runtime type implies, so it's
+ * stored the same way as an attribute of that type.
+ */
+export function writeUntypedValue(value: unknown): unknown {
+  if (value instanceof Date) return writeValue("datetime", value);
+  if (typeof value === "boolean") return writeValue("boolean", value);
+  return value;
+}
