@@ -195,7 +195,7 @@ export class Relation<M extends ModelBase> {
   ): Promise<AttributesOf<M>[K][]>;
   async pluck<const K extends readonly (keyof AttributesOf<M> & string)[]>(
     ...attributes: K
-  ): Promise<{ [I in keyof K]: AttributesOf<M>[K[I]] }[]>;
+  ): Promise<{ -readonly [I in keyof K]: AttributesOf<M>[K[I]] }[]>;
   async pluck(...attributes: string[]): Promise<unknown[]> {
     const definitions = attributes.map((name) => attributeOf(this.#model, name));
     const { sql, params } = compileSelect(this.#query, compileColumns(this.#model, attributes));
