@@ -42,4 +42,12 @@ describe("ordering and pagination", () => {
     expect(ids(byRoleThenId)).toEqual([4, 2, 3, 1]);
     expect(ids(appended)).toEqual([2, 4, 3, 1]);
   });
+
+  test("limit and offset page through ordered records, and offset works without a limit", async () => {
+    const byId = connect(binding).model(User).order({ id: "asc" });
+
+    expect(ids(await byId.limit(2).toArray())).toEqual([1, 2]);
+    expect(ids(await byId.limit(2).offset(2).toArray())).toEqual([3, 4]);
+    expect(ids(await byId.offset(3).toArray())).toEqual([4]);
+  });
 });
