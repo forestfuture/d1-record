@@ -68,9 +68,7 @@ export function compileSelect(query: SelectQuery, projection?: string): Compiled
 }
 
 function compileWhere({ model, conditions }: SelectQuery, params: unknown[]): string {
-  if (conditions.length === 0) return "";
-  const predicates = conditions.map((condition) => compileCondition(condition, model, params));
-  return ` WHERE ${predicates.join(" AND ")}`;
+  return conditions.length === 0 ? "" : ` WHERE ${compileAll(conditions, model, params)}`;
 }
 
 /** Conditions ANDed together as one predicate; no conditions matches everything. */
@@ -104,7 +102,6 @@ function compileCondition(
   return `(${parts.join(" AND ")})`;
 }
 
-/** `attr = value`, with NULL and arrays (IN) handled the way the contract specifies. */
 /** The quoted columns for `attributes`, or `*` for every column. */
 export function compileColumns(
   model: ModelClass<ModelBase>,
@@ -130,6 +127,7 @@ export function compileCount(query: SelectQuery, attribute?: string): CompiledQu
   return { sql: `SELECT COUNT(${counted}) AS count FROM (${inner.sql})`, params: inner.params };
 }
 
+/** `attr = value`, with NULL and arrays (IN) handled the way the contract specifies. */
 function compileEquality(
   attribute: AttributeDefinition,
   value: unknown,
