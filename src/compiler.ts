@@ -29,6 +29,10 @@ export function compileSelect({ model, conditions }: SelectQuery): CompiledQuery
     }
     for (const [name, value] of Object.entries(condition)) {
       const attribute = attributeOf(model, name);
+      if (value === null) {
+        predicates.push(`${quoteIdentifier(attribute.column)} IS NULL`);
+        continue;
+      }
       predicates.push(`${quoteIdentifier(attribute.column)} = ?`);
       params.push(writeValue(attribute.type, value));
     }
