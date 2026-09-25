@@ -123,4 +123,13 @@ describe("conditions", () => {
     expect((await users.findBy({}))?.id).toBeTypeOf("number");
     expect(await users.exists({})).toBe(true);
   });
+
+  test("an undefined value is rejected instead of silently matching nothing", async () => {
+    const users = connect(binding).model(User);
+    const body: { email?: string } = {};
+
+    expect(() => users.where({ role: undefined })).toThrow(TypeError);
+    expect(() => users.whereNot({ role: ["admin", undefined as never] })).toThrow(/"role".*null/);
+    await expect(users.findBy({ email: body.email })).rejects.toThrow(TypeError);
+  });
 });
