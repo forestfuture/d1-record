@@ -5,7 +5,7 @@ A Rails-inspired Active Record for [Cloudflare Workers](https://developers.cloud
 > **Status: in design and early development.** Not yet published to npm.
 
 ```ts
-import { connect, Model } from "d1-record";
+import { connect, Model } from "@forestfuture/d1-record";
 
 export class User extends Model {
   static tableName = "users";
