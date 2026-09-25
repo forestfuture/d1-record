@@ -77,4 +77,41 @@ describe("conditions", () => {
 
     expect(await ids(users.where({ role: "admin" }).whereNot({ suspended: true }))).toEqual([1]);
   });
+
+  test("count counts matching rows, and count(attr) counts non-null values", async () => {
+    const users = connect(binding).model(User);
+
+    expect(await users.count()).toBe(4);
+    expect(await users.where({ role: "admin" }).count()).toBe(2);
+    expect(await users.count("role")).toBe(3);
+    expect(await users.order({ id: "asc" }).limit(2).count()).toBe(2);
+  });
+
+  test("exists is true when any row matches, optionally with extra conditions", async () => {
+    const users = connect(binding).model(User);
+
+    expect(await users.where({ role: "admin" }).exists()).toBe(true);
+    expect(await users.exists({ role: "owner" })).toBe(false);
+    expect(await users.where({ suspended: true }).exists({ role: "member" })).toBe(true);
+  });
+
+  test("pluck returns converted attribute values, or tuples for several attributes", async () => {
+    const users = connect(binding).model(User).order({ id: "asc" });
+
+    expect(await users.pluck("suspended")).toEqual([false, true, false, true]);
+    expect(await users.where({ role: "admin" }).pluck("id", "email")).toEqual([
+      [1, "a@example.com"],
+      [4, "d@example.com"],
+    ]);
+  });
+
+  test("distinct removes duplicate rows, and count counts distinct values", async () => {
+    const users = connect(binding).model(User);
+
+    const roles = await users.order({ role: "asc" }).distinct().pluck("role");
+
+    expect(roles).toEqual([null, "admin", "member"]);
+    expect(await users.select("role").distinct().count()).toBe(3);
+    expect(await users.distinct().count("role")).toBe(2);
+  });
 });

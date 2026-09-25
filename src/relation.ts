@@ -1,4 +1,6 @@
 import {
+  compileColumns,
+  compileCount,
   compileSelect,
   Negated,
   type Condition,
@@ -15,6 +17,7 @@ import {
   type ModelBase,
   type ModelClass,
 } from "./model.ts";
+import { readValue } from "./conversion.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
 
 /**
@@ -71,6 +74,17 @@ export class Relation<M extends ModelBase> {
     return this.#with({ offset: count });
   }
 
+  /** Loads only these attributes (a partial record); the primary key is always loaded. */
+  select(...attributes: (keyof AttributesOf<M> & string)[]): Relation<M> {
+    for (const name of attributes) attributeOf(this.#model, name);
+    return this.#with({ select: attributes });
+  }
+
+  /** Removes duplicate rows (of the selected attributes). */
+  distinct(): Relation<M> {
+    return this.#with({ distinct: true });
+  }
+
   /** The record with this primary key, keeping this Relation's conditions. */
   async find(id: string | number): Promise<M> {
     const record = await this.#takeOne({ [this.#model.primaryKey]: id });
@@ -111,6 +125,37 @@ export class Relation<M extends ModelBase> {
   /** One record in whatever order D1 returns, or null. */
   async take(): Promise<M | null> {
     return this.#one(this.#query.order);
+  }
+
+  /** The number of matching rows, or of non-null values of `attribute`. */
+  async count(attribute?: keyof AttributesOf<M> & string): Promise<number> {
+    const { sql, params } = compileCount(this.#query, attribute);
+    const [row] = await this.#executor.all(sql, params);
+    return Number(row?.["count"] ?? 0);
+  }
+
+  /** Whether any row matches, optionally with extra conditions. */
+  async exists(conditions?: Conditions<M> | SafeSql): Promise<boolean> {
+    const relation = conditions === undefined ? this : this.where(conditions);
+    const { sql, params } = compileSelect({ ...relation.#query, limit: 1 }, "1");
+    return (await this.#executor.all(sql, params)).length > 0;
+  }
+
+  /** Converted values of one attribute, or tuples of several, in this Relation's order. */
+  async pluck<K extends keyof AttributesOf<M> & string>(
+    attribute: K,
+  ): Promise<AttributesOf<M>[K][]>;
+  async pluck<const K extends readonly (keyof AttributesOf<M> & string)[]>(
+    ...attributes: K
+  ): Promise<{ [I in keyof K]: AttributesOf<M>[K[I]] }[]>;
+  async pluck(...attributes: string[]): Promise<unknown[]> {
+    const definitions = attributes.map((name) => attributeOf(this.#model, name));
+    const { sql, params } = compileSelect(this.#query, compileColumns(this.#model, attributes));
+    const rows = await this.#executor.all(sql, params);
+    const values = rows.map((row) =>
+      definitions.map(({ type, column }) => readValue(type, row[column])),
+    );
+    return attributes.length === 1 ? values.map(([value]) => value) : values;
   }
 
   async toArray(): Promise<M[]> {

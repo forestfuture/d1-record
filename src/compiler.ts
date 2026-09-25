@@ -21,6 +21,9 @@ export interface SelectQuery {
   order: readonly OrderTerm[];
   limit?: number;
   offset?: number;
+  /** Attributes to load; undefined loads every column. */
+  select?: readonly string[];
+  distinct?: boolean;
 }
 
 export type Condition = Record<string, unknown> | SafeSql | Negated;
@@ -39,9 +42,12 @@ function quoteIdentifier(name: string): string {
   return `"${name.replaceAll('"', '""')}"`;
 }
 
-export function compileSelect(query: SelectQuery): CompiledQuery {
+/** `projection` is the SELECT list; the library builds it, never the caller. */
+export function compileSelect(query: SelectQuery, projection?: string): CompiledQuery {
   const params: unknown[] = [];
-  let sql = `SELECT * FROM ${quoteIdentifier(query.model.tableName)}`;
+  const list = projection ?? compileColumns(query.model, query.select);
+  let sql = `SELECT ${query.distinct ? "DISTINCT " : ""}${list}`;
+  sql += ` FROM ${quoteIdentifier(query.model.tableName)}`;
   sql += compileWhere(query, params);
   sql += compileOrder(query);
   sql += compilePagination(query, params);
@@ -71,6 +77,31 @@ function compileCondition(
 }
 
 /** `attr = value`, with NULL and arrays (IN) handled the way the contract specifies. */
+/** The quoted columns for `attributes`, or `*` for every column. */
+export function compileColumns(
+  model: ModelClass<ModelBase>,
+  attributes: readonly string[] | undefined,
+): string {
+  if (attributes === undefined) return "*";
+  return attributes.map((name) => quoteIdentifier(attributeOf(model, name).column)).join(", ");
+}
+
+/**
+ * Counts over the whole query as a subquery, so `count()` always equals the number of
+ * rows `toArray()` would return (including limit, offset, select and distinct).
+ * `count(attr)` counts non-null values, or distinct non-null values after `distinct()`.
+ */
+export function compileCount(query: SelectQuery, attribute?: string): CompiledQuery {
+  if (attribute === undefined) {
+    const inner = compileSelect(query);
+    return { sql: `SELECT COUNT(*) AS count FROM (${inner.sql})`, params: inner.params };
+  }
+  const inner = compileSelect({ ...query, select: undefined, distinct: false });
+  const column = quoteIdentifier(attributeOf(query.model, attribute).column);
+  const counted = query.distinct ? `DISTINCT ${column}` : column;
+  return { sql: `SELECT COUNT(${counted}) AS count FROM (${inner.sql})`, params: inner.params };
+}
+
 function compileEquality(
   attribute: AttributeDefinition,
   value: unknown,
