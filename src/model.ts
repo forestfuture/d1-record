@@ -48,6 +48,7 @@ export type AttributesOf<M> = M extends { readonly [attributeTypes]?: infer A } 
 
 export class ModelBase {
   static tableName: string;
+  static primaryKey = "id";
   static attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map();
 
   [values]: Record<string, unknown> = {};

@@ -38,6 +38,18 @@ export class Relation<M extends ModelBase> {
     return new Relation(this.#executor, this.#model, [...this.#conditions, conditions]);
   }
 
+  /** The record with this primary key, keeping this Relation's conditions. */
+  async find(id: string | number): Promise<M> {
+    const { sql, params } = compileSelect({
+      model: this.#model,
+      conditions: [...this.#conditions, { [this.#model.primaryKey]: id }],
+      limit: 1,
+    });
+    const [row] = await this.#executor.all(sql, params);
+    if (row === undefined) throw new Error("not found");
+    return hydrate(this.#model, row);
+  }
+
   async toArray(): Promise<M[]> {
     const { sql, params } = compileSelect({ model: this.#model, conditions: this.#conditions });
     const rows = await this.#executor.all(sql, params);
