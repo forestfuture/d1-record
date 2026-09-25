@@ -21,3 +21,5 @@ jobs:
       - run: vp check
       - run: vp test
       - run: vp pack
+      # Unused files, exports and dependencies.
+      - run: vp run knip

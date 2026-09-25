@@ -20,6 +20,7 @@ Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agent
 - Library code in `src/` must run on Cloudflare Workers. It's type-checked against `@cloudflare/workers-types` only (`src/tsconfig.json`), with no Node APIs.
 - Tests: `tests/unit/**` (no database) and `tests/integration/**` (real D1 through Miniflare in Node; see ADR-0002 and `tests/support/d1.ts`). Run one project with `vp test --project unit`.
 - Behavior is the contract: every public behavior needs a test, and integration tests prove it against D1.
+- `vp check` enforces size and complexity limits (Oxlint `complexity`, `max-depth`, `max-params`, `max-lines-per-function` in `vite.config.ts`). Split code that hits them rather than raising the limits. `vp run knip` reports unused files, exports and dependencies.
 
 <!--VITE PLUS START-->
 

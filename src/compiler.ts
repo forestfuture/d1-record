@@ -15,7 +15,7 @@ export interface SelectQuery {
 export type Condition = Record<string, unknown> | SafeSql;
 
 /** Quotes a SQLite identifier; embedded double quotes are doubled. */
-export function quoteIdentifier(name: string): string {
+function quoteIdentifier(name: string): string {
   return `"${name.replaceAll('"', '""')}"`;
 }
 

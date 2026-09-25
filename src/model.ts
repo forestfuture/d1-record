@@ -41,7 +41,7 @@ export type AttributeProperties<A extends AttributeSpecs> = {
 const values = Symbol("values");
 
 /** Type-only key carrying a record's declared attribute types; never set at runtime. */
-export declare const attributeTypes: unique symbol;
+declare const attributeTypes: unique symbol;
 
 /** The declared attributes of a record type, excluding methods and getters. */
 export type AttributesOf<M> = M extends { readonly [attributeTypes]?: infer A } ? A : never;
