@@ -115,9 +115,29 @@ const verified = new WeakSet<object>();
 /** Checks a Model's declaration the first time it's used; throws `InvalidModel`. */
 export function verifyModel(model: ModelClass): void {
   if (verified.has(model)) return;
+  requireTableName(model);
+  requirePrimaryKeyAttribute(model);
+  rejectReservedAttributeNames(model);
+  rejectShadowingFields(model);
+  verified.add(model);
+}
+
+function requireTableName(model: ModelClass): void {
   if (typeof model.tableName !== "string" || model.tableName === "") {
     throw new InvalidModel(`${model.name} has no tableName; add \`static tableName = "…"\``);
   }
+}
+
+function requirePrimaryKeyAttribute(model: ModelClass): void {
+  if (!model.attributeDefinitions.has(model.primaryKey)) {
+    throw new InvalidModel(
+      `${model.name}'s primaryKey "${model.primaryKey}" isn't a declared attribute; ` +
+        "declare it in Model({...}) or set `static primaryKey`",
+    );
+  }
+}
+
+function rejectReservedAttributeNames(model: ModelClass): void {
   for (const name of model.attributeDefinitions.keys()) {
     if (name in ModelBase.prototype) {
       throw new InvalidModel(
@@ -126,6 +146,9 @@ export function verifyModel(model: ModelClass): void {
       );
     }
   }
+}
+
+function rejectShadowingFields(model: ModelClass): void {
   const probe = new model();
   for (const name of model.attributeDefinitions.keys()) {
     if (Object.hasOwn(probe, name)) {
@@ -135,7 +158,6 @@ export function verifyModel(model: ModelClass): void {
       );
     }
   }
-  verified.add(model);
 }
 
 /** Looks up a declared attribute; throws `UnknownAttribute` for any other name. */
