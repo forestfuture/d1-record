@@ -114,4 +114,13 @@ describe("conditions", () => {
     expect(await users.select("role").distinct().count()).toBe(3);
     expect(await users.distinct().count("role")).toBe(2);
   });
+
+  test("an empty conditions object adds no condition, as when built from optional filters", async () => {
+    const users = connect(binding).model(User);
+
+    expect(await ids(users.where({}))).toEqual([1, 2, 3, 4]);
+    expect(await ids(users.whereNot({}))).toEqual([1, 2, 3, 4]);
+    expect((await users.findBy({}))?.id).toBeTypeOf("number");
+    expect(await users.exists({})).toBe(true);
+  });
 });

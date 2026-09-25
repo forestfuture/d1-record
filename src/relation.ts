@@ -36,6 +36,11 @@ export type OrderSpec<M> = { [K in keyof AttributesOf<M>]?: OrderDirection };
 /** Everything but the conditions: what `or` requires to match and `merge` may replace. */
 const SHAPE_CLAUSES = ["select", "order", "limit", "offset", "distinct"] as const;
 
+/** `{}` adds no condition at all (common when an object is built from optional filters). */
+function isEmptyConditions(conditions: object): boolean {
+  return !(conditions instanceof SafeSql) && Object.keys(conditions).length === 0;
+}
+
 /** One record from the page: `limit(0)` stays empty, and `offset` is kept by the caller. */
 function atMostOne(limit: number | undefined): number {
   return Math.min(limit ?? 1, 1);
@@ -55,12 +60,14 @@ export class Relation<M extends ModelBase> {
 
   where(conditions: Conditions<M> | SafeSql): Relation<M> {
     this.#check(conditions, "where");
+    if (isEmptyConditions(conditions)) return this;
     return this.#with({ conditions: [...this.#query.conditions, conditions] });
   }
 
   /** Negates the whole condition: `NOT (…)`. Rows where it is NULL are excluded too. */
   whereNot(conditions: Conditions<M> | SafeSql): Relation<M> {
     this.#check(conditions, "whereNot");
+    if (isEmptyConditions(conditions)) return this;
     return this.#with({ conditions: [...this.#query.conditions, new Negated(conditions)] });
   }
 
