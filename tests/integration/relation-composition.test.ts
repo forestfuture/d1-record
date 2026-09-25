@@ -1,5 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
-import { connect, IncompatibleRelation, Model, type Relation } from "../../src/index.ts";
+import {
+  connect,
+  IncompatibleRelation,
+  Model,
+  RecordNotFound,
+  type QueryEvent,
+  type Relation,
+} from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
@@ -72,5 +79,34 @@ describe("relation composition", () => {
 
     // @ts-expect-error a relation of another model
     expect(() => db.model(User).merge(db.model(Post))).toThrow(IncompatibleRelation);
+  });
+
+  test("none never touches D1, and every terminal operation returns an empty result", async () => {
+    const queries: QueryEvent[] = [];
+    const nothing = connect(binding, { onQuery: (event) => queries.push(event) })
+      .model(User)
+      .none()
+      .where({ role: "admin" })
+      .order({ id: "asc" });
+
+    expect(await nothing.toArray()).toEqual([]);
+    expect(await nothing.count()).toBe(0);
+    expect(await nothing.exists()).toBe(false);
+    expect(await nothing.first()).toBeNull();
+    expect(await nothing.last()).toBeNull();
+    expect(await nothing.take()).toBeNull();
+    expect(await nothing.findBy({ id: 1 })).toBeNull();
+    expect(await nothing.pluck("id")).toEqual([]);
+    await expect(nothing.find(1)).rejects.toThrow(RecordNotFound);
+    expect(queries).toHaveLength(0);
+  });
+
+  test("none drops out of or from either side, and merging with none gives none", async () => {
+    const users = connect(binding).model(User).order({ id: "asc" });
+    const admins = users.where({ role: "admin" });
+
+    expect(await ids(users.none().or(admins))).toEqual([1, 4]);
+    expect(await ids(admins.or(users.none()))).toEqual([1, 4]);
+    expect(await ids(admins.merge(users.none()))).toEqual([]);
   });
 });

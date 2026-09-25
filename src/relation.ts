@@ -6,6 +6,7 @@ import {
   Negated,
   type Condition,
   type OrderDirection,
+  type CompiledQuery,
   type OrderTerm,
   type SelectQuery,
 } from "./compiler.ts";
@@ -58,12 +59,19 @@ export class Relation<M extends ModelBase> {
     return this.#with({ conditions: [...this.#query.conditions, new Negated(conditions)] });
   }
 
+  /** A Relation that matches nothing and never queries D1; it stays empty when chained. */
+  none(): Relation<M> {
+    return this.#with({ none: true });
+  }
+
   /**
    * Rows matching this Relation's conditions or `other`'s. Both must be of the same Model and
    * identical in everything but their conditions (select, order, limit, offset, distinct).
    */
   or(other: Relation<M>): Relation<M> {
     this.#requireSameModel(other, "or");
+    if (this.#query.none) return other;
+    if (other.#query.none) return this;
     for (const clause of SHAPE_CLAUSES) {
       if (JSON.stringify(this.#query[clause]) !== JSON.stringify(other.#query[clause])) {
         throw new IncompatibleRelation(
@@ -90,6 +98,7 @@ export class Relation<M extends ModelBase> {
       ...(theirs.limit !== undefined && { limit: theirs.limit }),
       ...(theirs.offset !== undefined && { offset: theirs.offset }),
       ...(theirs.distinct === true && { distinct: true }),
+      ...(theirs.none === true && { none: true }),
     });
   }
 
@@ -169,7 +178,7 @@ export class Relation<M extends ModelBase> {
   /** The number of matching rows, or of non-null values of `attribute`. */
   async count(attribute?: keyof AttributesOf<M> & string): Promise<number> {
     const { sql, params } = compileCount(this.#query, attribute);
-    const [row] = await this.#executor.all(sql, params);
+    const [row] = await this.#all({ sql, params });
     return Number(row?.["count"] ?? 0);
   }
 
@@ -177,7 +186,7 @@ export class Relation<M extends ModelBase> {
   async exists(conditions?: Conditions<M> | SafeSql): Promise<boolean> {
     const relation = conditions === undefined ? this : this.where(conditions);
     const { sql, params } = compileSelect({ ...relation.#query, limit: 1 }, "1");
-    return (await this.#executor.all(sql, params)).length > 0;
+    return (await this.#all({ sql, params })).length > 0;
   }
 
   /** Converted values of one attribute, or tuples of several, in this Relation's order. */
@@ -190,7 +199,7 @@ export class Relation<M extends ModelBase> {
   async pluck(...attributes: string[]): Promise<unknown[]> {
     const definitions = attributes.map((name) => attributeOf(this.#model, name));
     const { sql, params } = compileSelect(this.#query, compileColumns(this.#model, attributes));
-    const rows = await this.#executor.all(sql, params);
+    const rows = await this.#all({ sql, params });
     const values = rows.map((row) =>
       definitions.map(({ type, column }) => readValue(type, row[column])),
     );
@@ -225,6 +234,11 @@ export class Relation<M extends ModelBase> {
     for (const name of names) attributeOf(this.#model, name);
   }
 
+  /** The one place a Relation runs SQL; a `none()` relation never reaches D1. */
+  async #all({ sql, params }: CompiledQuery): Promise<Record<string, unknown>[]> {
+    return this.#query.none ? [] : this.#executor.all(sql, params);
+  }
+
   #with(changes: Partial<SelectQuery>): Relation<M> {
     return new Relation(this.#executor, this.#model, { ...this.#query, ...changes });
   }
@@ -238,7 +252,7 @@ export class Relation<M extends ModelBase> {
         ? [primaryKey, ...query.select.filter((name) => name !== primaryKey)]
         : query.select;
     const { sql, params } = compileSelect(query, compileColumns(this.#model, loaded));
-    const rows = await this.#executor.all(sql, params);
+    const rows = await this.#all({ sql, params });
     return rows.map((row) => hydrate(this.#model, row));
   }
 

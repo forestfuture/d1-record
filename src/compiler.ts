@@ -24,6 +24,8 @@ export interface SelectQuery {
   /** Attributes to load; undefined loads every column. */
   select?: readonly string[];
   distinct?: boolean;
+  /** From `none()`: matches nothing, so it's never sent to D1. */
+  none?: boolean;
 }
 
 export type Condition = Record<string, unknown> | SafeSql | Negated | Either;
