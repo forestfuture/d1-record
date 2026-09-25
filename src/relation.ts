@@ -2,13 +2,14 @@ import {
   compileColumns,
   compileCount,
   compileSelect,
+  Either,
   Negated,
   type Condition,
   type OrderDirection,
   type OrderTerm,
   type SelectQuery,
 } from "./compiler.ts";
-import { RecordNotFound } from "./errors.ts";
+import { IncompatibleRelation, RecordNotFound } from "./errors.ts";
 import type { Executor } from "./executor.ts";
 import {
   attributeOf,
@@ -31,6 +32,9 @@ export type Conditions<M> = {
 /** `{ attribute: "asc" | "desc" }`; key order sets precedence. */
 export type OrderSpec<M> = { [K in keyof AttributesOf<M>]?: OrderDirection };
 
+/** Everything but the conditions: what `or` requires to match and `merge` may replace. */
+const SHAPE_CLAUSES = ["select", "order", "limit", "offset", "distinct"] as const;
+
 /** A lazy, immutable description of a query against one Model. */
 export class Relation<M extends ModelBase> {
   readonly #executor: Executor;
@@ -52,6 +56,23 @@ export class Relation<M extends ModelBase> {
   whereNot(conditions: Conditions<M> | SafeSql): Relation<M> {
     this.#check(conditions, "whereNot");
     return this.#with({ conditions: [...this.#query.conditions, new Negated(conditions)] });
+  }
+
+  /**
+   * Rows matching this Relation's conditions or `other`'s. Both must be of the same Model and
+   * identical in everything but their conditions (select, order, limit, offset, distinct).
+   */
+  or(other: Relation<M>): Relation<M> {
+    this.#requireSameModel(other, "or");
+    for (const clause of SHAPE_CLAUSES) {
+      if (JSON.stringify(this.#query[clause]) !== JSON.stringify(other.#query[clause])) {
+        throw new IncompatibleRelation(
+          `or() needs relations that differ only in their conditions, but their ${clause} differs`,
+        );
+      }
+    }
+    const either = new Either(this.#query.conditions, other.#query.conditions);
+    return this.#with({ conditions: [either] });
   }
 
   /** Sorts by each key in turn; repeated calls append. */
@@ -160,6 +181,14 @@ export class Relation<M extends ModelBase> {
 
   async toArray(): Promise<M[]> {
     return this.#load(this.#query);
+  }
+
+  #requireSameModel(other: Relation<ModelBase>, method: string): void {
+    if (other.#model !== this.#model) {
+      throw new IncompatibleRelation(
+        `${method}() needs relations of the same Model, not ${this.#model.name} and ${other.#model.name}`,
+      );
+    }
   }
 
   /** Rejects plain strings and unknown attributes when the condition is written, not when it runs. */

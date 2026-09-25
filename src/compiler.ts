@@ -26,7 +26,18 @@ export interface SelectQuery {
   distinct?: boolean;
 }
 
-export type Condition = Record<string, unknown> | SafeSql | Negated;
+export type Condition = Record<string, unknown> | SafeSql | Negated | Either;
+
+/** A condition from `or`: either side's conditions (each ANDed together) may match. */
+export class Either {
+  readonly left: readonly Condition[];
+  readonly right: readonly Condition[];
+
+  constructor(left: readonly Condition[], right: readonly Condition[]) {
+    this.left = left;
+    this.right = right;
+  }
+}
 
 /** A condition from `whereNot`: the whole condition is negated, `NOT (…)`. */
 export class Negated {
@@ -60,12 +71,27 @@ function compileWhere({ model, conditions }: SelectQuery, params: unknown[]): st
   return ` WHERE ${predicates.join(" AND ")}`;
 }
 
+/** Conditions ANDed together as one predicate; no conditions matches everything. */
+function compileAll(
+  conditions: readonly Condition[],
+  model: ModelClass<ModelBase>,
+  params: unknown[],
+): string {
+  if (conditions.length === 0) return "(1 = 1)";
+  return `(${conditions.map((condition) => compileCondition(condition, model, params)).join(" AND ")})`;
+}
+
 /** One condition as a single parenthesized predicate. */
 function compileCondition(
   condition: Condition,
   model: ModelClass<ModelBase>,
   params: unknown[],
 ): string {
+  if (condition instanceof Either) {
+    const left = compileAll(condition.left, model, params);
+    const right = compileAll(condition.right, model, params);
+    return `(${left} OR ${right})`;
+  }
   if (condition instanceof Negated) {
     return `(NOT ${compileCondition(condition.condition, model, params)})`;
   }

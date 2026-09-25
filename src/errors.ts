@@ -22,3 +22,8 @@ export class RecordNotFound extends D1RecordError {
 export class MissingAttribute extends D1RecordError {
   override name = "MissingAttribute";
 }
+
+/** Combining relations that can't be combined (`or`, `merge`), e.g. of different Models. */
+export class IncompatibleRelation extends D1RecordError {
+  override name = "IncompatibleRelation";
+}
