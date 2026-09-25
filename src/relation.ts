@@ -75,6 +75,24 @@ export class Relation<M extends ModelBase> {
     return this.#with({ conditions: [either] });
   }
 
+  /**
+   * ANDs `other`'s conditions onto this Relation's. For select, order, limit, offset and
+   * distinct, a clause `other` sets explicitly replaces this one's; one it doesn't set is kept.
+   * Orders are replaced, not concatenated (a deliberate difference from Rails).
+   */
+  merge(other: Relation<M>): Relation<M> {
+    this.#requireSameModel(other, "merge");
+    const theirs = other.#query;
+    return this.#with({
+      conditions: [...this.#query.conditions, ...theirs.conditions],
+      ...(theirs.order.length > 0 && { order: theirs.order }),
+      ...(theirs.select !== undefined && { select: theirs.select }),
+      ...(theirs.limit !== undefined && { limit: theirs.limit }),
+      ...(theirs.offset !== undefined && { offset: theirs.offset }),
+      ...(theirs.distinct === true && { distinct: true }),
+    });
+  }
+
   /** Sorts by each key in turn; repeated calls append. */
   order(spec: OrderSpec<M>): Relation<M> {
     const terms: OrderTerm[] = Object.entries(spec).map(([attribute, direction]) => {

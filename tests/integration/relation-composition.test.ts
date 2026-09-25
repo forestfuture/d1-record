@@ -54,4 +54,23 @@ describe("relation composition", () => {
     // @ts-expect-error a relation of another model
     expect(() => users.or(db.model(Post))).toThrow(IncompatibleRelation);
   });
+
+  test("merge ANDs conditions, and the argument's explicit clauses replace the receiver's", async () => {
+    const users = connect(binding).model(User);
+    const base = users.where({ suspended: false }).order({ id: "desc" }).limit(10);
+
+    const merged = base.merge(users.where({ role: "admin" }));
+    const reordered = base.merge(users.order({ id: "asc" }).limit(1));
+
+    expect(await ids(merged)).toEqual([1]);
+    expect(await ids(reordered)).toEqual([1]);
+    expect(await ids(base.merge(users))).toEqual([3, 1]);
+  });
+
+  test("merge rejects a relation of another Model", () => {
+    const db = connect(binding);
+
+    // @ts-expect-error a relation of another model
+    expect(() => db.model(User).merge(db.model(Post))).toThrow(IncompatibleRelation);
+  });
 });
