@@ -58,4 +58,40 @@ describe("types", () => {
     };
     expectTypeOf(typeOnly).toBeFunction();
   });
+
+  test("finders and pluck return precise types", () => {
+    const users = db.model(User);
+
+    expectTypeOf<ReturnType<typeof users.find>>().toEqualTypeOf<Promise<User>>();
+    expectTypeOf<ReturnType<typeof users.findBy>>().toEqualTypeOf<Promise<User | null>>();
+    expectTypeOf<ReturnType<typeof users.first>>().toEqualTypeOf<Promise<User | null>>();
+
+    // Checked by the type checker only; never called.
+    const typeOnly = async () => {
+      expectTypeOf(await users.pluck("email")).toEqualTypeOf<string[]>();
+      expectTypeOf(await users.pluck("id", "isActive")).toEqualTypeOf<[number, boolean | null][]>();
+    };
+    expectTypeOf(typeOnly).toBeFunction();
+  });
+
+  test("order, select, pluck and count accept only declared attributes", () => {
+    const users = db.model(User);
+
+    // Checked by the type checker only; never called.
+    const typeOnly = () => {
+      users.order({ createdAt: "desc", id: "asc" }).select("email", "isActive").distinct();
+      void users.count("isActive");
+      // @ts-expect-error direction must be "asc" or "desc"
+      users.order({ id: "up" });
+      // @ts-expect-error getters aren't attributes
+      users.order({ label: "asc" });
+      // @ts-expect-error unknown attribute
+      users.select("nope");
+      // @ts-expect-error unknown attribute
+      void users.pluck("nope");
+      // @ts-expect-error unknown attribute
+      void users.count("nope");
+    };
+    expectTypeOf(typeOnly).toBeFunction();
+  });
 });
