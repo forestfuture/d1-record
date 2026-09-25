@@ -1,4 +1,5 @@
 import { compileSelect, type Condition } from "./compiler.ts";
+import { RecordNotFound } from "./errors.ts";
 import type { Executor } from "./executor.ts";
 import {
   attributeOf,
@@ -46,7 +47,11 @@ export class Relation<M extends ModelBase> {
       limit: 1,
     });
     const [row] = await this.#executor.all(sql, params);
-    if (row === undefined) throw new Error("not found");
+    if (row === undefined) {
+      throw new RecordNotFound(
+        `${this.#model.name} with ${this.#model.primaryKey} ${id} not found`,
+      );
+    }
     return hydrate(this.#model, row);
   }
 

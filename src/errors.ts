@@ -12,3 +12,8 @@ export class InvalidModel extends D1RecordError {
 export class UnknownAttribute extends D1RecordError {
   override name = "UnknownAttribute";
 }
+
+/** No record matched a lookup that requires one (`find`, `findByOrThrow`). */
+export class RecordNotFound extends D1RecordError {
+  override name = "RecordNotFound";
+}
