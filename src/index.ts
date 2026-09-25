@@ -3,5 +3,5 @@ export { D1RecordError, InvalidModel, RecordNotFound, UnknownAttribute } from ".
 export type { QueryEvent, QueryListener } from "./executor.ts";
 export { Model } from "./model.ts";
 export type { AttributeSpec, AttributeSpecs, AttributeType } from "./model.ts";
-export { Relation } from "./relation.ts";
+export { Relation, type OrderSpec } from "./relation.ts";
 export { column, sql, type ColumnReference, type SafeSql } from "./sql.ts";

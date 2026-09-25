@@ -1,4 +1,10 @@
-import { compileSelect, type Condition } from "./compiler.ts";
+import {
+  compileSelect,
+  type Condition,
+  type OrderDirection,
+  type OrderTerm,
+  type SelectQuery,
+} from "./compiler.ts";
 import { RecordNotFound } from "./errors.ts";
 import type { Executor } from "./executor.ts";
 import {
@@ -10,16 +16,19 @@ import {
 } from "./model.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
 
+/** `{ attribute: "asc" | "desc" }`; key order sets precedence. */
+export type OrderSpec<M> = { [K in keyof AttributesOf<M>]?: OrderDirection };
+
 /** A lazy, immutable description of a query against one Model. */
 export class Relation<M extends ModelBase> {
   readonly #executor: Executor;
   readonly #model: ModelClass<M>;
-  readonly #conditions: readonly Condition[];
+  readonly #query: SelectQuery;
 
-  constructor(executor: Executor, model: ModelClass<M>, conditions: readonly Condition[] = []) {
+  constructor(executor: Executor, model: ModelClass<M>, query?: SelectQuery) {
     this.#executor = executor;
     this.#model = model;
-    this.#conditions = conditions;
+    this.#query = query ?? { model, conditions: [], order: [] };
   }
 
   where(conditions: Partial<AttributesOf<M>> | SafeSql): Relation<M> {
@@ -36,7 +45,19 @@ export class Relation<M extends ModelBase> {
           )
         : Object.keys(conditions);
     for (const name of names) attributeOf(this.#model, name);
-    return new Relation(this.#executor, this.#model, [...this.#conditions, conditions]);
+    return this.#with({ conditions: [...this.#query.conditions, conditions] });
+  }
+
+  /** Sorts by each key in turn; repeated calls append. */
+  order(spec: OrderSpec<M>): Relation<M> {
+    const terms: OrderTerm[] = Object.entries(spec).map(([attribute, direction]) => {
+      attributeOf(this.#model, attribute);
+      if (direction !== "asc" && direction !== "desc") {
+        throw new TypeError(`order() direction for "${attribute}" must be "asc" or "desc"`);
+      }
+      return { attribute, direction };
+    });
+    return this.#with({ order: [...this.#query.order, ...terms] });
   }
 
   /** The record with this primary key, keeping this Relation's conditions. */
@@ -63,15 +84,24 @@ export class Relation<M extends ModelBase> {
   }
 
   async toArray(): Promise<M[]> {
-    const { sql, params } = compileSelect({ model: this.#model, conditions: this.#conditions });
+    return this.#load(this.#query);
+  }
+
+  #with(changes: Partial<SelectQuery>): Relation<M> {
+    return new Relation(this.#executor, this.#model, { ...this.#query, ...changes });
+  }
+
+  async #load(query: SelectQuery): Promise<M[]> {
+    const { sql, params } = compileSelect(query);
     const rows = await this.#executor.all(sql, params);
     return rows.map((row) => hydrate(this.#model, row));
   }
 
+  /** One matching row by the finder rules: keeps conditions, ignores order and pagination. */
   async #takeOne(extra?: Condition): Promise<M | null> {
-    const conditions = extra === undefined ? this.#conditions : [...this.#conditions, extra];
-    const { sql, params } = compileSelect({ model: this.#model, conditions, limit: 1 });
-    const [row] = await this.#executor.all(sql, params);
-    return row === undefined ? null : hydrate(this.#model, row);
+    const conditions =
+      extra === undefined ? this.#query.conditions : [...this.#query.conditions, extra];
+    const [record] = await this.#load({ model: this.#model, conditions, order: [], limit: 1 });
+    return record ?? null;
   }
 }

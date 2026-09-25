@@ -7,10 +7,20 @@ export interface CompiledQuery {
   params: unknown[];
 }
 
+export type OrderDirection = "asc" | "desc";
+
+export interface OrderTerm {
+  attribute: string;
+  direction: OrderDirection;
+}
+
+/** Everything a Relation knows about its query; Relations copy it, never mutate it. */
 export interface SelectQuery {
   model: ModelClass<ModelBase>;
   conditions: readonly Condition[];
+  order: readonly OrderTerm[];
   limit?: number;
+  offset?: number;
 }
 
 export type Condition = Record<string, unknown> | SafeSql;
@@ -20,8 +30,16 @@ function quoteIdentifier(name: string): string {
   return `"${name.replaceAll('"', '""')}"`;
 }
 
-export function compileSelect({ model, conditions, limit }: SelectQuery): CompiledQuery {
+export function compileSelect(query: SelectQuery): CompiledQuery {
   const params: unknown[] = [];
+  let sql = `SELECT * FROM ${quoteIdentifier(query.model.tableName)}`;
+  sql += compileWhere(query, params);
+  sql += compileOrder(query);
+  sql += compilePagination(query, params);
+  return { sql, params };
+}
+
+function compileWhere({ model, conditions }: SelectQuery, params: unknown[]): string {
   const predicates: string[] = [];
   for (const condition of conditions) {
     if (condition instanceof SafeSql) {
@@ -38,13 +56,25 @@ export function compileSelect({ model, conditions, limit }: SelectQuery): Compil
       params.push(writeValue(attribute.type, value));
     }
   }
-  let sql = `SELECT * FROM ${quoteIdentifier(model.tableName)}`;
-  if (predicates.length > 0) sql += ` WHERE ${predicates.join(" AND ")}`;
-  if (limit !== undefined) {
-    sql += " LIMIT ?";
-    params.push(limit);
-  }
-  return { sql, params };
+  return predicates.length > 0 ? ` WHERE ${predicates.join(" AND ")}` : "";
+}
+
+function compileOrder({ model, order }: SelectQuery): string {
+  if (order.length === 0) return "";
+  const terms = order.map(
+    ({ attribute, direction }) =>
+      `${quoteIdentifier(attributeOf(model, attribute).column)} ${direction.toUpperCase()}`,
+  );
+  return ` ORDER BY ${terms.join(", ")}`;
+}
+
+function compilePagination({ limit, offset }: SelectQuery, params: unknown[]): string {
+  if (limit === undefined && offset === undefined) return "";
+  // SQLite only accepts OFFSET after a LIMIT; -1 means "no limit".
+  params.push(limit ?? -1);
+  if (offset === undefined) return " LIMIT ?";
+  params.push(offset);
+  return " LIMIT ? OFFSET ?";
 }
 
 /** Appends the fragment's values to `params` and returns its SQL text. */
