@@ -4,7 +4,7 @@
 
 ### Issue tracker
 
-Issues live in GitHub Issues on `christopherstyles/d1-record` (via `gh`). See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues on `forestfuture/d1-record` (via `gh`). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
