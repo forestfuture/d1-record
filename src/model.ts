@@ -1,4 +1,4 @@
-import { InvalidModel, UnknownAttribute } from "./errors.ts";
+import { InvalidModel, MissingAttribute, UnknownAttribute } from "./errors.ts";
 import { underscore } from "./naming.ts";
 import { readValue } from "./conversion.ts";
 
@@ -86,6 +86,11 @@ export function Model<const A extends AttributeSpecs>(
   for (const name of Object.keys(specs)) {
     Object.defineProperty(DefinedModel.prototype, name, {
       get(this: ModelBase) {
+        if (!(name in this[values])) {
+          throw new MissingAttribute(
+            `${this.constructor.name} record has no "${name}" loaded; it was left out of select(...)`,
+          );
+        }
         return this[values][name];
       },
       set(this: ModelBase, value: unknown) {
@@ -103,7 +108,8 @@ export function hydrate<M extends ModelBase>(
 ): M {
   const record = new model();
   for (const [name, { type, column }] of model.attributeDefinitions) {
-    record[values][name] = readValue(type, row[column]);
+    // A column absent from the row wasn't selected: the attribute stays unloaded.
+    if (column in row) record[values][name] = readValue(type, row[column]);
   }
   return record;
 }

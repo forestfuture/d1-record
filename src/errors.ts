@@ -17,3 +17,8 @@ export class UnknownAttribute extends D1RecordError {
 export class RecordNotFound extends D1RecordError {
   override name = "RecordNotFound";
 }
+
+/** Reading an attribute that wasn't loaded, e.g. one left out of `select(...)`. */
+export class MissingAttribute extends D1RecordError {
+  override name = "MissingAttribute";
+}
