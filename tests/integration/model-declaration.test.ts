@@ -1,5 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
-import { connect, D1RecordError, InvalidModel, Model, UnknownAttribute } from "../../src/index.ts";
+import {
+  column,
+  connect,
+  D1RecordError,
+  InvalidModel,
+  Model,
+  sql,
+  UnknownAttribute,
+} from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 describe("model declaration", () => {
@@ -48,5 +56,16 @@ describe("model declaration", () => {
     }
 
     expect(() => connect(binding).model(Clashing)).toThrow(/Clashing.*"attributes"/);
+  });
+
+  test("column() naming an unknown attribute is rejected as soon as where is called", () => {
+    class User extends Model({ createdAt: "datetime" }) {
+      static tableName = "users";
+    }
+    const users = connect(binding).model(User);
+
+    expect(() => users.where(sql`${column("createdAtt")} > ${new Date()}`)).toThrow(
+      UnknownAttribute,
+    );
   });
 });
