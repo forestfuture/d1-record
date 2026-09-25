@@ -77,4 +77,24 @@ describe("ordering and pagination", () => {
     expect(await users.where({ role: "owner" }).first()).toBeNull();
     expect(await users.where({ role: "owner" }).last()).toBeNull();
   });
+
+  test("first and last work within the page that limit and offset select", async () => {
+    const byId = connect(binding).model(User).order({ id: "asc" });
+
+    expect((await byId.limit(2).first())?.id).toBe(1);
+    expect((await byId.limit(2).last())?.id).toBe(2);
+    expect((await byId.offset(2).first())?.id).toBe(3);
+    expect((await byId.offset(2).last())?.id).toBe(4);
+    expect((await byId.limit(2).offset(1).last())?.id).toBe(3);
+  });
+
+  test("an empty page (limit 0) has no first, last, take or match", async () => {
+    const empty = connect(binding).model(User).order({ id: "asc" }).limit(0);
+
+    expect(await empty.toArray()).toEqual([]);
+    expect(await empty.first()).toBeNull();
+    expect(await empty.last()).toBeNull();
+    expect(await empty.take()).toBeNull();
+    expect(await empty.exists()).toBe(false);
+  });
 });
