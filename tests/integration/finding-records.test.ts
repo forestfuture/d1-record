@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model } from "../../src/index.ts";
+import { connect, D1RecordError, Model, RecordNotFound } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
@@ -34,5 +34,20 @@ describe("finding records", () => {
 
     expect(user).toBeInstanceOf(User);
     expect(user.email).toBe("b@example.com");
+  });
+
+  test("find throws RecordNotFound when no row has that primary key", async () => {
+    const lookup = connect(binding).model(User).find(99);
+
+    await expect(lookup).rejects.toThrow(RecordNotFound);
+    await expect(lookup).rejects.toThrow(D1RecordError);
+    await expect(lookup).rejects.toThrow(/User.*99/);
+  });
+
+  test("find keeps the relation's conditions, so an excluded row isn't found", async () => {
+    const admins = connect(binding).model(User).where({ role: "admin" });
+
+    await expect(admins.find(1)).resolves.toBeInstanceOf(User);
+    await expect(admins.find(2)).rejects.toThrow(RecordNotFound);
   });
 });
