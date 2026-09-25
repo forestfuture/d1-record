@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model } from "../../src/index.ts";
+import { connect, Model, sql } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class Sample extends Model({
@@ -84,5 +84,23 @@ describe("attribute types", () => {
     const unlabeled = await connect(binding).model(Sample).where({ label: null }).toArray();
 
     expect(unlabeled.map((sample) => sample.id)).toEqual([2]);
+  });
+
+  test("booleans and dates interpolated into an sql fragment are bound in their stored form", async () => {
+    await binding
+      .prepare(
+        `INSERT INTO samples (id, enabled, stamp) VALUES
+           (1, 1, '2026-01-02T03:04:05.000Z'),
+           (2, 0, '2026-01-02T03:04:05.000Z')`,
+      )
+      .run();
+    const stamp = new Date(Date.UTC(2026, 0, 2, 3, 4, 5));
+
+    const samples = await connect(binding)
+      .model(Sample)
+      .where(sql`enabled = ${true} AND stamp = ${stamp}`)
+      .toArray();
+
+    expect(samples.map((sample) => sample.id)).toEqual([1]);
   });
 });
