@@ -33,6 +33,20 @@ export default defineConfig({
       typeAware: true,
       typeCheck: true,
     },
+    // Size and complexity limits: small, understandable internals (brief, principle 5).
+    rules: {
+      complexity: ["error", { max: 10 }],
+      "max-depth": ["error", { max: 3 }],
+      "max-params": ["error", { max: 4 }],
+      "max-lines-per-function": ["error", { max: 60, skipBlankLines: true, skipComments: true }],
+    },
+    overrides: [
+      {
+        // A describe() callback holds a whole suite, so it's long by design.
+        files: ["tests/**"],
+        rules: { "max-lines-per-function": "off" },
+      },
+    ],
   },
   fmt: {
     // The original design brief is kept verbatim.
