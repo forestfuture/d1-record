@@ -23,7 +23,16 @@ export interface SelectQuery {
   offset?: number;
 }
 
-export type Condition = Record<string, unknown> | SafeSql;
+export type Condition = Record<string, unknown> | SafeSql | Negated;
+
+/** A condition from `whereNot`: the whole condition is negated, `NOT (…)`. */
+export class Negated {
+  readonly condition: Condition;
+
+  constructor(condition: Condition) {
+    this.condition = condition;
+  }
+}
 
 /** Quotes a SQLite identifier; embedded double quotes are doubled. */
 function quoteIdentifier(name: string): string {
@@ -51,6 +60,9 @@ function compileCondition(
   model: ModelClass<ModelBase>,
   params: unknown[],
 ): string {
+  if (condition instanceof Negated) {
+    return `(NOT ${compileCondition(condition.condition, model, params)})`;
+  }
   if (condition instanceof SafeSql) return `(${compileFragment(condition, model, params)})`;
   const parts = Object.entries(condition).map(([name, value]) =>
     compileEquality(attributeOf(model, name), value, params),

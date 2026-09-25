@@ -1,5 +1,6 @@
 import {
   compileSelect,
+  Negated,
   type Condition,
   type OrderDirection,
   type OrderTerm,
@@ -40,20 +41,14 @@ export class Relation<M extends ModelBase> {
   }
 
   where(conditions: Conditions<M> | SafeSql): Relation<M> {
-    if (typeof conditions !== "object" || conditions === null || Array.isArray(conditions)) {
-      throw new TypeError(
-        "where() takes an object of attribute values or an sql`…` fragment; plain strings are not accepted",
-      );
-    }
-    // Check attribute names now, so a typo fails where it was written rather than at toArray().
-    const names =
-      conditions instanceof SafeSql
-        ? conditions.values.flatMap((value) =>
-            value instanceof ColumnReference ? [value.attribute] : [],
-          )
-        : Object.keys(conditions);
-    for (const name of names) attributeOf(this.#model, name);
+    this.#check(conditions, "where");
     return this.#with({ conditions: [...this.#query.conditions, conditions] });
+  }
+
+  /** Negates the whole condition: `NOT (…)`. Rows where it is NULL are excluded too. */
+  whereNot(conditions: Conditions<M> | SafeSql): Relation<M> {
+    this.#check(conditions, "whereNot");
+    return this.#with({ conditions: [...this.#query.conditions, new Negated(conditions)] });
   }
 
   /** Sorts by each key in turn; repeated calls append. */
@@ -120,6 +115,22 @@ export class Relation<M extends ModelBase> {
 
   async toArray(): Promise<M[]> {
     return this.#load(this.#query);
+  }
+
+  /** Rejects plain strings and unknown attributes when the condition is written, not when it runs. */
+  #check(conditions: Conditions<M> | SafeSql, method: string): void {
+    if (typeof conditions !== "object" || conditions === null || Array.isArray(conditions)) {
+      throw new TypeError(
+        `${method}() takes an object of attribute values or an sql\`…\` fragment; plain strings are not accepted`,
+      );
+    }
+    const names =
+      conditions instanceof SafeSql
+        ? conditions.values.flatMap((value) =>
+            value instanceof ColumnReference ? [value.attribute] : [],
+          )
+        : Object.keys(conditions);
+    for (const name of names) attributeOf(this.#model, name);
   }
 
   #with(changes: Partial<SelectQuery>): Relation<M> {
