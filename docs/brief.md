@@ -55,7 +55,7 @@ A **Model** is a class created with `Model({...attributes})`. A **Record** is on
 Attributes are camelCase in JavaScript and map automatically to snake_case columns in D1 (ADR-0004). Attributes are declared once, in the object passed to `Model({...})`, and TypeScript infers the record's properties from it (ADR-0007). Scopes and associations are declared as typed static fields so that chained calls such as `db.model(User).active()` are type-checked. Validations and callbacks are declared in a `static {}` block.
 
 ```ts
-import { Model, sql, type BelongsTo, type HasMany } from "d1-record";
+import { Model, sql, type BelongsTo, type HasMany } from "@forestfuture/d1-record";
 
 export class User extends Model({
   id: { type: "integer", null: false },
@@ -112,7 +112,7 @@ export class Post extends Model({
 Workers must associate models with the D1 binding in a request-safe manner. The only supported shape is an explicit **Database**, created at the application edge for each request (ADR-0003):
 
 ```ts
-import { connect } from "d1-record";
+import { connect } from "@forestfuture/d1-record";
 
 export default {
   async fetch(request: Request, env: Env) {
