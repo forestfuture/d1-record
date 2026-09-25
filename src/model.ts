@@ -57,6 +57,16 @@ export class ModelBase {
   attributes(): Record<string, unknown> {
     return { ...this[values] };
   }
+
+  /** The loaded attributes as JSON-ready values (dates as ISO strings), for `Response.json(record)`. */
+  toJSON(): Record<string, unknown> {
+    return Object.fromEntries(
+      Object.entries(this[values]).map(([name, value]) => [
+        name,
+        value instanceof Date ? value.toISOString() : value,
+      ]),
+    );
+  }
 }
 
 /** Constructor type for any Model class, used wherever the library accepts one. */

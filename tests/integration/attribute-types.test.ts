@@ -103,4 +103,30 @@ describe("attribute types", () => {
 
     expect(samples.map((sample) => sample.id)).toEqual([1]);
   });
+
+  test("toJSON gives the attributes with dates as ISO strings, so Response.json works", async () => {
+    await binding
+      .prepare(
+        `INSERT INTO samples (id, label, enabled, stamp, settings)
+         VALUES (1, 'hello', 1, '2026-01-02T03:04:05.000Z', '{"theme":"dark"}')`,
+      )
+      .run();
+    const samples = connect(binding).model(Sample);
+    const [sample] = await samples.toArray();
+    const [partial] = await samples.select("stamp").toArray();
+
+    expect(JSON.parse(JSON.stringify(sample))).toEqual({
+      id: 1,
+      label: "hello",
+      quantity: null,
+      ratio: null,
+      enabled: true,
+      stamp: "2026-01-02T03:04:05.000Z",
+      settings: { theme: "dark" },
+    });
+    expect(await Response.json(partial).json()).toEqual({
+      id: 1,
+      stamp: "2026-01-02T03:04:05.000Z",
+    });
+  });
 });
