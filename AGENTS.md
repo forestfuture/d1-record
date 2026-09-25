@@ -16,7 +16,7 @@ Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agent
 
 ## Working on an issue
 
-Follow `docs/agents/workflow.md` for every issue. In short: orient (the issue and its comments, `CONTEXT.md`, the contract, ADRs) → **agree the test seams and open decisions with the human before writing tests** → build red → green, one committed slice at a time → `code-review` skill → **push only with the human's approval**, then close the issue with a summary. Workflow skills (`tdd`, `code-review`, `grilling`, `domain-modeling`, `implement`, `codebase-design`) are in `.claude/skills/`. Agents other than Claude Code can read each `SKILL.md` as plain instructions.
+Follow `docs/agents/workflow.md` for every issue. In short: orient (the issue and its comments, `CONTEXT.md`, the contract, ADRs) → **agree the test seams and open decisions with the human before writing tests** → build red → green, one committed slice at a time → `code-review` skill → **push only with the human's approval**, then close the issue with a summary. Workflow skills (`tdd`, `code-review`, `grilling`, `domain-modeling`, `implement`, `codebase-design`) are in `.claude/skills/`. Agents other than Claude Code can read each `SKILL.md` as plain instructions. To update or add skills, see `.claude/skills/README.md`.
 
 ## Project
 
