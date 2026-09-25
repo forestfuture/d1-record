@@ -77,4 +77,12 @@ describe("attribute types", () => {
     expect(enabled.map((sample) => sample.id)).toEqual([1]);
     expect(stamped.map((sample) => sample.id)).toEqual([2]);
   });
+
+  test("where with null matches rows whose column is NULL", async () => {
+    await binding.prepare("INSERT INTO samples (id, label) VALUES (1, 'set'), (2, NULL)").run();
+
+    const unlabeled = await connect(binding).model(Sample).where({ label: null }).toArray();
+
+    expect(unlabeled.map((sample) => sample.id)).toEqual([2]);
+  });
 });
