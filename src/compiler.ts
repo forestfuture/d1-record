@@ -10,6 +10,7 @@ export interface CompiledQuery {
 export interface SelectQuery {
   model: ModelClass<ModelBase>;
   conditions: readonly Condition[];
+  limit?: number;
 }
 
 export type Condition = Record<string, unknown> | SafeSql;
@@ -19,7 +20,7 @@ function quoteIdentifier(name: string): string {
   return `"${name.replaceAll('"', '""')}"`;
 }
 
-export function compileSelect({ model, conditions }: SelectQuery): CompiledQuery {
+export function compileSelect({ model, conditions, limit }: SelectQuery): CompiledQuery {
   const params: unknown[] = [];
   const predicates: string[] = [];
   for (const condition of conditions) {
@@ -39,6 +40,10 @@ export function compileSelect({ model, conditions }: SelectQuery): CompiledQuery
   }
   let sql = `SELECT * FROM ${quoteIdentifier(model.tableName)}`;
   if (predicates.length > 0) sql += ` WHERE ${predicates.join(" AND ")}`;
+  if (limit !== undefined) {
+    sql += " LIMIT ?";
+    params.push(limit);
+  }
   return { sql, params };
 }
 
