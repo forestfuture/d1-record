@@ -231,10 +231,15 @@ export class Relation<M extends ModelBase> {
   async pluck<K extends keyof AttributesOf<M> & string>(
     attribute: K,
   ): Promise<AttributesOf<M>[K][]>;
-  async pluck<const K extends readonly (keyof AttributesOf<M> & string)[]>(
-    ...attributes: K
-  ): Promise<{ -readonly [I in keyof K]: AttributesOf<M>[K[I]] }[]>;
+  async pluck<
+    const K extends readonly [
+      keyof AttributesOf<M> & string,
+      keyof AttributesOf<M> & string,
+      ...(keyof AttributesOf<M> & string)[],
+    ],
+  >(...attributes: K): Promise<{ -readonly [I in keyof K]: AttributesOf<M>[K[I]] }[]>;
   async pluck(...attributes: string[]): Promise<unknown[]> {
+    if (attributes.length === 0) throw new TypeError("pluck() needs at least one attribute");
     const definitions = attributes.map((name) => attributeOf(this.#model, name));
     const { sql, params } = compileSelect(this.#query, compileColumns(this.#model, attributes));
     const rows = await this.#all({ sql, params });
