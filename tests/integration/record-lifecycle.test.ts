@@ -304,4 +304,31 @@ describe("record lifecycle", () => {
     expect(role.changes()).toEqual({ role: ["admin", "owner"] });
     await expect(role.save()).rejects.toThrow(MissingAttribute);
   });
+
+  test("a loaded record rejects undefined when a property is set", async () => {
+    const users = connect(binding).model(User);
+    const user = await users.findByOrThrow({
+      email: (await users.create({ email: "a@example.com" })).email,
+    });
+
+    expect(() => {
+      user.role = undefined as never;
+    }).toThrow(TypeError);
+    expect(user.isChanged()).toBe(false);
+  });
+
+  test("after a real DELETE the record is read-only, even when assigning undefined", async () => {
+    const users = connect(binding).model(User);
+    const user = await users.create({ email: "a@example.com" });
+    await user.destroy();
+
+    expect(() => {
+      user.role = "admin";
+    }).toThrow(RecordDestroyed);
+    expect(() => {
+      user.role = undefined as never;
+    }).toThrow(RecordDestroyed);
+    expect(() => user.assign({ role: "admin" })).toThrow(RecordDestroyed);
+    expect(user.email).toBe("a@example.com");
+  });
 });
