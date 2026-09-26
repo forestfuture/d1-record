@@ -31,6 +31,7 @@ export class RecordState {
   readonly #snapshot = new Map<string, unknown>();
   #savedChanges: Changes = {};
   readonly #errors = new Errors();
+  #abortReason: string | undefined;
 
   constructor(model: ModelClass) {
     this.#model = model;
@@ -39,6 +40,15 @@ export class RecordState {
   /** The record's validation errors, filled by the last validation run. */
   get errors(): Errors {
     return this.#errors;
+  }
+
+  /** Why a callback last refused a save or destroy; cleared at the start of each run. */
+  get abortReason(): string | undefined {
+    return this.#abortReason;
+  }
+
+  set abortReason(reason: string | undefined) {
+    this.#abortReason = reason;
   }
 
   // Lifecycle and Database

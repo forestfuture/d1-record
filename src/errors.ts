@@ -96,3 +96,27 @@ export class RecordInvalid extends D1RecordError {
     this.record = record;
   }
 }
+
+/**
+ * Thrown by a callback to refuse a save or destroy: `throw abort("Account is suspended")`.
+ * Only this exact class halts a lifecycle; returning `false` never does.
+ */
+export class CallbackAbort extends D1RecordError {
+  override name = "CallbackAbort";
+  readonly reason: string;
+
+  constructor(reason: string) {
+    super(reason);
+    this.reason = reason;
+  }
+}
+
+/** Makes the sentinel a pre-write callback throws to refuse: `throw abort("reason")`. */
+export function abort(reason = "Aborted by a callback"): CallbackAbort {
+  return new CallbackAbort(reason);
+}
+
+/** A `…OrThrow` save was refused by a callback's `abort(reason)`. */
+export class RecordNotSaved extends D1RecordError {
+  override name = "RecordNotSaved";
+}

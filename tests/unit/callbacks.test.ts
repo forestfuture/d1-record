@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { connect, Model } from "../../src/index.ts";
+import { abort, CallbackAbort, connect, Model, RecordNotSaved } from "../../src/index.ts";
 
 const log: string[] = [];
 
@@ -48,4 +48,63 @@ describe("validation callbacks", () => {
     ]);
     expect(user.email).toBe("a@example.com");
   });
+
+  test("abort() in a validation callback makes the record invalid, with a reason but no errors", async () => {
+    const accounts = connect({} as never).model(Account);
+    const account = accounts.build({ email: "a@example.com", suspended: true });
+
+    expect(await account.isValid()).toBe(false);
+    expect(account.abortReason).toBe("Account is suspended");
+    expect(account.errors.isEmpty()).toBe(true);
+
+    account.suspended = false;
+    expect(await account.isValid()).toBe(true);
+    expect(account.abortReason).toBeUndefined();
+  });
+
+  test("an aborted save returns false, and saveOrThrow throws RecordNotSaved with the reason", async () => {
+    const account = connect({} as never)
+      .model(Account)
+      .build({ email: "a@example.com", suspended: true });
+
+    expect(await account.save()).toBe(false);
+    const error = await account.saveOrThrow().catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(RecordNotSaved);
+    expect((error as Error).message).toMatch(/Account is suspended/);
+    expect(account.isNewRecord()).toBe(true);
+  });
+
+  test("abort() creates a CallbackAbort; any other error from a callback propagates unchanged", async () => {
+    const failure = new Error("callback bug");
+    class Broken extends Model({ id: "integer" }) {
+      static tableName = "users";
+      static {
+        this.beforeValidation(() => {
+          throw failure;
+        });
+      }
+    }
+
+    expect(abort("why")).toBeInstanceOf(CallbackAbort);
+    await expect(
+      connect({} as never)
+        .model(Broken)
+        .build()
+        .isValid(),
+    ).rejects.toBe(failure);
+  });
 });
+
+class Account extends Model({
+  id: { type: "integer", null: false },
+  email: "string",
+  suspended: "boolean",
+}) {
+  static tableName = "users";
+
+  static {
+    this.beforeValidation((account) => {
+      if (account.suspended) throw abort("Account is suspended");
+    });
+  }
+}
