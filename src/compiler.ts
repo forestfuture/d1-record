@@ -52,7 +52,7 @@ export class Negated {
 }
 
 /** Quotes a SQLite identifier; embedded double quotes are doubled. */
-export function quoteIdentifier(name: string): string {
+function quoteIdentifier(name: string): string {
   return `"${name.replaceAll('"', '""')}"`;
 }
 
