@@ -73,7 +73,8 @@ function characters(count: number): string {
 
 const length: Check = (value, { length: rule }) => {
   if (rule === undefined) return [];
-  const size = typeof value === "string" ? value.length : 0;
+  // A string's characters or an array's items (e.g. a json list); anything else has length 0.
+  const size = typeof value === "string" || Array.isArray(value) ? value.length : 0;
   const failures: Failure[] = [];
   if (rule.is !== undefined && size !== rule.is) {
     failures.push({
@@ -104,12 +105,17 @@ const format: Check = (value, { format: rule }) => {
   return matches ? [] : [{ type: "invalid", message: "is invalid" }];
 };
 
+/** Equality for inclusion: dates match by their time, everything else by identity. */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
+  return Object.is(a, b);
+}
+
 const inclusion: Check = (value, { inclusion: rule }) => {
   if (rule === undefined) return [];
   const allowed = Array.isArray(rule) ? rule : (rule as { in: readonly unknown[] }).in;
-  return allowed.includes(value)
-    ? []
-    : [{ type: "inclusion", message: "is not included in the list" }];
+  const included = allowed.some((item) => sameValue(item, value));
+  return included ? [] : [{ type: "inclusion", message: "is not included in the list" }];
 };
 
 const COMPARISONS = [
