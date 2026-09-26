@@ -9,10 +9,22 @@ import {
 } from "./metadata.ts";
 import type { Errors } from "./errors-collection.ts";
 import { declare, seal } from "./declarations.ts";
-import { RecordInvalid, RecordNotDestroyed, RecordNotSaved } from "./errors.ts";
+import {
+  AssociationNotLoaded,
+  RecordInvalid,
+  RecordNotDestroyed,
+  RecordNotSaved,
+  UnknownAssociation,
+} from "./errors.ts";
 import { destroyLifecycle, reloadRecord, saveLifecycle, validateRecord } from "./lifecycle.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
-import type { AssociationDefinition, AssociationKeys } from "./associations.ts";
+import type {
+  AssociationDefinition,
+  AssociationKeys,
+  BelongsTo,
+  HasMany,
+  HasOne,
+} from "./associations.ts";
 import type { Scope } from "./relation.ts";
 import type { Validation, ValidationOptions } from "./validations.ts";
 
@@ -25,6 +37,21 @@ export type ScopesOf<C> = C extends { scopes: infer S }
     ? {} // only the base class's catch-all type: no declared scopes
     : S
   : {};
+
+/** What `loaded()` returns for an association accessor: its records, or its record or null. */
+export type LoadedValue<F> = F extends () => Promise<infer R>
+  ? R
+  : F extends () => { toArray(): Promise<infer T> }
+    ? T
+    : never;
+
+/** The names of a record's association accessors (from their `declare` lines). */
+export type AssociationName<R> = {
+  [K in keyof R]: R[K] extends BelongsTo<ModelClass> | HasOne<ModelClass> | HasMany<ModelClass>
+    ? K
+    : never;
+}[keyof R] &
+  string;
 
 /** A lifecycle callback; it receives the record and may be async. */
 export type Callback<R> = (record: R) => unknown;
@@ -162,6 +189,23 @@ export class ModelBase {
   /** The errors from the last validation run. */
   get errors(): Errors {
     return this[state].errors;
+  }
+
+  /**
+   * A preloaded association, synchronously: records for a hasMany, a record or null otherwise.
+   * Throws `AssociationNotLoaded` unless it was preloaded with `includes(...)`.
+   */
+  loaded<K extends AssociationName<this>>(name: K): LoadedValue<this[K]> {
+    const model = this.constructor as ModelClass;
+    if (model.associations[name] === undefined) {
+      throw new UnknownAssociation(`${model.name} has no association "${name}"`);
+    }
+    if (!this[state].hasPreloaded(name)) {
+      throw new AssociationNotLoaded(
+        `${model.name} record hasn't loaded "${name}"; preload it with includes("${name}")`,
+      );
+    }
+    return this[state].preloaded(name) as LoadedValue<this[K]>;
   }
 
   /** Why a callback last refused a save or destroy (`abort(reason)`); never copied into `errors`. */

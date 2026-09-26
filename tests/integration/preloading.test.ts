@@ -1,10 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 import {
+  AssociationNotLoaded,
   connect,
   Model,
   type BelongsTo,
   type HasMany,
   type HasOne,
+  sql,
   type QueryEvent,
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
@@ -33,9 +35,20 @@ class Post extends Model({
 
   static associations = this.defineAssociations({
     author: this.belongsTo(() => User, { foreignKey: "userId" }),
+    comments: this.hasMany(() => Comment, { foreignKey: "postId" }),
   });
 
+  declare comments: HasMany<typeof Comment>;
+
   declare author: BelongsTo<typeof User>;
+}
+
+class Comment extends Model({
+  id: { type: "integer", null: false },
+  postId: "integer",
+  body: "string",
+}) {
+  static tableName = "comments";
 }
 
 class Profile extends Model({
@@ -106,5 +119,67 @@ describe("preloading with includes", () => {
 
     expect(await user?.posts().where({ title: "A2" }).count()).toBe(1);
     expect(queries).toHaveLength(1);
+  });
+
+  test("preloading 250 records takes 1 + ceil(250 / 100) queries: keys go in groups of 100", async () => {
+    const ids = Array.from({ length: 250 }, (_, index) => index + 100);
+    await binding
+      .prepare(
+        `INSERT INTO users (id, email) VALUES ${ids.map((id) => `(${id}, 'u${id}@example.com')`).join(", ")}`,
+      )
+      .run();
+    await binding
+      .prepare(
+        `INSERT INTO posts (id, user_id, title) VALUES ${ids.map((id) => `(${id}, ${id}, 'P${id}')`).join(", ")}`,
+      )
+      .run();
+
+    // (A 250-value where({ id: [...] }) would itself exceed D1's 100-parameter limit.)
+    const users = await db()
+      .model(User)
+      .where(sql`id >= ${100}`)
+      .includes("posts")
+      .toArray();
+
+    expect(users).toHaveLength(250);
+    expect(queries).toHaveLength(4);
+    expect(queries.slice(1).map((query) => query.params.length)).toEqual([100, 100, 50]);
+  });
+
+  test("nested includes preload each level in its own query", async () => {
+    await binding
+      .prepare(
+        "INSERT INTO comments (id, post_id, body) VALUES (1, 10, 'Nice'), (2, 10, 'Agreed'), (3, 12, 'Hm')",
+      )
+      .run();
+
+    const users = await db()
+      .model(User)
+      .includes({ posts: "comments" })
+      .order({ id: "asc" })
+      .toArray();
+    expect(queries).toHaveLength(3);
+    queries.length = 0;
+
+    const firstPost = (await users[0]!.posts().toArray())[0]!;
+    expect((await firstPost.comments().toArray()).map((comment) => comment.body)).toEqual([
+      "Nice",
+      "Agreed",
+    ]);
+    expect(queries).toHaveLength(0);
+  });
+
+  test("loaded() returns preloaded data synchronously, and throws when it wasn't preloaded", async () => {
+    const [preloaded] = await db()
+      .model(User)
+      .includes("posts", "profile")
+      .where({ id: 2 })
+      .toArray();
+    const [plain] = await db().model(User).where({ id: 2 }).toArray();
+
+    expect(preloaded?.loaded("posts").map((post) => post.title)).toEqual(["B1"]);
+    expect((preloaded?.loaded("profile") as Profile | null)?.bio).toBe("Bee");
+    expect(() => plain?.loaded("posts")).toThrow(AssociationNotLoaded);
+    expect(() => plain?.loaded("posts")).toThrow(/User.*"posts".*includes/);
   });
 });
