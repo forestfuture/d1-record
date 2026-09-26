@@ -10,7 +10,7 @@ import {
   type OrderTerm,
   type SelectQuery,
 } from "./compiler.ts";
-import { IncompatibleRelation, InvalidModel, RecordNotFound } from "./errors.ts";
+import { IncompatibleRelation, RecordNotFound } from "./errors.ts";
 import type { Executor } from "./executor.ts";
 import { attributeOf } from "./metadata.ts";
 import {
@@ -19,7 +19,6 @@ import {
   type AttributesOf,
   type ModelBase,
   type ModelClass,
-  type ScopesOf,
 } from "./model.ts";
 import { readValue } from "./conversion.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
@@ -38,26 +37,35 @@ export type OrderSpec<M> = { [K in keyof AttributesOf<M>]?: OrderDirection };
 /** Everything but the conditions: what `or` requires to match and `merge` may replace. */
 const SHAPE_CLAUSES = ["select", "order", "limit", "offset", "distinct"] as const;
 
-/**
- * Whether two values of one shape clause are equal: primitives by identity, lists (select
- * attributes, order terms) item by item. Explicit, so a new clause is compared on purpose.
- */
-function sameClause(a: unknown, b: unknown): boolean {
-  if (!Array.isArray(a) || !Array.isArray(b)) return Object.is(a, b);
-  return a.length === b.length && a.every((item, index) => sameItem(item, b[index]));
+type ShapeClause = (typeof SHAPE_CLAUSES)[number];
+
+/** Whether two queries agree on one shape clause, by that clause's own rule. */
+function sameClause(clause: ShapeClause, a: SelectQuery, b: SelectQuery): boolean {
+  switch (clause) {
+    case "select":
+      return sameList(a.select, b.select, (x, y) => x === y);
+    case "order":
+      return sameList(
+        a.order,
+        b.order,
+        (x, y) => x.attribute === y.attribute && x.direction === y.direction,
+      );
+    default:
+      return Object.is(a[clause], b[clause]);
+  }
 }
 
-function sameItem(a: unknown, b: unknown): boolean {
-  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) {
-    return Object.is(a, b);
-  }
-  const { attribute, direction } = a as OrderTerm;
-  const other = b as OrderTerm;
-  return attribute === other.attribute && direction === other.direction;
+function sameList<T>(
+  a: readonly T[] | undefined,
+  b: readonly T[] | undefined,
+  same: (x: T, y: T) => boolean,
+): boolean {
+  if (a === undefined || b === undefined) return a === b;
+  return a.length === b.length && a.every((item, index) => same(item, b[index] as T));
 }
 
 /** Whether a clause was set explicitly; an empty order or an unset flag counts as not set. */
-function isSet(query: SelectQuery, clause: (typeof SHAPE_CLAUSES)[number]): boolean {
+function isSet(query: SelectQuery, clause: ShapeClause): boolean {
   const value = query[clause];
   return Array.isArray(value) ? value.length > 0 : value !== undefined && value !== false;
 }
@@ -113,7 +121,7 @@ function atMostOne(limit: number | undefined): number {
 declare const scopeTypes: unique symbol;
 
 /** The library's key for running a scope on a Relation; not exported from the package. */
-const applyScope = Symbol("applyScope");
+export const applyScope = Symbol("applyScope");
 
 /** A scope: receives the current Relation and its arguments, and returns a changed Relation. */
 // oxlint-disable-next-line typescript/no-explicit-any -- scope arguments are the scope's own business
@@ -148,14 +156,14 @@ export class Relation<M extends ModelBase, S = {}> {
 
   where(conditions: Conditions<M> | SafeSql): Scoped<M, S> {
     this.#checkConditions(conditions, "where");
-    if (isEmptyConditions(conditions)) return this as unknown as Scoped<M, S>;
+    if (isEmptyConditions(conditions)) return this.#scoped(this);
     return this.#with({ conditions: [...this.#query.conditions, conditions] });
   }
 
   /** Negates the whole condition: `NOT (…)`. Rows where it is NULL are excluded too. */
   whereNot(conditions: Conditions<M> | SafeSql): Scoped<M, S> {
     this.#checkConditions(conditions, "whereNot");
-    if (isEmptyConditions(conditions)) return this as unknown as Scoped<M, S>;
+    if (isEmptyConditions(conditions)) return this.#scoped(this);
     return this.#with({ conditions: [...this.#query.conditions, new Negated(conditions)] });
   }
 
@@ -170,10 +178,10 @@ export class Relation<M extends ModelBase, S = {}> {
    */
   or(other: Relation<M, S>): Scoped<M, S> {
     this.#requireSameModel(other, "or");
-    if (this.#query.none) return other as unknown as Scoped<M, S>;
-    if (other.#query.none) return this as unknown as Scoped<M, S>;
+    if (this.#query.none) return this.#scoped(other);
+    if (other.#query.none) return this.#scoped(this);
     for (const clause of SHAPE_CLAUSES) {
-      if (!sameClause(this.#query[clause], other.#query[clause])) {
+      if (!sameClause(clause, this.#query, other.#query)) {
         throw new IncompatibleRelation(
           `or() needs relations that differ only in their conditions, but their ${clause} differs`,
         );
@@ -397,6 +405,14 @@ export class Relation<M extends ModelBase, S = {}> {
     return result as Relation<M>;
   }
 
+  /**
+   * `relation` typed with its scope methods. Sound because every Relation is made by
+   * `relationFor` (the constructor needs the internal Executor), whose class has them.
+   */
+  #scoped(relation: Relation<M, S>): Scoped<M, S> {
+    return relation as unknown as Scoped<M, S>;
+  }
+
   /** A copy with `changes`, of this same class, so a Model's scope methods survive chaining. */
   #with(changes: Partial<SelectQuery>): Scoped<M, S> {
     const Class = this.constructor as new (...args: RelationArgs<M>) => Scoped<M, S>;
@@ -439,53 +455,11 @@ export class Relation<M extends ModelBase, S = {}> {
   }
 }
 
-type RelationArgs<M extends ModelBase> = [
+/** The Relation constructor's arguments. */
+export type RelationArgs<M extends ModelBase> = [
   executor: Executor,
   model: ModelClass<M>,
   query?: SelectQuery,
 ];
 
 /** One Relation class per Model, holding its scopes as methods; made on first use and cached. */
-type RelationClass = new (...args: RelationArgs<ModelBase>) => Relation<ModelBase>;
-
-// Module-level, but not request state (ADR-0003): derived only from a Model's static scopes.
-const relationClasses = new WeakMap<object, { Class: RelationClass; scopes: object }>();
-
-function relationClassFor(model: ModelClass): RelationClass {
-  const cached = relationClasses.get(model);
-  if (cached !== undefined) {
-    if (cached.scopes !== model.scopes) {
-      throw new InvalidModel(
-        `${model.name}'s scopes changed after its first use; declare them once, in the class body (static scopes = …)`,
-      );
-    }
-    return cached.Class;
-  }
-  const ScopedRelation = class extends Relation<ModelBase> {};
-  for (const [name, scope] of Object.entries(model.scopes)) {
-    // A scope must not hide a Relation method, and "then" would make Relations awaitable.
-    if (name === "then" || name in Relation.prototype) {
-      throw new InvalidModel(
-        `${model.name} declares a scope "${name}", which is the name of a Relation method; rename the scope`,
-      );
-    }
-    Object.defineProperty(ScopedRelation.prototype, name, {
-      value(this: Relation<ModelBase>, ...args: unknown[]) {
-        return this[applyScope](name, scope as Scope<ModelBase>, args);
-      },
-    });
-  }
-  relationClasses.set(model, { Class: ScopedRelation, scopes: model.scopes });
-  return ScopedRelation;
-}
-
-/** A fresh Relation over all of `model`'s records, with the Model's scopes as methods. */
-export function relationFor<C extends ModelClass>(
-  executor: Executor,
-  model: C,
-): Scoped<InstanceType<C>, ScopesOf<C>> {
-  const Class = relationClassFor(model) as unknown as new (
-    ...args: RelationArgs<InstanceType<C>>
-  ) => Scoped<InstanceType<C>, ScopesOf<C>>;
-  return new Class(executor, model as unknown as ModelClass<InstanceType<C>>);
-}
