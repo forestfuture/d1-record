@@ -28,6 +28,11 @@ function markSaved(record: ModelBase): void {
   record[state].assigned.clear();
 }
 
+/** The primary key as stored in D1: the row's key before any unsaved change to it. */
+function storedKeyOf(record: ModelBase): unknown {
+  return record[state].snapshot.get(modelOf(record).primaryKey);
+}
+
 /** Loads a D1 row into a record, which becomes persisted and clean; absent columns stay unloaded. */
 export function applyRow(record: ModelBase, row: Record<string, unknown>): void {
   for (const [name, { type, column }] of modelOf(record).attributeDefinitions) {
@@ -97,8 +102,7 @@ export function requireLive(record: ModelBase, action: string): void {
 /** Deletes the record's row by its stored key; the record becomes a destroyed snapshot. */
 export async function destroyRecord(record: ModelBase): Promise<void> {
   requireLive(record, "be destroyed again");
-  const model = modelOf(record);
-  await write(record, compileDelete(model, record[state].snapshot.get(model.primaryKey)));
+  await write(record, compileDelete(modelOf(record), storedKeyOf(record)));
   record[state].lifecycle = "destroyed";
 }
 
@@ -113,7 +117,7 @@ export async function reloadRecord(record: ModelBase): Promise<void> {
     );
   }
   const { type } = attributeOf(model, model.primaryKey);
-  const key = readValue(type, record[state].snapshot.get(model.primaryKey));
+  const key = readValue(type, storedKeyOf(record));
   const query = { model, conditions: [{ [model.primaryKey]: key }], order: [], limit: 1 };
   const { sql, params } = compileSelect(query);
   const [row] = await executor.all(sql, params);
@@ -129,19 +133,20 @@ function hasTimestamp(record: ModelBase, name: "createdAt" | "updatedAt"): boole
 }
 
 /**
- * Sets timestamps just before a write, unless they were assigned explicitly: on insert,
- * `createdAt` and `updatedAt`; on update (only when something changed), `updatedAt`.
+ * The timestamps to add to a write: `createdAt` and `updatedAt` on insert, `updatedAt` on
+ * update. Never one the caller assigned. They join the pending write and reach the record
+ * only after D1 accepts it, so a failed save leaves nothing but the caller's own changes.
  */
-function stampTimestamps(record: ModelBase, changed: readonly string[]): void {
+function timestampsFor(
+  record: ModelBase,
+  isInsert: boolean,
+  assigned: readonly string[],
+): Assignment[] {
   const now = new Date();
-  const isInsert = record[state].lifecycle === "new";
-  const stamp = isInsert ? (["createdAt", "updatedAt"] as const) : (["updatedAt"] as const);
-  for (const name of stamp) {
-    if (hasTimestamp(record, name) && !changed.includes(name)) {
-      record[values][name] = now;
-      record[state].assigned.add(name);
-    }
-  }
+  const names = isInsert ? (["createdAt", "updatedAt"] as const) : (["updatedAt"] as const);
+  return names
+    .filter((name) => hasTimestamp(record, name) && !assigned.includes(name))
+    .map((name): Assignment => [name, now]);
 }
 
 /** Runs a write for `record`, translating D1 constraint failures into `ConstraintViolation`s. */
@@ -170,29 +175,42 @@ function executorOf(record: ModelBase): Executor {
 /** Inserts a new record, or updates a persisted one's changed attributes. */
 export async function saveRecord(record: ModelBase): Promise<boolean> {
   requireLive(record, "be saved");
-  const pending = changedNames(record);
-  if (record[state].lifecycle === "new" || pending.length > 0) stampTimestamps(record, pending);
+  return record[state].lifecycle === "new" ? insertRecord(record) : updateRecord(record);
+}
+
+/** The attributes as they'd be written: `[name, current value]`. */
+function assignmentsOf(record: ModelBase, names: readonly string[]): Assignment[] {
+  return names.map((name): Assignment => [name, record[values][name]]);
+}
+
+/** INSERT the assigned attributes (plus timestamps); `RETURNING *` loads what D1 stored. */
+async function insertRecord(record: ModelBase): Promise<true> {
   const changes = changesOf(record);
-  if (record[state].lifecycle === "new") {
-    const assignments = [...record[state].assigned].map((name): Assignment => [
-      name,
-      record[values][name],
-    ]);
-    const [row] = await write(record, compileInsert(modelOf(record), assignments));
-    if (row !== undefined) applyRow(record, row);
-    record[state].savedChanges = changes;
-    return true;
-  }
-  const changed = Object.keys(changes);
+  const assigned = [...record[state].assigned];
+  const assignments = [
+    ...assignmentsOf(record, assigned),
+    ...timestampsFor(record, true, assigned),
+  ];
+  const [row] = await write(record, compileInsert(modelOf(record), assignments));
+  // RETURNING * always yields the stored row; without one, keep the values as written.
+  if (row === undefined) markSaved(record);
+  else applyRow(record, row);
+  record[state].savedChanges = changes;
+  return true;
+}
+
+/** UPDATE only the changed attributes (plus `updatedAt`); a clean record sends nothing. */
+async function updateRecord(record: ModelBase): Promise<true> {
+  const changed = changedNames(record);
   if (changed.length === 0) {
     record[state].savedChanges = {};
     return true;
   }
-  const model = modelOf(record);
-  const storedKey = record[state].snapshot.get(model.primaryKey);
-  const assignments = changed.map((name): Assignment => [name, record[values][name]]);
-  await write(record, compileUpdate(model, assignments, storedKey));
+  const stamps = timestampsFor(record, false, changed);
+  const assignments = [...assignmentsOf(record, changed), ...stamps];
+  await write(record, compileUpdate(modelOf(record), assignments, storedKeyOf(record)));
+  for (const [name, value] of stamps) record[values][name] = value;
+  record[state].savedChanges = changesOf(record);
   markSaved(record);
-  record[state].savedChanges = changes;
   return true;
 }
