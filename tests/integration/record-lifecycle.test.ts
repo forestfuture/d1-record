@@ -52,4 +52,28 @@ describe("record lifecycle", () => {
     expect(key.id).toMatch(/^key-\d+$/);
     expect(queries).toHaveLength(0);
   });
+
+  test("saving a new record inserts it; the database fills in its key and column defaults", async () => {
+    const users = connect(binding).model(User);
+    const user = users.build({ email: "a@example.com" });
+
+    expect(await user.save()).toBe(true);
+
+    expect(user.isPersisted()).toBe(true);
+    expect(user.isNewRecord()).toBe(false);
+    expect(user.id).toBeTypeOf("number");
+    expect(user.isActive).toBe(true); // column default, because isActive wasn't assigned
+    expect((await users.find(user.id)).email).toBe("a@example.com");
+  });
+
+  test("an app-generated key from a default is inserted as given", async () => {
+    const keys = connect(binding).model(ApiKey);
+    const key = keys.build({ label: "deploy", scopes: ["read"] });
+    const id = key.id;
+
+    await key.save();
+
+    expect(key.id).toBe(id);
+    expect((await keys.find(id)).scopes).toEqual(["read"]);
+  });
 });

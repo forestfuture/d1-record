@@ -1,5 +1,5 @@
 import { InvalidModel, MissingAttribute } from "./errors.ts";
-import { readValue } from "./conversion.ts";
+import type { Executor } from "./executor.ts";
 import {
   attributeOf,
   define,
@@ -7,6 +7,7 @@ import {
   type AttributeDefinition,
   type AttributeSpecs,
 } from "./metadata.ts";
+import { applyRow, saveRecord } from "./persistence.ts";
 import { state, values, type RecordState } from "./record-state.ts";
 
 /** Type-only key carrying a record's declared attribute types; never set at runtime. */
@@ -22,6 +23,11 @@ export class ModelBase {
 
   [values]: Record<string, unknown> = {};
   [state]: RecordState = { lifecycle: "new", assigned: new Set() };
+
+  /** Inserts a new record or updates a persisted one; `false` only for validation or abort (#4). */
+  async save(): Promise<boolean> {
+    return saveRecord(this);
+  }
 
   /** Not yet saved: built, or created but not persisted. */
   isNewRecord(): boolean {
@@ -95,13 +101,12 @@ export function Model<const A extends AttributeSpecs>(
 export function hydrate<M extends ModelBase>(
   model: ModelClass<M>,
   row: Record<string, unknown>,
+  executor: Executor,
 ): M {
   const record = new model();
-  record[state].lifecycle = "persisted";
-  for (const [name, { type, column }] of model.attributeDefinitions) {
-    // A column absent from the row wasn't selected: the attribute stays unloaded.
-    if (column in row) record[values][name] = readValue(type, row[column]);
-  }
+  record[state].executor = executor;
+  // A column absent from the row wasn't selected: the attribute stays unloaded.
+  applyRow(record, row);
   return record;
 }
 
@@ -164,8 +169,10 @@ function rejectShadowingFields(model: ModelClass): void {
 export function buildRecord<M extends ModelBase>(
   model: ModelClass<M>,
   attributes: Record<string, unknown>,
+  executor: Executor,
 ): M {
   const record = new model();
+  record[state].executor = executor;
   for (const [name, definition] of model.attributeDefinitions) {
     record[values][name] = null;
     if (definition.default !== undefined) {
