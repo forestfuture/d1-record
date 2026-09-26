@@ -13,6 +13,11 @@ export class UnknownAttribute extends D1RecordError {
   override name = "UnknownAttribute";
 }
 
+/** A record constructed directly (`new User()`) was used for something that needs D1. */
+export class NoDatabase extends D1RecordError {
+  override name = "NoDatabase";
+}
+
 /** No record matched a lookup that requires one (`find`, `findByOrThrow`). */
 export class RecordNotFound extends D1RecordError {
   override name = "RecordNotFound";
