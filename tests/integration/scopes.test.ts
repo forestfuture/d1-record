@@ -1,5 +1,5 @@
-import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
-import { connect, Model, sql } from "../../src/index.ts";
+import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vite-plus/test";
+import { connect, Model, sql, type QueryEvent } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
@@ -15,6 +15,8 @@ class User extends Model({
     active: (q) => q.where({ isActive: true }),
     recent: (q) => q.order({ createdAt: "desc" }),
     createdAfter: (q, since: Date) => q.where(sql`created_at > ${since}`),
+    createdWithinDays: (q, days: number) =>
+      q.where(sql`created_at > ${new Date(Date.now() - days * 86_400_000)}`),
   });
 }
 
@@ -36,6 +38,9 @@ describe("scopes", () => {
       .run();
   });
   afterAll(() => dispose());
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   test("scopes are callable on the model and after any chained call, and compose", async () => {
     const users = connect(binding).model(User);
@@ -49,5 +54,34 @@ describe("scopes", () => {
 
     expect(ids(activeRecent)).toEqual([4, 2, 1]);
     expect(ids(adminsAfter)).toEqual([4]);
+  });
+
+  test("calling scopes never queries; only a terminal operation does", async () => {
+    const queries: QueryEvent[] = [];
+    const users = connect(binding, { onQuery: (event) => queries.push(event) }).model(User);
+
+    const relation = users.active().recent().where({ role: "admin" }).active();
+    expect(queries).toHaveLength(0);
+
+    await relation.toArray();
+    expect(queries).toHaveLength(1);
+  });
+
+  test("a scope computes its values when it's called, not when the class was defined", async () => {
+    const queries: QueryEvent[] = [];
+    const users = connect(binding, { onQuery: (event) => queries.push(event) }).model(User);
+    vi.useFakeTimers();
+
+    vi.setSystemTime(new Date(Date.UTC(2026, 3, 2)));
+    const aprilWeek = await users.createdWithinDays(7).toArray();
+    vi.setSystemTime(new Date(Date.UTC(2026, 4, 2)));
+    const mayWeek = await users.createdWithinDays(7).toArray();
+
+    expect(queries.map((query) => query.params[0])).toEqual([
+      "2026-03-26T00:00:00.000Z",
+      "2026-04-25T00:00:00.000Z",
+    ]);
+    expect(ids(aprilWeek)).toEqual([3, 4]);
+    expect(ids(mayWeek)).toEqual([4]);
   });
 });
