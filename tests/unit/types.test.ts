@@ -1,5 +1,13 @@
 import { describe, expectTypeOf, test } from "vite-plus/test";
-import { connect, Model, sql, type Relation } from "../../src/index.ts";
+import {
+  connect,
+  Model,
+  sql,
+  type BelongsTo,
+  type HasMany,
+  type HasOne,
+  type Relation,
+} from "../../src/index.ts";
 
 class User extends Model({
   id: { type: "integer", null: false },
@@ -165,6 +173,46 @@ describe("types", () => {
       posts.since("yesterday");
       // @ts-expect-error unknown scope
       posts.archived();
+    };
+    expectTypeOf(typeOnly).toBeFunction();
+  });
+
+  test("associations are typed from their declare lines, including includes() names", () => {
+    class Author extends Model({ id: "integer" }) {
+      static tableName = "users";
+      static associations = this.defineAssociations({
+        articles: this.hasMany(() => Article, { foreignKey: "authorId" }),
+        bio: this.hasOne(() => Bio, { foreignKey: "authorId" }),
+      });
+      declare articles: HasMany<typeof Article>;
+      declare bio: HasOne<typeof Bio>;
+    }
+    class Article extends Model({ id: "integer", authorId: "integer", live: "boolean" }) {
+      static tableName = "posts";
+      static associations = this.defineAssociations({
+        author: this.belongsTo(() => Author, { foreignKey: "authorId" }),
+      });
+      static scopes = this.defineScopes({ live: (q) => q.where({ live: true }) });
+      declare author: BelongsTo<typeof Author>;
+    }
+    class Bio extends Model({ id: "integer", authorId: "integer" }) {
+      static tableName = "profiles";
+    }
+
+    // Checked by the type checker only; never called.
+    const typeOnly = async (author: Author, article: Article) => {
+      expectTypeOf(await article.author()).toEqualTypeOf<Author | null>();
+      expectTypeOf(await author.bio()).toEqualTypeOf<Bio | null>();
+      expectTypeOf(await author.articles().live().toArray()).toEqualTypeOf<Article[]>();
+      expectTypeOf(author.loaded("articles")).toEqualTypeOf<Article[]>();
+      expectTypeOf(author.loaded("bio")).toEqualTypeOf<Bio | null>();
+      db.model(Author).includes("articles", "bio").includes({ articles: "author" });
+      // @ts-expect-error unknown association
+      db.model(Author).includes("posts");
+      // @ts-expect-error unknown nested association
+      db.model(Author).includes({ articles: "comments" });
+      // @ts-expect-error attributes aren't associations
+      author.loaded("id");
     };
     expectTypeOf(typeOnly).toBeFunction();
   });

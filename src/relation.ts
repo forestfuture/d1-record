@@ -23,7 +23,9 @@ import { attributeOf } from "./metadata.ts";
 import {
   buildRecord,
   hydrate,
+  type AssociationName,
   type AttributesOf,
+  type LoadedValue,
   type ModelBase,
   type ModelClass,
 } from "./model.ts";
@@ -130,10 +132,21 @@ declare const scopeTypes: unique symbol;
 /** The library's key for a hasMany Relation answered from preloaded records; not exported. */
 export const withPreloaded = Symbol("withPreloaded");
 
-/** What `includes()` accepts: association names, or `{ name: nested }` for nested ones. */
-export type IncludeSpec =
-  | string
-  | { readonly [association: string]: IncludeSpec | readonly IncludeSpec[] };
+/** The record type an association accessor loads: `Post` for `HasMany<typeof Post>`. */
+type TargetRecord<F> =
+  LoadedValue<F> extends readonly (infer T)[] ? T : NonNullable<LoadedValue<F>>;
+
+/**
+ * What `includes()` accepts for records `M`: an association name, or `{ name: nested }` where
+ * `nested` names associations of that association's records. Checked against `declare` lines.
+ */
+export type IncludeSpec<M> =
+  | AssociationName<M>
+  | {
+      readonly [K in AssociationName<M>]?:
+        | IncludeSpec<TargetRecord<M[K]>>
+        | readonly IncludeSpec<TargetRecord<M[K]>>[];
+    };
 
 /** The library's key for marking an association Relation of an unsaved owner; not exported. */
 export const markUnsavedOwner = Symbol("markUnsavedOwner");
@@ -270,7 +283,7 @@ export class Relation<M extends ModelBase, S = {}> {
    * Preloads associations for every record this Relation loads, so reading them afterwards
    * sends no query: `includes("posts", "profile")`, nested `includes({ posts: "comments" })`.
    */
-  includes(...specs: IncludeSpec[]): Scoped<M, S> {
+  includes(...specs: IncludeSpec<M>[]): Scoped<M, S> {
     const added = includeTree(this.#model, specs);
     return this.#with({ includes: mergeTrees(this.#query.includes ?? {}, added) });
   }
@@ -536,13 +549,13 @@ export type RelationArgs<M extends ModelBase> = [
 /** One Relation class per Model, holding its scopes as methods; made on first use and cached. */
 
 /** Normalizes `includes()` arguments into a tree, checking every name against its Model. */
-function includeTree(model: ModelClass, specs: readonly IncludeSpec[]): IncludeTree {
+function includeTree(model: ModelClass, specs: readonly unknown[]): IncludeTree {
   let tree: IncludeTree = {};
   for (const spec of specs) {
-    const entries: [string, readonly IncludeSpec[]][] =
+    const entries: [string, readonly unknown[]][] =
       typeof spec === "string"
         ? [[spec, []]]
-        : Object.entries(spec).map(([name, nested]) => [
+        : Object.entries(spec as Record<string, unknown>).map(([name, nested]) => [
             name,
             Array.isArray(nested) ? nested : [nested],
           ]);
