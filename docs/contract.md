@@ -77,7 +77,7 @@ class User extends Model({
 
 - Change detection compares each attribute's current serialized value with the value last loaded or saved, so in-place changes to `json` values and `Date`s are detected.
 - `isChanged()`, `changed()` → `["email"]`, `changedAttributes()` → `{ email: old }`, `changes()` → `{ email: [old, new] }`.
-- `savedChanges()` holds the changes from the last **successful** save (`{}` after a clean save). A failed save doesn't change it. Use it in `after*` callbacks, where the record is already clean.
+- `savedChanges()` holds the changes from the last **successful** save (`{}` after a clean save). After `create`, that's everything the new row holds, including what D1 filled in (the generated key, column defaults), each changed from `null`. A failed save doesn't change it. `changes()` and `savedChanges()` return copies, so editing the record afterwards never alters them. Use it in `after*` callbacks, where the record is already clean.
 - A new record's changes are its assigned attributes, each changed from `null`.
 
 ## Associations
@@ -120,7 +120,7 @@ Any error thrown by a callback other than an `abort(...)` propagates unchanged. 
 ## Constraint errors
 
 - `RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation` and `CheckViolation`, all subclasses of `ConstraintViolation`, are recognised from D1 error messages on insert, update and delete. They carry the original error as `cause`, and `.table`, `.columns` and `.attributes` where the message names them (SQLite's foreign-key message doesn't name a column).
-- Both the throwing and non-throwing methods throw them. After a constraint error the dirty attributes are kept and `errors` is not changed, because nothing was persisted.
+- Both the throwing and non-throwing methods throw them. After a constraint error the caller's own changes are kept and `errors` is not changed, because nothing was persisted. Timestamps are only applied once D1 accepts a write, so a failed save doesn't leave `createdAt`/`updatedAt` behind.
 - Uniqueness validation is a friendly early check, not race-safe. The database constraint has the final say.
 
 ## Validation
@@ -190,7 +190,7 @@ this.beforeSave((account) => {
 
 ## Destroyed records
 
-- A record is marked destroyed only after the D1 `DELETE` succeeds, and before `afterDestroy` runs. If `afterDestroy` throws, the row stays deleted and the record stays destroyed.
+- A record is marked destroyed only after the D1 `DELETE` succeeds, and before `afterDestroy` runs. Destroying a never-saved record sends nothing, since there's no row, and marks it destroyed. If `afterDestroy` throws, the row stays deleted and the record stays destroyed.
 - `isDestroyed()` is `true` and `isPersisted()` is `false`. Attributes stay readable.
 - `save`, `saveOrThrow`, `update`, `destroy` and `reload` throw `RecordDestroyed`.
 - A keyless record from `select(...).distinct()` has no identity to write by, so the same methods throw `MissingAttribute`. A record constructed directly (`new User()`) has no Database, so they throw `NoDatabase`.
