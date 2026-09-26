@@ -30,5 +30,12 @@ export type {
   ValidationOptions,
 } from "./validations.ts";
 export type { AttributeSpec, AttributeSpecs, AttributeType } from "./metadata.ts";
-export { Relation, type Conditions, type OrderSpec } from "./relation.ts";
+export {
+  Relation,
+  type Conditions,
+  type OrderSpec,
+  type Scope,
+  type ScopeMethods,
+  type Scoped,
+} from "./relation.ts";
 export { column, sql, type ColumnReference, type SafeSql } from "./sql.ts";
