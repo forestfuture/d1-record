@@ -36,8 +36,19 @@ export class RecordState {
 
   // Lifecycle and Database
 
-  get lifecycle(): Lifecycle {
-    return this.#lifecycle;
+  /** Not yet saved: built, or created but not persisted. */
+  get isNew(): boolean {
+    return this.#lifecycle === "new";
+  }
+
+  /** Backed by a row: loaded, or saved successfully. */
+  get isPersisted(): boolean {
+    return this.#lifecycle === "persisted";
+  }
+
+  /** Deleted by this instance: a read-only snapshot of the row. */
+  get isDestroyed(): boolean {
+    return this.#lifecycle === "destroyed";
   }
 
   /** Records belong to the Database they were built or loaded through (ADR-0003). */
@@ -171,6 +182,11 @@ export class RecordState {
   /** The primary key as stored in D1: the row's key before any unsaved change to it. */
   get storedKey(): unknown {
     return this.#snapshot.get(this.#model.primaryKey);
+  }
+
+  /** The stored primary key as a JavaScript value, e.g. to find the row again. */
+  get storedKeyValue(): unknown {
+    return readValue(this.#definition(this.#model.primaryKey).type, this.storedKey);
   }
 
   /** After an insert: load what D1 stored; `savedChanges` is everything the new row holds. */

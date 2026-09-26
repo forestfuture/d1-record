@@ -102,17 +102,17 @@ export class ModelBase {
 
   /** Not yet saved: built, or created but not persisted. */
   isNewRecord(): boolean {
-    return this[state].lifecycle === "new";
+    return this[state].isNew;
   }
 
   /** Backed by a row: loaded, or saved successfully. */
   isPersisted(): boolean {
-    return this[state].lifecycle === "persisted";
+    return this[state].isPersisted;
   }
 
   /** Deleted by this instance; a read-only snapshot of the row. */
   isDestroyed(): boolean {
-    return this[state].lifecycle === "destroyed";
+    return this[state].isDestroyed;
   }
 
   /** The record's attributes as a plain object of JavaScript values. */
