@@ -23,7 +23,12 @@ export {
 export type { QueryEvent, QueryListener } from "./executor.ts";
 export { Errors, type ValidationError } from "./errors-collection.ts";
 export { Model } from "./model.ts";
-export type { ValidationOptions } from "./validations.ts";
+export type {
+  LengthOptions,
+  NumericalityOptions,
+  UniquenessOptions,
+  ValidationOptions,
+} from "./validations.ts";
 export type { AttributeSpec, AttributeSpecs, AttributeType } from "./metadata.ts";
 export { Relation, type Conditions, type OrderSpec } from "./relation.ts";
 export { column, sql, type ColumnReference, type SafeSql } from "./sql.ts";
