@@ -35,6 +35,10 @@ export class ModelBase {
     options: ValidationOptions<InstanceType<C>>,
   ): void {
     attributeOf(this, attribute);
+    const { uniqueness } = options;
+    if (typeof uniqueness === "object") {
+      for (const name of uniqueness.scope ?? []) attributeOf(this, name);
+    }
     const validation: Validation = { attribute, options: options as ValidationOptions<never> };
     declare(this, "validations", validation);
   }

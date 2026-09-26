@@ -1,4 +1,5 @@
 import type { Errors } from "./errors-collection.ts";
+import type { AttributesOf } from "./model.ts";
 
 export interface LengthOptions {
   minimum?: number;
@@ -14,8 +15,12 @@ export interface NumericalityOptions {
   lessThanOrEqualTo?: number;
 }
 
-export interface UniquenessOptions {
-  scope?: readonly string[];
+/** The Model's attribute names for record type `R` (any string where `R` isn't known). */
+type AttributeName<R> = [R] extends [never] ? string : keyof AttributesOf<R> & string;
+
+export interface UniquenessOptions<R = never> {
+  /** Attributes that must also match for a value to count as taken. */
+  scope?: readonly AttributeName<R>[];
   caseSensitive?: boolean;
 }
 
@@ -32,7 +37,7 @@ export interface ValidationOptions<R = never> {
    * attributes that must match too; `caseSensitive: false` compares with `lower()` (ASCII only).
    * `null` is never taken, as with SQLite's UNIQUE. Not race-safe: the constraint has the final say.
    */
-  uniqueness?: boolean | UniquenessOptions;
+  uniqueness?: boolean | UniquenessOptions<R>;
   /** Skip these rules when the value is null. */
   allowNull?: boolean;
   /** Replaces the default message of every failure from these rules. */
