@@ -67,4 +67,11 @@ describe("validations", () => {
     expect(admin.errors.toArray().map((error) => error.attribute)).toEqual(["email", "role"]);
     expect(user.errors.toArray().map((error) => error.attribute)).toEqual(["email"]);
   });
+
+  test("only a validation run clears errors: there's no public clear()", () => {
+    const { errors } = users.build();
+
+    // @ts-expect-error clear() isn't part of the errors collection's interface
+    expect(errors.clear).toBeUndefined();
+  });
 });

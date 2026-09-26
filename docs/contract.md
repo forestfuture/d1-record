@@ -145,7 +145,7 @@ Validators add entries with a `type` (`"blank"`, `"taken"`, `"tooShort"`, …) a
 
 Declared in `static {}` with `this.validates(attribute, rules)`. The attribute name and the `if` callback's record are typed against the Model. Every declared validation runs, in declaration order, with no stopping at the first failure, so one attribute can collect several errors. Within one `validates` call the rules apply in a fixed order: presence, length, format, inclusion, numericality, uniqueness.
 
-All validators accept `allowNull` (skip when the value is null), `message` (replaces every default message from that call) and `if: (record) => boolean`. Apart from `presence`, a null value fails a validator unless `allowNull` is set.
+All validators accept `allowNull` (skip when the value is null), `message` (replaces every default message from that call) and `if: (record) => boolean`. Without `allowNull`, a null value fails `presence`, `format`, `inclusion` and `numericality`. `length` counts it as length 0 (so it fails a `minimum` or `is`, and passes a `maximum`), and `uniqueness` never treats it as taken.
 
 Default messages (Rails' English): `blank` "can't be blank", `tooShort` "is too short (minimum is N characters)", `tooLong` "is too long (maximum is N characters)", `wrongLength` "is the wrong length (should be N characters)", `invalid` "is invalid", `inclusion` "is not included in the list", `notANumber` "is not a number", `notAnInteger` "must be an integer", `greaterThan`/`greaterThanOrEqualTo`/`lessThan`/`lessThanOrEqualTo` "must be greater than (or equal to) N" / "must be less than (or equal to) N", `taken` "has already been taken".
 
