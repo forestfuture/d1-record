@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-pl
 import {
   connect,
   Model,
+  sql,
   RecordNotFound,
   UnknownAttribute,
   type QueryEvent,
@@ -171,5 +172,21 @@ describe("record lifecycle", () => {
     await binding.prepare("DELETE FROM users").run();
 
     await expect(user.reload()).rejects.toThrow(RecordNotFound);
+  });
+
+  test("building from a relation inherits its single equality values; explicit ones win", async () => {
+    const users = connect(binding).model(User);
+    const admins = users
+      .where({ role: "admin", id: [1, 2] })
+      .whereNot({ email: "x@example.com" })
+      .where(sql`email LIKE ${"%@example.com"}`);
+
+    const built = admins.build({ email: "a@example.com" });
+    const overridden = admins.build({ email: "b@example.com", role: "member" });
+    const created = await admins.create({ email: "c@example.com" });
+
+    expect(built.changes()).toEqual({ email: [null, "a@example.com"], role: [null, "admin"] });
+    expect(overridden.role).toBe("member");
+    expect((await users.find(created.id)).role).toBe("admin");
   });
 });
