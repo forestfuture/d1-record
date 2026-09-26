@@ -48,12 +48,45 @@ export function prepareModel(model: ModelClass): void {
 }
 
 function accessorFor(definition: AssociationDefinition): (this: ModelBase) => unknown {
-  return async function belongsTo(this: ModelBase) {
-    const target = definition.target();
-    prepareModel(target);
-    const key = this[state].read(definition.foreignKey);
-    if (key === null) return null;
-    const primaryKey = definition.primaryKey ?? target.primaryKey;
-    return relationFor(this[state].executor, target).findBy({ [primaryKey]: key });
-  };
+  switch (definition.kind) {
+    case "belongsTo":
+      return async function belongsTo(this: ModelBase) {
+        const target = targetOf(definition);
+        const key = this[state].read(definition.foreignKey);
+        if (key === null) return null;
+        const primaryKey = definition.primaryKey ?? target.primaryKey;
+        return relationFor(this[state].executor, target).findBy({ [primaryKey]: key });
+      };
+    case "hasOne":
+      return async function hasOne(this: ModelBase) {
+        const key = ownerKey(this, definition);
+        if (key === null) return null;
+        const target = targetOf(definition);
+        return relationFor(this[state].executor, target).findBy({ [definition.foreignKey]: key });
+      };
+    case "hasMany":
+      return function hasMany(this: ModelBase) {
+        const key = ownerKey(this, definition);
+        const target = targetOf(definition);
+        const relation = relationFor(this[state].executor, target).where({
+          [definition.foreignKey]: key,
+        });
+        // An unsaved owner has no records yet; building through it still gets the (null) key.
+        return key === null ? relation.none() : relation;
+      };
+  }
+}
+
+/** The target Model, ready for use. */
+function targetOf(definition: AssociationDefinition): ModelClass {
+  const target = definition.target();
+  prepareModel(target);
+  return target;
+}
+
+/** The owner's value that targets point at (its primary key, by default); null if unsaved. */
+function ownerKey(owner: ModelBase, definition: AssociationDefinition): unknown {
+  if (owner[state].isNew) return null;
+  const model = owner.constructor as ModelClass;
+  return owner[state].read(definition.primaryKey ?? model.primaryKey);
 }

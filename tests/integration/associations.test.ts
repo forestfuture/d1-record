@@ -1,5 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model, type BelongsTo, type HasMany, type QueryEvent } from "../../src/index.ts";
+import {
+  connect,
+  Model,
+  type BelongsTo,
+  type HasMany,
+  type HasOne,
+  type QueryEvent,
+} from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
@@ -10,9 +17,33 @@ class User extends Model({
 
   static associations = this.defineAssociations({
     posts: this.hasMany(() => Post, { foreignKey: "userId" }),
+    profile: this.hasOne(() => Profile, { foreignKey: "userId" }),
   });
 
   declare posts: HasMany<typeof Post>;
+  declare profile: HasOne<typeof Profile>;
+}
+
+class Profile extends Model({
+  id: { type: "integer", null: false },
+  userId: { type: "integer", null: false },
+  bio: "string",
+}) {
+  static tableName = "profiles";
+}
+
+class Comment extends Model({
+  id: { type: "integer", null: false },
+  postId: "integer",
+  body: "string",
+}) {
+  static tableName = "comments";
+
+  static associations = this.defineAssociations({
+    post: this.belongsTo(() => Post, { foreignKey: "postId" }),
+  });
+
+  declare post: BelongsTo<typeof Post>;
 }
 
 class Post extends Model({
@@ -65,5 +96,28 @@ describe("associations", () => {
     expect(author).toBeInstanceOf(User);
     expect(author?.email).toBe("b@example.com");
     expect(queries).toHaveLength(1);
+  });
+
+  test("hasOne loads the one record pointing at this one, or null", async () => {
+    await binding.prepare("INSERT INTO profiles (id, user_id, bio) VALUES (1, 1, 'Hello')").run();
+    const users = connect(binding).model(User);
+
+    const withProfile = await (await users.find(1)).profile();
+    const withoutProfile = await (await users.find(2)).profile();
+
+    expect(withProfile).toBeInstanceOf(Profile);
+    expect(withProfile?.bio).toBe("Hello");
+    expect(withoutProfile).toBeNull();
+  });
+
+  test("a missing foreign key, or an unsaved owner, resolves to null without querying", async () => {
+    const queries: QueryEvent[] = [];
+    const db = connect(binding, { onQuery: (event) => queries.push(event) });
+    const orphan = db.model(Comment).build({ body: "no post" });
+    const newUser = db.model(User).build({ email: "new@example.com" });
+
+    expect(await orphan.post()).toBeNull();
+    expect(await newUser.profile()).toBeNull();
+    expect(queries).toHaveLength(0);
   });
 });
