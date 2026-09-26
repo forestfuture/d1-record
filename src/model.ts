@@ -9,7 +9,7 @@ import {
 } from "./metadata.ts";
 import type { Errors } from "./errors-collection.ts";
 import { declare } from "./declarations.ts";
-import { RecordInvalid } from "./errors.ts";
+import { RecordInvalid, RecordNotSaved } from "./errors.ts";
 import { destroyRecord, reloadRecord, saveLifecycle, validateRecord } from "./lifecycle.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
 import type { Validation, ValidationOptions } from "./validations.ts";
@@ -60,6 +60,11 @@ export class ModelBase {
     return this[state].errors;
   }
 
+  /** Why a callback last refused a save or destroy (`abort(reason)`); never copied into `errors`. */
+  get abortReason(): string | undefined {
+    return this[state].abortReason;
+  }
+
   /** Runs every validation, filling `errors` from scratch; `true` if there are none. */
   async isValid(): Promise<boolean> {
     return validateRecord(this);
@@ -101,6 +106,7 @@ export class ModelBase {
   async saveOrThrow(): Promise<true> {
     const outcome = await saveLifecycle(this);
     if (outcome.status === "invalid") throw new RecordInvalid(this);
+    if (outcome.status === "aborted") throw new RecordNotSaved(outcome.reason);
     return true;
   }
 

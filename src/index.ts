@@ -1,5 +1,7 @@
 export { connect, Database, type ConnectOptions, type RelationsFor } from "./database.ts";
 export {
+  abort,
+  CallbackAbort,
   CheckViolation,
   ConstraintViolation,
   D1RecordError,
@@ -12,6 +14,7 @@ export {
   RecordDestroyed,
   RecordInvalid,
   RecordNotFound,
+  RecordNotSaved,
   RecordNotUnique,
   UnknownAttribute,
 } from "./errors.ts";

@@ -9,7 +9,7 @@ import {
   type Condition,
 } from "./compiler.ts";
 import { translateConstraintError } from "./constraints.ts";
-import { RecordNotFound } from "./errors.ts";
+import { CallbackAbort, RecordNotFound } from "./errors.ts";
 import { declared } from "./declarations.ts";
 import type { Callback, ModelBase, ModelClass } from "./model.ts";
 import { state } from "./record-state.ts";
@@ -60,7 +60,12 @@ function timestampsFor(
  * What a lifecycle run ended with. Refusals are outcomes (the non-throwing methods return
  * `false`, the `OrThrow` ones throw); constraint and D1 errors are thrown (ADR-0005).
  */
-export type Outcome = { status: "saved" } | { status: "invalid" };
+export type Outcome =
+  | { status: "saved" }
+  | { status: "invalid" }
+  | { status: "aborted"; reason: string };
+
+type Validity = "valid" | "invalid" | "aborted";
 
 /**
  * Whether another row already has `value` for `attribute`: a `SELECT 1 … LIMIT 1` through the
@@ -92,22 +97,40 @@ async function runCallbacks(record: ModelBase, kind: string): Promise<void> {
   }
 }
 
-/**
- * Clears `errors`, then beforeValidation → validators → afterValidation, and reports whether
- * the record is valid.
- */
+/** Runs callbacks of `kind`; an `abort()` from one sets `abortReason` and returns `false`. */
+async function runAbortableCallbacks(record: ModelBase, kind: string): Promise<boolean> {
+  try {
+    await runCallbacks(record, kind);
+    return true;
+  } catch (error) {
+    if (!(error instanceof CallbackAbort)) throw error;
+    record[state].abortReason = error.reason;
+    return false;
+  }
+}
+
+/** Whether the record is valid: `isValid()`'s answer. */
 export async function validateRecord(record: ModelBase): Promise<boolean> {
+  return (await validation(record)) === "valid";
+}
+
+/**
+ * Clears `errors` and `abortReason`, then beforeValidation → validators → afterValidation.
+ * An `abort()` in either callback makes the record "aborted" (not valid).
+ */
+async function validation(record: ModelBase): Promise<Validity> {
   const recordState = record[state];
   recordState.errors.clear();
-  await runCallbacks(record, "beforeValidation");
+  recordState.abortReason = undefined;
+  if (!(await runAbortableCallbacks(record, "beforeValidation"))) return "aborted";
   await runValidations(declared<Validation>(modelOf(record), "validations"), {
     record,
     read: (attribute) => recordState.read(attribute),
     errors: recordState.errors,
     isTaken: (attribute, value, options) => isTaken(record, attribute, value, options),
   });
-  await runCallbacks(record, "afterValidation");
-  return recordState.errors.isEmpty();
+  if (!(await runAbortableCallbacks(record, "afterValidation"))) return "aborted";
+  return recordState.errors.isEmpty() ? "valid" : "invalid";
 }
 
 /**
@@ -117,7 +140,9 @@ export async function validateRecord(record: ModelBase): Promise<boolean> {
 export async function saveLifecycle(record: ModelBase): Promise<Outcome> {
   const recordState = record[state];
   recordState.requireLive("be saved");
-  if (!(await validateRecord(record))) return { status: "invalid" };
+  const validity = await validation(record);
+  if (validity === "aborted") return { status: "aborted", reason: recordState.abortReason ?? "" };
+  if (validity === "invalid") return { status: "invalid" };
   await (recordState.isNew ? insertRecord(record) : updateRecord(record));
   return { status: "saved" };
 }
