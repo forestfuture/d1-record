@@ -6,7 +6,13 @@ export type AttributeType = "string" | "integer" | "real" | "boolean" | "datetim
 
 export type AttributeSpec =
   | AttributeType
-  | { type: AttributeType; null?: boolean; column?: string };
+  | {
+      type: AttributeType;
+      null?: boolean;
+      column?: string;
+      /** Evaluated at `build()`, e.g. `() => crypto.randomUUID()` for app-generated keys. */
+      default?: () => unknown;
+    };
 
 export type AttributeSpecs = Record<string, AttributeSpec>;
 
@@ -14,6 +20,7 @@ export type AttributeSpecs = Record<string, AttributeSpec>;
 export interface AttributeDefinition {
   type: AttributeType;
   column: string;
+  default?: () => unknown;
 }
 
 type JsType<T extends AttributeType> = T extends "string"
@@ -39,6 +46,15 @@ export type AttributeProperties<A extends AttributeSpecs> = {
 };
 
 const values = Symbol("values");
+const state = Symbol("state");
+
+type Lifecycle = "new" | "persisted" | "destroyed";
+
+interface RecordState {
+  lifecycle: Lifecycle;
+  /** Attributes assigned on a new record; only these are written on insert. */
+  assigned: Set<string>;
+}
 
 /** Type-only key carrying a record's declared attribute types; never set at runtime. */
 declare const attributeTypes: unique symbol;
@@ -52,6 +68,22 @@ export class ModelBase {
   static attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map();
 
   [values]: Record<string, unknown> = {};
+  [state]: RecordState = { lifecycle: "new", assigned: new Set() };
+
+  /** Not yet saved: built, or created but not persisted. */
+  isNewRecord(): boolean {
+    return this[state].lifecycle === "new";
+  }
+
+  /** Backed by a row: loaded, or saved successfully. */
+  isPersisted(): boolean {
+    return this[state].lifecycle === "persisted";
+  }
+
+  /** Deleted by this instance; a read-only snapshot of the row. */
+  isDestroyed(): boolean {
+    return this[state].lifecycle === "destroyed";
+  }
 
   /** The record's attributes as a plain object of JavaScript values. */
   attributes(): Record<string, unknown> {
@@ -76,7 +108,7 @@ export type ModelClass<M extends ModelBase = ModelBase> = (new () => M) &
 function define(name: string, spec: AttributeSpec): AttributeDefinition {
   return typeof spec === "string"
     ? { type: spec, column: underscore(name) }
-    : { type: spec.type, column: spec.column ?? underscore(name) };
+    : { type: spec.type, column: spec.column ?? underscore(name), default: spec.default };
 }
 
 /**
@@ -105,6 +137,7 @@ export function Model<const A extends AttributeSpecs>(
       },
       set(this: ModelBase, value: unknown) {
         this[values][name] = value;
+        this[state].assigned.add(name);
       },
     });
   }
@@ -117,6 +150,7 @@ export function hydrate<M extends ModelBase>(
   row: Record<string, unknown>,
 ): M {
   const record = new model();
+  record[state].lifecycle = "persisted";
   for (const [name, { type, column }] of model.attributeDefinitions) {
     // A column absent from the row wasn't selected: the attribute stays unloaded.
     if (column in row) record[values][name] = readValue(type, row[column]);
@@ -183,4 +217,28 @@ export function attributeOf(model: ModelClass, name: string): AttributeDefinitio
     throw new UnknownAttribute(`${model.name} has no attribute "${name}"`);
   }
   return attribute;
+}
+
+/**
+ * A new, unsaved record. Every attribute reads as null until assigned; defaults are
+ * evaluated now and count as assigned, and so are the given attributes.
+ */
+export function buildRecord<M extends ModelBase>(
+  model: ModelClass<M>,
+  attributes: Record<string, unknown>,
+): M {
+  const record = new model();
+  for (const [name, definition] of model.attributeDefinitions) {
+    record[values][name] = null;
+    if (definition.default !== undefined) {
+      record[values][name] = definition.default();
+      record[state].assigned.add(name);
+    }
+  }
+  for (const [name, value] of Object.entries(attributes)) {
+    attributeOf(model, name);
+    record[values][name] = value;
+    record[state].assigned.add(name);
+  }
+  return record;
 }

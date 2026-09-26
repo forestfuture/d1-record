@@ -14,6 +14,7 @@ import { IncompatibleRelation, RecordNotFound } from "./errors.ts";
 import type { Executor } from "./executor.ts";
 import {
   attributeOf,
+  buildRecord,
   hydrate,
   type AttributesOf,
   type ModelBase,
@@ -165,6 +166,11 @@ export class Relation<M extends ModelBase> {
   /** Removes duplicate rows (of the selected attributes). */
   distinct(): Relation<M> {
     return this.#with({ distinct: true });
+  }
+
+  /** A new, unsaved record of this Relation's Model. */
+  build(attributes: Partial<AttributesOf<M>> = {}): M {
+    return buildRecord(this.#model, attributes);
   }
 
   /** The record with this primary key, keeping this Relation's conditions. */
