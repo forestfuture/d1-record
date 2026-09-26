@@ -5,16 +5,20 @@ import {
   NotNullViolation,
   RecordNotUnique,
 } from "./errors.ts";
+import { attributesForColumn } from "./metadata.ts";
 import type { ModelClass } from "./model.ts";
 
 type ViolationClass = typeof ConstraintViolation;
 
-/** D1 constraint messages, e.g. "UNIQUE constraint failed: users.email: SQLITE_CONSTRAINT …". */
-const KINDS: readonly (readonly [pattern: RegExp, kind: ViolationClass])[] = [
-  [/UNIQUE constraint failed: ([^:]+)/, RecordNotUnique],
-  [/NOT NULL constraint failed: ([^:]+)/, NotNullViolation],
-  [/FOREIGN KEY constraint failed/, InvalidForeignKey],
-  [/CHECK constraint failed/, CheckViolation],
+/**
+ * D1 constraint messages, e.g. "UNIQUE constraint failed: users.email: SQLITE_CONSTRAINT …".
+ * Each kind carries a readable label, since bundlers may rename the error classes.
+ */
+const KINDS: readonly (readonly [pattern: RegExp, kind: ViolationClass, label: string])[] = [
+  [/UNIQUE constraint failed: ([^:]+)/, RecordNotUnique, "not unique"],
+  [/NOT NULL constraint failed: ([^:]+)/, NotNullViolation, "must not be null"],
+  [/FOREIGN KEY constraint failed/, InvalidForeignKey, "foreign key constraint failed"],
+  [/CHECK constraint failed/, CheckViolation, "check constraint failed"],
 ];
 
 /** "users.email, users.role" → ["email", "role"] (columns of the Model's table only). */
@@ -33,15 +37,13 @@ function columnsIn(list: string | undefined, table: string): string[] {
  */
 export function translateConstraintError(error: unknown, model: ModelClass): unknown {
   const message = error instanceof Error ? error.message : String(error);
-  for (const [pattern, Kind] of KINDS) {
+  for (const [pattern, Kind, label] of KINDS) {
     const match = pattern.exec(message);
     if (match === null) continue;
     const columns = columnsIn(match[1], model.tableName);
-    const attributes = columns.flatMap((column) =>
-      [...model.attributeDefinitions].filter(([, d]) => d.column === column).map(([name]) => name),
-    );
+    const attributes = columns.flatMap((column) => attributesForColumn(model, column));
     const named = columns.length > 0 ? ` (${columns.join(", ")})` : "";
-    return new Kind(`${Kind.name}: ${model.name}${named}`, {
+    return new Kind(`${model.name}${named}: ${label}`, {
       table: model.tableName,
       columns,
       attributes,

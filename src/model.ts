@@ -190,7 +190,6 @@ export function hydrate<M extends ModelBase>(
 ): M {
   const record = new model();
   record[state].executor = executor;
-  // A column absent from the row wasn't selected: the attribute stays unloaded.
   applyRow(record, row);
   return record;
 }

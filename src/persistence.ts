@@ -1,4 +1,10 @@
-import { compileDelete, compileInsert, compileSelect, compileUpdate } from "./compiler.ts";
+import {
+  compileDelete,
+  compileInsert,
+  compileSelect,
+  compileUpdate,
+  type Assignment,
+} from "./compiler.ts";
 import { translateConstraintError } from "./constraints.ts";
 import { MissingAttribute, NoDatabase, RecordDestroyed, RecordNotFound } from "./errors.ts";
 import { attributeOf } from "./metadata.ts";
@@ -6,8 +12,6 @@ import { readValue, writeValue } from "./conversion.ts";
 import type { Executor } from "./executor.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { state, values, type Changes } from "./record-state.ts";
-
-type Assignment = readonly [attribute: string, value: unknown];
 
 function modelOf(record: ModelBase): ModelClass {
   return record.constructor as ModelClass;

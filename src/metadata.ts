@@ -60,3 +60,10 @@ export function attributeOf(model: ModelClass, name: string): AttributeDefinitio
   }
   return attribute;
 }
+
+/** The attribute names mapped to `column` (usually one; none if the column isn't declared). */
+export function attributesForColumn(model: ModelClass, column: string): string[] {
+  return [...model.attributeDefinitions]
+    .filter(([, definition]) => definition.column === column)
+    .map(([name]) => name);
+}
