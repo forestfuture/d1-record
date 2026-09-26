@@ -89,12 +89,12 @@ export class RecordState {
    * (use `null` for that); a destroyed record is read-only.
    */
   write(name: string, value: unknown): void {
+    this.#requireNotDestroyed("be changed");
     if (value === undefined) {
       throw new TypeError(
         `${this.#model.name}: got undefined for "${name}"; use null to store NULL`,
       );
     }
-    this.#requireNotDestroyed("be changed");
     this.#values[name] = value;
     this.#assigned.add(name);
   }
