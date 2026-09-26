@@ -10,6 +10,7 @@ export {
   NoDatabase,
   NotNullViolation,
   RecordDestroyed,
+  RecordInvalid,
   RecordNotFound,
   RecordNotUnique,
   UnknownAttribute,

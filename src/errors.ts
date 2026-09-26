@@ -1,3 +1,5 @@
+import type { ModelBase } from "./model.ts";
+
 /** Base class for every error the library throws on purpose. */
 export class D1RecordError extends Error {
   override name = "D1RecordError";
@@ -82,4 +84,15 @@ export class NotNullViolation extends ConstraintViolation {
 /** A CHECK constraint failed. */
 export class CheckViolation extends ConstraintViolation {
   override name = "CheckViolation";
+}
+
+/** A `…OrThrow` save was refused because the record is invalid; `record.errors` says why. */
+export class RecordInvalid extends D1RecordError {
+  override name = "RecordInvalid";
+  readonly record: ModelBase;
+
+  constructor(record: ModelBase) {
+    super(`Validation failed: ${record.errors.fullMessages().join(", ")}`);
+    this.record = record;
+  }
 }
