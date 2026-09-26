@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { connect, Model } from "../../src/index.ts";
+import { connect, Model, UnknownAttribute } from "../../src/index.ts";
 
 class Account extends Model({
   id: { type: "integer", null: false },
@@ -117,5 +117,20 @@ describe("validators", () => {
     const results = [await tag.isValid(), await tag.isValid(), await tag.isValid()];
 
     expect(results).toEqual([true, true, true]);
+  });
+
+  test("uniqueness scope names are checked when the validation is declared", () => {
+    const declare = () => {
+      class Membership extends Model({ id: "integer", email: "string", teamId: "integer" }) {
+        static tableName = "memberships";
+        static {
+          // @ts-expect-error "team" isn't an attribute; "teamId" is
+          this.validates("email", { uniqueness: { scope: ["team"] } });
+        }
+      }
+      return Membership;
+    };
+
+    expect(declare).toThrow(UnknownAttribute);
   });
 });
