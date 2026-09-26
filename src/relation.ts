@@ -205,6 +205,11 @@ export class Relation<M extends ModelBase, S = {}> {
         );
       }
     }
+    if (!sameTree(this.#query.includes ?? {}, other.#query.includes ?? {})) {
+      throw new IncompatibleRelation(
+        "or() needs relations that differ only in their conditions, but their includes differ",
+      );
+    }
     const either = new Either(this.#query.conditions, other.#query.conditions);
     return this.#with({ conditions: [either] });
   }
@@ -220,6 +225,9 @@ export class Relation<M extends ModelBase, S = {}> {
     const changes: Partial<SelectQuery> = {
       conditions: [...this.#query.conditions, ...theirs.conditions],
       ...(theirs.none === true && { none: true }),
+      ...(theirs.includes !== undefined && {
+        includes: mergeTrees(this.#query.includes ?? {}, theirs.includes),
+      }),
     };
     for (const clause of SHAPE_CLAUSES) {
       if (isSet(theirs, clause)) Object.assign(changes, { [clause]: theirs[clause] });
@@ -478,7 +486,13 @@ export class Relation<M extends ModelBase, S = {}> {
     const { primaryKey } = this.#model;
     const loaded =
       query.select && !query.distinct
-        ? [primaryKey, ...query.select.filter((name) => name !== primaryKey)]
+        ? [
+            ...new Set([
+              primaryKey,
+              ...keysForIncludes(this.#model, query.includes),
+              ...query.select,
+            ]),
+          ]
         : query.select;
     const { sql, params } = compileSelect(query, compileColumns(this.#model, loaded));
     const rows = await this.#all({ sql, params });
@@ -505,7 +519,9 @@ export class Relation<M extends ModelBase, S = {}> {
   async #findOne(extra?: Condition): Promise<M | null> {
     const conditions =
       extra === undefined ? this.#query.conditions : [...this.#query.conditions, extra];
-    const [record] = await this.#load({ model: this.#model, conditions, order: [], limit: 1 });
+    const { includes } = this.#query;
+    const query = { model: this.#model, conditions, order: [], limit: 1, includes };
+    const [record] = await this.#load(query);
     return record ?? null;
   }
 }
@@ -548,4 +564,21 @@ function mergeTrees(a: IncludeTree, b: IncludeTree): IncludeTree {
     merged[name] = mergeTrees(merged[name] ?? {}, nested);
   }
   return merged;
+}
+
+/** Whether two include trees name the same associations at every level. */
+function sameTree(a: IncludeTree, b: IncludeTree): boolean {
+  const names = Object.keys(a);
+  if (names.length !== Object.keys(b).length) return false;
+  return names.every((name) => b[name] !== undefined && sameTree(a[name]!, b[name]!));
+}
+
+/** The attributes a record must have loaded for its includes to be preloaded. */
+function keysForIncludes(model: ModelClass, includes: IncludeTree | undefined): string[] {
+  return Object.keys(includes ?? {}).map((name) => {
+    const definition = model.associations[name]!;
+    return definition.kind === "belongsTo"
+      ? definition.foreignKey
+      : (definition.primaryKey ?? model.primaryKey);
+  });
 }
