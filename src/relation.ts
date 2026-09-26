@@ -349,6 +349,11 @@ export class Relation<M extends ModelBase, S = {}> {
         `${method}() needs relations of the same Model, not ${this.#model.name} and ${other.#model.name}`,
       );
     }
+    if (other.#executor !== this.#executor) {
+      throw new IncompatibleRelation(
+        `${method}() needs relations on the same Database; these come from two connect() calls`,
+      );
+    }
   }
 
   /**
@@ -381,6 +386,12 @@ export class Relation<M extends ModelBase, S = {}> {
       const model = this.#model.name;
       throw new TypeError(
         `${model} scope "${name}" must return a Relation of ${model}, e.g. (q) => q.where(...)`,
+      );
+    }
+    // Otherwise the query would silently run on another connection.
+    if (result.#executor !== this.#executor) {
+      throw new TypeError(
+        `${this.#model.name} scope "${name}" must return a Relation on the same Database it was called on`,
       );
     }
     return result as Relation<M>;
