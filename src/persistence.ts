@@ -2,7 +2,7 @@ import { compileInsert, compileUpdate } from "./compiler.ts";
 import { readValue, writeValue } from "./conversion.ts";
 import type { Executor } from "./executor.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
-import { state, values } from "./record-state.ts";
+import { state, values, type Changes } from "./record-state.ts";
 
 type Assignment = readonly [attribute: string, value: unknown];
 
@@ -33,12 +33,27 @@ export function applyRow(record: ModelBase, row: Record<string, unknown>): void 
   markSaved(record);
 }
 
-/** Loaded attributes whose stored form differs from the snapshot. */
+/** A new record's assigned attributes, or a persisted one's that differ from the snapshot. */
 export function changedNames(record: ModelBase): string[] {
-  const { snapshot } = record[state];
+  const { lifecycle, assigned, snapshot } = record[state];
+  if (lifecycle === "new") return [...assigned];
   return Object.keys(record[values]).filter(
     (name) => !snapshot.has(name) || snapshot.get(name) !== storedForm(record, name),
   );
+}
+
+/** `{ attribute: [before, after] }`; "before" is read back from the snapshot, so it's a fresh copy. */
+export function changesOf(record: ModelBase): Changes {
+  const { snapshot } = record[state];
+  const definitions = modelOf(record).attributeDefinitions;
+  const changes: Changes = {};
+  for (const name of changedNames(record)) {
+    const before = snapshot.has(name)
+      ? readValue(definitions.get(name)!.type, snapshot.get(name))
+      : null;
+    changes[name] = [before, record[values][name]];
+  }
+  return changes;
 }
 
 function executorOf(record: ModelBase): Executor {
@@ -50,6 +65,7 @@ function executorOf(record: ModelBase): Executor {
 /** Inserts a new record, or updates a persisted one's changed attributes. */
 export async function saveRecord(record: ModelBase): Promise<boolean> {
   const executor = executorOf(record);
+  const changes = changesOf(record);
   if (record[state].lifecycle === "new") {
     const assignments = [...record[state].assigned].map((name): Assignment => [
       name,
@@ -58,15 +74,20 @@ export async function saveRecord(record: ModelBase): Promise<boolean> {
     const { sql, params } = compileInsert(modelOf(record), assignments);
     const [row] = await executor.all(sql, params);
     if (row !== undefined) applyRow(record, row);
+    record[state].savedChanges = changes;
     return true;
   }
-  const changed = changedNames(record);
-  if (changed.length === 0) return true;
+  const changed = Object.keys(changes);
+  if (changed.length === 0) {
+    record[state].savedChanges = {};
+    return true;
+  }
   const model = modelOf(record);
   const storedKey = record[state].snapshot.get(model.primaryKey);
   const assignments = changed.map((name): Assignment => [name, record[values][name]]);
   const { sql, params } = compileUpdate(model, assignments, storedKey);
   await executor.all(sql, params);
   markSaved(record);
+  record[state].savedChanges = changes;
   return true;
 }

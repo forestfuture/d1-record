@@ -4,6 +4,9 @@ import type { Executor } from "./executor.ts";
 export const values = Symbol("values");
 export const state = Symbol("state");
 
+/** `{ attribute: [before, after] }` */
+export type Changes = Record<string, [before: unknown, after: unknown]>;
+
 type Lifecycle = "new" | "persisted" | "destroyed";
 
 export interface RecordState {
@@ -14,4 +17,6 @@ export interface RecordState {
   assigned: Set<string>;
   /** Each loaded attribute's stored form as last loaded or saved; changes are measured against it. */
   snapshot: Map<string, unknown>;
+  /** The changes the last successful save wrote, as `{ attribute: [before, after] }`. */
+  savedChanges: Changes;
 }

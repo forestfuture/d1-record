@@ -7,8 +7,8 @@ import {
   type AttributeDefinition,
   type AttributeSpecs,
 } from "./metadata.ts";
-import { applyRow, saveRecord } from "./persistence.ts";
-import { state, values, type RecordState } from "./record-state.ts";
+import { applyRow, changedNames, changesOf, saveRecord } from "./persistence.ts";
+import { state, values, type Changes, type RecordState } from "./record-state.ts";
 
 /** Type-only key carrying a record's declared attribute types; never set at runtime. */
 declare const attributeTypes: unique symbol;
@@ -22,7 +22,39 @@ export class ModelBase {
   static attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map();
 
   [values]: Record<string, unknown> = {};
-  [state]: RecordState = { lifecycle: "new", assigned: new Set(), snapshot: new Map() };
+  [state]: RecordState = {
+    lifecycle: "new",
+    assigned: new Set(),
+    snapshot: new Map(),
+    savedChanges: {},
+  };
+
+  /** Whether any attribute differs from its value as last loaded or saved. */
+  isChanged(): boolean {
+    return changedNames(this).length > 0;
+  }
+
+  /** The names of the changed attributes. */
+  changed(): string[] {
+    return changedNames(this);
+  }
+
+  /** Each changed attribute's value before the change: `{ email: old }`. */
+  changedAttributes(): Record<string, unknown> {
+    return Object.fromEntries(
+      Object.entries(changesOf(this)).map(([name, [before]]) => [name, before]),
+    );
+  }
+
+  /** Each changed attribute's value before and after: `{ email: [old, new] }`. */
+  changes(): Changes {
+    return changesOf(this);
+  }
+
+  /** The changes the last successful save wrote; use it in after-save callbacks. */
+  savedChanges(): Changes {
+    return { ...this[state].savedChanges };
+  }
 
   /** Inserts a new record or updates a persisted one; `false` only for validation or abort (#4). */
   async save(): Promise<boolean> {
