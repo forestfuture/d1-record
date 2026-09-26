@@ -3,7 +3,13 @@ import { abort, AbortAfterPersistence, CallbackAbort, connect, Model } from "../
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 const log: string[] = [];
-const hooks: { beforeSave?: (user: User) => void; afterSave?: (user: User) => void } = {};
+type Hook = (user: User) => void;
+const hooks: Partial<
+  Record<
+    "beforeSave" | "beforeCreate" | "beforeUpdate" | "afterCreate" | "afterUpdate" | "afterSave",
+    Hook
+  >
+> = {};
 
 class User extends Model({
   id: { type: "integer", null: false },
@@ -19,10 +25,22 @@ class User extends Model({
       log.push("beforeSave");
       hooks.beforeSave?.(user);
     });
-    this.beforeCreate(() => void log.push("beforeCreate"));
-    this.beforeUpdate(() => void log.push("beforeUpdate"));
-    this.afterCreate((user) => void log.push(`afterCreate (persisted: ${user.isPersisted()})`));
-    this.afterUpdate(() => void log.push("afterUpdate"));
+    this.beforeCreate((user) => {
+      log.push("beforeCreate");
+      hooks.beforeCreate?.(user);
+    });
+    this.beforeUpdate((user) => {
+      log.push("beforeUpdate");
+      hooks.beforeUpdate?.(user);
+    });
+    this.afterCreate((user) => {
+      log.push(`afterCreate (persisted: ${user.isPersisted()})`);
+      hooks.afterCreate?.(user);
+    });
+    this.afterUpdate((user) => {
+      log.push("afterUpdate");
+      hooks.afterUpdate?.(user);
+    });
     this.afterSave((user) => {
       log.push("afterSave");
       hooks.afterSave?.(user);
@@ -43,8 +61,7 @@ describe("save callbacks", () => {
   beforeEach(async () => {
     await binding.prepare("DELETE FROM users").run();
     log.length = 0;
-    delete hooks.beforeSave;
-    delete hooks.afterSave;
+    for (const name of Object.keys(hooks)) delete hooks[name as keyof typeof hooks];
   });
 
   test("creating runs the create callbacks around the INSERT", async () => {
@@ -159,5 +176,42 @@ describe("save callbacks", () => {
     expect((error as Error).message).toMatch(/afterSave.*already succeeded/);
     expect(user.isPersisted()).toBe(true);
     expect(await users().count()).toBe(1);
+  });
+
+  test("abort() in beforeCreate or beforeUpdate refuses the save too", async () => {
+    hooks.beforeCreate = () => {
+      throw abort("no creates");
+    };
+    const user = users().build({ email: "a@example.com" });
+    expect(await user.save()).toBe(false);
+    expect(user.abortReason).toBe("no creates");
+    delete hooks.beforeCreate;
+
+    await user.save();
+    expect(user.abortReason).toBeUndefined(); // cleared at the start of each save
+    hooks.beforeUpdate = () => {
+      throw abort("no updates");
+    };
+    expect(await user.update({ role: "admin" })).toBe(false);
+    expect((await users().find(user.id)).role).toBeNull();
+  });
+
+  test("abort() in afterCreate or afterUpdate becomes AbortAfterPersistence", async () => {
+    hooks.afterCreate = () => {
+      throw abort("late create");
+    };
+    const created = users().build({ email: "a@example.com" });
+    await expect(created.save()).rejects.toMatchObject({
+      callback: "afterCreate",
+      reason: "late create",
+    });
+    expect(created.isPersisted()).toBe(true);
+    delete hooks.afterCreate;
+
+    hooks.afterUpdate = () => {
+      throw abort("late update");
+    };
+    await expect(created.update({ role: "admin" })).rejects.toThrow(AbortAfterPersistence);
+    expect((await users().find(created.id)).role).toBe("admin");
   });
 });

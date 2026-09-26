@@ -149,3 +149,22 @@ describe("declaration timing", () => {
     expect(() => Note.validates("body", { presence: true })).toThrow(/Note.*static \{\}/);
   });
 });
+
+describe("abort in afterValidation", () => {
+  test("refuses too: isValid is false with the reason", async () => {
+    class Gate extends Model({ id: "integer", email: "string" }) {
+      static tableName = "users";
+      static {
+        this.afterValidation((gate) => {
+          if (gate.errors.isEmpty()) throw abort("closed");
+        });
+      }
+    }
+    const gate = connect({} as never)
+      .model(Gate)
+      .build();
+
+    expect(await gate.isValid()).toBe(false);
+    expect(gate.abortReason).toBe("closed");
+  });
+});
