@@ -27,4 +27,27 @@ describe("validations", () => {
     expect(await user.isValid()).toBe(true);
     expect(user.errors.isEmpty()).toBe(true);
   });
+
+  test("the errors collection: add, get, fullMessages, toArray, isEmpty, size and base errors", () => {
+    const { errors } = users.build();
+
+    errors.add("createdAt", "is in the future");
+    errors.add("email", "is taken", { type: "taken" });
+    errors.add("base", "Account is locked");
+
+    expect(errors.get("email")).toEqual(["is taken"]);
+    expect(errors.get("role")).toEqual([]);
+    expect(errors.fullMessages()).toEqual([
+      "Created at is in the future",
+      "Email is taken",
+      "Account is locked",
+    ]);
+    expect(errors.toArray()[0]).toEqual({
+      attribute: "createdAt",
+      type: "invalid",
+      message: "is in the future",
+    });
+    expect(errors.size).toBe(3);
+    expect(errors.isEmpty()).toBe(false);
+  });
 });
