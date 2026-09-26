@@ -120,4 +120,26 @@ describe("types", () => {
     };
     expectTypeOf(typeOnly).toBeFunction();
   });
+
+  test("validations and callbacks are typed against the Model", () => {
+    // Checked by the type checker only; never called.
+    const typeOnly = () => {
+      class Account extends Model({ id: "integer", email: { type: "string", null: false } }) {
+        static tableName = "accounts";
+        static {
+          this.validates("email", { presence: true, if: (account) => account.email.length > 0 });
+          this.beforeSave((account) => {
+            expectTypeOf(account).toEqualTypeOf<Account>();
+            expectTypeOf(account.email).toEqualTypeOf<string>();
+          });
+          // @ts-expect-error unknown attribute
+          this.validates("nope", { presence: true });
+          // @ts-expect-error unknown validator
+          this.validates("email", { mustBe: "shiny" });
+        }
+      }
+      return Account;
+    };
+    expectTypeOf(typeOnly).toBeFunction();
+  });
 });
