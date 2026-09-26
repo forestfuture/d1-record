@@ -133,4 +133,26 @@ describe("validators", () => {
 
     expect(declare).toThrow(UnknownAttribute);
   });
+
+  test("length messages say 'character' for a count of one", async () => {
+    class Pin extends Model({ id: "integer", a: "string", b: "string", c: "string" }) {
+      static tableName = "pins";
+      static {
+        this.validates("a", { length: { minimum: 1 } });
+        this.validates("b", { length: { maximum: 1 } });
+        this.validates("c", { length: { is: 1 } });
+      }
+    }
+    const pin = connect({} as never)
+      .model(Pin)
+      .build({ a: "", b: "xy", c: "xy" });
+
+    await pin.isValid();
+
+    expect(pin.errors.fullMessages()).toEqual([
+      "A is too short (minimum is 1 character)",
+      "B is too long (maximum is 1 character)",
+      "C is the wrong length (should be 1 character)",
+    ]);
+  });
 });
