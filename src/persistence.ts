@@ -1,4 +1,5 @@
 import { compileDelete, compileInsert, compileSelect, compileUpdate } from "./compiler.ts";
+import { translateConstraintError } from "./constraints.ts";
 import { RecordDestroyed, RecordNotFound } from "./errors.ts";
 import { attributeOf } from "./metadata.ts";
 import { readValue, writeValue } from "./conversion.ts";
@@ -84,11 +85,8 @@ export function requireLive(record: ModelBase, action: string): void {
 /** Deletes the record's row by its stored key; the record becomes a destroyed snapshot. */
 export async function destroyRecord(record: ModelBase): Promise<void> {
   requireLive(record, "be destroyed again");
-  const { sql, params } = compileDelete(
-    modelOf(record),
-    record[state].snapshot.get(modelOf(record).primaryKey),
-  );
-  await executorOf(record).all(sql, params);
+  const model = modelOf(record);
+  await write(record, compileDelete(model, record[state].snapshot.get(model.primaryKey)));
   record[state].lifecycle = "destroyed";
 }
 
@@ -128,6 +126,18 @@ function stampTimestamps(record: ModelBase, changed: readonly string[]): void {
   }
 }
 
+/** Runs a write for `record`, translating D1 constraint failures into `ConstraintViolation`s. */
+async function write(
+  record: ModelBase,
+  { sql, params }: { sql: string; params: unknown[] },
+): Promise<Record<string, unknown>[]> {
+  try {
+    return await executorOf(record).all(sql, params);
+  } catch (error) {
+    throw translateConstraintError(error, modelOf(record));
+  }
+}
+
 function executorOf(record: ModelBase): Executor {
   const { executor } = record[state];
   if (executor === undefined) throw new Error("record has no Database");
@@ -137,7 +147,6 @@ function executorOf(record: ModelBase): Executor {
 /** Inserts a new record, or updates a persisted one's changed attributes. */
 export async function saveRecord(record: ModelBase): Promise<boolean> {
   requireLive(record, "be saved");
-  const executor = executorOf(record);
   const pending = changedNames(record);
   if (record[state].lifecycle === "new" || pending.length > 0) stampTimestamps(record, pending);
   const changes = changesOf(record);
@@ -146,8 +155,7 @@ export async function saveRecord(record: ModelBase): Promise<boolean> {
       name,
       record[values][name],
     ]);
-    const { sql, params } = compileInsert(modelOf(record), assignments);
-    const [row] = await executor.all(sql, params);
+    const [row] = await write(record, compileInsert(modelOf(record), assignments));
     if (row !== undefined) applyRow(record, row);
     record[state].savedChanges = changes;
     return true;
@@ -160,8 +168,7 @@ export async function saveRecord(record: ModelBase): Promise<boolean> {
   const model = modelOf(record);
   const storedKey = record[state].snapshot.get(model.primaryKey);
   const assignments = changed.map((name): Assignment => [name, record[values][name]]);
-  const { sql, params } = compileUpdate(model, assignments, storedKey);
-  await executor.all(sql, params);
+  await write(record, compileUpdate(model, assignments, storedKey));
   markSaved(record);
   record[state].savedChanges = changes;
   return true;

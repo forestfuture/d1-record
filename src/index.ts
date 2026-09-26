@@ -1,11 +1,16 @@
 export { connect, Database, type ConnectOptions, type RelationsFor } from "./database.ts";
 export {
+  CheckViolation,
+  ConstraintViolation,
   D1RecordError,
   IncompatibleRelation,
+  InvalidForeignKey,
   InvalidModel,
   MissingAttribute,
+  NotNullViolation,
   RecordDestroyed,
   RecordNotFound,
+  RecordNotUnique,
   UnknownAttribute,
 } from "./errors.ts";
 export type { QueryEvent, QueryListener } from "./executor.ts";

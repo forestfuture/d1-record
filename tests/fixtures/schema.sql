@@ -49,3 +49,10 @@ CREATE TABLE api_keys (
   created_at TEXT,
   updated_at TEXT
 );
+
+-- A CHECK constraint, for constraint-error translation.
+CREATE TABLE products (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  price_cents INTEGER NOT NULL CHECK (price_cents >= 0)
+);
