@@ -1,6 +1,7 @@
 import { Executor, type QueryListener } from "./executor.ts";
 import { verifyModel, type ModelBase, type ModelClass, type ScopesOf } from "./model.ts";
-import { relationFor, type Scoped } from "./relation.ts";
+import type { Scoped } from "./relation.ts";
+import { relationFor } from "./scoped-relation.ts";
 
 /** One request-bound Relation per Model, keyed like the object passed to `db.models()`. */
 export type RelationsFor<T extends Record<string, ModelClass<ModelBase>>> = {
