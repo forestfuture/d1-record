@@ -1,13 +1,16 @@
 import { InvalidModel } from "./errors.ts";
 import type { Executor } from "./executor.ts";
 import {
+  attributeOf,
   define,
   type AttributeProperties,
   type AttributeDefinition,
   type AttributeSpecs,
 } from "./metadata.ts";
+import type { Errors } from "./errors-collection.ts";
 import { destroyRecord, reloadRecord, saveRecord } from "./persistence.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
+import { runValidations, type Validation, type ValidationOptions } from "./validations.ts";
 
 /** Type-only key carrying a record's declared attribute types; never set at runtime. */
 declare const attributeTypes: unique symbol;
@@ -19,9 +22,36 @@ export class ModelBase {
   static tableName: string;
   static primaryKey = "id";
   static attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map();
+  /** This Model's `validates(...)` declarations; a subclass gets its own copy. */
+  static validations: readonly Validation[] = [];
+
+  /** Declares a validation, e.g. `this.validates("email", { presence: true })` in `static {}`. */
+  static validates<C extends ModelClass>(
+    this: C,
+    attribute: keyof AttributesOf<InstanceType<C>> & string,
+    options: ValidationOptions,
+  ): void {
+    attributeOf(this, attribute);
+    // A new array each time, so declaring on a subclass never changes its parent's list.
+    this.validations = [...this.validations, { attribute, options }];
+  }
 
   /** This record's values, lifecycle and Snapshot; only `RecordState` changes them. */
   readonly [state] = new RecordState(this.constructor as ModelClass);
+
+  /** The errors from the last validation run. */
+  get errors(): Errors {
+    return this[state].errors;
+  }
+
+  /** Runs every validation, filling `errors` from scratch; `true` if there are none. */
+  async isValid(): Promise<boolean> {
+    const { errors } = this[state];
+    errors.clear();
+    const model = this.constructor as ModelClass;
+    await runValidations(model.validations, (attribute) => this[state].read(attribute), errors);
+    return errors.isEmpty();
+  }
 
   /** Whether any attribute differs from its value as last loaded or saved. */
   isChanged(): boolean {
