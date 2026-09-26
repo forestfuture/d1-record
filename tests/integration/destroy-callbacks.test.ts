@@ -65,6 +65,10 @@ describe("destroy callbacks", () => {
     await expect(user.destroyOrThrow()).rejects.toThrow(RecordNotDestroyed);
     expect(user.isDestroyed()).toBe(false);
     expect(await users().count()).toBe(1);
+
+    delete hooks.beforeDestroy;
+    await user.destroy();
+    expect(user.abortReason).toBeUndefined(); // cleared at the start of each destroy
   });
 
   test("an error from afterDestroy propagates; the row stays deleted and the record destroyed", async () => {

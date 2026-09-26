@@ -51,6 +51,8 @@ describe("validation when saving", () => {
     expect((error as RecordInvalid).record).toBe(user);
     expect((error as Error).message).toMatch(/Email can't be blank/);
     await expect(users.createOrThrow({})).rejects.toThrow(RecordInvalid);
+    const saved = await users.create({ email: "a@example.com" });
+    await expect(saved.updateOrThrow({ email: " " })).rejects.toThrow(RecordInvalid);
   });
 
   test("create returns an invalid record unsaved, with its errors", async () => {
