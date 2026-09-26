@@ -76,4 +76,19 @@ describe("record lifecycle", () => {
     expect(key.id).toBe(id);
     expect((await keys.find(id)).scopes).toEqual(["read"]);
   });
+
+  test("create and createOrThrow build and save in one step, resolving to the record", async () => {
+    const users = connect(binding).model(User);
+
+    const created = await users.create({ email: "a@example.com", role: "admin" });
+    const createdOrThrow = await users.createOrThrow({ email: "b@example.com" });
+
+    expect(created).toBeInstanceOf(User);
+    expect(created.isPersisted()).toBe(true);
+    expect(createdOrThrow.isPersisted()).toBe(true);
+    expect(await users.order({ id: "asc" }).pluck("email")).toEqual([
+      "a@example.com",
+      "b@example.com",
+    ]);
+  });
 });
