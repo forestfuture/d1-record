@@ -60,6 +60,27 @@ function rejectUndefined(value: unknown, name: string, method: string): void {
   }
 }
 
+/**
+ * The single equality values of a Relation's `where` conditions (a value or null), which a
+ * record built from it starts with. Arrays, `whereNot`, `or` and fragments carry nothing over.
+ */
+function inheritedAttributes(conditions: readonly Condition[]): Record<string, unknown> {
+  const inherited: Record<string, unknown> = {};
+  for (const condition of conditions) {
+    if (
+      condition instanceof SafeSql ||
+      condition instanceof Negated ||
+      condition instanceof Either
+    ) {
+      continue;
+    }
+    for (const [name, value] of Object.entries(condition)) {
+      if (!Array.isArray(value)) inherited[name] = value;
+    }
+  }
+  return inherited;
+}
+
 /** `{}` adds no condition at all (common when an object is built from optional filters). */
 function isEmptyConditions(conditions: object): boolean {
   return !(conditions instanceof SafeSql) && Object.keys(conditions).length === 0;
@@ -170,7 +191,8 @@ export class Relation<M extends ModelBase> {
 
   /** A new, unsaved record of this Relation's Model. */
   build(attributes: Partial<AttributesOf<M>> = {}): M {
-    return buildRecord(this.#model, attributes, this.#executor);
+    const inherited = inheritedAttributes(this.#query.conditions);
+    return buildRecord(this.#model, { ...inherited, ...attributes }, this.#executor);
   }
 
   /** Builds and saves a record; resolves to it whether or not it was saved (check `isPersisted()`). */
