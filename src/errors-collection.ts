@@ -13,6 +13,9 @@ function displayName(attribute: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+/** The library's key for emptying an errors collection; not exported from the package. */
+export const clearErrors = Symbol("clearErrors");
+
 /** A record's validation errors: `record.errors`. Cleared at the start of each validation run. */
 export class Errors {
   #entries: ValidationError[] = [];
@@ -49,8 +52,8 @@ export class Errors {
     return this.#entries.length;
   }
 
-  /** @internal Called at the start of each validation run. */
-  clear(): void {
+  /** Called at the start of each validation run; not part of the public interface. */
+  [clearErrors](): void {
     this.#entries = [];
   }
 }

@@ -10,6 +10,7 @@ import {
 } from "./compiler.ts";
 import { translateConstraintError } from "./constraints.ts";
 import { AbortAfterPersistence, CallbackAbort, RecordNotFound } from "./errors.ts";
+import { clearErrors } from "./errors-collection.ts";
 import {
   declared,
   type AfterCallbackKind,
@@ -129,7 +130,7 @@ export async function validateRecord(record: ModelBase): Promise<boolean> {
  */
 async function validation(record: ModelBase): Promise<Validity> {
   const recordState = record[state];
-  recordState.errors.clear();
+  recordState.errors[clearErrors]();
   recordState.abortReason = undefined;
   if (!(await runAbortableCallbacks(record, "beforeValidation"))) return "aborted";
   await runValidations(declared(modelOf(record), "validations"), {
