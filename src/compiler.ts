@@ -27,6 +27,8 @@ export interface SelectQuery {
   distinct?: boolean;
   /** From `none()`: matches nothing, so it's never sent to D1. */
   none?: boolean;
+  /** The Model name of an unsaved owner whose hasMany this is: `create` must refuse. */
+  unsavedOwner?: string;
 }
 
 export type Condition = Record<string, unknown> | SafeSql | Negated | Either;
