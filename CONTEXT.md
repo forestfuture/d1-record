@@ -16,6 +16,10 @@ _Avoid_: Row (outside the hydration boundary), object, instance
 The three lifecycle states of a **Record**: not yet written, backed by a row, or backed by a row that this instance deleted. A destroyed record is a read-only snapshot of the deleted row.
 _Avoid_: Saved, deleted, frozen
 
+**Snapshot**:
+A Record's attribute values as last loaded from or saved to D1. Changes are measured against it, and `reload()` replaces it.
+_Avoid_: Original, previous values, dirty state
+
 **Partial record**:
 A **Record** loaded through a Relation with `select(...)`. Only the selected attributes and the primary key are loaded. Reading any other attribute is an error, not `null`.
 _Avoid_: Projection, sparse record
