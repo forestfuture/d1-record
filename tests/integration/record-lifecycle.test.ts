@@ -91,4 +91,33 @@ describe("record lifecycle", () => {
       "b@example.com",
     ]);
   });
+
+  test("saving a loaded record updates only its changed columns", async () => {
+    await connect(binding).model(User).create({ email: "a@example.com", role: "member" });
+    const queries: QueryEvent[] = [];
+    const users = connect(binding, { onQuery: (event) => queries.push(event) }).model(User);
+    const user = await users.findByOrThrow({ email: "a@example.com" });
+    queries.length = 0;
+
+    user.role = "admin";
+    expect(await user.save()).toBe(true);
+
+    expect(queries).toHaveLength(1);
+    expect(queries[0]?.sql).toMatch(/^UPDATE "users" SET "role" = \?/);
+    expect(queries[0]?.sql).not.toContain('"email"');
+    expect((await users.find(user.id)).role).toBe("admin");
+  });
+
+  test("saving a record with no changes sends no statement", async () => {
+    await connect(binding).model(User).create({ email: "a@example.com" });
+    const queries: QueryEvent[] = [];
+    const users = connect(binding, { onQuery: (event) => queries.push(event) }).model(User);
+    const user = await users.findByOrThrow({ email: "a@example.com" });
+    queries.length = 0;
+
+    user.email = "a@example.com"; // assigned, but unchanged
+
+    expect(await user.save()).toBe(true);
+    expect(queries).toHaveLength(0);
+  });
 });

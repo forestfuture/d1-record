@@ -22,7 +22,7 @@ export class ModelBase {
   static attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map();
 
   [values]: Record<string, unknown> = {};
-  [state]: RecordState = { lifecycle: "new", assigned: new Set() };
+  [state]: RecordState = { lifecycle: "new", assigned: new Set(), snapshot: new Map() };
 
   /** Inserts a new record or updates a persisted one; `false` only for validation or abort (#4). */
   async save(): Promise<boolean> {
