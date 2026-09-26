@@ -30,9 +30,10 @@ export class Database {
 
   /** Request-bound relations for several models at once: `db.models({ User }).User`. */
   models<const T extends Record<string, ModelClass<ModelBase>>>(models: T): RelationsFor<T> {
+    // Each entry is exactly db.model(thatModel), so it has that Model's Relation type.
     return Object.fromEntries(
       Object.entries(models).map(([name, model]) => [name, this.model(model)]),
-    ) as RelationsFor<T>;
+    ) as unknown as RelationsFor<T>;
   }
 }
 
