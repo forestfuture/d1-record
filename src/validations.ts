@@ -66,6 +66,11 @@ function isBlank(value: unknown): boolean {
 const presence: Check = (value, { presence: required }) =>
   required && isBlank(value) ? [{ type: "blank", message: "can't be blank" }] : [];
 
+/** "1 character", "3 characters" */
+function characters(count: number): string {
+  return `${count} character${count === 1 ? "" : "s"}`;
+}
+
 const length: Check = (value, { length: rule }) => {
   if (rule === undefined) return [];
   const size = typeof value === "string" ? value.length : 0;
@@ -73,19 +78,19 @@ const length: Check = (value, { length: rule }) => {
   if (rule.is !== undefined && size !== rule.is) {
     failures.push({
       type: "wrongLength",
-      message: `is the wrong length (should be ${rule.is} characters)`,
+      message: `is the wrong length (should be ${characters(rule.is)})`,
     });
   }
   if (rule.minimum !== undefined && size < rule.minimum) {
     failures.push({
       type: "tooShort",
-      message: `is too short (minimum is ${rule.minimum} characters)`,
+      message: `is too short (minimum is ${characters(rule.minimum)})`,
     });
   }
   if (rule.maximum !== undefined && size > rule.maximum) {
     failures.push({
       type: "tooLong",
-      message: `is too long (maximum is ${rule.maximum} characters)`,
+      message: `is too long (maximum is ${characters(rule.maximum)})`,
     });
   }
   return failures;
