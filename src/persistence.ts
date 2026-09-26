@@ -102,7 +102,10 @@ export function requireLive(record: ModelBase, action: string): void {
 /** Deletes the record's row by its stored key; the record becomes a destroyed snapshot. */
 export async function destroyRecord(record: ModelBase): Promise<void> {
   requireLive(record, "be destroyed again");
-  await write(record, compileDelete(modelOf(record), storedKeyOf(record)));
+  // A never-saved record has no row, so there's nothing to delete (as in Rails).
+  if (record[state].lifecycle !== "new") {
+    await write(record, compileDelete(modelOf(record), storedKeyOf(record)));
+  }
   record[state].lifecycle = "destroyed";
 }
 
