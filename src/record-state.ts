@@ -1,5 +1,6 @@
 import type { Assignment } from "./compiler.ts";
 import { readValue, writeValue } from "./conversion.ts";
+import { Errors } from "./errors-collection.ts";
 import { MissingAttribute, NoDatabase, RecordDestroyed } from "./errors.ts";
 import type { Executor } from "./executor.ts";
 import { attributeOf, type AttributeDefinition } from "./metadata.ts";
@@ -29,9 +30,15 @@ export class RecordState {
   readonly #assigned = new Set<string>();
   readonly #snapshot = new Map<string, unknown>();
   #savedChanges: Changes = {};
+  readonly #errors = new Errors();
 
   constructor(model: ModelClass) {
     this.#model = model;
+  }
+
+  /** The record's validation errors, filled by the last validation run. */
+  get errors(): Errors {
+    return this.#errors;
   }
 
   // Lifecycle and Database
