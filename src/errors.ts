@@ -27,3 +27,8 @@ export class MissingAttribute extends D1RecordError {
 export class IncompatibleRelation extends D1RecordError {
   override name = "IncompatibleRelation";
 }
+
+/** Using a destroyed record as a live one: `save`, `update`, `destroy` or `reload` after `destroy()`. */
+export class RecordDestroyed extends D1RecordError {
+  override name = "RecordDestroyed";
+}

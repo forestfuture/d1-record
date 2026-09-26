@@ -1,5 +1,5 @@
-import { compileInsert, compileSelect, compileUpdate } from "./compiler.ts";
-import { RecordNotFound } from "./errors.ts";
+import { compileDelete, compileInsert, compileSelect, compileUpdate } from "./compiler.ts";
+import { RecordDestroyed, RecordNotFound } from "./errors.ts";
 import { attributeOf } from "./metadata.ts";
 import { readValue, writeValue } from "./conversion.ts";
 import type { Executor } from "./executor.ts";
@@ -74,8 +74,27 @@ export function assignAttributes(record: ModelBase, attributes: Record<string, u
   }
 }
 
+/** A destroyed record is a read-only snapshot; using it as a live record is a mistake. */
+export function requireLive(record: ModelBase, action: string): void {
+  if (record[state].lifecycle === "destroyed") {
+    throw new RecordDestroyed(`${modelOf(record).name} record was destroyed; it can't ${action}`);
+  }
+}
+
+/** Deletes the record's row by its stored key; the record becomes a destroyed snapshot. */
+export async function destroyRecord(record: ModelBase): Promise<void> {
+  requireLive(record, "be destroyed again");
+  const { sql, params } = compileDelete(
+    modelOf(record),
+    record[state].snapshot.get(modelOf(record).primaryKey),
+  );
+  await executorOf(record).all(sql, params);
+  record[state].lifecycle = "destroyed";
+}
+
 /** Loads the record's row again by its stored primary key, discarding unsaved changes. */
 export async function reloadRecord(record: ModelBase): Promise<void> {
+  requireLive(record, "be reloaded");
   const model = modelOf(record);
   const { type } = attributeOf(model, model.primaryKey);
   const key = readValue(type, record[state].snapshot.get(model.primaryKey));
@@ -117,6 +136,7 @@ function executorOf(record: ModelBase): Executor {
 
 /** Inserts a new record, or updates a persisted one's changed attributes. */
 export async function saveRecord(record: ModelBase): Promise<boolean> {
+  requireLive(record, "be saved");
   const executor = executorOf(record);
   const pending = changedNames(record);
   if (record[state].lifecycle === "new" || pending.length > 0) stampTimestamps(record, pending);

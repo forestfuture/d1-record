@@ -11,7 +11,9 @@ import {
   assignAttributes,
   changedNames,
   changesOf,
+  destroyRecord,
   reloadRecord,
+  requireLive,
   saveRecord,
 } from "./persistence.ts";
 import { state, values, type Changes, type RecordState } from "./record-state.ts";
@@ -81,12 +83,29 @@ export class ModelBase {
 
   /** `assign` then `save`. */
   async update(attributes: Partial<AttributesOf<this>>): Promise<boolean> {
+    requireLive(this, "be updated");
     return this.assign(attributes).save();
   }
 
   /** `assign` then `saveOrThrow`. */
   async updateOrThrow(attributes: Partial<AttributesOf<this>>): Promise<true> {
+    requireLive(this, "be updated");
     return this.assign(attributes).saveOrThrow();
+  }
+
+  /**
+   * Deletes the row and resolves to this record, now a read-only destroyed snapshot.
+   * A row that's already gone still counts. `false` is reserved for a callback abort (#4).
+   */
+  async destroy(): Promise<this | false> {
+    await destroyRecord(this);
+    return this;
+  }
+
+  /** Like `destroy()`, but throws instead of returning `false`. */
+  async destroyOrThrow(): Promise<this> {
+    await destroyRecord(this);
+    return this;
   }
 
   /** Loads the stored row again, discarding unsaved changes; `RecordNotFound` if it's gone. */

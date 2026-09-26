@@ -144,6 +144,15 @@ export function compileUpdate(
   };
 }
 
+/** `DELETE … WHERE <primary key> = ?`, with the key as stored in D1. */
+export function compileDelete(model: ModelClass<ModelBase>, storedKey: unknown): CompiledQuery {
+  const { column } = attributeOf(model, model.primaryKey);
+  return {
+    sql: `DELETE FROM ${quoteIdentifier(model.tableName)} WHERE ${quoteIdentifier(column)} = ?`,
+    params: [storedKey],
+  };
+}
+
 /** The quoted columns for `attributes`, or `*` for every column. */
 export function compileColumns(
   model: ModelClass<ModelBase>,

@@ -4,6 +4,7 @@ export {
   IncompatibleRelation,
   InvalidModel,
   MissingAttribute,
+  RecordDestroyed,
   RecordNotFound,
   UnknownAttribute,
 } from "./errors.ts";
