@@ -155,4 +155,23 @@ describe("validators", () => {
       "C is the wrong length (should be 1 character)",
     ]);
   });
+
+  test("length counts the items of an array, and inclusion matches dates by their time", async () => {
+    const launch = new Date(Date.UTC(2026, 0, 1));
+    class Post extends Model({ id: "integer", tags: "json", publishOn: "datetime" }) {
+      static tableName = "posts";
+      static {
+        this.validates("tags", { length: { minimum: 1 } });
+        this.validates("publishOn", { inclusion: [launch] });
+      }
+    }
+    const posts = connect({} as never).model(Post);
+
+    const valid = posts.build({ tags: ["news"], publishOn: new Date(launch.getTime()) });
+    const invalid = posts.build({ tags: [], publishOn: new Date(Date.UTC(2027, 0, 1)) });
+
+    expect(await valid.isValid()).toBe(true);
+    expect(await invalid.isValid()).toBe(false);
+    expect(invalid.errors.toArray().map((error) => error.type)).toEqual(["tooShort", "inclusion"]);
+  });
 });
