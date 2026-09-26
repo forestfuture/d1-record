@@ -50,4 +50,21 @@ describe("validations", () => {
     expect(errors.size).toBe(3);
     expect(errors.isEmpty()).toBe(false);
   });
+
+  test("a subclass inherits its parent's validations, and adding more never changes the parent", async () => {
+    class Admin extends User {
+      static {
+        this.validates("role", { presence: true });
+      }
+    }
+    const admins = connect({} as never).model(Admin);
+
+    const admin = admins.build();
+    const user = users.build();
+    await admin.isValid();
+    await user.isValid();
+
+    expect(admin.errors.toArray().map((error) => error.attribute)).toEqual(["email", "role"]);
+    expect(user.errors.toArray().map((error) => error.attribute)).toEqual(["email"]);
+  });
 });
