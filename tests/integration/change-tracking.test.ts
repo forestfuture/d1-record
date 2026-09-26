@@ -88,4 +88,23 @@ describe("change tracking", () => {
     await user.save();
     expect(user.savedChanges()).toEqual({});
   });
+
+  test("savedChanges holds copies, so editing the record afterwards doesn't change it", async () => {
+    const key = await connect(binding).model(ApiKey).find("k1");
+    key.scopes = ["read", "write"];
+    await key.save();
+
+    (key.scopes as string[]).push("admin");
+
+    expect(key.savedChanges()).toEqual({ scopes: [["read"], ["read", "write"]] });
+  });
+
+  test("after create, savedChanges includes what D1 filled in, like the generated key", async () => {
+    const user = await connect(binding).model(User).create({ email: "b@example.com" });
+
+    expect(user.savedChanges()).toEqual({
+      id: [null, user.id],
+      email: [null, "b@example.com"],
+    });
+  });
 });

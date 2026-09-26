@@ -73,7 +73,10 @@ describe("constraint errors", () => {
     expect(other.isPersisted()).toBe(true);
     expect(other.changes()).toEqual({ email: ["other@example.com", "taken@example.com"] });
     // Still the changes from the last successful save (the create), not the failed one.
-    expect(other.savedChanges()).toEqual({ email: [null, "other@example.com"] });
+    expect(other.savedChanges()).toEqual({
+      id: [null, other.id],
+      email: [null, "other@example.com"],
+    });
   });
 
   test("a FOREIGN KEY violation throws InvalidForeignKey", async () => {

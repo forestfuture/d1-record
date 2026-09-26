@@ -19,6 +19,12 @@ function storedForm(record: ModelBase, name: string): unknown {
   return writeValue(type, record[values][name]);
 }
 
+/** A copy of an attribute's current value, read back from its stored form (so no shared objects). */
+function copyOf(record: ModelBase, name: string): unknown {
+  const { type } = modelOf(record).attributeDefinitions.get(name)!;
+  return readValue(type, storedForm(record, name));
+}
+
 /** Records the current values as saved: clean, and persisted. */
 function markSaved(record: ModelBase): void {
   const { snapshot } = record[state];
@@ -50,7 +56,7 @@ export function changedNames(record: ModelBase): string[] {
   );
 }
 
-/** `{ attribute: [before, after] }`; "before" is read back from the snapshot, so it's a fresh copy. */
+/** `{ attribute: [before, after] }`; both are copies, never the record's own objects. */
 export function changesOf(record: ModelBase): Changes {
   const { snapshot } = record[state];
   const definitions = modelOf(record).attributeDefinitions;
@@ -59,7 +65,7 @@ export function changesOf(record: ModelBase): Changes {
     const before = snapshot.has(name)
       ? readValue(definitions.get(name)!.type, snapshot.get(name))
       : null;
-    changes[name] = [before, record[values][name]];
+    changes[name] = [before, copyOf(record, name)];
   }
   return changes;
 }
@@ -188,7 +194,6 @@ function assignmentsOf(record: ModelBase, names: readonly string[]): Assignment[
 
 /** INSERT the assigned attributes (plus timestamps); `RETURNING *` loads what D1 stored. */
 async function insertRecord(record: ModelBase): Promise<true> {
-  const changes = changesOf(record);
   const assigned = [...record[state].assigned];
   const assignments = [
     ...assignmentsOf(record, assigned),
@@ -198,7 +203,12 @@ async function insertRecord(record: ModelBase): Promise<true> {
   // RETURNING * always yields the stored row; without one, keep the values as written.
   if (row === undefined) markSaved(record);
   else applyRow(record, row);
-  record[state].savedChanges = changes;
+  // Everything the new row holds, including what D1 filled in (generated key, defaults).
+  record[state].savedChanges = Object.fromEntries(
+    Object.keys(record[values])
+      .filter((name) => record[values][name] !== null)
+      .map((name) => [name, [null, copyOf(record, name)]]),
+  );
   return true;
 }
 
