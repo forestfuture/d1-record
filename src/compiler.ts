@@ -103,10 +103,13 @@ function compileCondition(
   return `(${parts.join(" AND ")})`;
 }
 
+/** An attribute and the value to write to it. */
+export type Assignment = readonly [attribute: string, value: unknown];
+
 /** `INSERT … RETURNING *` for the given attribute values, or `DEFAULT VALUES` for none. */
 export function compileInsert(
   model: ModelClass<ModelBase>,
-  assignments: readonly (readonly [attribute: string, value: unknown])[],
+  assignments: readonly Assignment[],
 ): CompiledQuery {
   const table = quoteIdentifier(model.tableName);
   if (assignments.length === 0) {
@@ -127,7 +130,7 @@ export function compileInsert(
  */
 export function compileUpdate(
   model: ModelClass<ModelBase>,
-  assignments: readonly (readonly [attribute: string, value: unknown])[],
+  assignments: readonly Assignment[],
   storedKey: unknown,
 ): CompiledQuery {
   const params: unknown[] = [];

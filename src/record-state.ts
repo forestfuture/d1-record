@@ -1,6 +1,6 @@
 import type { Executor } from "./executor.ts";
 
-/** Where a record keeps its attribute values; never exported from the package. */
+/** Where a record keeps its attribute values and lifecycle state; neither is exported from the package. */
 export const values = Symbol("values");
 export const state = Symbol("state");
 
