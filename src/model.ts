@@ -30,11 +30,14 @@ export class ModelBase {
   static validates<C extends ModelClass>(
     this: C,
     attribute: keyof AttributesOf<InstanceType<C>> & string,
-    options: ValidationOptions,
+    options: ValidationOptions<InstanceType<C>>,
   ): void {
     attributeOf(this, attribute);
     // A new array each time, so declaring on a subclass never changes its parent's list.
-    this.validations = [...this.validations, { attribute, options }];
+    this.validations = [
+      ...this.validations,
+      { attribute, options: options as ValidationOptions<never> },
+    ];
   }
 
   /** This record's values, lifecycle and Snapshot; only `RecordState` changes them. */

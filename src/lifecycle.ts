@@ -63,7 +63,7 @@ export async function validateRecord(record: ModelBase): Promise<boolean> {
   const recordState = record[state];
   recordState.errors.clear();
   const read = (attribute: string) => recordState.read(attribute);
-  await runValidations(modelOf(record).validations, read, recordState.errors);
+  await runValidations(record, modelOf(record).validations, read, recordState.errors);
   return recordState.errors.isEmpty();
 }
 
