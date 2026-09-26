@@ -14,6 +14,11 @@ export interface NumericalityOptions {
   lessThanOrEqualTo?: number;
 }
 
+export interface UniquenessOptions {
+  scope?: readonly string[];
+  caseSensitive?: boolean;
+}
+
 /** The rules for one `validates(attribute, options)` call. `R` is the Model's record type. */
 export interface ValidationOptions<R = never> {
   /** Not null, and not blank after trimming a string. */
@@ -22,6 +27,12 @@ export interface ValidationOptions<R = never> {
   format?: RegExp | { with: RegExp };
   inclusion?: readonly unknown[] | { in: readonly unknown[] };
   numericality?: boolean | NumericalityOptions;
+  /**
+   * No other row has this value (checked in D1 through the record's Database). `scope` adds
+   * attributes that must match too; `caseSensitive: false` compares with `lower()` (ASCII only).
+   * `null` is never taken, as with SQLite's UNIQUE. Not race-safe: the constraint has the final say.
+   */
+  uniqueness?: boolean | UniquenessOptions;
   /** Skip these rules when the value is null. */
   allowNull?: boolean;
   /** Replaces the default message of every failure from these rules. */
@@ -118,19 +129,41 @@ const numericality: Check = (value, { numericality: rule }) => {
 /** Applied in this order within one `validates` call. */
 const CHECKS: readonly Check[] = [presence, length, format, inclusion, numericality];
 
+/** What running validations needs from the record being validated. */
+export interface ValidationTarget {
+  record: unknown;
+  read: (attribute: string) => unknown;
+  errors: Errors;
+  /** Whether another row already has `value` for `attribute` (the uniqueness check, in D1). */
+  isTaken: (attribute: string, value: unknown, options: UniquenessOptions) => Promise<boolean>;
+}
+
+async function uniquenessFailures(
+  target: ValidationTarget,
+  attribute: string,
+  value: unknown,
+  { uniqueness: rule }: ValidationOptions<never>,
+): Promise<Failure[]> {
+  if (rule === undefined || rule === false || value === null) return [];
+  const taken = await target.isTaken(attribute, value, rule === true ? {} : rule);
+  return taken ? [{ type: "taken", message: "has already been taken" }] : [];
+}
+
 /** Runs every validation in declaration order, adding failures to `errors`. */
 export async function runValidations(
-  record: unknown,
   validations: readonly Validation[],
-  read: (attribute: string) => unknown,
-  errors: Errors,
+  target: ValidationTarget,
 ): Promise<void> {
   for (const { attribute, options } of validations) {
-    if (options.if && !options.if(record as never)) continue;
-    const value = read(attribute);
+    if (options.if && !options.if(target.record as never)) continue;
+    const value = target.read(attribute);
     if (options.allowNull && value === null) continue;
-    for (const failure of CHECKS.flatMap((check) => check(value, options))) {
-      errors.add(attribute, options.message ?? failure.message, { type: failure.type });
+    const failures = [
+      ...CHECKS.flatMap((check) => check(value, options)),
+      ...(await uniquenessFailures(target, attribute, value, options)),
+    ];
+    for (const failure of failures) {
+      target.errors.add(attribute, options.message ?? failure.message, { type: failure.type });
     }
   }
 }

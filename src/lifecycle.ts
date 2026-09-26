@@ -3,14 +3,17 @@ import {
   compileInsert,
   compileSelect,
   compileUpdate,
+  Negated,
   type Assignment,
   type CompiledQuery,
+  type Condition,
 } from "./compiler.ts";
 import { translateConstraintError } from "./constraints.ts";
 import { RecordNotFound } from "./errors.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { state } from "./record-state.ts";
-import { runValidations } from "./validations.ts";
+import { column, sql } from "./sql.ts";
+import { runValidations, type UniquenessOptions } from "./validations.ts";
 
 function modelOf(record: ModelBase): ModelClass {
   return record.constructor as ModelClass;
@@ -58,12 +61,39 @@ function timestampsFor(
  */
 export type Outcome = { status: "saved" } | { status: "invalid" };
 
+/**
+ * Whether another row already has `value` for `attribute`: a `SELECT 1 … LIMIT 1` through the
+ * record's own Database (so its Session), within the scope, leaving out the record's own row.
+ */
+async function isTaken(
+  record: ModelBase,
+  attribute: string,
+  value: unknown,
+  { scope = [], caseSensitive = true }: UniquenessOptions,
+): Promise<boolean> {
+  const model = modelOf(record);
+  const recordState = record[state];
+  const conditions: Condition[] = [
+    caseSensitive ? { [attribute]: value } : sql`lower(${column(attribute)}) = lower(${value})`,
+    ...scope.map((name) => ({ [name]: recordState.read(name) })),
+  ];
+  if (!recordState.isNew) {
+    conditions.push(new Negated({ [model.primaryKey]: recordState.storedKeyValue }));
+  }
+  const { sql: text, params } = compileSelect({ model, conditions, order: [], limit: 1 }, "1");
+  return (await recordState.executor.all(text, params)).length > 0;
+}
+
 /** Clears `errors`, runs every validation, and reports whether the record is valid. */
 export async function validateRecord(record: ModelBase): Promise<boolean> {
   const recordState = record[state];
   recordState.errors.clear();
-  const read = (attribute: string) => recordState.read(attribute);
-  await runValidations(record, modelOf(record).validations, read, recordState.errors);
+  await runValidations(modelOf(record).validations, {
+    record,
+    read: (attribute) => recordState.read(attribute),
+    errors: recordState.errors,
+    isTaken: (attribute, value, options) => isTaken(record, attribute, value, options),
+  });
   return recordState.errors.isEmpty();
 }
 
