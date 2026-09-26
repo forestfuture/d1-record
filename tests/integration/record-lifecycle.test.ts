@@ -1,5 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model, type QueryEvent } from "../../src/index.ts";
+import {
+  connect,
+  Model,
+  RecordNotFound,
+  UnknownAttribute,
+  type QueryEvent,
+} from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
@@ -119,5 +125,51 @@ describe("record lifecycle", () => {
 
     expect(await user.save()).toBe(true);
     expect(queries).toHaveLength(0);
+  });
+
+  test("assign sets several attributes without saving, rejecting unknown keys and undefined", async () => {
+    const queries: QueryEvent[] = [];
+    const users = connect(binding, { onQuery: (event) => queries.push(event) }).model(User);
+    const user = users.build({ email: "a@example.com" });
+
+    user.assign({ role: "admin", isActive: false });
+
+    expect(user.changes()).toMatchObject({ role: [null, "admin"], isActive: [null, false] });
+    expect(queries).toHaveLength(0);
+    // @ts-expect-error unknown attribute
+    expect(() => user.assign({ nope: 1 })).toThrow(UnknownAttribute);
+    expect(() => user.assign({ role: undefined })).toThrow(/"role".*null/);
+    expect(() => users.build({ role: undefined })).toThrow(TypeError);
+  });
+
+  test("update and updateOrThrow assign and save in one step", async () => {
+    const users = connect(binding).model(User);
+    const user = await users.create({ email: "a@example.com", role: "member" });
+
+    expect(await user.update({ role: "admin" })).toBe(true);
+    expect(await user.updateOrThrow({ isActive: false })).toBe(true);
+
+    const stored = await users.find(user.id);
+    expect([stored.role, stored.isActive]).toEqual(["admin", false]);
+  });
+
+  test("reload discards unsaved changes and loads the stored row", async () => {
+    const users = connect(binding).model(User);
+    const user = await users.create({ email: "a@example.com", role: "member" });
+    await binding.prepare("UPDATE users SET role = 'owner' WHERE id = ?").bind(user.id).run();
+    user.email = "changed@example.com";
+
+    await user.reload();
+
+    expect(user.email).toBe("a@example.com");
+    expect(user.role).toBe("owner");
+    expect(user.isChanged()).toBe(false);
+  });
+
+  test("reload throws RecordNotFound when the row is gone", async () => {
+    const user = await connect(binding).model(User).create({ email: "a@example.com" });
+    await binding.prepare("DELETE FROM users").run();
+
+    await expect(user.reload()).rejects.toThrow(RecordNotFound);
   });
 });

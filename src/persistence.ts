@@ -1,4 +1,6 @@
-import { compileInsert, compileUpdate } from "./compiler.ts";
+import { compileInsert, compileSelect, compileUpdate } from "./compiler.ts";
+import { RecordNotFound } from "./errors.ts";
+import { attributeOf } from "./metadata.ts";
 import { readValue, writeValue } from "./conversion.ts";
 import type { Executor } from "./executor.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
@@ -54,6 +56,36 @@ export function changesOf(record: ModelBase): Changes {
     changes[name] = [before, record[values][name]];
   }
   return changes;
+}
+
+/**
+ * Assigns attributes without saving. Unknown names throw `UnknownAttribute`; `undefined`
+ * throws `TypeError`, because it would silently write NULL (use `null` for that).
+ */
+export function assignAttributes(record: ModelBase, attributes: Record<string, unknown>): void {
+  const model = modelOf(record);
+  for (const [name, value] of Object.entries(attributes)) {
+    attributeOf(model, name);
+    if (value === undefined) {
+      throw new TypeError(`${model.name}: got undefined for "${name}"; use null to store NULL`);
+    }
+    record[values][name] = value;
+    record[state].assigned.add(name);
+  }
+}
+
+/** Loads the record's row again by its stored primary key, discarding unsaved changes. */
+export async function reloadRecord(record: ModelBase): Promise<void> {
+  const model = modelOf(record);
+  const { type } = attributeOf(model, model.primaryKey);
+  const key = readValue(type, record[state].snapshot.get(model.primaryKey));
+  const query = { model, conditions: [{ [model.primaryKey]: key }], order: [], limit: 1 };
+  const { sql, params } = compileSelect(query);
+  const [row] = await executorOf(record).all(sql, params);
+  if (row === undefined) {
+    throw new RecordNotFound(`${model.name} with ${model.primaryKey} ${String(key)} not found`);
+  }
+  applyRow(record, row);
 }
 
 /** Whether the Model declares `name` as a datetime attribute, which turns its timestamp on. */

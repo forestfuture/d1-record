@@ -1,13 +1,19 @@
 import { InvalidModel, MissingAttribute } from "./errors.ts";
 import type { Executor } from "./executor.ts";
 import {
-  attributeOf,
   define,
   type AttributeProperties,
   type AttributeDefinition,
   type AttributeSpecs,
 } from "./metadata.ts";
-import { applyRow, changedNames, changesOf, saveRecord } from "./persistence.ts";
+import {
+  applyRow,
+  assignAttributes,
+  changedNames,
+  changesOf,
+  reloadRecord,
+  saveRecord,
+} from "./persistence.ts";
 import { state, values, type Changes, type RecordState } from "./record-state.ts";
 
 /** Type-only key carrying a record's declared attribute types; never set at runtime. */
@@ -65,6 +71,28 @@ export class ModelBase {
   async saveOrThrow(): Promise<true> {
     await saveRecord(this);
     return true;
+  }
+
+  /** Assigns several attributes without saving. */
+  assign(attributes: Partial<AttributesOf<this>>): this {
+    assignAttributes(this, attributes);
+    return this;
+  }
+
+  /** `assign` then `save`. */
+  async update(attributes: Partial<AttributesOf<this>>): Promise<boolean> {
+    return this.assign(attributes).save();
+  }
+
+  /** `assign` then `saveOrThrow`. */
+  async updateOrThrow(attributes: Partial<AttributesOf<this>>): Promise<true> {
+    return this.assign(attributes).saveOrThrow();
+  }
+
+  /** Loads the stored row again, discarding unsaved changes; `RecordNotFound` if it's gone. */
+  async reload(): Promise<this> {
+    await reloadRecord(this);
+    return this;
   }
 
   /** Not yet saved: built, or created but not persisted. */
@@ -218,10 +246,6 @@ export function buildRecord<M extends ModelBase>(
       record[state].assigned.add(name);
     }
   }
-  for (const [name, value] of Object.entries(attributes)) {
-    attributeOf(model, name);
-    record[values][name] = value;
-    record[state].assigned.add(name);
-  }
+  assignAttributes(record, attributes);
   return record;
 }
