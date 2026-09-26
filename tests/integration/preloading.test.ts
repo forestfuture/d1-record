@@ -232,4 +232,12 @@ describe("preloading with includes", () => {
     expect(merged?.loaded("posts")).toHaveLength(1);
     expect(merged?.loaded("profile")?.bio).toBe("Bee");
   });
+
+  test("reload() drops preloaded associations", async () => {
+    const user = await db().model(User).includes("posts").find(1);
+
+    await user.reload();
+
+    expect(() => user.loaded("posts")).toThrow(AssociationNotLoaded);
+  });
 });
