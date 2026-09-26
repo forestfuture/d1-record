@@ -8,9 +8,10 @@ import {
   type AttributeSpecs,
 } from "./metadata.ts";
 import type { Errors } from "./errors-collection.ts";
-import { destroyRecord, reloadRecord, saveRecord } from "./persistence.ts";
+import { RecordInvalid } from "./errors.ts";
+import { destroyRecord, reloadRecord, saveLifecycle, validateRecord } from "./lifecycle.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
-import { runValidations, type Validation, type ValidationOptions } from "./validations.ts";
+import type { Validation, ValidationOptions } from "./validations.ts";
 
 /** Type-only key carrying a record's declared attribute types; never set at runtime. */
 declare const attributeTypes: unique symbol;
@@ -46,11 +47,7 @@ export class ModelBase {
 
   /** Runs every validation, filling `errors` from scratch; `true` if there are none. */
   async isValid(): Promise<boolean> {
-    const { errors } = this[state];
-    errors.clear();
-    const model = this.constructor as ModelClass;
-    await runValidations(model.validations, (attribute) => this[state].read(attribute), errors);
-    return errors.isEmpty();
+    return validateRecord(this);
   }
 
   /** Whether any attribute differs from its value as last loaded or saved. */
@@ -82,12 +79,13 @@ export class ModelBase {
 
   /** Inserts a new record or updates a persisted one; `false` only for validation or abort (#4). */
   async save(): Promise<boolean> {
-    return saveRecord(this);
+    return (await saveLifecycle(this)).status === "saved";
   }
 
   /** Like `save()`, but throws instead of returning `false`; #4 adds `RecordInvalid`/`RecordNotSaved`. */
   async saveOrThrow(): Promise<true> {
-    await saveRecord(this);
+    const outcome = await saveLifecycle(this);
+    if (outcome.status === "invalid") throw new RecordInvalid(this);
     return true;
   }
 

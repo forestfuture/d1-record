@@ -10,6 +10,7 @@ import { translateConstraintError } from "./constraints.ts";
 import { RecordNotFound } from "./errors.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { state } from "./record-state.ts";
+import { runValidations } from "./validations.ts";
 
 function modelOf(record: ModelBase): ModelClass {
   return record.constructor as ModelClass;
@@ -51,11 +52,31 @@ function timestampsFor(
     .map((name): Assignment => [name, now]);
 }
 
-/** Inserts a new record, or updates a persisted one's changed attributes. */
-export async function saveRecord(record: ModelBase): Promise<boolean> {
+/**
+ * What a lifecycle run ended with. Refusals are outcomes (the non-throwing methods return
+ * `false`, the `OrThrow` ones throw); constraint and D1 errors are thrown (ADR-0005).
+ */
+export type Outcome = { status: "saved" } | { status: "invalid" };
+
+/** Clears `errors`, runs every validation, and reports whether the record is valid. */
+export async function validateRecord(record: ModelBase): Promise<boolean> {
+  const recordState = record[state];
+  recordState.errors.clear();
+  const read = (attribute: string) => recordState.read(attribute);
+  await runValidations(modelOf(record).validations, read, recordState.errors);
+  return recordState.errors.isEmpty();
+}
+
+/**
+ * The save lifecycle: can this record be used → validation → the write (insert, or update of
+ * the changed attributes, with timestamps) → commit the new state.
+ */
+export async function saveLifecycle(record: ModelBase): Promise<Outcome> {
   const recordState = record[state];
   recordState.requireLive("be saved");
-  return recordState.isNew ? insertRecord(record) : updateRecord(record);
+  if (!(await validateRecord(record))) return { status: "invalid" };
+  await (recordState.isNew ? insertRecord(record) : updateRecord(record));
+  return { status: "saved" };
 }
 
 /** INSERT the assigned attributes (plus timestamps); `RETURNING *` loads what D1 stored. */
