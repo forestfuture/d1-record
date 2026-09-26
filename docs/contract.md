@@ -58,9 +58,13 @@ class User extends Model({
 - Types: `string`, `integer`, `real`, `boolean` (0/1), `datetime` (a `Date`, stored as ISO-8601 TEXT), `json` (stored as TEXT). As in SQLite, an attribute can be null unless it's declared `null: false`, and its TypeScript type includes `| null` to match.
 - Attribute properties are prototype accessors. The first time a Model is used, `db.model(X)` throws `InvalidModel` if it has no `tableName`, if a class field hides an accessor (e.g. `email!: string` in the class body), or if an attribute is named like a record method (`attributes`, `save`, `constructor`, …). Rename such an attribute and map it with `{ column }`.
 - SQL fragments are SQL, so they use column names (``sql`created_at > ${since}` ``), or `column("createdAt")` to look the column up from the attribute (ADR-0006).
-- Defaults are evaluated at `build()`, so app-generated keys (UUID, CUID, ULID) exist before saving and can be used to link rows inside one `batch()`.
-- If the database generates the primary key, `RETURNING *` fills it in on insert.
-- Timestamps are on when `createdAt`/`updatedAt` are declared as `datetime` attributes. They're set in JavaScript just before the write is compiled. Explicit values on create are kept.
+- `db.model(X).build(attrs)` makes a new record without querying. Before an attribute is assigned, it reads as `null`. Defaults are evaluated at `build()`, so app-generated keys (UUID, CUID, ULID) exist before saving and can be used to link rows inside one `batch()`.
+- A record built or created from a Relation starts with that Relation's single equality values: `where({ role: "admin" }).build()` has `role: "admin"`. Arrays, `whereNot`, `or` and `sql` fragments carry nothing over, and explicit attributes win.
+- `record.assign(attrs)` assigns several attributes without saving. `update(attrs)` is `assign` then `save`. An unknown key throws `UnknownAttribute` and an `undefined` value throws `TypeError` (use `null` to store NULL), in `build`, `create`, `assign` and `update`.
+- An insert writes only **assigned** attributes: given to `build`/`create`, set through a property, or filled by a `default`. Anything else is left out, so the column's database default applies. `RETURNING *` then loads what D1 actually stored, including generated keys and defaults.
+- An update writes only the attributes that changed. A save with nothing changed sends no statement. Changing the primary key is allowed, and the UPDATE finds the row by the key as last loaded or saved.
+- If the row is already gone (e.g. another request deleted it), `save` and `destroy` still succeed. `reload()` throws `RecordNotFound`, since there's nothing to load, and so does reloading a record that was never saved.
+- Timestamps are on when `createdAt`/`updatedAt` are declared as `datetime` attributes. They're set in JavaScript (`new Date()`) just before the write is compiled: both on insert, and `updatedAt` on an update that changes something. A clean save leaves `updatedAt` alone. A timestamp assigned explicitly is kept.
 - Keys that aren't declared attributes throw `UnknownAttribute` in `build`, `create`, `update` and `where`, and are compile errors where the types can see them.
 
 ## Inheritance, shared behavior and serialization
@@ -73,7 +77,8 @@ class User extends Model({
 
 - Change detection compares each attribute's current serialized value with the value last loaded or saved, so in-place changes to `json` values and `Date`s are detected.
 - `isChanged()`, `changed()` → `["email"]`, `changedAttributes()` → `{ email: old }`, `changes()` → `{ email: [old, new] }`.
-- `savedChanges()` holds the changes from the last successful save. Use it in `after*` callbacks, where the record is already clean.
+- `savedChanges()` holds the changes from the last **successful** save (`{}` after a clean save). A failed save doesn't change it. Use it in `after*` callbacks, where the record is already clean.
+- A new record's changes are its assigned attributes, each changed from `null`.
 
 ## Associations
 
@@ -114,7 +119,7 @@ Any error thrown by a callback other than an `abort(...)` propagates unchanged. 
 
 ## Constraint errors
 
-- `RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation` and `CheckViolation` are recognised from D1 error messages. They carry the original error as `cause`, and `.table`, `.columns` and `.attributes` where the message names them (SQLite's foreign-key message doesn't name a column).
+- `RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation` and `CheckViolation`, all subclasses of `ConstraintViolation`, are recognised from D1 error messages on insert, update and delete. They carry the original error as `cause`, and `.table`, `.columns` and `.attributes` where the message names them (SQLite's foreign-key message doesn't name a column).
 - Both the throwing and non-throwing methods throw them. After a constraint error the dirty attributes are kept and `errors` is not changed, because nothing was persisted.
 - Uniqueness validation is a friendly early check, not race-safe. The database constraint has the final say.
 
@@ -188,6 +193,7 @@ this.beforeSave((account) => {
 - A record is marked destroyed only after the D1 `DELETE` succeeds, and before `afterDestroy` runs. If `afterDestroy` throws, the row stays deleted and the record stays destroyed.
 - `isDestroyed()` is `true` and `isPersisted()` is `false`. Attributes stay readable.
 - `save`, `saveOrThrow`, `update`, `destroy` and `reload` throw `RecordDestroyed`.
+- A keyless record from `select(...).distinct()` has no identity to write by, so the same methods throw `MissingAttribute`. A record constructed directly (`new User()`) has no Database, so they throw `NoDatabase`.
 
 ## Relations
 
@@ -234,4 +240,4 @@ Everything extends `D1RecordError`:
 
 - **Lifecycle:** `RecordNotFound`, `RecordInvalid` (`.record`), `RecordNotSaved`, `RecordNotDestroyed`, `RecordDestroyed`, `AbortAfterPersistence`
 - **Usage:** `InvalidModel` (a problem in a Model's declaration, detected the first time it's used), `UnknownAttribute`, `MissingAttribute`, `IncompatibleRelation`, `AssociationNotLoaded`, `NoDatabase`
-- **Constraints:** `RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation`, `CheckViolation`
+- **Constraints:** `ConstraintViolation`, with subclasses `RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation` and `CheckViolation`
