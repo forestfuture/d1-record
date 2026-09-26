@@ -1,4 +1,4 @@
-import { InvalidModel, MissingAttribute } from "./errors.ts";
+import { InvalidModel } from "./errors.ts";
 import type { Executor } from "./executor.ts";
 import {
   define,
@@ -6,17 +6,8 @@ import {
   type AttributeDefinition,
   type AttributeSpecs,
 } from "./metadata.ts";
-import {
-  applyRow,
-  assignAttributes,
-  changedNames,
-  changesOf,
-  destroyRecord,
-  reloadRecord,
-  requireLive,
-  saveRecord,
-} from "./persistence.ts";
-import { state, values, type Changes, type RecordState } from "./record-state.ts";
+import { destroyRecord, reloadRecord, saveRecord } from "./persistence.ts";
+import { RecordState, state, type Changes } from "./record-state.ts";
 
 /** Type-only key carrying a record's declared attribute types; never set at runtime. */
 declare const attributeTypes: unique symbol;
@@ -29,39 +20,34 @@ export class ModelBase {
   static primaryKey = "id";
   static attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map();
 
-  [values]: Record<string, unknown> = {};
-  [state]: RecordState = {
-    lifecycle: "new",
-    assigned: new Set(),
-    snapshot: new Map(),
-    savedChanges: {},
-  };
+  /** This record's values, lifecycle and Snapshot; only `RecordState` changes them. */
+  readonly [state] = new RecordState(this.constructor as ModelClass);
 
   /** Whether any attribute differs from its value as last loaded or saved. */
   isChanged(): boolean {
-    return changedNames(this).length > 0;
+    return this[state].changedNames().length > 0;
   }
 
   /** The names of the changed attributes. */
   changed(): string[] {
-    return changedNames(this);
+    return this[state].changedNames();
   }
 
   /** Each changed attribute's value before the change: `{ email: old }`. */
   changedAttributes(): Record<string, unknown> {
     return Object.fromEntries(
-      Object.entries(changesOf(this)).map(([name, [before]]) => [name, before]),
+      Object.entries(this[state].changes()).map(([name, [before]]) => [name, before]),
     );
   }
 
   /** Each changed attribute's value before and after: `{ email: [old, new] }`. */
   changes(): Changes {
-    return changesOf(this);
+    return this[state].changes();
   }
 
   /** The changes the last successful save wrote; use it in after-save callbacks. */
   savedChanges(): Changes {
-    return { ...this[state].savedChanges };
+    return this[state].savedChanges();
   }
 
   /** Inserts a new record or updates a persisted one; `false` only for validation or abort (#4). */
@@ -77,19 +63,19 @@ export class ModelBase {
 
   /** Assigns several attributes without saving. */
   assign(attributes: Partial<AttributesOf<this>>): this {
-    assignAttributes(this, attributes);
+    this[state].assign(attributes);
     return this;
   }
 
   /** `assign` then `save`. */
   async update(attributes: Partial<AttributesOf<this>>): Promise<boolean> {
-    requireLive(this, "be updated");
+    this[state].requireLive("be updated");
     return this.assign(attributes).save();
   }
 
   /** `assign` then `saveOrThrow`. */
   async updateOrThrow(attributes: Partial<AttributesOf<this>>): Promise<true> {
-    requireLive(this, "be updated");
+    this[state].requireLive("be updated");
     return this.assign(attributes).saveOrThrow();
   }
 
@@ -131,13 +117,13 @@ export class ModelBase {
 
   /** The record's attributes as a plain object of JavaScript values. */
   attributes(): Record<string, unknown> {
-    return { ...this[values] };
+    return this[state].attributes();
   }
 
   /** The loaded attributes as JSON-ready values (dates as ISO strings), for `Response.json(record)`. */
   toJSON(): Record<string, unknown> {
     return Object.fromEntries(
-      Object.entries(this[values]).map(([name, value]) => [
+      Object.entries(this[state].attributes()).map(([name, value]) => [
         name,
         value instanceof Date ? value.toISOString() : value,
       ]),
@@ -166,16 +152,10 @@ export function Model<const A extends AttributeSpecs>(
   for (const name of Object.keys(specs)) {
     Object.defineProperty(DefinedModel.prototype, name, {
       get(this: ModelBase) {
-        if (!(name in this[values])) {
-          throw new MissingAttribute(
-            `${this.constructor.name} record has no "${name}" loaded; it was left out of select(...)`,
-          );
-        }
-        return this[values][name];
+        return this[state].read(name);
       },
       set(this: ModelBase, value: unknown) {
-        this[values][name] = value;
-        this[state].assigned.add(name);
+        this[state].write(name, value);
       },
     });
   }
@@ -189,8 +169,8 @@ export function hydrate<M extends ModelBase>(
   executor: Executor,
 ): M {
   const record = new model();
-  record[state].executor = executor;
-  applyRow(record, row);
+  record[state].belongTo(executor);
+  record[state].loadRow(row);
   return record;
 }
 
@@ -256,14 +236,7 @@ export function buildRecord<M extends ModelBase>(
   executor: Executor,
 ): M {
   const record = new model();
-  record[state].executor = executor;
-  for (const [name, definition] of model.attributeDefinitions) {
-    record[values][name] = null;
-    if (definition.default !== undefined) {
-      record[values][name] = definition.default();
-      record[state].assigned.add(name);
-    }
-  }
-  assignAttributes(record, attributes);
+  record[state].belongTo(executor);
+  record[state].build(attributes);
   return record;
 }

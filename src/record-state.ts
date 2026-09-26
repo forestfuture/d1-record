@@ -1,7 +1,11 @@
+import type { Assignment } from "./compiler.ts";
+import { readValue, writeValue } from "./conversion.ts";
+import { MissingAttribute, NoDatabase, RecordDestroyed } from "./errors.ts";
 import type { Executor } from "./executor.ts";
+import { attributeOf, type AttributeDefinition } from "./metadata.ts";
+import type { ModelClass } from "./model.ts";
 
-/** Where a record keeps its attribute values and lifecycle state; neither is exported from the package. */
-export const values = Symbol("values");
+/** The hidden slot where a Record keeps its `RecordState`; never exported from the package. */
 export const state = Symbol("state");
 
 /** `{ attribute: [before, after] }` */
@@ -9,14 +13,222 @@ export type Changes = Record<string, [before: unknown, after: unknown]>;
 
 type Lifecycle = "new" | "persisted" | "destroyed";
 
-export interface RecordState {
-  lifecycle: Lifecycle;
-  /** The Database's executor this record was built or loaded through (ADR-0003). */
-  executor?: Executor;
-  /** Attributes assigned on a new record; only these are written on insert. */
-  assigned: Set<string>;
-  /** Each loaded attribute's stored form as last loaded or saved; changes are measured against it. */
-  snapshot: Map<string, unknown>;
-  /** The changes the last successful save wrote, as `{ attribute: [before, after] }`. */
-  savedChanges: Changes;
+/**
+ * Everything one Record knows about itself: its attribute values, lifecycle, the attributes
+ * assigned since it was built, its Snapshot (each loaded attribute's stored form as last loaded
+ * or saved), the changes its last save wrote, and the Database it belongs to.
+ *
+ * This is the only module that reads or writes those fields. Every rule about them (unloaded
+ * attributes, undefined values, destroyed records, change detection) is enforced here.
+ */
+export class RecordState {
+  readonly #model: ModelClass;
+  #executor: Executor | undefined;
+  #lifecycle: Lifecycle = "new";
+  readonly #values: Record<string, unknown> = {};
+  readonly #assigned = new Set<string>();
+  readonly #snapshot = new Map<string, unknown>();
+  #savedChanges: Changes = {};
+
+  constructor(model: ModelClass) {
+    this.#model = model;
+  }
+
+  // Lifecycle and Database
+
+  get lifecycle(): Lifecycle {
+    return this.#lifecycle;
+  }
+
+  /** Records belong to the Database they were built or loaded through (ADR-0003). */
+  belongTo(executor: Executor): void {
+    this.#executor = executor;
+  }
+
+  /** The record's Database; `NoDatabase` for a record constructed directly (`new User()`). */
+  get executor(): Executor {
+    if (this.#executor === undefined) {
+      const { name } = this.#model;
+      throw new NoDatabase(
+        `${name} record has no Database; build or load records through db.model(${name})`,
+      );
+    }
+    return this.#executor;
+  }
+
+  /**
+   * Refuses to use a record as a live one when it can't be: a destroyed record is a read-only
+   * snapshot, and a persisted record without its primary key (from `select(...).distinct()`)
+   * has no identity to write by.
+   */
+  requireLive(action: string): void {
+    const { name, primaryKey } = this.#model;
+    if (this.#lifecycle === "destroyed") {
+      throw new RecordDestroyed(`${name} record was destroyed; it can't ${action}`);
+    }
+    if (this.#lifecycle === "persisted" && !this.#snapshot.has(primaryKey)) {
+      throw new MissingAttribute(
+        `${name} record has no primary key loaded (it came from select(...).distinct()); ` +
+          `it can't ${action}`,
+      );
+    }
+  }
+
+  // Attributes
+
+  /** An attribute's value; `MissingAttribute` if it wasn't loaded (left out of `select`). */
+  read(name: string): unknown {
+    if (!(name in this.#values)) {
+      throw new MissingAttribute(
+        `${this.#model.name} record has no "${name}" loaded; it was left out of select(...)`,
+      );
+    }
+    return this.#values[name];
+  }
+
+  /**
+   * Assigns one attribute. `undefined` throws `TypeError`, because it would silently store NULL
+   * (use `null` for that); a destroyed record is read-only.
+   */
+  write(name: string, value: unknown): void {
+    if (value === undefined) {
+      throw new TypeError(
+        `${this.#model.name}: got undefined for "${name}"; use null to store NULL`,
+      );
+    }
+    this.requireLive("be changed");
+    this.#values[name] = value;
+    this.#assigned.add(name);
+  }
+
+  /** Assigns several attributes; unknown names throw `UnknownAttribute`. */
+  assign(attributes: Record<string, unknown>): void {
+    for (const [name, value] of Object.entries(attributes)) {
+      attributeOf(this.#model, name);
+      this.write(name, value);
+    }
+  }
+
+  /** A new record: every attribute reads as null until assigned, and defaults are evaluated now. */
+  build(attributes: Record<string, unknown>): void {
+    for (const [name, definition] of this.#model.attributeDefinitions) {
+      this.#values[name] = null;
+      if (definition.default !== undefined) this.write(name, definition.default());
+    }
+    this.assign(attributes);
+  }
+
+  /** Loads a D1 row; the record becomes persisted and clean. Absent columns stay unloaded. */
+  loadRow(row: Record<string, unknown>): void {
+    for (const [name, { type, column }] of this.#model.attributeDefinitions) {
+      if (column in row) this.#values[name] = readValue(type, row[column]);
+    }
+    this.#markSaved();
+  }
+
+  /** The loaded attributes as a plain object (the record's own values, not copies). */
+  attributes(): Record<string, unknown> {
+    return { ...this.#values };
+  }
+
+  // Changes
+
+  /** A new record's assigned attributes, or a persisted one's that differ from the Snapshot. */
+  changedNames(): string[] {
+    if (this.#lifecycle === "new") return [...this.#assigned];
+    return Object.keys(this.#values).filter(
+      (name) => !this.#snapshot.has(name) || this.#snapshot.get(name) !== this.#storedForm(name),
+    );
+  }
+
+  /** `{ attribute: [before, after] }`; both are copies, never the record's own objects. */
+  changes(): Changes {
+    const changes: Changes = {};
+    for (const name of this.changedNames()) {
+      const before = this.#snapshot.has(name)
+        ? readValue(this.#definition(name).type, this.#snapshot.get(name))
+        : null;
+      changes[name] = [before, this.#copyOf(name)];
+    }
+    return changes;
+  }
+
+  /** The changes the last successful save wrote (copies). */
+  savedChanges(): Changes {
+    return { ...this.#savedChanges };
+  }
+
+  // Writes
+
+  /** The attributes an insert writes: the assigned ones, so column defaults apply to the rest. */
+  insertAssignments(): Assignment[] {
+    return this.#assignmentsOf([...this.#assigned]);
+  }
+
+  /** The attributes an update writes: the changed ones. */
+  updateAssignments(): Assignment[] {
+    return this.#assignmentsOf(this.changedNames());
+  }
+
+  /** The primary key as stored in D1: the row's key before any unsaved change to it. */
+  get storedKey(): unknown {
+    return this.#snapshot.get(this.#model.primaryKey);
+  }
+
+  /** After an insert: load what D1 stored; `savedChanges` is everything the new row holds. */
+  commitInsert(row: Record<string, unknown> | undefined): void {
+    if (row === undefined) this.#markSaved();
+    else this.loadRow(row);
+    this.#savedChanges = Object.fromEntries(
+      Object.keys(this.#values)
+        .filter((name) => this.#values[name] !== null)
+        .map((name) => [name, [null, this.#copyOf(name)]]),
+    );
+  }
+
+  /** After an update: apply values the write added (timestamps), then record the save. */
+  commitUpdate(added: readonly Assignment[]): void {
+    for (const [name, value] of added) this.#values[name] = value;
+    this.#savedChanges = this.changes();
+    this.#markSaved();
+  }
+
+  /** A save with nothing to write: nothing changes but `savedChanges`. */
+  commitClean(): void {
+    this.#savedChanges = {};
+  }
+
+  markDestroyed(): void {
+    this.#lifecycle = "destroyed";
+  }
+
+  // Internals
+
+  #definition(name: string): AttributeDefinition {
+    return attributeOf(this.#model, name);
+  }
+
+  /** An attribute's current value in its stored form, for comparing with the Snapshot. */
+  #storedForm(name: string): unknown {
+    return writeValue(this.#definition(name).type, this.#values[name]);
+  }
+
+  /** A copy of an attribute's current value, read back from its stored form. */
+  #copyOf(name: string): unknown {
+    return readValue(this.#definition(name).type, this.#storedForm(name));
+  }
+
+  #assignmentsOf(names: readonly string[]): Assignment[] {
+    return names.map((name): Assignment => [name, this.#values[name]]);
+  }
+
+  /** The current values become the Snapshot: persisted and clean. */
+  #markSaved(): void {
+    this.#snapshot.clear();
+    for (const name of Object.keys(this.#values)) {
+      this.#snapshot.set(name, this.#storedForm(name));
+    }
+    this.#lifecycle = "persisted";
+    this.#assigned.clear();
+  }
 }
