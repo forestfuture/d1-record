@@ -45,4 +45,18 @@ describe("record state without D1", () => {
     expect(user.changes()).toEqual({ email: [null, "a@example.com"], role: [null, "admin"] });
     expect(user.changedAttributes()).toEqual({ email: null, role: null });
   });
+
+  test("a default that returns undefined is rejected when the record is built", () => {
+    class Token extends Model({
+      id: { type: "string", null: false, default: () => undefined },
+    }) {
+      static tableName = "tokens";
+    }
+
+    expect(() =>
+      connect({} as never)
+        .model(Token)
+        .build(),
+    ).toThrow(/Token.*"id".*null/);
+  });
 });
