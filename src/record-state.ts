@@ -63,9 +63,7 @@ export class RecordState {
    */
   requireLive(action: string): void {
     const { name, primaryKey } = this.#model;
-    if (this.#lifecycle === "destroyed") {
-      throw new RecordDestroyed(`${name} record was destroyed; it can't ${action}`);
-    }
+    this.#requireNotDestroyed(action);
     if (this.#lifecycle === "persisted" && !this.#snapshot.has(primaryKey)) {
       throw new MissingAttribute(
         `${name} record has no primary key loaded (it came from select(...).distinct()); ` +
@@ -96,7 +94,7 @@ export class RecordState {
         `${this.#model.name}: got undefined for "${name}"; use null to store NULL`,
       );
     }
-    this.requireLive("be changed");
+    this.#requireNotDestroyed("be changed");
     this.#values[name] = value;
     this.#assigned.add(name);
   }
@@ -203,6 +201,13 @@ export class RecordState {
   }
 
   // Internals
+
+  /** A destroyed record is a read-only snapshot. (A keyless record may change in memory.) */
+  #requireNotDestroyed(action: string): void {
+    if (this.#lifecycle === "destroyed") {
+      throw new RecordDestroyed(`${this.#model.name} record was destroyed; it can't ${action}`);
+    }
+  }
 
   #definition(name: string): AttributeDefinition {
     return attributeOf(this.#model, name);

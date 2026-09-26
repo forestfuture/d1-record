@@ -291,4 +291,17 @@ describe("record lifecycle", () => {
     const stored = await users.find(created.id);
     expect([stored.email, stored.role]).toEqual(["b@example.com", "admin"]);
   });
+
+  test("a keyless record can still be changed in memory; it just can't be saved", async () => {
+    const users = connect(binding).model(User);
+    await users.create({ email: "a@example.com", role: "admin" });
+    const [role] = await users.select("role").distinct().toArray();
+    if (!role) throw new Error("expected a record");
+
+    role.role = "member";
+    role.assign({ role: "owner" });
+
+    expect(role.changes()).toEqual({ role: ["admin", "owner"] });
+    await expect(role.save()).rejects.toThrow(MissingAttribute);
+  });
 });
