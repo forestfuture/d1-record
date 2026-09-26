@@ -173,6 +173,20 @@ export class Relation<M extends ModelBase> {
     return buildRecord(this.#model, attributes, this.#executor);
   }
 
+  /** Builds and saves a record; resolves to it whether or not it was saved (check `isPersisted()`). */
+  async create(attributes: Partial<AttributesOf<M>> = {}): Promise<M> {
+    const record = this.build(attributes);
+    await record.save();
+    return record;
+  }
+
+  /** Builds and saves a record, throwing if it can't be saved. */
+  async createOrThrow(attributes: Partial<AttributesOf<M>> = {}): Promise<M> {
+    const record = this.build(attributes);
+    await record.saveOrThrow();
+    return record;
+  }
+
   /** The record with this primary key, keeping this Relation's conditions. */
   async find(id: string | number): Promise<M> {
     const record = await this.#findOne({ [this.#model.primaryKey]: id });

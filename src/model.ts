@@ -29,6 +29,12 @@ export class ModelBase {
     return saveRecord(this);
   }
 
+  /** Like `save()`, but throws instead of returning `false`; #4 adds `RecordInvalid`/`RecordNotSaved`. */
+  async saveOrThrow(): Promise<true> {
+    await saveRecord(this);
+    return true;
+  }
+
   /** Not yet saved: built, or created but not persisted. */
   isNewRecord(): boolean {
     return this[state].lifecycle === "new";
