@@ -2,6 +2,7 @@ export type { BelongsTo, HasMany, HasOne } from "./associations.ts";
 export { connect, Database, type ConnectOptions, type RelationsFor } from "./database.ts";
 export {
   abort,
+  AssociationNotLoaded,
   AbortAfterPersistence,
   CallbackAbort,
   CheckViolation,
