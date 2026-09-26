@@ -7,9 +7,7 @@ import {
   type CompiledQuery,
 } from "./compiler.ts";
 import { translateConstraintError } from "./constraints.ts";
-import { readValue } from "./conversion.ts";
 import { RecordNotFound } from "./errors.ts";
-import { attributeOf } from "./metadata.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { state } from "./record-state.ts";
 
@@ -55,60 +53,64 @@ function timestampsFor(
 
 /** Inserts a new record, or updates a persisted one's changed attributes. */
 export async function saveRecord(record: ModelBase): Promise<boolean> {
-  record[state].requireLive("be saved");
-  return record[state].lifecycle === "new" ? insertRecord(record) : updateRecord(record);
+  const recordState = record[state];
+  recordState.requireLive("be saved");
+  return recordState.isNew ? insertRecord(record) : updateRecord(record);
 }
 
 /** INSERT the assigned attributes (plus timestamps); `RETURNING *` loads what D1 stored. */
 async function insertRecord(record: ModelBase): Promise<true> {
-  const own = record[state].insertAssignments();
+  const recordState = record[state];
+  const own = recordState.insertAssignments();
   const stamps = timestampsFor(record, true, own);
   const [row] = await write(record, compileInsert(modelOf(record), [...own, ...stamps]));
-  record[state].commitInsert(row);
+  recordState.commitInsert(row);
   return true;
 }
 
 /** UPDATE only the changed attributes (plus `updatedAt`); a clean record sends nothing. */
 async function updateRecord(record: ModelBase): Promise<true> {
-  const own = record[state].updateAssignments();
+  const recordState = record[state];
+  const own = recordState.updateAssignments();
   if (own.length === 0) {
-    record[state].commitClean();
+    recordState.commitClean();
     return true;
   }
   const stamps = timestampsFor(record, false, own);
-  const update = compileUpdate(modelOf(record), [...own, ...stamps], record[state].storedKey);
+  const update = compileUpdate(modelOf(record), [...own, ...stamps], recordState.storedKey);
   await write(record, update);
-  record[state].commitUpdate(stamps);
+  recordState.commitUpdate(stamps);
   return true;
 }
 
 /** Deletes the record's row by its stored key; the record becomes a destroyed snapshot. */
 export async function destroyRecord(record: ModelBase): Promise<void> {
-  record[state].requireLive("be destroyed again");
+  const recordState = record[state];
+  recordState.requireLive("be destroyed");
   // A never-saved record has no row, so there's nothing to delete (as in Rails).
-  if (record[state].lifecycle !== "new") {
-    await write(record, compileDelete(modelOf(record), record[state].storedKey));
+  if (!recordState.isNew) {
+    await write(record, compileDelete(modelOf(record), recordState.storedKey));
   }
-  record[state].markDestroyed();
+  recordState.markDestroyed();
 }
 
 /** Loads the record's row again by its stored primary key, discarding unsaved changes. */
 export async function reloadRecord(record: ModelBase): Promise<void> {
-  record[state].requireLive("be reloaded");
-  const { executor } = record[state];
+  const recordState = record[state];
+  recordState.requireLive("be reloaded");
+  const { executor } = recordState;
   const model = modelOf(record);
-  if (record[state].lifecycle === "new") {
+  if (recordState.isNew) {
     throw new RecordNotFound(
       `${model.name} record hasn't been saved, so there's nothing to reload`,
     );
   }
-  const { type } = attributeOf(model, model.primaryKey);
-  const key = readValue(type, record[state].storedKey);
+  const key = recordState.storedKeyValue;
   const query = { model, conditions: [{ [model.primaryKey]: key }], order: [], limit: 1 };
   const { sql, params } = compileSelect(query);
   const [row] = await executor.all(sql, params);
   if (row === undefined) {
     throw new RecordNotFound(`${model.name} with ${model.primaryKey} ${String(key)} not found`);
   }
-  record[state].loadRow(row);
+  recordState.loadRow(row);
 }
