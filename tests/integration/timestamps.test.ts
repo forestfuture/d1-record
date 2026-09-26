@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model, type QueryEvent } from "../../src/index.ts";
+import { connect, ConstraintViolation, Model, type QueryEvent } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class ApiKey extends Model({
@@ -78,5 +78,36 @@ describe("timestamps", () => {
     key.updatedAt = chosen;
     await key.save();
     expect((await keys.find("k1")).updatedAt).toEqual(chosen);
+  });
+
+  test("a failed insert leaves only the caller's changes, not timestamps", async () => {
+    const keys = connect(binding).model(ApiKey);
+    await keys.create({ id: "k1", label: "deploy" });
+    const duplicate = keys.build({ id: "k1", label: "again" });
+
+    await expect(duplicate.save()).rejects.toThrow(ConstraintViolation);
+
+    expect(duplicate.changed().sort()).toEqual(["id", "label"]);
+    expect(duplicate.createdAt).toBeNull();
+  });
+
+  test("a failed update leaves only the caller's changes, so reverting them makes it clean", async () => {
+    await connect(binding)
+      .model(ApiKey)
+      .create({ id: "k1", label: "deploy", createdAt: past, updatedAt: past });
+    const queries: QueryEvent[] = [];
+    const keys = connect(binding, { onQuery: (event) => queries.push(event) }).model(ApiKey);
+    const key = await keys.find("k1");
+
+    key.label = null as never;
+    await expect(key.save()).rejects.toThrow(ConstraintViolation);
+    expect(key.changed()).toEqual(["label"]);
+
+    key.label = "deploy";
+    queries.length = 0;
+    await key.save();
+    expect(key.isChanged()).toBe(false);
+    expect(key.updatedAt).toEqual(past);
+    expect(queries).toHaveLength(0);
   });
 });
