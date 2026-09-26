@@ -56,3 +56,16 @@ CREATE TABLE products (
   name TEXT NOT NULL,
   price_cents INTEGER NOT NULL CHECK (price_cents >= 0)
 );
+
+-- For associations: a has-one target, and a nested has-many whose foreign key can be null.
+CREATE TABLE profiles (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users (id),
+  bio TEXT
+);
+
+CREATE TABLE comments (
+  id INTEGER PRIMARY KEY,
+  post_id INTEGER REFERENCES posts (id),
+  body TEXT
+);

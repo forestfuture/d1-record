@@ -1,5 +1,6 @@
 import { Executor, type QueryListener } from "./executor.ts";
-import { verifyModel, type ModelBase, type ModelClass, type ScopesOf } from "./model.ts";
+import { prepareModel } from "./associations.ts";
+import type { ModelBase, ModelClass, ScopesOf } from "./model.ts";
 import type { Scoped } from "./relation.ts";
 import { relationFor } from "./scoped-relation.ts";
 
@@ -23,7 +24,7 @@ export class Database {
 
   /** A request-bound Relation over the Model's records, with its scopes as methods. */
   model<C extends ModelClass<ModelBase>>(model: C): Scoped<InstanceType<C>, ScopesOf<C>> {
-    verifyModel(model);
+    prepareModel(model);
     return relationFor(this.#executor, model);
   }
 
