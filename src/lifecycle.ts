@@ -200,15 +200,26 @@ async function updateRecord(record: ModelBase): Promise<true> {
   return true;
 }
 
-/** Deletes the record's row by its stored key; the record becomes a destroyed snapshot. */
-export async function destroyRecord(record: ModelBase): Promise<void> {
+/**
+ * The destroy lifecycle: can this record be used → beforeDestroy → DELETE by the stored key
+ * (skipped for a never-saved record: there's no row, as in Rails) → mark destroyed
+ * → afterDestroy.
+ */
+export async function destroyLifecycle(
+  record: ModelBase,
+): Promise<{ status: "destroyed" } | { status: "aborted"; reason: string }> {
   const recordState = record[state];
   recordState.requireLive("be destroyed");
-  // A never-saved record has no row, so there's nothing to delete (as in Rails).
+  recordState.abortReason = undefined;
+  if (!(await runAbortableCallbacks(record, "beforeDestroy"))) {
+    return { status: "aborted", reason: recordState.abortReason ?? "" };
+  }
   if (!recordState.isNew) {
     await write(record, compileDelete(modelOf(record), recordState.storedKey));
   }
   recordState.markDestroyed();
+  await runAfterCallbacks(record, "afterDestroy");
+  return { status: "destroyed" };
 }
 
 /** Loads the record's row again by its stored primary key, discarding unsaved changes. */
