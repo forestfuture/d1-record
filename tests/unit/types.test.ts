@@ -94,4 +94,30 @@ describe("types", () => {
     };
     expectTypeOf(typeOnly).toBeFunction();
   });
+
+  test("the record lifecycle API is typed against the Model's attributes", () => {
+    const users = db.model(User);
+    const user = users.build({ email: "a@example.com" });
+
+    expectTypeOf(user).toEqualTypeOf<User>();
+    expectTypeOf<ReturnType<typeof users.create>>().toEqualTypeOf<Promise<User>>();
+    expectTypeOf<ReturnType<typeof users.createOrThrow>>().toEqualTypeOf<Promise<User>>();
+    expectTypeOf<ReturnType<typeof user.save>>().toEqualTypeOf<Promise<boolean>>();
+    expectTypeOf<ReturnType<typeof user.destroy>>().toEqualTypeOf<Promise<User | false>>();
+    expectTypeOf<ReturnType<typeof user.destroyOrThrow>>().toEqualTypeOf<Promise<User>>();
+    expectTypeOf<ReturnType<typeof user.reload>>().toEqualTypeOf<Promise<User>>();
+
+    // Checked by the type checker only; never called.
+    const typeOnly = async () => {
+      user.assign({ isActive: true, createdAt: null });
+      await user.update({ email: "b@example.com" });
+      // @ts-expect-error unknown attribute
+      users.build({ nope: 1 });
+      // @ts-expect-error wrong value type
+      user.assign({ isActive: "yes" });
+      // @ts-expect-error email can't be null
+      await user.update({ email: null });
+    };
+    expectTypeOf(typeOnly).toBeFunction();
+  });
 });
