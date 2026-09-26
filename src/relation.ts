@@ -19,6 +19,7 @@ import {
   type AttributesOf,
   type ModelBase,
   type ModelClass,
+  type ScopesOf,
 } from "./model.ts";
 import { readValue } from "./conversion.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
@@ -91,8 +92,29 @@ function atMostOne(limit: number | undefined): number {
   return Math.min(limit ?? 1, 1);
 }
 
+declare const scopeTypes: unique symbol;
+
+/** A scope: receives the current Relation and its arguments, and returns a changed Relation. */
+// oxlint-disable-next-line typescript/no-explicit-any -- scope arguments are the scope's own business
+export type Scope<M extends ModelBase> = (relation: Relation<M>, ...args: any[]) => Relation<M>;
+
+/** The scope methods a Model's scopes `S` add to its Relations: `active()`, `createdAfter(date)`. */
+export type ScopeMethods<M extends ModelBase, S> = {
+  [K in keyof S]: S[K] extends (relation: never, ...args: infer A) => unknown
+    ? (...args: A) => Scoped<M, S>
+    : never;
+};
+
+/** A Relation of Model records `M` with the Model's scope methods `S`. */
+export type Scoped<M extends ModelBase, S = {}> = [keyof S] extends [never]
+  ? Relation<M, S>
+  : Relation<M, S> & ScopeMethods<M, S>;
+
 /** A lazy, immutable description of a query against one Model. */
-export class Relation<M extends ModelBase> {
+export class Relation<M extends ModelBase, S = {}> {
+  /** Type-only: the Model's scopes, so chained calls keep their scope methods. */
+  declare readonly [scopeTypes]?: S;
+
   readonly #executor: Executor;
   readonly #model: ModelClass<M>;
   readonly #query: SelectQuery;
@@ -103,21 +125,21 @@ export class Relation<M extends ModelBase> {
     this.#query = query ?? { model, conditions: [], order: [] };
   }
 
-  where(conditions: Conditions<M> | SafeSql): Relation<M> {
+  where(conditions: Conditions<M> | SafeSql): Scoped<M, S> {
     this.#checkConditions(conditions, "where");
-    if (isEmptyConditions(conditions)) return this;
+    if (isEmptyConditions(conditions)) return this as unknown as Scoped<M, S>;
     return this.#with({ conditions: [...this.#query.conditions, conditions] });
   }
 
   /** Negates the whole condition: `NOT (…)`. Rows where it is NULL are excluded too. */
-  whereNot(conditions: Conditions<M> | SafeSql): Relation<M> {
+  whereNot(conditions: Conditions<M> | SafeSql): Scoped<M, S> {
     this.#checkConditions(conditions, "whereNot");
-    if (isEmptyConditions(conditions)) return this;
+    if (isEmptyConditions(conditions)) return this as unknown as Scoped<M, S>;
     return this.#with({ conditions: [...this.#query.conditions, new Negated(conditions)] });
   }
 
   /** A Relation that matches nothing and never queries D1; it stays empty when chained. */
-  none(): Relation<M> {
+  none(): Scoped<M, S> {
     return this.#with({ none: true });
   }
 
@@ -125,10 +147,10 @@ export class Relation<M extends ModelBase> {
    * Rows matching this Relation's conditions or `other`'s. Both must be of the same Model and
    * identical in everything but their conditions (select, order, limit, offset, distinct).
    */
-  or(other: Relation<M>): Relation<M> {
+  or(other: Relation<M, S>): Scoped<M, S> {
     this.#requireSameModel(other, "or");
-    if (this.#query.none) return other;
-    if (other.#query.none) return this;
+    if (this.#query.none) return other as unknown as Scoped<M, S>;
+    if (other.#query.none) return this as unknown as Scoped<M, S>;
     for (const clause of SHAPE_CLAUSES) {
       if (JSON.stringify(this.#query[clause]) !== JSON.stringify(other.#query[clause])) {
         throw new IncompatibleRelation(
@@ -145,7 +167,7 @@ export class Relation<M extends ModelBase> {
    * distinct, a clause `other` sets explicitly replaces this one's; one it doesn't set is kept.
    * Orders are replaced, not concatenated (a deliberate difference from Rails).
    */
-  merge(other: Relation<M>): Relation<M> {
+  merge(other: Relation<M, S>): Scoped<M, S> {
     this.#requireSameModel(other, "merge");
     const theirs = other.#query;
     const changes: Partial<SelectQuery> = {
@@ -159,7 +181,7 @@ export class Relation<M extends ModelBase> {
   }
 
   /** Sorts by each key in turn; repeated calls append. */
-  order(spec: OrderSpec<M>): Relation<M> {
+  order(spec: OrderSpec<M>): Scoped<M, S> {
     const terms: OrderTerm[] = Object.entries(spec).map(([attribute, direction]) => {
       attributeOf(this.#model, attribute);
       if (direction !== "asc" && direction !== "desc") {
@@ -170,22 +192,22 @@ export class Relation<M extends ModelBase> {
     return this.#with({ order: [...this.#query.order, ...terms] });
   }
 
-  limit(count: number): Relation<M> {
+  limit(count: number): Scoped<M, S> {
     return this.#with({ limit: count });
   }
 
-  offset(count: number): Relation<M> {
+  offset(count: number): Scoped<M, S> {
     return this.#with({ offset: count });
   }
 
   /** Loads only these attributes (a partial record); the primary key is always loaded. */
-  select(...attributes: (keyof AttributesOf<M> & string)[]): Relation<M> {
+  select(...attributes: (keyof AttributesOf<M> & string)[]): Scoped<M, S> {
     for (const name of attributes) attributeOf(this.#model, name);
     return this.#with({ select: attributes });
   }
 
   /** Removes duplicate rows (of the selected attributes). */
-  distinct(): Relation<M> {
+  distinct(): Scoped<M, S> {
     return this.#with({ distinct: true });
   }
 
@@ -300,7 +322,7 @@ export class Relation<M extends ModelBase> {
     return this.#load(this.#query);
   }
 
-  #requireSameModel(other: Relation<ModelBase>, method: string): void {
+  #requireSameModel(other: Relation<M, S>, method: string): void {
     if (other.#model !== this.#model) {
       throw new IncompatibleRelation(
         `${method}() needs relations of the same Model, not ${this.#model.name} and ${other.#model.name}`,
@@ -331,8 +353,10 @@ export class Relation<M extends ModelBase> {
     return this.#query.none ? [] : this.#executor.all(sql, params);
   }
 
-  #with(changes: Partial<SelectQuery>): Relation<M> {
-    return new Relation(this.#executor, this.#model, { ...this.#query, ...changes });
+  /** A copy with `changes`, of this same class, so a Model's scope methods survive chaining. */
+  #with(changes: Partial<SelectQuery>): Scoped<M, S> {
+    const Class = this.constructor as new (...args: RelationArgs<M>) => Scoped<M, S>;
+    return new Class(this.#executor, this.#model, { ...this.#query, ...changes });
   }
 
   async #load(query: SelectQuery): Promise<M[]> {
@@ -369,4 +393,41 @@ export class Relation<M extends ModelBase> {
     const [record] = await this.#load({ model: this.#model, conditions, order: [], limit: 1 });
     return record ?? null;
   }
+}
+
+type RelationArgs<M extends ModelBase> = [
+  executor: Executor,
+  model: ModelClass<M>,
+  query?: SelectQuery,
+];
+
+/** One Relation class per Model, holding its scopes as methods; made on first use and cached. */
+type RelationClass = new (...args: RelationArgs<ModelBase>) => Relation<ModelBase>;
+
+const relationClasses = new WeakMap<object, RelationClass>();
+
+function relationClassFor(model: ModelClass): RelationClass {
+  const cached = relationClasses.get(model);
+  if (cached !== undefined) return cached;
+  const ScopedRelation = class extends Relation<ModelBase> {};
+  for (const [name, scope] of Object.entries(model.scopes)) {
+    Object.defineProperty(ScopedRelation.prototype, name, {
+      value(this: Relation<ModelBase>, ...args: unknown[]) {
+        return (scope as Scope<ModelBase>)(this, ...args);
+      },
+    });
+  }
+  relationClasses.set(model, ScopedRelation);
+  return ScopedRelation;
+}
+
+/** A fresh Relation over all of `model`'s records, with the Model's scopes as methods. */
+export function relationFor<C extends ModelClass>(
+  executor: Executor,
+  model: C,
+): Scoped<InstanceType<C>, ScopesOf<C>> {
+  const Class = relationClassFor(model) as unknown as new (
+    ...args: RelationArgs<InstanceType<C>>
+  ) => Scoped<InstanceType<C>, ScopesOf<C>>;
+  return new Class(executor, model as unknown as ModelClass<InstanceType<C>>);
 }
