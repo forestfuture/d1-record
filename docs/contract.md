@@ -95,21 +95,35 @@ class User extends Model({
 
 ```ts
 class User extends Model({ id: { type: "integer", null: false } }) {
+  static tableName = "users";
   static associations = this.defineAssociations({
     posts: this.hasMany(() => Post, { foreignKey: "userId" }),
     profile: this.hasOne(() => Profile, { foreignKey: "userId" }),
   });
-  declare posts: HasMany<Post>;
-  declare profile: HasOne<Profile>;
+  declare posts: HasMany<typeof Post>;
+  declare profile: HasOne<typeof Profile>;
+}
+
+class Post extends Model({ id: "integer", userId: "integer" }) {
+  static tableName = "posts";
+  static associations = this.defineAssociations({
+    author: this.belongsTo(() => User, { foreignKey: "userId" }),
+  });
+  declare author: BelongsTo<typeof User>;
 }
 ```
 
-- `belongsTo`, `hasMany` and `hasOne`. `foreignKey` is always explicit and names an attribute. `primaryKey` defaults to the target Model's primary key.
-- Each association accessor still needs a matching `declare` (attributes don't; see ADR-0007). Without one, TypeScript reports a missing-property error. A shipped type test checks that `declare`s match `associations`.
-- `await post.author()` resolves to `User | null`, and `await user.profile()` to `Profile | null`. `user.posts()` returns a Relation that supports scopes and every Relation method.
-- Preloaded associations resolve without a query: `await user.posts().toArray()` and `await post.author()`. Chaining further (`user.posts().published()`) queries as normal.
-- `user.loaded("posts")` returns preloaded data synchronously and throws `AssociationNotLoaded` if it wasn't preloaded.
-- `includes("posts")`, `includes("posts", "profile")` and nested `includes({ posts: "comments" })` load each association in its own `WHERE fk IN (…)` query. Keys are deduplicated and split into groups of 100, D1's limit on bound parameters per query, so preloading N parents takes ⌈N/100⌉ queries per association. Query-count tests prove this.
+- `belongsTo`, `hasMany` and `hasOne`, declared with `static associations = this.defineAssociations({...})`. The target is a thunk (`() => Post`), so Models can point at each other.
+- `foreignKey` is always explicit and names an attribute: the owner's for `belongsTo`, the target's for `hasMany`/`hasOne`. `primaryKey` is the attribute the foreign key points at. It defaults to the target's primary key for `belongsTo`, and the owner's for `hasMany`/`hasOne`. Keys aren't type-checked (typing them makes Models that point at each other circular). They're checked when the Model is first used, as are an association named like an attribute or a record method/property, and a target that isn't a Model: all `InvalidModel`.
+- Each association accessor needs a matching `declare`, naming the target **class** (`HasMany<typeof Post>`) so association Relations keep the target's scopes. Without one, TypeScript reports a missing property. Inferring the accessors instead is deferred (#15).
+- `await post.author()` and `await user.profile()` resolve to a record or `null`. `user.posts()` returns a lazy Relation of the target, with its scopes and every Relation method. All three query through the owner's Database. A missing foreign key, or an unsaved owner, resolves to `null` (or an empty `posts()`) without querying.
+- Lazy loads aren't cached: each call queries unless the association was preloaded. Rails-style caching is deferred (#28).
+- Records built or created through `user.posts()` get the owner's key. On an unsaved owner, `build` is allowed (the key is `null`, so save the owner first), while `create`/`createOrThrow` throw `RecordNotSaved`, as in Rails. Autosave is deferred (#29).
+- `includes("posts", "profile")` and nested `includes({ posts: "comments" })` or `includes({ posts: ["comments", "tags"] })` preload associations for every record loaded, by `toArray`, `first`, `last`, `take`, `find` and `findBy`. Names are typed from the `declare` lines, and an unknown one throws `UnknownAssociation`. Each association is loaded with its own `WHERE key IN (…)` query per group of 100 distinct keys (D1's limit on bound parameters), so N parents take ⌈N/100⌉ queries per association, never one per record. Keys preloading needs are loaded even if `select` leaves them out. `includes` on `none()` sends nothing.
+- Preloaded data answers without a query: `await post.author()`, `await user.profile()` and `await user.posts().toArray()`. Chaining further (`user.posts().published()`, `.count()`, …) queries as normal. Preloaded `hasMany` records are in target primary-key order. Association-level order and conditions are deferred (#30).
+- `record.loaded("posts")` returns preloaded data synchronously (records for a `hasMany`, a record or `null` otherwise), typed from the `declare`. It throws `AssociationNotLoaded` if it wasn't preloaded. `reload()` drops preloaded associations.
+- `or()` needs the same `includes`, and `merge()` combines both sides' includes.
+- A subclass has its parent's associations plus its own (spread `...Parent.associations` to keep them typed, as with scopes). Replacing `associations` after a Model's first use throws `InvalidModel`.
 - Polymorphic associations, counter caches, inverse inference and `dependent` strategies are out of scope.
 
 ## Persistence results
@@ -256,5 +270,5 @@ this.beforeSave((account) => {
 Everything extends `D1RecordError`:
 
 - **Lifecycle:** `RecordNotFound`, `RecordInvalid` (`.record`), `RecordNotSaved`, `RecordNotDestroyed`, `RecordDestroyed`, `CallbackAbort` (from `abort()`), `AbortAfterPersistence` (`.callback`, `.reason`)
-- **Usage:** `InvalidModel` (a problem in a Model's declaration, detected the first time it's used), `UnknownAttribute`, `MissingAttribute`, `IncompatibleRelation`, `AssociationNotLoaded`, `NoDatabase`
+- **Usage:** `UnknownAssociation`, `InvalidModel` (a problem in a Model's declaration, detected the first time it's used), `UnknownAttribute`, `MissingAttribute`, `IncompatibleRelation`, `AssociationNotLoaded`, `NoDatabase`
 - **Constraints:** `ConstraintViolation`, with subclasses `RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation` and `CheckViolation`
