@@ -448,11 +448,19 @@ type RelationArgs<M extends ModelBase> = [
 /** One Relation class per Model, holding its scopes as methods; made on first use and cached. */
 type RelationClass = new (...args: RelationArgs<ModelBase>) => Relation<ModelBase>;
 
-const relationClasses = new WeakMap<object, RelationClass>();
+// Module-level, but not request state (ADR-0003): derived only from a Model's static scopes.
+const relationClasses = new WeakMap<object, { Class: RelationClass; scopes: object }>();
 
 function relationClassFor(model: ModelClass): RelationClass {
   const cached = relationClasses.get(model);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    if (cached.scopes !== model.scopes) {
+      throw new InvalidModel(
+        `${model.name}'s scopes changed after its first use; declare them once, in the class body (static scopes = …)`,
+      );
+    }
+    return cached.Class;
+  }
   const ScopedRelation = class extends Relation<ModelBase> {};
   for (const [name, scope] of Object.entries(model.scopes)) {
     // A scope must not hide a Relation method, and "then" would make Relations awaitable.
@@ -467,7 +475,7 @@ function relationClassFor(model: ModelClass): RelationClass {
       },
     });
   }
-  relationClasses.set(model, ScopedRelation);
+  relationClasses.set(model, { Class: ScopedRelation, scopes: model.scopes });
   return ScopedRelation;
 }
 
