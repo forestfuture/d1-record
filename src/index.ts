@@ -1,6 +1,7 @@
 export { connect, Database, type ConnectOptions, type RelationsFor } from "./database.ts";
 export {
   abort,
+  AbortAfterPersistence,
   CallbackAbort,
   CheckViolation,
   ConstraintViolation,

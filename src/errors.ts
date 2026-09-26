@@ -120,3 +120,22 @@ export function abort(reason = "Aborted by a callback"): CallbackAbort {
 export class RecordNotSaved extends D1RecordError {
   override name = "RecordNotSaved";
 }
+
+/**
+ * `abort()` was thrown from an after-write callback (`afterSave`, `afterCreate`, `afterUpdate`,
+ * `afterDestroy`). That's a mistake: the save or destroy already succeeded and nothing rolls back.
+ */
+export class AbortAfterPersistence extends D1RecordError {
+  override name = "AbortAfterPersistence";
+  readonly callback: string;
+  readonly reason: string;
+
+  constructor(callback: string, abortion: CallbackAbort) {
+    super(
+      `abort() in ${callback}: the ${callback === "afterDestroy" ? "destroy" : "save"} has already succeeded`,
+      { cause: abortion },
+    );
+    this.callback = callback;
+    this.reason = abortion.reason;
+  }
+}
