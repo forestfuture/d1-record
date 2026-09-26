@@ -12,4 +12,6 @@ export interface RecordState {
   executor?: Executor;
   /** Attributes assigned on a new record; only these are written on insert. */
   assigned: Set<string>;
+  /** Each loaded attribute's stored form as last loaded or saved; changes are measured against it. */
+  snapshot: Map<string, unknown>;
 }

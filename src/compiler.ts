@@ -121,6 +121,29 @@ export function compileInsert(
   };
 }
 
+/**
+ * `UPDATE … SET … WHERE <primary key> = ?` for the given attribute values. `storedKey` is
+ * the key as stored in D1 (the row's key before any change to it), so it's bound as-is.
+ */
+export function compileUpdate(
+  model: ModelClass<ModelBase>,
+  assignments: readonly (readonly [attribute: string, value: unknown])[],
+  storedKey: unknown,
+): CompiledQuery {
+  const params: unknown[] = [];
+  const sets = assignments.map(([name, value]) => {
+    const { column, type } = attributeOf(model, name);
+    params.push(writeValue(type, value));
+    return `${quoteIdentifier(column)} = ?`;
+  });
+  const primaryKey = attributeOf(model, model.primaryKey);
+  params.push(storedKey);
+  return {
+    sql: `UPDATE ${quoteIdentifier(model.tableName)} SET ${sets.join(", ")} WHERE ${quoteIdentifier(primaryKey.column)} = ?`,
+    params,
+  };
+}
+
 /** The quoted columns for `attributes`, or `*` for every column. */
 export function compileColumns(
   model: ModelClass<ModelBase>,
