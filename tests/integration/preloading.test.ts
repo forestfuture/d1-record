@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-pl
 import {
   AssociationNotLoaded,
   connect,
+  IncompatibleRelation,
   Model,
   type BelongsTo,
   type HasMany,
@@ -181,5 +182,54 @@ describe("preloading with includes", () => {
     expect((preloaded?.loaded("profile") as Profile | null)?.bio).toBe("Bee");
     expect(() => plain?.loaded("posts")).toThrow(AssociationNotLoaded);
     expect(() => plain?.loaded("posts")).toThrow(/User.*"posts".*includes/);
+  });
+
+  test("first, find and findBy preload too", async () => {
+    const users = db().model(User).includes("posts");
+
+    const first = await users.order({ id: "asc" }).first();
+    const found = await users.find(2);
+    const foundBy = await users.findBy({ email: "a@example.com" });
+
+    expect(first?.loaded("posts")).toHaveLength(2);
+    expect(found.loaded("posts")).toHaveLength(1);
+    expect(foundBy?.loaded("posts")).toHaveLength(2);
+  });
+
+  test("the keys preloading needs are loaded even when select leaves them out", async () => {
+    const posts = await db()
+      .model(Post)
+      .select("title")
+      .includes("author")
+      .order({ id: "asc" })
+      .toArray();
+
+    expect(posts.map((post) => post.loaded("author")?.email)).toEqual([
+      "a@example.com",
+      "a@example.com",
+      "b@example.com",
+    ]);
+  });
+
+  test("includes on none() sends no queries", async () => {
+    expect(await db().model(User).includes("posts").none().toArray()).toEqual([]);
+    expect(queries).toHaveLength(0);
+  });
+
+  test("or() needs the same includes; merge() combines them", async () => {
+    const users = db().model(User);
+
+    expect(() => users.includes("posts").or(users.includes("profile"))).toThrow(
+      IncompatibleRelation,
+    );
+    expect(() => users.includes("posts").or(users.includes("posts"))).not.toThrow();
+
+    const [merged] = await users
+      .includes("posts")
+      .merge(users.includes("profile"))
+      .where({ id: 2 })
+      .toArray();
+    expect(merged?.loaded("posts")).toHaveLength(1);
+    expect(merged?.loaded("profile")?.bio).toBe("Bee");
   });
 });
