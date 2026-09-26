@@ -142,4 +142,30 @@ describe("types", () => {
     };
     expectTypeOf(typeOnly).toBeFunction();
   });
+
+  test("scope calls are typed through chaining", () => {
+    class Post extends Model({ id: "integer", published: "boolean", createdAt: "datetime" }) {
+      static tableName = "posts";
+      static scopes = this.defineScopes({
+        published: (q) => q.where({ published: true }),
+        since: (q, date: Date) => q.where({ createdAt: date }),
+        // Q6: sibling scopes aren't typed inside a scope body.
+        // @ts-expect-error `published` isn't visible on q here
+        both: (q) => q.published(),
+      });
+    }
+    const posts = db.model(Post);
+
+    // Checked by the type checker only; never called.
+    const typeOnly = () => {
+      const chained = posts.where({ published: true }).published().since(new Date()).limit(5);
+      expectTypeOf<ReturnType<typeof chained.toArray>>().toEqualTypeOf<Promise<Post[]>>();
+      expectTypeOf(db.models({ Post }).Post.published).toBeFunction();
+      // @ts-expect-error since() takes a Date
+      posts.since("yesterday");
+      // @ts-expect-error unknown scope
+      posts.archived();
+    };
+    expectTypeOf(typeOnly).toBeFunction();
+  });
 });
