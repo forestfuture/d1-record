@@ -143,16 +143,22 @@ Validators add entries with a `type` (`"blank"`, `"taken"`, `"tooShort"`, …) a
 
 ## Validators
 
-All validators accept `allowNull`, `message` and `if: (record) => boolean`.
+Declared in `static {}` with `this.validates(attribute, rules)`. The attribute name and the `if` callback's record are typed against the Model. Every declared validation runs, in declaration order, with no stopping at the first failure, so one attribute can collect several errors. Within one `validates` call the rules apply in a fixed order: presence, length, format, inclusion, numericality, uniqueness.
+
+All validators accept `allowNull` (skip when the value is null), `message` (replaces every default message from that call) and `if: (record) => boolean`. Apart from `presence`, a null value fails a validator unless `allowNull` is set.
+
+Default messages (Rails' English): `blank` "can't be blank", `tooShort` "is too short (minimum is N characters)", `tooLong` "is too long (maximum is N characters)", `wrongLength` "is the wrong length (should be N characters)", `invalid` "is invalid", `inclusion` "is not included in the list", `notANumber` "is not a number", `notAnInteger` "must be an integer", `greaterThan`/`greaterThanOrEqualTo`/`lessThan`/`lessThanOrEqualTo` "must be greater than (or equal to) N" / "must be less than (or equal to) N", `taken` "has already been taken".
 
 - `presence`: not null, and not blank after trimming a string. For a boolean, use `inclusion: [true, false]`.
 - `length`: `{ minimum, maximum, is }`.
 - `format`: `{ with: /re/ }`, or `format: /re/` as shorthand.
 - `inclusion`: `{ in: [...] }`, or an array as shorthand.
-- `numericality`: `{ onlyInteger, greaterThan, greaterThanOrEqualTo, lessThan, lessThanOrEqualTo }`.
-- `uniqueness`: `{ scope: [...], caseSensitive }`. It leaves out the record itself when updating and runs `SELECT 1 … LIMIT 1` through the record's Database (so the same session). `caseSensitive: false` compiles to `lower(col) = lower(?)`, and SQLite's `lower()` only lowercases ASCII letters.
+- `numericality`: `{ onlyInteger, greaterThan, greaterThanOrEqualTo, lessThan, lessThanOrEqualTo }`, or `true`. Only real numbers pass: a numeric string such as `"12"` is `notANumber`, so convert form input first.
+- `uniqueness`: `{ scope: [...], caseSensitive }`. It leaves out the record itself when updating and runs `SELECT 1 … LIMIT 1` through the record's Database (so the same session). `null` is never taken, matching SQLite's UNIQUE, which allows any number of NULLs. `caseSensitive: false` compiles to `lower(col) = lower(?)`, and SQLite's `lower()` only lowercases ASCII letters.
 
 ## Callback lifecycle
+
+Declared in `static {}`: `this.beforeValidation(fn)`, `afterValidation`, `beforeSave`, `beforeCreate`, `beforeUpdate`, `afterCreate`, `afterUpdate`, `afterSave`, `beforeDestroy`, `afterDestroy`. Each takes a function that receives the record, typed as the Model's record, and may be async; callbacks of one kind run in declaration order. A subclass runs its parent's callbacks and validations plus its own, and declaring on it never changes the parent.
 
 ```text
 beforeValidation → validators → afterValidation
@@ -174,7 +180,7 @@ this.beforeSave((account) => {
 });
 ```
 
-- `abort(reason)` returns a unique `CallbackAbort` sentinel, and only that exact sentinel is caught. Returning `false` never halts anything.
+- `abort(reason)` returns a `CallbackAbort` (a `D1RecordError`; the reason defaults to "Aborted by a callback"), and only that class is caught. Returning `false` never halts anything.
 - It only takes effect in `beforeValidation`, `afterValidation`, `beforeSave`, `beforeCreate`, `beforeUpdate` and `beforeDestroy`.
 - `save()` returns `false`, does no write, and keeps the dirty and new-record state. `saveOrThrow()` throws `RecordNotSaved` with the reason. `destroy()` returns `false`, and `destroyOrThrow()` throws `RecordNotDestroyed`.
 - `record.abortReason` holds the reason. It's cleared at the start of each `isValid()`, `save()` and `destroy()`, and never copied into `errors`.
@@ -238,6 +244,6 @@ this.beforeSave((account) => {
 
 Everything extends `D1RecordError`:
 
-- **Lifecycle:** `RecordNotFound`, `RecordInvalid` (`.record`), `RecordNotSaved`, `RecordNotDestroyed`, `RecordDestroyed`, `AbortAfterPersistence`
+- **Lifecycle:** `RecordNotFound`, `RecordInvalid` (`.record`), `RecordNotSaved`, `RecordNotDestroyed`, `RecordDestroyed`, `CallbackAbort` (from `abort()`), `AbortAfterPersistence` (`.callback`, `.reason`)
 - **Usage:** `InvalidModel` (a problem in a Model's declaration, detected the first time it's used), `UnknownAttribute`, `MissingAttribute`, `IncompatibleRelation`, `AssociationNotLoaded`, `NoDatabase`
 - **Constraints:** `ConstraintViolation`, with subclasses `RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation` and `CheckViolation`
