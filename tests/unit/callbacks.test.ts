@@ -108,3 +108,25 @@ class Account extends Model({
     });
   }
 }
+
+describe("callback inheritance", () => {
+  test("a subclass runs its parent's callbacks plus its own; the parent never gets the subclass's", async () => {
+    log.length = 0;
+    class Admin extends User {
+      static {
+        this.afterValidation(() => void log.push("admin afterValidation"));
+      }
+    }
+
+    await connect({} as never)
+      .model(Admin)
+      .build({ email: "a@example.com" })
+      .isValid();
+    const adminLog = [...log];
+    log.length = 0;
+    await users.build({ email: "a@example.com" }).isValid();
+
+    expect(adminLog.at(-1)).toBe("admin afterValidation");
+    expect(log).not.toContain("admin afterValidation");
+  });
+});
