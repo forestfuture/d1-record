@@ -1,4 +1,5 @@
-import { verifyModel, type ModelBase, type ModelClass, type ScopesOf } from "./model.ts";
+import { InvalidModel } from "./errors.ts";
+import { ModelBase, verifyModel, type ModelClass, type ScopesOf } from "./model.ts";
 import { state } from "./record-state.ts";
 import { markUnsavedOwner, withPreloaded, type Scoped } from "./relation.ts";
 import { relationFor } from "./scoped-relation.ts";
@@ -29,22 +30,64 @@ export type HasOne<C extends ModelClass> = () => Promise<InstanceType<C> | null>
 /** `user.posts()`: a Relation of the associated records, with the target's scopes. */
 export type HasMany<C extends ModelClass> = () => Scoped<InstanceType<C>, ScopesOf<C>>;
 
-const prepared = new WeakSet<object>();
+/** Each prepared Model, with the associations it was prepared with. */
+const prepared = new WeakMap<object, object>();
 
 /**
- * Makes a Model ready for use, once: verifies its declaration and installs its association
- * accessors. Module-level, but not request state (ADR-0003): derived only from the class.
+ * Makes a Model ready for use, once: verifies its declaration, checks its associations and
+ * installs their accessors. Module-level, but not request state (ADR-0003): derived only from
+ * the class.
  */
 export function prepareModel(model: ModelClass): void {
   verifyModel(model);
-  if (prepared.has(model)) return;
+  const seen = prepared.get(model);
+  if (seen !== undefined) {
+    if (seen !== model.associations) {
+      throw new InvalidModel(
+        `${model.name}'s associations changed after its first use; declare them once, in the class body (static associations = …)`,
+      );
+    }
+    return;
+  }
   for (const [name, definition] of Object.entries(model.associations)) {
+    checkAssociation(model, name, definition);
     Object.defineProperty(model.prototype, name, {
       configurable: true,
       value: accessorFor(name, definition),
     });
   }
-  prepared.add(model);
+  prepared.set(model, model.associations);
+}
+
+/** An association's name must be free, its target a Model, and its keys declared attributes. */
+function checkAssociation(
+  model: ModelClass,
+  name: string,
+  definition: AssociationDefinition,
+): void {
+  const label = `${model.name} association "${name}"`;
+  if (model.attributeDefinitions.has(name)) {
+    throw new InvalidModel(`${label} has the same name as an attribute; rename one of them`);
+  }
+  if (name in ModelBase.prototype) {
+    throw new InvalidModel(`${label} is the name of a record method or property; rename it`);
+  }
+  const target: unknown = definition.target();
+  if (typeof target !== "function" || !(target.prototype instanceof ModelBase)) {
+    throw new InvalidModel(`${label} must point at a Model: this.hasMany(() => Post, …)`);
+  }
+  const [keyOwner, pointedAt] =
+    definition.kind === "belongsTo" ? [model, target as ModelClass] : [target as ModelClass, model];
+  requireAttribute(label, keyOwner, definition.foreignKey, "foreignKey");
+  if (definition.primaryKey !== undefined) {
+    requireAttribute(label, pointedAt, definition.primaryKey, "primaryKey");
+  }
+}
+
+function requireAttribute(label: string, model: ModelClass, name: string, option: string): void {
+  if (!model.attributeDefinitions.has(name)) {
+    throw new InvalidModel(`${label}: ${model.name} has no attribute "${name}" (its ${option})`);
+  }
 }
 
 function accessorFor(
