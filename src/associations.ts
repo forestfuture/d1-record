@@ -1,6 +1,6 @@
 import { verifyModel, type ModelBase, type ModelClass, type ScopesOf } from "./model.ts";
 import { state } from "./record-state.ts";
-import type { Scoped } from "./relation.ts";
+import { markUnsavedOwner, type Scoped } from "./relation.ts";
 import { relationFor } from "./scoped-relation.ts";
 
 /** One declared association: its kind, its target Model, and the keys that link them. */
@@ -72,7 +72,7 @@ function accessorFor(definition: AssociationDefinition): (this: ModelBase) => un
           [definition.foreignKey]: key,
         });
         // An unsaved owner has no records yet; building through it still gets the (null) key.
-        return key === null ? relation.none() : relation;
+        return key === null ? relation[markUnsavedOwner](model(this).name) : relation;
       };
   }
 }
@@ -84,9 +84,12 @@ function targetOf(definition: AssociationDefinition): ModelClass {
   return target;
 }
 
+function model(record: ModelBase): ModelClass {
+  return record.constructor as ModelClass;
+}
+
 /** The owner's value that targets point at (its primary key, by default); null if unsaved. */
 function ownerKey(owner: ModelBase, definition: AssociationDefinition): unknown {
   if (owner[state].isNew) return null;
-  const model = owner.constructor as ModelClass;
-  return owner[state].read(definition.primaryKey ?? model.primaryKey);
+  return owner[state].read(definition.primaryKey ?? model(owner).primaryKey);
 }

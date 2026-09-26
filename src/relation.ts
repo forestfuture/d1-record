@@ -10,7 +10,7 @@ import {
   type OrderTerm,
   type SelectQuery,
 } from "./compiler.ts";
-import { IncompatibleRelation, RecordNotFound } from "./errors.ts";
+import { IncompatibleRelation, RecordNotFound, RecordNotSaved } from "./errors.ts";
 import type { Executor } from "./executor.ts";
 import { attributeOf } from "./metadata.ts";
 import {
@@ -119,6 +119,9 @@ function atMostOne(limit: number | undefined): number {
 }
 
 declare const scopeTypes: unique symbol;
+
+/** The library's key for marking an association Relation of an unsaved owner; not exported. */
+export const markUnsavedOwner = Symbol("markUnsavedOwner");
 
 /** The library's key for running a scope on a Relation; not exported from the package. */
 export const applyScope = Symbol("applyScope");
@@ -246,8 +249,24 @@ export class Relation<M extends ModelBase, S = {}> {
     return buildRecord(this.#model, { ...inherited, ...attributes }, this.#executor);
   }
 
+  /** The association Relation of an unsaved owner: reads find nothing, `create` refuses. */
+  [markUnsavedOwner](ownerName: string): Scoped<M, S> {
+    return this.#with({ none: true, unsavedOwner: ownerName });
+  }
+
+  /** As in Rails, records can't be created through an owner that hasn't been saved. */
+  #requireSavedOwner(): void {
+    const owner = this.#query.unsavedOwner;
+    if (owner !== undefined) {
+      throw new RecordNotSaved(
+        `You cannot create a ${this.#model.name} through an unsaved ${owner}: save the ${owner} first`,
+      );
+    }
+  }
+
   /** Builds and saves a record; resolves to it whether or not it was saved (check `isPersisted()`). */
   async create(attributes: Partial<AttributesOf<M>> = {}): Promise<M> {
+    this.#requireSavedOwner();
     const record = this.build(attributes);
     await record.save();
     return record;
@@ -255,6 +274,7 @@ export class Relation<M extends ModelBase, S = {}> {
 
   /** Builds and saves a record, throwing if it can't be saved. */
   async createOrThrow(attributes: Partial<AttributesOf<M>> = {}): Promise<M> {
+    this.#requireSavedOwner();
     const record = this.build(attributes);
     await record.saveOrThrow();
     return record;

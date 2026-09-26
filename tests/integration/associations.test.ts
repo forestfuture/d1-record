@@ -5,6 +5,7 @@ import {
   type BelongsTo,
   type HasMany,
   type HasOne,
+  RecordNotSaved,
   type QueryEvent,
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
@@ -56,6 +57,10 @@ class Post extends Model({
 
   static associations = this.defineAssociations({
     author: this.belongsTo(() => User, { foreignKey: "userId" }),
+  });
+
+  static scopes = this.defineScopes({
+    published: (q) => q.where({ published: true }),
   });
 
   declare author: BelongsTo<typeof User>;
@@ -119,5 +124,40 @@ describe("associations", () => {
     expect(await orphan.post()).toBeNull();
     expect(await newUser.profile()).toBeNull();
     expect(queries).toHaveLength(0);
+  });
+
+  test("hasMany returns a lazy Relation of the target, with its scopes", async () => {
+    const queries: QueryEvent[] = [];
+    const users = connect(binding, { onQuery: (event) => queries.push(event) }).model(User);
+    const user = await users.find(1);
+    queries.length = 0;
+
+    const published = user.posts().published().order({ id: "asc" });
+    expect(queries).toHaveLength(0);
+
+    expect((await published.toArray()).map((post) => post.title)).toEqual(["First"]);
+    expect(await user.posts().count()).toBe(2);
+  });
+
+  test("records built or created through hasMany get the owner's key", async () => {
+    const user = await connect(binding).model(User).find(2);
+
+    const built = user.posts().build({ title: "Built" });
+    const created = await user.posts().create({ title: "Created" });
+
+    expect(built.userId).toBe(2);
+    expect(created.isPersisted()).toBe(true);
+    expect(await user.posts().count()).toBe(2);
+  });
+
+  test("creating through an unsaved owner throws RecordNotSaved, as in Rails; building is allowed", async () => {
+    const owner = connect(binding).model(User).build({ email: "new@example.com" });
+
+    expect(owner.posts().build({ title: "Later" }).userId).toBeNull();
+    expect(await owner.posts().count()).toBe(0);
+    await expect(owner.posts().create({ title: "Now" })).rejects.toThrow(RecordNotSaved);
+    await expect(owner.posts().createOrThrow({ title: "Now" })).rejects.toThrow(
+      /save the User first/,
+    );
   });
 });
