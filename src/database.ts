@@ -1,10 +1,10 @@
 import { Executor, type QueryListener } from "./executor.ts";
-import { verifyModel, type ModelBase, type ModelClass } from "./model.ts";
-import { Relation } from "./relation.ts";
+import { verifyModel, type ModelBase, type ModelClass, type ScopesOf } from "./model.ts";
+import { relationFor, type Scoped } from "./relation.ts";
 
 /** One request-bound Relation per Model, keyed like the object passed to `db.models()`. */
 export type RelationsFor<T extends Record<string, ModelClass<ModelBase>>> = {
-  [K in keyof T]: Relation<InstanceType<T[K]>>;
+  [K in keyof T]: Scoped<InstanceType<T[K]>, ScopesOf<T[K]>>;
 };
 
 export interface ConnectOptions {
@@ -20,9 +20,10 @@ export class Database {
     this.#executor = new Executor(binding, options.onQuery);
   }
 
-  model<M extends ModelBase>(model: ModelClass<M>): Relation<M> {
+  /** A request-bound Relation over the Model's records, with its scopes as methods. */
+  model<C extends ModelClass<ModelBase>>(model: C): Scoped<InstanceType<C>, ScopesOf<C>> {
     verifyModel(model);
-    return new Relation(this.#executor, model);
+    return relationFor(this.#executor, model);
   }
 
   /** Request-bound relations for several models at once: `db.models({ User }).User`. */

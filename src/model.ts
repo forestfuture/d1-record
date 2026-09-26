@@ -12,7 +12,18 @@ import { declare, seal } from "./declarations.ts";
 import { RecordInvalid, RecordNotDestroyed, RecordNotSaved } from "./errors.ts";
 import { destroyLifecycle, reloadRecord, saveLifecycle, validateRecord } from "./lifecycle.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
+import type { Scope } from "./relation.ts";
 import type { Validation, ValidationOptions } from "./validations.ts";
+
+/** Any Model's scope, whatever its record type and arguments. */
+type AnyScope = (relation: never, ...args: never[]) => unknown;
+
+/** A Model class's scopes, as declared with `defineScopes`. */
+export type ScopesOf<C> = C extends { scopes: infer S }
+  ? string extends keyof S
+    ? {} // only the base class's catch-all type: no declared scopes
+    : S
+  : {};
 
 /** A lifecycle callback; it receives the record and may be async. */
 export type Callback<R> = (record: R) => unknown;
@@ -27,6 +38,21 @@ export class ModelBase {
   static tableName: string;
   static primaryKey = "id";
   static attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map();
+  /** This Model's scopes, from `static scopes = this.defineScopes({...})`. */
+  static scopes: Readonly<Record<string, AnyScope>> = {};
+
+  /**
+   * Declares scopes: `static scopes = this.defineScopes({ active: (q) => q.where(...) })`.
+   * A subclass's scopes are added to its parent's (a same-named one replaces the parent's).
+   */
+  // Constrained on the constructor only: `C`'s static side includes the `scopes` being defined.
+  static defineScopes<
+    C extends abstract new () => ModelBase,
+    S extends Record<string, Scope<InstanceType<C>>>,
+  >(this: C, scopes: S): S {
+    const inherited = (this as unknown as typeof ModelBase).scopes;
+    return { ...inherited, ...scopes } as S;
+  }
 
   /** Declares a validation, e.g. `this.validates("email", { presence: true })` in `static {}`. */
   static validates<C extends ModelClass>(
