@@ -7,6 +7,7 @@ export {
   InvalidForeignKey,
   InvalidModel,
   MissingAttribute,
+  NoDatabase,
   NotNullViolation,
   RecordDestroyed,
   RecordNotFound,

@@ -1,6 +1,6 @@
 import { compileDelete, compileInsert, compileSelect, compileUpdate } from "./compiler.ts";
 import { translateConstraintError } from "./constraints.ts";
-import { RecordDestroyed, RecordNotFound } from "./errors.ts";
+import { MissingAttribute, NoDatabase, RecordDestroyed, RecordNotFound } from "./errors.ts";
 import { attributeOf } from "./metadata.ts";
 import { readValue, writeValue } from "./conversion.ts";
 import type { Executor } from "./executor.ts";
@@ -75,10 +75,22 @@ export function assignAttributes(record: ModelBase, attributes: Record<string, u
   }
 }
 
-/** A destroyed record is a read-only snapshot; using it as a live record is a mistake. */
+/**
+ * Refuses to use a record as a live one when it can't be: a destroyed record is a read-only
+ * snapshot, and a persisted record without its primary key (from `select(...).distinct()`)
+ * has no identity to write by.
+ */
 export function requireLive(record: ModelBase, action: string): void {
-  if (record[state].lifecycle === "destroyed") {
-    throw new RecordDestroyed(`${modelOf(record).name} record was destroyed; it can't ${action}`);
+  const model = modelOf(record);
+  const { lifecycle, snapshot } = record[state];
+  if (lifecycle === "destroyed") {
+    throw new RecordDestroyed(`${model.name} record was destroyed; it can't ${action}`);
+  }
+  if (lifecycle === "persisted" && !snapshot.has(model.primaryKey)) {
+    throw new MissingAttribute(
+      `${model.name} record has no primary key loaded (it came from select(...).distinct()); ` +
+        `it can't ${action}`,
+    );
   }
 }
 
@@ -93,12 +105,18 @@ export async function destroyRecord(record: ModelBase): Promise<void> {
 /** Loads the record's row again by its stored primary key, discarding unsaved changes. */
 export async function reloadRecord(record: ModelBase): Promise<void> {
   requireLive(record, "be reloaded");
+  const executor = executorOf(record);
   const model = modelOf(record);
+  if (record[state].lifecycle === "new") {
+    throw new RecordNotFound(
+      `${model.name} record hasn't been saved, so there's nothing to reload`,
+    );
+  }
   const { type } = attributeOf(model, model.primaryKey);
   const key = readValue(type, record[state].snapshot.get(model.primaryKey));
   const query = { model, conditions: [{ [model.primaryKey]: key }], order: [], limit: 1 };
   const { sql, params } = compileSelect(query);
-  const [row] = await executorOf(record).all(sql, params);
+  const [row] = await executor.all(sql, params);
   if (row === undefined) {
     throw new RecordNotFound(`${model.name} with ${model.primaryKey} ${String(key)} not found`);
   }
@@ -140,7 +158,12 @@ async function write(
 
 function executorOf(record: ModelBase): Executor {
   const { executor } = record[state];
-  if (executor === undefined) throw new Error("record has no Database");
+  if (executor === undefined) {
+    const { name } = modelOf(record);
+    throw new NoDatabase(
+      `${name} record has no Database; build or load records through db.model(${name})`,
+    );
+  }
   return executor;
 }
 

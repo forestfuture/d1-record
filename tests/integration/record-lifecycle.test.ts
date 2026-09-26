@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 import {
   connect,
+  MissingAttribute,
   Model,
+  NoDatabase,
   sql,
   RecordDestroyed,
   RecordNotFound,
@@ -220,5 +222,26 @@ describe("record lifecycle", () => {
     await expect(user.update({ role: "admin" })).rejects.toThrow(RecordDestroyed);
     await expect(user.destroy()).rejects.toThrow(RecordDestroyed);
     await expect(user.reload()).rejects.toThrow(/User.*destroyed/);
+  });
+
+  test("a record constructed directly has no Database, so it can't be saved or loaded", async () => {
+    const user = new User();
+
+    await expect(user.save()).rejects.toThrow(NoDatabase);
+    await expect(user.reload()).rejects.toThrow(/User.*db\.model\(User\)/);
+    await expect(connect(binding).model(User).build().reload()).rejects.toThrow(RecordNotFound);
+  });
+
+  test("a keyless record from select(...).distinct() can't be saved, updated, destroyed or reloaded", async () => {
+    const users = connect(binding).model(User);
+    await users.create({ email: "a@example.com", role: "admin" });
+    const [role] = await users.select("role").distinct().toArray();
+    if (!role) throw new Error("expected a record");
+
+    await expect(role.update({ role: "member" })).rejects.toThrow(MissingAttribute);
+    await expect(role.save()).rejects.toThrow(/primary key.*distinct/);
+    await expect(role.destroy()).rejects.toThrow(MissingAttribute);
+    await expect(role.reload()).rejects.toThrow(MissingAttribute);
+    expect(await users.pluck("role")).toEqual(["admin"]);
   });
 });
