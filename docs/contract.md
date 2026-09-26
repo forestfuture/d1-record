@@ -69,12 +69,13 @@ class User extends Model({
 
 ## Scopes
 
-- Declared with `static scopes = this.defineScopes({ name: (q, ...args) => q… })`. A scope receives the current Relation and its arguments and returns a changed Relation of the **same Model**; anything else throws `TypeError` naming the scope.
+- Declared with `static scopes = this.defineScopes({ name: (q, ...args) => q… })`. A scope receives the current Relation and its arguments and returns a changed Relation of the **same Model on the same Database**; anything else throws `TypeError` naming the scope, so a query never silently moves to another connection.
 - Callable on `db.model(X)` and on any Relation of that Model, and chainable with everything: `db.model(User).where(…).active().createdAfter(d).order(…)`. Chained scope calls are typed: a wrong argument type or an unknown scope name is a compile error.
 - Calling a scope never queries. A scope's arguments, and anything it computes such as `new Date()`, are evaluated when it's called, not when the class is defined.
 - Inside a scope body, `q` has every Relation method but not the Model's other scopes (their types would refer to themselves). To reuse logic, share a plain function between scopes.
-- A subclass has its parent's scopes plus its own, and a same-named scope replaces the parent's. The parent never gains the subclass's scopes. A subclass that declares no scopes keeps its parent's types; one that declares its own should spread its parent's to keep them typed: `this.defineScopes({ ...User.scopes, admins: … })`.
-- A scope can't be named like a Relation method (`where`, `count`, …) or `then`, which would make Relations awaitable. `db.model(X)` throws `InvalidModel` for such a name.
+- A subclass has its parent's scopes plus its own, and a same-named scope replaces the parent's. The parent never gains the subclass's scopes. A subclass that declares no scopes keeps its parent's types; one that declares its own should spread its parent's to keep them typed: `this.defineScopes({ ...User.scopes, admins: … })`. Only `defineScopes` inherits: a plain `static scopes = { … }` replaces the parent's scopes entirely.
+- A scope can't use any name a Relation already has: its methods (`where`, `count`, …), the standard object ones (`constructor`, `toString`, …), or `then`, which would make Relations awaitable. `db.model(X)` throws `InvalidModel` for such a name.
+- Scopes are fixed once a Model is used: replacing `scopes` afterwards makes `db.model(X)` throw `InvalidModel`.
 - Default scopes and `unscoped` are deferred (#25).
 
 ## Inheritance, shared behavior and serialization
@@ -222,8 +223,8 @@ this.beforeSave((account) => {
 - `order({ createdAt: "desc", id: "asc" })` sorts by each key in turn, and repeated calls append. NULLs sort as SQLite sorts them (first in ascending order). `limit`/`offset` page, and `offset` works without a `limit`.
 - `first()` and `last()` with no order sort by the primary key ascending or descending. With `limit`/`offset`, `first`, `last`, `take` and `exists` work within that page (so `limit(0)` has none). `last()` reverses every direction of an explicit order. `take()` adds no ordering.
 - `find()`, `findBy()` and `findByOrThrow()` keep the Relation's where conditions and scopes, ignore its order, limit, offset and `select()`, and always load full rows.
-- `or()`: same Model, and the same select, order, limit, offset and distinct. Only where conditions may differ, and each side is wrapped in parentheses. Otherwise it throws `IncompatibleRelation`.
-- `merge()`: same Model only. Where conditions combine with AND. For order, limit, offset, select and distinct, a clause the argument sets explicitly replaces the receiver's, and a clause it doesn't set leaves the receiver's alone. Orders are replaced, not concatenated, which is a deliberate difference from Rails. Merging across Models throws `IncompatibleRelation`.
+- `or()`: same Model on the same Database, and the same select, order, limit, offset and distinct. Only where conditions may differ, and each side is wrapped in parentheses. Otherwise it throws `IncompatibleRelation`.
+- `merge()`: same Model on the same Database only. Where conditions combine with AND. For order, limit, offset, select and distinct, a clause the argument sets explicitly replaces the receiver's, and a clause it doesn't set leaves the receiver's alone. Orders are replaced, not concatenated, which is a deliberate difference from Rails. Merging across Models throws `IncompatibleRelation`.
 
 ## Terminal operations
 
