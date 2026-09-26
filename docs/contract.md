@@ -60,7 +60,7 @@ class User extends Model({
 - SQL fragments are SQL, so they use column names (``sql`created_at > ${since}` ``), or `column("createdAt")` to look the column up from the attribute (ADR-0006).
 - `db.model(X).build(attrs)` makes a new record without querying. Before an attribute is assigned, it reads as `null`. Defaults are evaluated at `build()`, so app-generated keys (UUID, CUID, ULID) exist before saving and can be used to link rows inside one `batch()`.
 - A record built or created from a Relation starts with that Relation's single equality values: `where({ role: "admin" }).build()` has `role: "admin"`. Arrays, `whereNot`, `or` and `sql` fragments carry nothing over, and explicit attributes win.
-- `record.assign(attrs)` assigns several attributes without saving. `update(attrs)` is `assign` then `save`. An unknown key throws `UnknownAttribute` and an `undefined` value throws `TypeError` (use `null` to store NULL), in `build`, `create`, `assign` and `update`.
+- `record.assign(attrs)` assigns several attributes without saving. `update(attrs)` is `assign` then `save`. An unknown key throws `UnknownAttribute` and an `undefined` value throws `TypeError` (use `null` to store NULL), in `build`, `create`, `assign`, `update`, and when setting a property (`user.email = undefined`).
 - An insert writes only **assigned** attributes: given to `build`/`create`, set through a property, or filled by a `default`. Anything else is left out, so the column's database default applies. `RETURNING *` then loads what D1 actually stored, including generated keys and defaults.
 - An update writes only the attributes that changed. A save with nothing changed sends no statement. Changing the primary key is allowed, and the UPDATE finds the row by the key as last loaded or saved.
 - If the row is already gone (e.g. another request deleted it), `save` and `destroy` still succeed. `reload()` throws `RecordNotFound`, since there's nothing to load, and so does reloading a record that was never saved.
@@ -191,7 +191,7 @@ this.beforeSave((account) => {
 ## Destroyed records
 
 - A record is marked destroyed only after the D1 `DELETE` succeeds, and before `afterDestroy` runs. Destroying a never-saved record sends nothing, since there's no row, and marks it destroyed. If `afterDestroy` throws, the row stays deleted and the record stays destroyed.
-- `isDestroyed()` is `true` and `isPersisted()` is `false`. Attributes stay readable.
+- `isDestroyed()` is `true` and `isPersisted()` is `false`. Attributes stay readable, but the record is read-only: setting a property or calling `assign` throws `RecordDestroyed`.
 - `save`, `saveOrThrow`, `update`, `destroy` and `reload` throw `RecordDestroyed`.
 - A keyless record from `select(...).distinct()` has no identity to write by, so the same methods throw `MissingAttribute`. A record constructed directly (`new User()`) has no Database, so they throw `NoDatabase`.
 

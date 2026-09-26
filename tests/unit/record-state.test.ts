@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { connect, Model } from "../../src/index.ts";
+import { connect, Model, RecordDestroyed } from "../../src/index.ts";
 
 class User extends Model({
   id: { type: "integer", null: false },
@@ -23,5 +23,26 @@ describe("record state without D1", () => {
       user.role = undefined as never;
     }).toThrow(/"role".*null/);
     expect(user.role).toBeNull();
+  });
+
+  test("a destroyed record is read-only: setting or assigning throws, reading still works", async () => {
+    const user = users.build({ email: "a@example.com" });
+    await user.destroy(); // never saved, so no D1 statement
+
+    expect(() => {
+      user.role = "admin";
+    }).toThrow(RecordDestroyed);
+    expect(() => user.assign({ role: "admin" })).toThrow(RecordDestroyed);
+    expect(user.email).toBe("a@example.com");
+    expect(user.role).toBeNull();
+  });
+
+  test("a built record's changes are its assigned attributes, each changed from null", () => {
+    const user = users.build({ email: "a@example.com" });
+    user.role = "admin";
+
+    expect(user.changed()).toEqual(["email", "role"]);
+    expect(user.changes()).toEqual({ email: [null, "a@example.com"], role: [null, "admin"] });
+    expect(user.changedAttributes()).toEqual({ email: null, role: null });
   });
 });
