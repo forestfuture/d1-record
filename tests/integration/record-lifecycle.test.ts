@@ -244,4 +244,16 @@ describe("record lifecycle", () => {
     await expect(role.reload()).rejects.toThrow(MissingAttribute);
     expect(await users.pluck("role")).toEqual(["admin"]);
   });
+
+  test("destroying a never-saved record sends nothing: there's no row to delete", async () => {
+    const queries: QueryEvent[] = [];
+    const user = connect(binding, { onQuery: (event) => queries.push(event) })
+      .model(User)
+      .build({ email: "a@example.com" });
+
+    expect(await user.destroy()).toBe(user);
+
+    expect(user.isDestroyed()).toBe(true);
+    expect(queries).toHaveLength(0);
+  });
 });
