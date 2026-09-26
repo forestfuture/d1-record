@@ -1,4 +1,4 @@
-import type { AttributeType } from "./model.ts";
+import type { AttributeType } from "./metadata.ts";
 
 interface Converter {
   /** D1 value → JavaScript value. Never called with null. */
