@@ -9,8 +9,8 @@ import {
 } from "./metadata.ts";
 import type { Errors } from "./errors-collection.ts";
 import { declare } from "./declarations.ts";
-import { RecordInvalid, RecordNotSaved } from "./errors.ts";
-import { destroyRecord, reloadRecord, saveLifecycle, validateRecord } from "./lifecycle.ts";
+import { RecordInvalid, RecordNotDestroyed, RecordNotSaved } from "./errors.ts";
+import { destroyLifecycle, reloadRecord, saveLifecycle, validateRecord } from "./lifecycle.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
 import type { Validation, ValidationOptions } from "./validations.ts";
 
@@ -80,6 +80,16 @@ export class ModelBase {
   /** Runs after every successful save; the record is already persisted and clean. */
   static afterSave<C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>): void {
     declare(this, "afterSave", callback);
+  }
+
+  /** Runs before deleting the row. May `throw abort(reason)` to refuse the destroy. */
+  static beforeDestroy<C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>): void {
+    declare(this, "beforeDestroy", callback);
+  }
+
+  /** Runs after the row was deleted; the record is already destroyed. */
+  static afterDestroy<C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>): void {
+    declare(this, "afterDestroy", callback);
   }
 
   /** This record's values, lifecycle and Snapshot; only `RecordState` changes them. */
@@ -163,13 +173,13 @@ export class ModelBase {
    * A row that's already gone still counts. `false` is reserved for a callback abort (#4).
    */
   async destroy(): Promise<this | false> {
-    await destroyRecord(this);
-    return this;
+    return (await destroyLifecycle(this)).status === "destroyed" ? this : false;
   }
 
-  /** Like `destroy()`, but throws instead of returning `false`. */
+  /** Like `destroy()`, but throws `RecordNotDestroyed` instead of returning `false`. */
   async destroyOrThrow(): Promise<this> {
-    await destroyRecord(this);
+    const outcome = await destroyLifecycle(this);
+    if (outcome.status === "aborted") throw new RecordNotDestroyed(outcome.reason);
     return this;
   }
 

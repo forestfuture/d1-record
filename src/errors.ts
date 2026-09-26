@@ -139,3 +139,8 @@ export class AbortAfterPersistence extends D1RecordError {
     this.reason = abortion.reason;
   }
 }
+
+/** A `destroyOrThrow()` was refused by a `beforeDestroy` callback's `abort(reason)`. */
+export class RecordNotDestroyed extends D1RecordError {
+  override name = "RecordNotDestroyed";
+}
