@@ -102,3 +102,18 @@ describe("relations stay on their Database", () => {
     expect(() => here.merge(there)).toThrow(/same Database/);
   });
 });
+
+describe("scope timing", () => {
+  test("replacing a Model's scopes after its first use throws, rather than being ignored", () => {
+    class Late extends Model({ id: "integer", role: "string" }) {
+      static tableName = "users";
+      static scopes = this.defineScopes({ admins: (q) => q.where({ role: "admin" }) });
+    }
+    db.model(Late);
+
+    Late.scopes = Late.defineScopes({ admins: (q) => q.where({ role: "owner" }) });
+
+    expect(() => db.model(Late)).toThrow(InvalidModel);
+    expect(() => db.model(Late)).toThrow(/Late.*scopes.*static/);
+  });
+});
