@@ -10,10 +10,11 @@ import {
 } from "./compiler.ts";
 import { translateConstraintError } from "./constraints.ts";
 import { RecordNotFound } from "./errors.ts";
-import type { ModelBase, ModelClass } from "./model.ts";
+import { declared } from "./declarations.ts";
+import type { Callback, ModelBase, ModelClass } from "./model.ts";
 import { state } from "./record-state.ts";
 import { column, sql } from "./sql.ts";
-import { runValidations, type UniquenessOptions } from "./validations.ts";
+import { runValidations, type UniquenessOptions, type Validation } from "./validations.ts";
 
 function modelOf(record: ModelBase): ModelClass {
   return record.constructor as ModelClass;
@@ -84,16 +85,28 @@ async function isTaken(
   return (await recordState.executor.all(text, params)).length > 0;
 }
 
-/** Clears `errors`, runs every validation, and reports whether the record is valid. */
+/** Runs the Model's callbacks of `kind` in declaration order, awaiting each. */
+async function runCallbacks(record: ModelBase, kind: string): Promise<void> {
+  for (const callback of declared<Callback<ModelBase>>(modelOf(record), kind)) {
+    await callback(record);
+  }
+}
+
+/**
+ * Clears `errors`, then beforeValidation → validators → afterValidation, and reports whether
+ * the record is valid.
+ */
 export async function validateRecord(record: ModelBase): Promise<boolean> {
   const recordState = record[state];
   recordState.errors.clear();
-  await runValidations(modelOf(record).validations, {
+  await runCallbacks(record, "beforeValidation");
+  await runValidations(declared<Validation>(modelOf(record), "validations"), {
     record,
     read: (attribute) => recordState.read(attribute),
     errors: recordState.errors,
     isTaken: (attribute, value, options) => isTaken(record, attribute, value, options),
   });
+  await runCallbacks(record, "afterValidation");
   return recordState.errors.isEmpty();
 }
 
