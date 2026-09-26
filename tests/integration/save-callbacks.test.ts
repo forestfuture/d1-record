@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { abort, connect, Model } from "../../src/index.ts";
+import { abort, AbortAfterPersistence, CallbackAbort, connect, Model } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 const log: string[] = [];
@@ -129,5 +129,35 @@ describe("save callbacks", () => {
 
     expect(log.filter((entry) => entry === "INSERT" || entry === "UPDATE")).toEqual(["INSERT"]);
     expect(user.changed()).toEqual(["role"]);
+  });
+
+  test("an error from afterSave propagates, but the row stays written and the record persisted", async () => {
+    const failure = new Error("audit log unavailable");
+    hooks.afterSave = () => {
+      throw failure;
+    };
+    const user = users().build({ email: "a@example.com" });
+
+    await expect(user.save()).rejects.toBe(failure);
+
+    expect(user.isPersisted()).toBe(true);
+    expect(user.isChanged()).toBe(false);
+    expect(await users().count()).toBe(1);
+  });
+
+  test("abort() after the write becomes AbortAfterPersistence; the save still happened", async () => {
+    hooks.afterSave = () => {
+      throw abort("too late");
+    };
+    const user = users().build({ email: "a@example.com" });
+
+    const error = await user.save().catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(AbortAfterPersistence);
+    expect(error).toMatchObject({ callback: "afterSave", reason: "too late" });
+    expect((error as Error).cause).toBeInstanceOf(CallbackAbort);
+    expect((error as Error).message).toMatch(/afterSave.*already succeeded/);
+    expect(user.isPersisted()).toBe(true);
+    expect(await users().count()).toBe(1);
   });
 });

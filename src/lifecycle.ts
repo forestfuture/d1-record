@@ -9,7 +9,7 @@ import {
   type Condition,
 } from "./compiler.ts";
 import { translateConstraintError } from "./constraints.ts";
-import { CallbackAbort, RecordNotFound } from "./errors.ts";
+import { AbortAfterPersistence, CallbackAbort, RecordNotFound } from "./errors.ts";
 import { declared } from "./declarations.ts";
 import type { Callback, ModelBase, ModelClass } from "./model.ts";
 import { state } from "./record-state.ts";
@@ -149,9 +149,22 @@ export async function saveLifecycle(record: ModelBase): Promise<Outcome> {
     return { status: "aborted", reason: recordState.abortReason ?? "" };
   }
   await (isInsert ? insertRecord(record) : updateRecord(record));
-  await runCallbacks(record, isInsert ? "afterCreate" : "afterUpdate");
-  await runCallbacks(record, "afterSave");
+  await runAfterCallbacks(record, isInsert ? "afterCreate" : "afterUpdate");
+  await runAfterCallbacks(record, "afterSave");
   return { status: "saved" };
+}
+
+/**
+ * Runs after-write callbacks. The write already succeeded, so an `abort()` here can't refuse
+ * anything: it becomes `AbortAfterPersistence`. Any other error propagates unchanged.
+ */
+async function runAfterCallbacks(record: ModelBase, kind: string): Promise<void> {
+  try {
+    await runCallbacks(record, kind);
+  } catch (error) {
+    if (error instanceof CallbackAbort) throw new AbortAfterPersistence(kind, error);
+    throw error;
+  }
 }
 
 /** beforeSave, then beforeCreate or beforeUpdate; `false` if one aborted. */
