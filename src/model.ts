@@ -48,52 +48,52 @@ export class ModelBase {
     this: C,
     callback: Callback<InstanceType<C>>,
   ): void {
-    declare(this, "beforeValidation", callback);
+    declare(this, "beforeValidation", callback as Callback<ModelBase>);
   }
 
   /** Runs after the validators, whether or not they passed. May `throw abort(reason)`. */
   static afterValidation<C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>): void {
-    declare(this, "afterValidation", callback);
+    declare(this, "afterValidation", callback as Callback<ModelBase>);
   }
 
   /** Runs before every save (create or update), after validation. May `throw abort(reason)`. */
   static beforeSave<C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>): void {
-    declare(this, "beforeSave", callback);
+    declare(this, "beforeSave", callback as Callback<ModelBase>);
   }
 
   /** Runs before inserting a new record, after `beforeSave`. May `throw abort(reason)`. */
   static beforeCreate<C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>): void {
-    declare(this, "beforeCreate", callback);
+    declare(this, "beforeCreate", callback as Callback<ModelBase>);
   }
 
   /** Runs before updating a persisted record, after `beforeSave`. May `throw abort(reason)`. */
   static beforeUpdate<C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>): void {
-    declare(this, "beforeUpdate", callback);
+    declare(this, "beforeUpdate", callback as Callback<ModelBase>);
   }
 
   /** Runs after a new record was inserted, before `afterSave`. */
   static afterCreate<C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>): void {
-    declare(this, "afterCreate", callback);
+    declare(this, "afterCreate", callback as Callback<ModelBase>);
   }
 
   /** Runs after a persisted record was saved (even with nothing to write), before `afterSave`. */
   static afterUpdate<C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>): void {
-    declare(this, "afterUpdate", callback);
+    declare(this, "afterUpdate", callback as Callback<ModelBase>);
   }
 
   /** Runs after every successful save; the record is already persisted and clean. */
   static afterSave<C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>): void {
-    declare(this, "afterSave", callback);
+    declare(this, "afterSave", callback as Callback<ModelBase>);
   }
 
   /** Runs before deleting the row. May `throw abort(reason)` to refuse the destroy. */
   static beforeDestroy<C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>): void {
-    declare(this, "beforeDestroy", callback);
+    declare(this, "beforeDestroy", callback as Callback<ModelBase>);
   }
 
   /** Runs after the row was deleted; the record is already destroyed. */
   static afterDestroy<C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>): void {
-    declare(this, "afterDestroy", callback);
+    declare(this, "afterDestroy", callback as Callback<ModelBase>);
   }
 
   /** This record's values, lifecycle and Snapshot; only `RecordState` changes them. */

@@ -130,11 +130,8 @@ export class AbortAfterPersistence extends D1RecordError {
   readonly callback: string;
   readonly reason: string;
 
-  constructor(callback: string, abortion: CallbackAbort) {
-    super(
-      `abort() in ${callback}: the ${callback === "afterDestroy" ? "destroy" : "save"} has already succeeded`,
-      { cause: abortion },
-    );
+  constructor(callback: string, lifecycle: "save" | "destroy", abortion: CallbackAbort) {
+    super(`abort() in ${callback}: the ${lifecycle} has already succeeded`, { cause: abortion });
     this.callback = callback;
     this.reason = abortion.reason;
   }
