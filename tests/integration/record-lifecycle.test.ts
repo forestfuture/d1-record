@@ -256,4 +256,39 @@ describe("record lifecycle", () => {
     expect(user.isDestroyed()).toBe(true);
     expect(queries).toHaveLength(0);
   });
+
+  test("changing the primary key updates the row found by its stored key", async () => {
+    const users = connect(binding).model(User);
+    const user = await users.create({ email: "a@example.com" });
+    const oldId = user.id;
+
+    user.id = oldId + 100;
+    await user.save();
+
+    expect(await users.exists({ id: oldId })).toBe(false);
+    expect((await users.find(oldId + 100)).email).toBe("a@example.com");
+  });
+
+  test("saving a record whose row was deleted elsewhere still succeeds", async () => {
+    const user = await connect(binding).model(User).create({ email: "a@example.com" });
+    await binding.prepare("DELETE FROM users").run();
+
+    user.role = "admin";
+
+    expect(await user.save()).toBe(true);
+    expect(user.isChanged()).toBe(false);
+  });
+
+  test("saving a partial record writes only its changes and leaves unloaded columns alone", async () => {
+    const users = connect(binding).model(User);
+    const created = await users.create({ email: "a@example.com", role: "admin" });
+    const [partial] = await users.select("email").toArray();
+    if (!partial) throw new Error("expected a record");
+
+    partial.email = "b@example.com";
+    await partial.save();
+
+    const stored = await users.find(created.id);
+    expect([stored.email, stored.role]).toEqual(["b@example.com", "admin"]);
+  });
 });

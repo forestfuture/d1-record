@@ -109,4 +109,24 @@ describe("constraint errors", () => {
       CheckViolation,
     );
   });
+
+  test("constraint errors are translated on update too", async () => {
+    const product = await connect(binding).model(Product).create({ name: "Pen", priceCents: 100 });
+
+    product.priceCents = -5;
+    await expect(product.save()).rejects.toThrow(CheckViolation);
+    product.priceCents = null as never;
+    await expect(product.save()).rejects.toThrow(NotNullViolation);
+  });
+
+  test("destroying a row that others reference throws InvalidForeignKey and keeps the record", async () => {
+    const db = connect(binding);
+    const user = await db.model(User).find(1);
+    await db.model(Post).create({ userId: 1, title: "Hello" });
+
+    await expect(user.destroy()).rejects.toThrow(InvalidForeignKey);
+
+    expect(user.isDestroyed()).toBe(false);
+    expect(await db.model(User).exists({ id: 1 })).toBe(true);
+  });
 });

@@ -110,4 +110,21 @@ describe("timestamps", () => {
     expect(key.updatedAt).toEqual(past);
     expect(queries).toHaveLength(0);
   });
+
+  test("saving a partial record also moves updatedAt forward", async () => {
+    await connect(binding)
+      .model(ApiKey)
+      .create({ id: "k1", label: "deploy", createdAt: past, updatedAt: past });
+    const keys = connect(binding).model(ApiKey);
+    const [partial] = await keys.select("label").toArray();
+    if (!partial) throw new Error("expected a record");
+    const before = Date.now();
+
+    partial.label = "release";
+    await partial.save();
+
+    const stored = await keys.find("k1");
+    expect(stored.updatedAt?.getTime()).toBeGreaterThanOrEqual(before);
+    expect(stored.createdAt).toEqual(past);
+  });
 });
