@@ -12,6 +12,7 @@ import { declare, seal } from "./declarations.ts";
 import { RecordInvalid, RecordNotDestroyed, RecordNotSaved } from "./errors.ts";
 import { destroyLifecycle, reloadRecord, saveLifecycle, validateRecord } from "./lifecycle.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
+import type { AssociationDefinition, AssociationKeys } from "./associations.ts";
 import type { Scope } from "./relation.ts";
 import type { Validation, ValidationOptions } from "./validations.ts";
 
@@ -40,6 +41,39 @@ export class ModelBase {
   static attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map();
   /** This Model's scopes, from `static scopes = this.defineScopes({...})`. */
   static scopes: Readonly<Record<string, AnyScope>> = {};
+
+  /** This Model's associations, from `static associations = this.defineAssociations({...})`. */
+  static associations: Readonly<Record<string, AssociationDefinition>> = {};
+
+  /**
+   * Declares associations: `static associations = this.defineAssociations({ posts: this.hasMany(…) })`.
+   * A subclass's associations are added to its parent's (a same-named one replaces the parent's).
+   */
+  static defineAssociations<S extends Record<string, AssociationDefinition>>(
+    this: abstract new () => ModelBase,
+    associations: S,
+  ): S {
+    const inherited = (this as unknown as typeof ModelBase).associations;
+    return { ...inherited, ...associations };
+  }
+
+  // The target and keys are checked on first use, not typed: typing them makes Models that
+  // point at each other (User ↔ Post) circular for TypeScript. Accessor types come from `declare`.
+
+  /** This Model's records point at one `target` record through `foreignKey` (their own attribute). */
+  static belongsTo(target: () => unknown, options: AssociationKeys): AssociationDefinition {
+    return { kind: "belongsTo", target: target as () => ModelClass, ...options };
+  }
+
+  /** Many `target` records point at this Model's records through `foreignKey` (theirs). */
+  static hasMany(target: () => unknown, options: AssociationKeys): AssociationDefinition {
+    return { kind: "hasMany", target: target as () => ModelClass, ...options };
+  }
+
+  /** One `target` record points at this Model's records through `foreignKey` (its own). */
+  static hasOne(target: () => unknown, options: AssociationKeys): AssociationDefinition {
+    return { kind: "hasOne", target: target as () => ModelClass, ...options };
+  }
 
   /**
    * Declares scopes: `static scopes = this.defineScopes({ active: (q) => q.where(...) })`.
