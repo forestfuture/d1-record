@@ -52,6 +52,36 @@ export class ModelBase {
     declare(this, "afterValidation", callback);
   }
 
+  /** Runs before every save (create or update), after validation. May `throw abort(reason)`. */
+  static beforeSave<C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>): void {
+    declare(this, "beforeSave", callback);
+  }
+
+  /** Runs before inserting a new record, after `beforeSave`. May `throw abort(reason)`. */
+  static beforeCreate<C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>): void {
+    declare(this, "beforeCreate", callback);
+  }
+
+  /** Runs before updating a persisted record, after `beforeSave`. May `throw abort(reason)`. */
+  static beforeUpdate<C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>): void {
+    declare(this, "beforeUpdate", callback);
+  }
+
+  /** Runs after a new record was inserted, before `afterSave`. */
+  static afterCreate<C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>): void {
+    declare(this, "afterCreate", callback);
+  }
+
+  /** Runs after a persisted record was saved (even with nothing to write), before `afterSave`. */
+  static afterUpdate<C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>): void {
+    declare(this, "afterUpdate", callback);
+  }
+
+  /** Runs after every successful save; the record is already persisted and clean. */
+  static afterSave<C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>): void {
+    declare(this, "afterSave", callback);
+  }
+
   /** This record's values, lifecycle and Snapshot; only `RecordState` changes them. */
   readonly [state] = new RecordState(this.constructor as ModelClass);
 

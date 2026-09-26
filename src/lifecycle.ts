@@ -134,17 +134,32 @@ async function validation(record: ModelBase): Promise<Validity> {
 }
 
 /**
- * The save lifecycle: can this record be used → validation → the write (insert, or update of
- * the changed attributes, with timestamps) → commit the new state.
+ * The save lifecycle, in the contract's order:
+ * can this record be used → beforeValidation → validators → afterValidation
+ * → beforeSave → beforeCreate | beforeUpdate → write (skipped when clean) → commit state
+ * → afterCreate | afterUpdate → afterSave.
  */
 export async function saveLifecycle(record: ModelBase): Promise<Outcome> {
   const recordState = record[state];
   recordState.requireLive("be saved");
   const validity = await validation(record);
-  if (validity === "aborted") return { status: "aborted", reason: recordState.abortReason ?? "" };
   if (validity === "invalid") return { status: "invalid" };
-  await (recordState.isNew ? insertRecord(record) : updateRecord(record));
+  const isInsert = recordState.isNew;
+  if (validity === "aborted" || !(await beforeWrite(record, isInsert))) {
+    return { status: "aborted", reason: recordState.abortReason ?? "" };
+  }
+  await (isInsert ? insertRecord(record) : updateRecord(record));
+  await runCallbacks(record, isInsert ? "afterCreate" : "afterUpdate");
+  await runCallbacks(record, "afterSave");
   return { status: "saved" };
+}
+
+/** beforeSave, then beforeCreate or beforeUpdate; `false` if one aborted. */
+async function beforeWrite(record: ModelBase, isInsert: boolean): Promise<boolean> {
+  return (
+    (await runAbortableCallbacks(record, "beforeSave")) &&
+    (await runAbortableCallbacks(record, isInsert ? "beforeCreate" : "beforeUpdate"))
+  );
 }
 
 /** INSERT the assigned attributes (plus timestamps); `RETURNING *` loads what D1 stored. */
