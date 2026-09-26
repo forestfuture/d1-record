@@ -56,6 +56,27 @@ export function changesOf(record: ModelBase): Changes {
   return changes;
 }
 
+/** Whether the Model declares `name` as a datetime attribute, which turns its timestamp on. */
+function hasTimestamp(record: ModelBase, name: "createdAt" | "updatedAt"): boolean {
+  return modelOf(record).attributeDefinitions.get(name)?.type === "datetime";
+}
+
+/**
+ * Sets timestamps just before a write, unless they were assigned explicitly: on insert,
+ * `createdAt` and `updatedAt`; on update (only when something changed), `updatedAt`.
+ */
+function stampTimestamps(record: ModelBase, changed: readonly string[]): void {
+  const now = new Date();
+  const isInsert = record[state].lifecycle === "new";
+  const stamp = isInsert ? (["createdAt", "updatedAt"] as const) : (["updatedAt"] as const);
+  for (const name of stamp) {
+    if (hasTimestamp(record, name) && !changed.includes(name)) {
+      record[values][name] = now;
+      record[state].assigned.add(name);
+    }
+  }
+}
+
 function executorOf(record: ModelBase): Executor {
   const { executor } = record[state];
   if (executor === undefined) throw new Error("record has no Database");
@@ -65,6 +86,8 @@ function executorOf(record: ModelBase): Executor {
 /** Inserts a new record, or updates a persisted one's changed attributes. */
 export async function saveRecord(record: ModelBase): Promise<boolean> {
   const executor = executorOf(record);
+  const pending = changedNames(record);
+  if (record[state].lifecycle === "new" || pending.length > 0) stampTimestamps(record, pending);
   const changes = changesOf(record);
   if (record[state].lifecycle === "new") {
     const assignments = [...record[state].assigned].map((name): Assignment => [
