@@ -301,7 +301,7 @@ function rejectReservedAttributeNames(model: ModelClass): void {
   for (const name of model.attributeDefinitions.keys()) {
     if (name in ModelBase.prototype) {
       throw new InvalidModel(
-        `${model.name} declares an attribute "${name}", which is the name of a record method; ` +
+        `${model.name} declares an attribute "${name}", which is the name of a record method or property; ` +
           "rename the attribute and map it with { column }",
       );
     }

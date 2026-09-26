@@ -81,4 +81,18 @@ describe("model declaration", () => {
     expect(() => connect(binding).model(Keyless)).toThrow(/Keyless.*primaryKey "id"/);
     expect(() => connect(binding).model(WrongKey)).toThrow(InvalidModel);
   });
+
+  test("errors and abortReason are reserved: they're record properties", () => {
+    class WithErrors extends Model({ id: "integer", errors: "json" }) {
+      static tableName = "users";
+    }
+    class WithReason extends Model({ id: "integer", abortReason: "string" }) {
+      static tableName = "users";
+    }
+
+    expect(() => connect(binding).model(WithErrors)).toThrow(
+      /WithErrors.*"errors".*record method or property/,
+    );
+    expect(() => connect(binding).model(WithReason)).toThrow(InvalidModel);
+  });
 });
