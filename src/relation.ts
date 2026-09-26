@@ -170,7 +170,7 @@ export class Relation<M extends ModelBase> {
 
   /** A new, unsaved record of this Relation's Model. */
   build(attributes: Partial<AttributesOf<M>> = {}): M {
-    return buildRecord(this.#model, attributes);
+    return buildRecord(this.#model, attributes, this.#executor);
   }
 
   /** The record with this primary key, keeping this Relation's conditions. */
@@ -309,7 +309,7 @@ export class Relation<M extends ModelBase> {
         : query.select;
     const { sql, params } = compileSelect(query, compileColumns(this.#model, loaded));
     const rows = await this.#all({ sql, params });
-    return rows.map((row) => hydrate(this.#model, row));
+    return rows.map((row) => hydrate(this.#model, row, this.#executor));
   }
 
   #orderOrPrimaryKey(): readonly OrderTerm[] {

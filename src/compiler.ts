@@ -52,7 +52,7 @@ export class Negated {
 }
 
 /** Quotes a SQLite identifier; embedded double quotes are doubled. */
-function quoteIdentifier(name: string): string {
+export function quoteIdentifier(name: string): string {
   return `"${name.replaceAll('"', '""')}"`;
 }
 
@@ -101,6 +101,24 @@ function compileCondition(
     compileEquality(attributeOf(model, name), value, params),
   );
   return `(${parts.join(" AND ")})`;
+}
+
+/** `INSERT … RETURNING *` for the given attribute values, or `DEFAULT VALUES` for none. */
+export function compileInsert(
+  model: ModelClass<ModelBase>,
+  assignments: readonly (readonly [attribute: string, value: unknown])[],
+): CompiledQuery {
+  const table = quoteIdentifier(model.tableName);
+  if (assignments.length === 0) {
+    return { sql: `INSERT INTO ${table} DEFAULT VALUES RETURNING *`, params: [] };
+  }
+  const definitions = assignments.map(([name]) => attributeOf(model, name));
+  const columns = definitions.map(({ column }) => quoteIdentifier(column)).join(", ");
+  const placeholders = assignments.map(() => "?").join(", ");
+  return {
+    sql: `INSERT INTO ${table} (${columns}) VALUES (${placeholders}) RETURNING *`,
+    params: assignments.map(([, value], index) => writeValue(definitions[index]!.type, value)),
+  };
 }
 
 /** The quoted columns for `attributes`, or `*` for every column. */
