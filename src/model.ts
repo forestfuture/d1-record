@@ -141,12 +141,12 @@ export class ModelBase {
     return this[state].savedChanges();
   }
 
-  /** Inserts a new record or updates a persisted one; `false` only for validation or abort (#4). */
+  /** Inserts a new record or updates a persisted one; `false` if it's invalid or a callback aborted. */
   async save(): Promise<boolean> {
     return (await saveLifecycle(this)).status === "saved";
   }
 
-  /** Like `save()`, but throws instead of returning `false`; #4 adds `RecordInvalid`/`RecordNotSaved`. */
+  /** Like `save()`, but throws `RecordInvalid` or `RecordNotSaved` instead of returning `false`. */
   async saveOrThrow(): Promise<true> {
     const outcome = await saveLifecycle(this);
     if (outcome.status === "invalid") throw new RecordInvalid(this);
@@ -174,7 +174,7 @@ export class ModelBase {
 
   /**
    * Deletes the row and resolves to this record, now a read-only destroyed snapshot.
-   * A row that's already gone still counts. `false` is reserved for a callback abort (#4).
+   * A row that's already gone still counts. `false` means a `beforeDestroy` callback aborted.
    */
   async destroy(): Promise<this | false> {
     return (await destroyLifecycle(this)).status === "destroyed" ? this : false;

@@ -71,6 +71,9 @@ export type Outcome =
   | { status: "invalid" }
   | { status: "aborted"; reason: string };
 
+/** What a destroy lifecycle run ended with. */
+export type DestroyOutcome = { status: "destroyed" } | { status: "aborted"; reason: string };
+
 type Validity = "valid" | "invalid" | "aborted";
 
 /**
@@ -190,28 +193,26 @@ async function beforeWrite(record: ModelBase, isInsert: boolean): Promise<boolea
 }
 
 /** INSERT the assigned attributes (plus timestamps); `RETURNING *` loads what D1 stored. */
-async function insertRecord(record: ModelBase): Promise<true> {
+async function insertRecord(record: ModelBase): Promise<void> {
   const recordState = record[state];
   const own = recordState.insertAssignments();
   const stamps = timestampsFor(record, true, own);
   const [row] = await write(record, compileInsert(modelOf(record), [...own, ...stamps]));
   recordState.commitInsert(row);
-  return true;
 }
 
 /** UPDATE only the changed attributes (plus `updatedAt`); a clean record sends nothing. */
-async function updateRecord(record: ModelBase): Promise<true> {
+async function updateRecord(record: ModelBase): Promise<void> {
   const recordState = record[state];
   const own = recordState.updateAssignments();
   if (own.length === 0) {
     recordState.commitClean();
-    return true;
+    return;
   }
   const stamps = timestampsFor(record, false, own);
   const update = compileUpdate(modelOf(record), [...own, ...stamps], recordState.storedKey);
   await write(record, update);
   recordState.commitUpdate(stamps);
-  return true;
 }
 
 /**
@@ -219,9 +220,7 @@ async function updateRecord(record: ModelBase): Promise<true> {
  * (skipped for a never-saved record: there's no row, as in Rails) → mark destroyed
  * → afterDestroy.
  */
-export async function destroyLifecycle(
-  record: ModelBase,
-): Promise<{ status: "destroyed" } | { status: "aborted"; reason: string }> {
+export async function destroyLifecycle(record: ModelBase): Promise<DestroyOutcome> {
   const recordState = record[state];
   recordState.requireLive("be destroyed");
   recordState.abortReason = undefined;

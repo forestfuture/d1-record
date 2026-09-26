@@ -158,7 +158,7 @@ Default messages (Rails' English): `blank` "can't be blank", `tooShort` "is too 
 
 ## Callback lifecycle
 
-Declared in `static {}`: `this.beforeValidation(fn)`, `afterValidation`, `beforeSave`, `beforeCreate`, `beforeUpdate`, `afterCreate`, `afterUpdate`, `afterSave`, `beforeDestroy`, `afterDestroy`. Each takes a function that receives the record, typed as the Model's record, and may be async; callbacks of one kind run in declaration order. A subclass runs its parent's callbacks and validations plus its own, and declaring on it never changes the parent.
+Declared in `static {}`: `this.beforeValidation(fn)`, `afterValidation`, `beforeSave`, `beforeCreate`, `beforeUpdate`, `afterCreate`, `afterUpdate`, `afterSave`, `beforeDestroy`, `afterDestroy`. Each takes a function that receives the record, typed as the Model's record, and may be async; callbacks of one kind run in declaration order. A subclass runs its parent's callbacks and validations plus its own, and declaring on it never changes the parent. Declarations belong in the class's `static {}` block: once a Model has been used (`db.model(X)`), declaring on it throws `InvalidModel`, so request code can never add callbacks that leak into later requests.
 
 ```text
 beforeValidation → validators → afterValidation
