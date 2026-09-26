@@ -39,3 +39,13 @@ CREATE TABLE accounts (
   sha256_hash TEXT,
   person_identifier TEXT
 );
+
+-- A table with an app-generated text primary key and timestamps.
+CREATE TABLE api_keys (
+  id TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  scopes TEXT,
+  expires_at TEXT,
+  created_at TEXT,
+  updated_at TEXT
+);
