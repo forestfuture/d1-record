@@ -3,6 +3,7 @@ import {
   connect,
   Model,
   sql,
+  RecordDestroyed,
   RecordNotFound,
   UnknownAttribute,
   type QueryEvent,
@@ -188,5 +189,36 @@ describe("record lifecycle", () => {
     expect(built.changes()).toEqual({ email: [null, "a@example.com"], role: [null, "admin"] });
     expect(overridden.role).toBe("member");
     expect((await users.find(created.id)).role).toBe("admin");
+  });
+
+  test("destroy deletes the row; the record stays readable as a destroyed snapshot", async () => {
+    const users = connect(binding).model(User);
+    const user = await users.create({ email: "a@example.com" });
+
+    expect(await user.destroy()).toBe(user);
+
+    expect(user.isDestroyed()).toBe(true);
+    expect(user.isPersisted()).toBe(false);
+    expect(user.email).toBe("a@example.com");
+    expect(await users.exists({ id: user.id })).toBe(false);
+  });
+
+  test("destroyOrThrow resolves to the record, and a row that's already gone still counts", async () => {
+    const user = await connect(binding).model(User).create({ email: "a@example.com" });
+    await binding.prepare("DELETE FROM users").run();
+
+    expect(await user.destroyOrThrow()).toBe(user);
+    expect(user.isDestroyed()).toBe(true);
+  });
+
+  test("using a destroyed record as a live one throws RecordDestroyed", async () => {
+    const user = await connect(binding).model(User).create({ email: "a@example.com" });
+    await user.destroy();
+
+    await expect(user.save()).rejects.toThrow(RecordDestroyed);
+    await expect(user.saveOrThrow()).rejects.toThrow(RecordDestroyed);
+    await expect(user.update({ role: "admin" })).rejects.toThrow(RecordDestroyed);
+    await expect(user.destroy()).rejects.toThrow(RecordDestroyed);
+    await expect(user.reload()).rejects.toThrow(/User.*destroyed/);
   });
 });
