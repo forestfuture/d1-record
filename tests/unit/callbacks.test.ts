@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vite-plus/test";
-import { abort, CallbackAbort, connect, Model, RecordNotSaved } from "../../src/index.ts";
+import {
+  abort,
+  CallbackAbort,
+  connect,
+  InvalidModel,
+  Model,
+  RecordNotSaved,
+} from "../../src/index.ts";
 
 const log: string[] = [];
 
@@ -128,5 +135,17 @@ describe("callback inheritance", () => {
 
     expect(adminLog.at(-1)).toBe("admin afterValidation");
     expect(log).not.toContain("admin afterValidation");
+  });
+});
+
+describe("declaration timing", () => {
+  test("declaring on a Model after its first use throws, so requests can't add callbacks", () => {
+    class Note extends Model({ id: "integer", body: "string" }) {
+      static tableName = "notes";
+    }
+    connect({} as never).model(Note);
+
+    expect(() => Note.beforeSave(() => {})).toThrow(InvalidModel);
+    expect(() => Note.validates("body", { presence: true })).toThrow(/Note.*static \{\}/);
   });
 });

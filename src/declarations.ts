@@ -1,3 +1,4 @@
+import { InvalidModel } from "./errors.ts";
 import type { Callback, ModelBase } from "./model.ts";
 import type { Validation } from "./validations.ts";
 
@@ -9,6 +10,17 @@ import type { Validation } from "./validations.ts";
  * class is defined, and only read afterwards.
  */
 const registry = new WeakMap<object, Map<string, readonly unknown[]>>();
+
+/** Models that have been used; their declarations can no longer change. */
+const sealed = new WeakSet<object>();
+
+/**
+ * Called on a Model's first use. From then on, declaring on it throws: declarations belong in
+ * the class's `static {}` block, never in request code, where they'd leak into every request.
+ */
+export function seal(model: object): void {
+  sealed.add(model);
+}
 
 /** Callbacks that run before the D1 write, and may `throw abort(reason)` to refuse it. */
 export type BeforeCallbackKind =
@@ -51,6 +63,12 @@ export function declare<K extends keyof Declarations>(
   kind: K,
   entry: Declarations[K],
 ): void {
+  if (sealed.has(model)) {
+    const { name } = model as { name: string };
+    throw new InvalidModel(
+      `${name} has already been used; declare validations and callbacks in its static {} block`,
+    );
+  }
   const own = registry.get(model) ?? new Map<string, readonly unknown[]>();
   registry.set(model, own);
   own.set(kind, [...declared(model, kind), entry]);

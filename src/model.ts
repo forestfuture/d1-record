@@ -8,7 +8,7 @@ import {
   type AttributeSpecs,
 } from "./metadata.ts";
 import type { Errors } from "./errors-collection.ts";
-import { declare } from "./declarations.ts";
+import { declare, seal } from "./declarations.ts";
 import { RecordInvalid, RecordNotDestroyed, RecordNotSaved } from "./errors.ts";
 import { destroyLifecycle, reloadRecord, saveLifecycle, validateRecord } from "./lifecycle.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
@@ -278,6 +278,7 @@ export function verifyModel(model: ModelClass): void {
   requirePrimaryKeyAttribute(model);
   rejectReservedAttributeNames(model);
   rejectShadowingFields(model);
+  seal(model);
   verified.add(model);
 }
 
