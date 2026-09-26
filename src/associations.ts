@@ -1,6 +1,6 @@
 import { verifyModel, type ModelBase, type ModelClass, type ScopesOf } from "./model.ts";
 import { state } from "./record-state.ts";
-import { markUnsavedOwner, type Scoped } from "./relation.ts";
+import { markUnsavedOwner, withPreloaded, type Scoped } from "./relation.ts";
 import { relationFor } from "./scoped-relation.ts";
 
 /** One declared association: its kind, its target Model, and the keys that link them. */
@@ -41,16 +41,20 @@ export function prepareModel(model: ModelClass): void {
   for (const [name, definition] of Object.entries(model.associations)) {
     Object.defineProperty(model.prototype, name, {
       configurable: true,
-      value: accessorFor(definition),
+      value: accessorFor(name, definition),
     });
   }
   prepared.add(model);
 }
 
-function accessorFor(definition: AssociationDefinition): (this: ModelBase) => unknown {
+function accessorFor(
+  name: string,
+  definition: AssociationDefinition,
+): (this: ModelBase) => unknown {
   switch (definition.kind) {
     case "belongsTo":
       return async function belongsTo(this: ModelBase) {
+        if (this[state].hasPreloaded(name)) return this[state].preloaded(name);
         const target = targetOf(definition);
         const key = this[state].read(definition.foreignKey);
         if (key === null) return null;
@@ -59,6 +63,7 @@ function accessorFor(definition: AssociationDefinition): (this: ModelBase) => un
       };
     case "hasOne":
       return async function hasOne(this: ModelBase) {
+        if (this[state].hasPreloaded(name)) return this[state].preloaded(name);
         const key = ownerKey(this, definition);
         if (key === null) return null;
         const target = targetOf(definition);
@@ -71,6 +76,9 @@ function accessorFor(definition: AssociationDefinition): (this: ModelBase) => un
         const relation = relationFor(this[state].executor, target).where({
           [definition.foreignKey]: key,
         });
+        if (this[state].hasPreloaded(name)) {
+          return relation[withPreloaded](this[state].preloaded(name) as readonly ModelBase[]);
+        }
         // An unsaved owner has no records yet; building through it still gets the (null) key.
         return key === null ? relation[markUnsavedOwner](model(this).name) : relation;
       };

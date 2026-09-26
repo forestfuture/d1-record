@@ -19,6 +19,7 @@ export {
   RecordNotFound,
   RecordNotSaved,
   RecordNotUnique,
+  UnknownAssociation,
   UnknownAttribute,
 } from "./errors.ts";
 export type { QueryEvent, QueryListener } from "./executor.ts";

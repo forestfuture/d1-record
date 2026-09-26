@@ -15,6 +15,11 @@ export interface OrderTerm {
   direction: OrderDirection;
 }
 
+/** Association names to preload, each with the names to preload on its records in turn. */
+export interface IncludeTree {
+  readonly [association: string]: IncludeTree;
+}
+
 /** Everything a Relation knows about its query; Relations copy it, never mutate it. */
 export interface SelectQuery {
   model: ModelClass<ModelBase>;
@@ -29,6 +34,10 @@ export interface SelectQuery {
   none?: boolean;
   /** The Model name of an unsaved owner whose hasMany this is: `create` must refuse. */
   unsavedOwner?: string;
+  /** Associations to preload for every record loaded: `includes(...)`. */
+  includes?: IncludeTree;
+  /** Records already preloaded for this hasMany; `toArray()` answers from them. */
+  preloaded?: readonly ModelBase[];
 }
 
 export type Condition = Record<string, unknown> | SafeSql | Negated | Either;

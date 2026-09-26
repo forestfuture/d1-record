@@ -32,6 +32,7 @@ export class RecordState {
   #savedChanges: Changes = {};
   readonly #errors = new Errors();
   #abortReason: string | undefined;
+  readonly #preloaded = new Map<string, unknown>();
 
   constructor(model: ModelClass) {
     this.#model = model;
@@ -149,8 +150,22 @@ export class RecordState {
     this.assign(attributes);
   }
 
-  /** Loads a D1 row; the record becomes persisted and clean. Absent columns stay unloaded. */
+  /** Associations loaded by `includes`: a record, an array of records, or null. */
+  setPreloaded(name: string, value: unknown): void {
+    this.#preloaded.set(name, value);
+  }
+
+  hasPreloaded(name: string): boolean {
+    return this.#preloaded.has(name);
+  }
+
+  preloaded(name: string): unknown {
+    return this.#preloaded.get(name);
+  }
+
+  /** Loads a D1 row; the record becomes persisted and clean, and preloaded associations are dropped. */
   loadRow(row: Record<string, unknown>): void {
+    this.#preloaded.clear();
     for (const [name, { type, column }] of this.#model.attributeDefinitions) {
       if (column in row) this.#values[name] = readValue(type, row[column]);
     }

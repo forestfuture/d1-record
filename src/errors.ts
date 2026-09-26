@@ -141,3 +141,8 @@ export class AbortAfterPersistence extends D1RecordError {
 export class RecordNotDestroyed extends D1RecordError {
   override name = "RecordNotDestroyed";
 }
+
+/** A name passed to `includes()` or `loaded()` that isn't one of the Model's associations. */
+export class UnknownAssociation extends D1RecordError {
+  override name = "UnknownAssociation";
+}
