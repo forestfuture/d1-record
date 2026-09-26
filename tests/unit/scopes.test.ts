@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, test } from "vite-plus/test";
-import { connect, InvalidModel, Model } from "../../src/index.ts";
+import { connect, IncompatibleRelation, InvalidModel, Model } from "../../src/index.ts";
 
 class User extends Model({
   id: { type: "integer", null: false },
@@ -78,5 +78,27 @@ describe("scope rules", () => {
     const sloppy = db.model(Sloppy) as unknown as { forgetful: () => unknown };
     expect(() => sloppy.forgetful()).toThrow(TypeError);
     expect(() => sloppy.forgetful()).toThrow(/Sloppy.*"forgetful".*Relation/);
+  });
+});
+
+describe("relations stay on their Database", () => {
+  test("a scope that returns a Relation on another Database is rejected", () => {
+    // Typed loosely: a scope can't name its own class's scoped Relation type (Q6).
+    const otherDb = connect({} as never) as unknown as { model(model: unknown): never };
+    class Wanderer extends Model({ id: "integer" }) {
+      static tableName = "users";
+      static scopes = this.defineScopes({ elsewhere: () => otherDb.model(Wanderer) });
+    }
+
+    expect(() => db.model(Wanderer).elsewhere()).toThrow(TypeError);
+    expect(() => db.model(Wanderer).elsewhere()).toThrow(/same Database/);
+  });
+
+  test("or() and merge() reject a Relation from another Database", () => {
+    const here = db.model(User);
+    const there = connect({} as never).model(User);
+
+    expect(() => here.or(there)).toThrow(IncompatibleRelation);
+    expect(() => here.merge(there)).toThrow(/same Database/);
   });
 });
