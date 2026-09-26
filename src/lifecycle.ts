@@ -10,11 +10,16 @@ import {
 } from "./compiler.ts";
 import { translateConstraintError } from "./constraints.ts";
 import { AbortAfterPersistence, CallbackAbort, RecordNotFound } from "./errors.ts";
-import { declared } from "./declarations.ts";
-import type { Callback, ModelBase, ModelClass } from "./model.ts";
+import {
+  declared,
+  type AfterCallbackKind,
+  type BeforeCallbackKind,
+  type CallbackKind,
+} from "./declarations.ts";
+import type { ModelBase, ModelClass } from "./model.ts";
 import { state } from "./record-state.ts";
 import { column, sql } from "./sql.ts";
-import { runValidations, type UniquenessOptions, type Validation } from "./validations.ts";
+import { runValidations, type UniquenessOptions } from "./validations.ts";
 
 function modelOf(record: ModelBase): ModelClass {
   return record.constructor as ModelClass;
@@ -92,14 +97,17 @@ async function isTaken(
 }
 
 /** Runs the Model's callbacks of `kind` in declaration order, awaiting each. */
-async function runCallbacks(record: ModelBase, kind: string): Promise<void> {
-  for (const callback of declared<Callback<ModelBase>>(modelOf(record), kind)) {
+async function runCallbacks(record: ModelBase, kind: CallbackKind): Promise<void> {
+  for (const callback of declared(modelOf(record), kind)) {
     await callback(record);
   }
 }
 
 /** Runs callbacks of `kind`; an `abort()` from one sets `abortReason` and returns `false`. */
-async function runAbortableCallbacks(record: ModelBase, kind: string): Promise<boolean> {
+async function runAbortableCallbacks(
+  record: ModelBase,
+  kind: BeforeCallbackKind,
+): Promise<boolean> {
   try {
     await runCallbacks(record, kind);
     return true;
@@ -124,7 +132,7 @@ async function validation(record: ModelBase): Promise<Validity> {
   recordState.errors.clear();
   recordState.abortReason = undefined;
   if (!(await runAbortableCallbacks(record, "beforeValidation"))) return "aborted";
-  await runValidations(declared<Validation>(modelOf(record), "validations"), {
+  await runValidations(declared(modelOf(record), "validations"), {
     record,
     read: (attribute) => recordState.read(attribute),
     errors: recordState.errors,
@@ -150,8 +158,8 @@ export async function saveLifecycle(record: ModelBase): Promise<Outcome> {
     return { status: "aborted", reason: recordState.abortReason ?? "" };
   }
   await (isInsert ? insertRecord(record) : updateRecord(record));
-  await runAfterCallbacks(record, isInsert ? "afterCreate" : "afterUpdate");
-  await runAfterCallbacks(record, "afterSave");
+  await runAfterCallbacks(record, isInsert ? "afterCreate" : "afterUpdate", "save");
+  await runAfterCallbacks(record, "afterSave", "save");
   return { status: "saved" };
 }
 
@@ -159,11 +167,15 @@ export async function saveLifecycle(record: ModelBase): Promise<Outcome> {
  * Runs after-write callbacks. The write already succeeded, so an `abort()` here can't refuse
  * anything: it becomes `AbortAfterPersistence`. Any other error propagates unchanged.
  */
-async function runAfterCallbacks(record: ModelBase, kind: string): Promise<void> {
+async function runAfterCallbacks(
+  record: ModelBase,
+  kind: AfterCallbackKind,
+  lifecycle: "save" | "destroy",
+): Promise<void> {
   try {
     await runCallbacks(record, kind);
   } catch (error) {
-    if (error instanceof CallbackAbort) throw new AbortAfterPersistence(kind, error);
+    if (error instanceof CallbackAbort) throw new AbortAfterPersistence(kind, lifecycle, error);
     throw error;
   }
 }
@@ -219,7 +231,7 @@ export async function destroyLifecycle(
     await write(record, compileDelete(modelOf(record), recordState.storedKey));
   }
   recordState.markDestroyed();
-  await runAfterCallbacks(record, "afterDestroy");
+  await runAfterCallbacks(record, "afterDestroy", "destroy");
   return { status: "destroyed" };
 }
 
