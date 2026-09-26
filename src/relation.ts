@@ -10,7 +10,7 @@ import {
   type OrderTerm,
   type SelectQuery,
 } from "./compiler.ts";
-import { IncompatibleRelation, RecordNotFound } from "./errors.ts";
+import { IncompatibleRelation, InvalidModel, RecordNotFound } from "./errors.ts";
 import type { Executor } from "./executor.ts";
 import { attributeOf } from "./metadata.ts";
 import {
@@ -111,6 +111,9 @@ function atMostOne(limit: number | undefined): number {
 }
 
 declare const scopeTypes: unique symbol;
+
+/** The library's key for running a scope on a Relation; not exported from the package. */
+const applyScope = Symbol("applyScope");
 
 /** A scope: receives the current Relation and its arguments, and returns a changed Relation. */
 // oxlint-disable-next-line typescript/no-explicit-any -- scope arguments are the scope's own business
@@ -371,6 +374,18 @@ export class Relation<M extends ModelBase, S = {}> {
     return this.#query.none ? [] : this.#executor.all(sql, params);
   }
 
+  /** Runs a scope on this Relation, checking that it returned a Relation of the same Model. */
+  [applyScope](name: string, scope: Scope<M>, args: unknown[]): Relation<M> {
+    const result: unknown = scope(this as Relation<M>, ...args);
+    if (!(result instanceof Relation) || result.#model !== this.#model) {
+      const model = this.#model.name;
+      throw new TypeError(
+        `${model} scope "${name}" must return a Relation of ${model}, e.g. (q) => q.where(...)`,
+      );
+    }
+    return result as Relation<M>;
+  }
+
   /** A copy with `changes`, of this same class, so a Model's scope methods survive chaining. */
   #with(changes: Partial<SelectQuery>): Scoped<M, S> {
     const Class = this.constructor as new (...args: RelationArgs<M>) => Scoped<M, S>;
@@ -429,9 +444,15 @@ function relationClassFor(model: ModelClass): RelationClass {
   if (cached !== undefined) return cached;
   const ScopedRelation = class extends Relation<ModelBase> {};
   for (const [name, scope] of Object.entries(model.scopes)) {
+    // A scope must not hide a Relation method, and "then" would make Relations awaitable.
+    if (name === "then" || name in Relation.prototype) {
+      throw new InvalidModel(
+        `${model.name} declares a scope "${name}", which is the name of a Relation method; rename the scope`,
+      );
+    }
     Object.defineProperty(ScopedRelation.prototype, name, {
       value(this: Relation<ModelBase>, ...args: unknown[]) {
-        return (scope as Scope<ModelBase>)(this, ...args);
+        return this[applyScope](name, scope as Scope<ModelBase>, args);
       },
     });
   }
