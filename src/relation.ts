@@ -12,8 +12,8 @@ import {
 } from "./compiler.ts";
 import { IncompatibleRelation, RecordNotFound } from "./errors.ts";
 import type { Executor } from "./executor.ts";
+import { attributeOf } from "./metadata.ts";
 import {
-  attributeOf,
   buildRecord,
   hydrate,
   type AttributesOf,

@@ -1,4 +1,5 @@
-import { attributeOf, type AttributeDefinition, type ModelBase, type ModelClass } from "./model.ts";
+import { attributeOf, type AttributeDefinition } from "./metadata.ts";
+import type { ModelBase, ModelClass } from "./model.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
 import { writeUntypedValue, writeValue } from "./conversion.ts";
 

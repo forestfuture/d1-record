@@ -1,60 +1,13 @@
-import { InvalidModel, MissingAttribute, UnknownAttribute } from "./errors.ts";
-import { underscore } from "./naming.ts";
+import { InvalidModel, MissingAttribute } from "./errors.ts";
 import { readValue } from "./conversion.ts";
-
-export type AttributeType = "string" | "integer" | "real" | "boolean" | "datetime" | "json";
-
-export type AttributeSpec =
-  | AttributeType
-  | {
-      type: AttributeType;
-      null?: boolean;
-      column?: string;
-      /** Evaluated at `build()`, e.g. `() => crypto.randomUUID()` for app-generated keys. */
-      default?: () => unknown;
-    };
-
-export type AttributeSpecs = Record<string, AttributeSpec>;
-
-/** An attribute's resolved metadata. */
-export interface AttributeDefinition {
-  type: AttributeType;
-  column: string;
-  default?: () => unknown;
-}
-
-type JsType<T extends AttributeType> = T extends "string"
-  ? string
-  : T extends "integer" | "real"
-    ? number
-    : T extends "boolean"
-      ? boolean
-      : T extends "datetime"
-        ? Date
-        : unknown;
-
-type AttributeValue<S> = S extends AttributeType
-  ? JsType<S> | null
-  : S extends { type: infer T extends AttributeType; null: false }
-    ? JsType<T>
-    : S extends { type: infer T extends AttributeType }
-      ? JsType<T> | null
-      : never;
-
-export type AttributeProperties<A extends AttributeSpecs> = {
-  -readonly [K in keyof A]: AttributeValue<A[K]>;
-};
-
-const values = Symbol("values");
-const state = Symbol("state");
-
-type Lifecycle = "new" | "persisted" | "destroyed";
-
-interface RecordState {
-  lifecycle: Lifecycle;
-  /** Attributes assigned on a new record; only these are written on insert. */
-  assigned: Set<string>;
-}
+import {
+  attributeOf,
+  define,
+  type AttributeProperties,
+  type AttributeDefinition,
+  type AttributeSpecs,
+} from "./metadata.ts";
+import { state, values, type RecordState } from "./record-state.ts";
 
 /** Type-only key carrying a record's declared attribute types; never set at runtime. */
 declare const attributeTypes: unique symbol;
@@ -104,12 +57,6 @@ export class ModelBase {
 /** Constructor type for any Model class, used wherever the library accepts one. */
 export type ModelClass<M extends ModelBase = ModelBase> = (new () => M) &
   Omit<typeof ModelBase, "prototype">;
-
-function define(name: string, spec: AttributeSpec): AttributeDefinition {
-  return typeof spec === "string"
-    ? { type: spec, column: underscore(name) }
-    : { type: spec.type, column: spec.column ?? underscore(name), default: spec.default };
-}
 
 /**
  * Creates a Model base class whose records have the given attributes.
@@ -208,15 +155,6 @@ function rejectShadowingFields(model: ModelClass): void {
       );
     }
   }
-}
-
-/** Looks up a declared attribute; throws `UnknownAttribute` for any other name. */
-export function attributeOf(model: ModelClass, name: string): AttributeDefinition {
-  const attribute = model.attributeDefinitions.get(name);
-  if (attribute === undefined) {
-    throw new UnknownAttribute(`${model.name} has no attribute "${name}"`);
-  }
-  return attribute;
 }
 
 /**
