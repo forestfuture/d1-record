@@ -102,4 +102,20 @@ describe("validators", () => {
     ]);
     expect(await errorsFor({ age: null })).toEqual(["age notANumber: is not a number"]);
   });
+
+  test("format gives the same answer every time, even with a /g or /y pattern", async () => {
+    class Tag extends Model({ id: "integer", name: "string" }) {
+      static tableName = "tags";
+      static {
+        this.validates("name", { format: /^[a-z]+$/g });
+      }
+    }
+    const tag = connect({} as never)
+      .model(Tag)
+      .build({ name: "news" });
+
+    const results = [await tag.isValid(), await tag.isValid(), await tag.isValid()];
+
+    expect(results).toEqual([true, true, true]);
+  });
 });

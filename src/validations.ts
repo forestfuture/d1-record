@@ -89,7 +89,8 @@ const length: Check = (value, { length: rule }) => {
 const format: Check = (value, { format: rule }) => {
   if (rule === undefined) return [];
   const pattern = rule instanceof RegExp ? rule : rule.with;
-  const matches = typeof value === "string" && pattern.test(value);
+  // search() always starts at 0 and ignores the pattern's lastIndex, unlike test() with /g or /y.
+  const matches = typeof value === "string" && value.search(pattern) !== -1;
   return matches ? [] : [{ type: "invalid", message: "is invalid" }];
 };
 
