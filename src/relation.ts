@@ -7,10 +7,17 @@ import {
   type Condition,
   type OrderDirection,
   type CompiledQuery,
+  type IncludeTree,
   type OrderTerm,
   type SelectQuery,
 } from "./compiler.ts";
-import { IncompatibleRelation, RecordNotFound, RecordNotSaved } from "./errors.ts";
+import {
+  IncompatibleRelation,
+  RecordNotFound,
+  RecordNotSaved,
+  UnknownAssociation,
+} from "./errors.ts";
+import { preload } from "./preload.ts";
 import type { Executor } from "./executor.ts";
 import { attributeOf } from "./metadata.ts";
 import {
@@ -119,6 +126,14 @@ function atMostOne(limit: number | undefined): number {
 }
 
 declare const scopeTypes: unique symbol;
+
+/** The library's key for a hasMany Relation answered from preloaded records; not exported. */
+export const withPreloaded = Symbol("withPreloaded");
+
+/** What `includes()` accepts: association names, or `{ name: nested }` for nested ones. */
+export type IncludeSpec =
+  | string
+  | { readonly [association: string]: IncludeSpec | readonly IncludeSpec[] };
 
 /** The library's key for marking an association Relation of an unsaved owner; not exported. */
 export const markUnsavedOwner = Symbol("markUnsavedOwner");
@@ -241,6 +256,20 @@ export class Relation<M extends ModelBase, S = {}> {
   /** Removes duplicate rows (of the selected attributes). */
   distinct(): Scoped<M, S> {
     return this.#with({ distinct: true });
+  }
+
+  /**
+   * Preloads associations for every record this Relation loads, so reading them afterwards
+   * sends no query: `includes("posts", "profile")`, nested `includes({ posts: "comments" })`.
+   */
+  includes(...specs: IncludeSpec[]): Scoped<M, S> {
+    const added = includeTree(this.#model, specs);
+    return this.#with({ includes: mergeTrees(this.#query.includes ?? {}, added) });
+  }
+
+  /** A hasMany Relation whose `toArray()` answers from records already preloaded. */
+  [withPreloaded](records: readonly ModelBase[]): Scoped<M, S> {
+    return this.#with({ preloaded: records });
   }
 
   /** A new, unsaved record of this Relation's Model. */
@@ -368,6 +397,8 @@ export class Relation<M extends ModelBase, S = {}> {
   }
 
   async toArray(): Promise<M[]> {
+    const { preloaded } = this.#query;
+    if (preloaded !== undefined) return [...preloaded] as M[];
     return this.#load(this.#query);
   }
 
@@ -436,7 +467,9 @@ export class Relation<M extends ModelBase, S = {}> {
   /** A copy with `changes`, of this same class, so a Model's scope methods survive chaining. */
   #with(changes: Partial<SelectQuery>): Scoped<M, S> {
     const Class = this.constructor as new (...args: RelationArgs<M>) => Scoped<M, S>;
-    return new Class(this.#executor, this.#model, { ...this.#query, ...changes });
+    // Any change means the preloaded records no longer answer the query.
+    const query = { ...this.#query, preloaded: undefined, ...changes };
+    return new Class(this.#executor, this.#model, query);
   }
 
   async #load(query: SelectQuery): Promise<M[]> {
@@ -449,7 +482,9 @@ export class Relation<M extends ModelBase, S = {}> {
         : query.select;
     const { sql, params } = compileSelect(query, compileColumns(this.#model, loaded));
     const rows = await this.#all({ sql, params });
-    return rows.map((row) => hydrate(this.#model, row, this.#executor));
+    const records = rows.map((row) => hydrate(this.#model, row, this.#executor));
+    if (query.includes !== undefined) await preload(records, query.includes, this.#executor);
+    return records;
   }
 
   #orderOrPrimaryKey(): readonly OrderTerm[] {
@@ -483,3 +518,34 @@ export type RelationArgs<M extends ModelBase> = [
 ];
 
 /** One Relation class per Model, holding its scopes as methods; made on first use and cached. */
+
+/** Normalizes `includes()` arguments into a tree, checking every name against its Model. */
+function includeTree(model: ModelClass, specs: readonly IncludeSpec[]): IncludeTree {
+  let tree: IncludeTree = {};
+  for (const spec of specs) {
+    const entries: [string, readonly IncludeSpec[]][] =
+      typeof spec === "string"
+        ? [[spec, []]]
+        : Object.entries(spec).map(([name, nested]) => [
+            name,
+            Array.isArray(nested) ? nested : [nested],
+          ]);
+    for (const [name, nested] of entries) {
+      const definition = model.associations[name];
+      if (definition === undefined) {
+        throw new UnknownAssociation(`${model.name} has no association "${name}"`);
+      }
+      tree = mergeTrees(tree, { [name]: includeTree(definition.target(), nested) });
+    }
+  }
+  return tree;
+}
+
+/** The union of two include trees. */
+function mergeTrees(a: IncludeTree, b: IncludeTree): IncludeTree {
+  const merged: Record<string, IncludeTree> = { ...a };
+  for (const [name, nested] of Object.entries(b)) {
+    merged[name] = mergeTrees(merged[name] ?? {}, nested);
+  }
+  return merged;
+}
