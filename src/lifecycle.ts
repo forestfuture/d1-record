@@ -84,6 +84,7 @@ async function isTaken(
     ...scope.map((name) => ({ [name]: recordState.read(name) })),
   ];
   if (!recordState.isNew) {
+    recordState.requireKey("be checked for uniqueness");
     conditions.push(new Negated({ [model.primaryKey]: recordState.storedKeyValue }));
   }
   const { sql: text, params } = compileSelect({ model, conditions, order: [], limit: 1 }, "1");

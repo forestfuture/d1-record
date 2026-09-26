@@ -90,8 +90,13 @@ export class RecordState {
    * has no identity to write by.
    */
   requireLive(action: string): void {
-    const { name, primaryKey } = this.#model;
     this.#requireNotDestroyed(action);
+    this.requireKey(action);
+  }
+
+  /** A persisted record needs its primary key to be found by; one from `distinct()` has none. */
+  requireKey(action: string): void {
+    const { name, primaryKey } = this.#model;
     if (this.#lifecycle === "persisted" && !this.#snapshot.has(primaryKey)) {
       throw new MissingAttribute(
         `${name} record has no primary key loaded (it came from select(...).distinct()); ` +

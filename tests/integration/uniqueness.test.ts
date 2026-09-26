@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model, type QueryEvent } from "../../src/index.ts";
+import { connect, MissingAttribute, Model, type QueryEvent } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 // The accounts table has no UNIQUE constraints, so only the validation can reject duplicates.
@@ -79,5 +79,19 @@ describe("uniqueness validation", () => {
     expect(queries.map((query) => query.sql)).toEqual([
       expect.stringMatching(/^SELECT 1 FROM "accounts"/),
     ]);
+  });
+
+  test("a keyless record can't be checked for uniqueness: it can't leave itself out", async () => {
+    const accounts = connect(binding).model(Account);
+    await accounts.create({ externalAccountId: "e1", userID: 1 });
+    // Every validated attribute is loaded, so only the uniqueness check can fail.
+    const [keyless] = await accounts
+      .select("externalAccountId", "userID", "htmlURL")
+      .distinct()
+      .toArray();
+    if (!keyless) throw new Error("expected a record");
+
+    await expect(keyless.isValid()).rejects.toThrow(MissingAttribute);
+    await expect(keyless.isValid()).rejects.toThrow(/primary key/);
   });
 });
