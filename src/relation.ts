@@ -38,6 +38,24 @@ export type OrderSpec<M> = { [K in keyof AttributesOf<M>]?: OrderDirection };
 /** Everything but the conditions: what `or` requires to match and `merge` may replace. */
 const SHAPE_CLAUSES = ["select", "order", "limit", "offset", "distinct"] as const;
 
+/**
+ * Whether two values of one shape clause are equal: primitives by identity, lists (select
+ * attributes, order terms) item by item. Explicit, so a new clause is compared on purpose.
+ */
+function sameClause(a: unknown, b: unknown): boolean {
+  if (!Array.isArray(a) || !Array.isArray(b)) return Object.is(a, b);
+  return a.length === b.length && a.every((item, index) => sameItem(item, b[index]));
+}
+
+function sameItem(a: unknown, b: unknown): boolean {
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) {
+    return Object.is(a, b);
+  }
+  const { attribute, direction } = a as OrderTerm;
+  const other = b as OrderTerm;
+  return attribute === other.attribute && direction === other.direction;
+}
+
 /** Whether a clause was set explicitly; an empty order or an unset flag counts as not set. */
 function isSet(query: SelectQuery, clause: (typeof SHAPE_CLAUSES)[number]): boolean {
   const value = query[clause];
@@ -152,7 +170,7 @@ export class Relation<M extends ModelBase, S = {}> {
     if (this.#query.none) return other as unknown as Scoped<M, S>;
     if (other.#query.none) return this as unknown as Scoped<M, S>;
     for (const clause of SHAPE_CLAUSES) {
-      if (JSON.stringify(this.#query[clause]) !== JSON.stringify(other.#query[clause])) {
+      if (!sameClause(this.#query[clause], other.#query[clause])) {
         throw new IncompatibleRelation(
           `or() needs relations that differ only in their conditions, but their ${clause} differs`,
         );
