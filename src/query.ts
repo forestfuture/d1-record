@@ -94,16 +94,20 @@ function sameOrderTerm(x: OrderTerm, y: OrderTerm): boolean {
   return x.attribute === y.attribute && x.direction === y.direction && x.nulls === y.nulls;
 }
 
-/** Fragments with the same text and the same values (columns by attribute). */
+/** Fragments with the same text and the same values. */
 function sameFragment(x: SafeSql, y: SafeSql): boolean {
   return (
-    sameList(x.strings, y.strings, (a, b) => a === b) &&
-    sameList(x.values, y.values, (a, b) =>
-      a instanceof ColumnReference && b instanceof ColumnReference
-        ? a.attribute === b.attribute
-        : Object.is(a, b),
-    )
+    sameList(x.strings, y.strings, (a, b) => a === b) && sameList(x.values, y.values, sameValue)
   );
+}
+
+/** Columns by attribute, dates by time, anything else by identity. */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a instanceof ColumnReference && b instanceof ColumnReference) {
+    return a.attribute === b.attribute;
+  }
+  if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
+  return Object.is(a, b);
 }
 
 function sameList<T>(

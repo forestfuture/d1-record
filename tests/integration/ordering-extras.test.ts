@@ -119,6 +119,13 @@ describe("ordering extras", () => {
       .or(users.where({ id: 3 }).order(byLower()));
 
     expect(await same.pluck("id")).toEqual([3, 1]);
+    const byCutoff = () => sql`${column("id")} > ${new Date(Date.UTC(2026, 0, 1))}`;
+    expect(() =>
+      users
+        .where({ id: 1 })
+        .order(byCutoff())
+        .or(users.where({ id: 3 }).order(byCutoff())),
+    ).not.toThrow();
     expect(() =>
       users.order(sql`lower(${column("email")})`).or(users.order(sql`upper(${column("email")})`)),
     ).toThrow(IncompatibleRelation);
