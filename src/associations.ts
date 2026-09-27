@@ -1,7 +1,7 @@
 import { InvalidModel } from "./errors.ts";
 import { ModelBase, verifyModel, type ModelClass, type ScopesOf } from "./model.ts";
 import { state } from "./record-state.ts";
-import { markUnsavedOwner, withPreloaded, type Scoped } from "./relation.ts";
+import { ofOwner, type Scoped } from "./relation.ts";
 import { relationFor } from "./scoped-relation.ts";
 
 /** One declared association: its kind, its target Model, and the keys that link them. */
@@ -144,11 +144,11 @@ function accessorFor(
           [definition.foreignKey]: key,
         });
         if (this[state].hasPreloaded(name)) {
-          return relation[withPreloaded](this[state].preloaded(name) as readonly ModelBase[]);
+          return relation[ofOwner]({ preloaded: this[state].preloaded(name) as ModelBase[] });
         }
         // An owner without a key has no records yet; building through it still gets the (null) key.
         return key === null
-          ? relation[markUnsavedOwner](missingKeyReason(this, definition))
+          ? relation[ofOwner]({ unsavedOwner: missingKeyReason(this, definition) })
           : relation;
       };
   }
