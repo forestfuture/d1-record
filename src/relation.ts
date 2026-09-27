@@ -7,18 +7,11 @@ import {
   type Condition,
   type OrderDirection,
   type CompiledQuery,
-  type IncludeTree,
   type OrderTerm,
   type SelectQuery,
 } from "./compiler.ts";
-import {
-  IncompatibleRelation,
-  RecordNotFound,
-  RecordNotSaved,
-  UnknownAssociation,
-} from "./errors.ts";
-import { prepareModel } from "./associations.ts";
-import { preload } from "./preload.ts";
+import { IncompatibleRelation, RecordNotFound, RecordNotSaved } from "./errors.ts";
+import { includeTree, keysForIncludes, mergeTrees, preload, sameTree } from "./preload.ts";
 import type { Executor } from "./executor.ts";
 import { attributeOf } from "./metadata.ts";
 import {
@@ -550,56 +543,3 @@ export type RelationArgs<M extends ModelBase> = [
   model: ModelClass<M>,
   query?: SelectQuery,
 ];
-
-/** One Relation class per Model, holding its scopes as methods; made on first use and cached. */
-
-/** Normalizes `includes()` arguments into a tree, checking every name against its Model. */
-function includeTree(model: ModelClass, specs: readonly unknown[]): IncludeTree {
-  let tree: IncludeTree = {};
-  for (const spec of specs) {
-    const entries: [string, readonly unknown[]][] =
-      typeof spec === "string"
-        ? [[spec, []]]
-        : Object.entries(spec as Record<string, unknown>).map(([name, nested]) => [
-            name,
-            Array.isArray(nested) ? nested : [nested],
-          ]);
-    for (const [name, nested] of entries) {
-      const definition = model.associations[name];
-      if (definition === undefined) {
-        throw new UnknownAssociation(`${model.name} has no association "${name}"`);
-      }
-      const target = definition.target();
-      // A Model reached only through includes is still verified and gets its accessors.
-      prepareModel(target);
-      tree = mergeTrees(tree, { [name]: includeTree(target, nested) });
-    }
-  }
-  return tree;
-}
-
-/** The union of two include trees. */
-function mergeTrees(a: IncludeTree, b: IncludeTree): IncludeTree {
-  const merged: Record<string, IncludeTree> = { ...a };
-  for (const [name, nested] of Object.entries(b)) {
-    merged[name] = mergeTrees(merged[name] ?? {}, nested);
-  }
-  return merged;
-}
-
-/** Whether two include trees name the same associations at every level. */
-function sameTree(a: IncludeTree, b: IncludeTree): boolean {
-  const names = Object.keys(a);
-  if (names.length !== Object.keys(b).length) return false;
-  return names.every((name) => b[name] !== undefined && sameTree(a[name]!, b[name]!));
-}
-
-/** The attributes a record must have loaded for its includes to be preloaded. */
-function keysForIncludes(model: ModelClass, includes: IncludeTree | undefined): string[] {
-  return Object.keys(includes ?? {}).map((name) => {
-    const definition = model.associations[name]!;
-    return definition.kind === "belongsTo"
-      ? definition.foreignKey
-      : (definition.primaryKey ?? model.primaryKey);
-  });
-}

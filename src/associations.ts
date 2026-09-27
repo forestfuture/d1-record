@@ -15,6 +15,27 @@ export interface AssociationDefinition {
   primaryKey?: string;
 }
 
+/**
+ * How an association links records: the owner's `ownerAttribute` equals the target's
+ * `targetAttribute`. For belongsTo that's owner.foreignKey = target.primaryKey; for
+ * hasMany/hasOne it's owner.primaryKey = target.foreignKey. The one place this is decided.
+ */
+export function linkOf(
+  definition: AssociationDefinition,
+  owner: ModelClass,
+  target: ModelClass,
+): { ownerAttribute: string; targetAttribute: string } {
+  return definition.kind === "belongsTo"
+    ? {
+        ownerAttribute: definition.foreignKey,
+        targetAttribute: definition.primaryKey ?? target.primaryKey,
+      }
+    : {
+        ownerAttribute: definition.primaryKey ?? owner.primaryKey,
+        targetAttribute: definition.foreignKey,
+      };
+}
+
 /** The keys linking two Models. */
 export interface AssociationKeys {
   foreignKey: string;
@@ -76,17 +97,16 @@ function checkAssociation(
   if (typeof target !== "function" || !(target.prototype instanceof ModelBase)) {
     throw new InvalidModel(`${label} must point at a Model: this.hasMany(() => Post, …)`);
   }
-  const [keyOwner, pointedAt] =
-    definition.kind === "belongsTo" ? [model, target as ModelClass] : [target as ModelClass, model];
-  requireAttribute(label, keyOwner, definition.foreignKey, "foreignKey");
-  if (definition.primaryKey !== undefined) {
-    requireAttribute(label, pointedAt, definition.primaryKey, "primaryKey");
-  }
+  const { ownerAttribute, targetAttribute } = linkOf(definition, model, target as ModelClass);
+  requireAttribute(label, model, ownerAttribute);
+  requireAttribute(label, target as ModelClass, targetAttribute);
 }
 
-function requireAttribute(label: string, model: ModelClass, name: string, option: string): void {
+function requireAttribute(label: string, model: ModelClass, name: string): void {
   if (!model.attributeDefinitions.has(name)) {
-    throw new InvalidModel(`${label}: ${model.name} has no attribute "${name}" (its ${option})`);
+    throw new InvalidModel(
+      `${label}: ${model.name} has no attribute "${name}" (check foreignKey/primaryKey)`,
+    );
   }
 }
 
@@ -99,10 +119,10 @@ function accessorFor(
       return async function belongsTo(this: ModelBase) {
         if (this[state].hasPreloaded(name)) return this[state].preloaded(name);
         const target = targetOf(definition);
-        const key = this[state].read(definition.foreignKey);
+        const { ownerAttribute, targetAttribute } = linkOf(definition, model(this), target);
+        const key = this[state].read(ownerAttribute);
         if (key === null) return null;
-        const primaryKey = definition.primaryKey ?? target.primaryKey;
-        return relationFor(this[state].executor, target).findBy({ [primaryKey]: key });
+        return relationFor(this[state].executor, target).findBy({ [targetAttribute]: key });
       };
     case "hasOne":
       return async function hasOne(this: ModelBase) {
@@ -147,14 +167,16 @@ function model(record: ModelBase): ModelClass {
 
 /** Why an owner has no key for its targets to point at. */
 function missingKeyReason(owner: ModelBase, definition: AssociationDefinition): string {
-  const { name, primaryKey } = model(owner);
+  const { name } = model(owner);
+  const { ownerAttribute } = linkOf(definition, model(owner), definition.target());
   return owner[state].isNew
     ? `the ${name} hasn't been saved; save the ${name} first`
-    : `the ${name} has no ${definition.primaryKey ?? primaryKey}`;
+    : `the ${name} has no ${ownerAttribute}`;
 }
 
 /** The owner's value that targets point at (its primary key, by default); null if unsaved. */
 function ownerKey(owner: ModelBase, definition: AssociationDefinition): unknown {
   if (owner[state].isNew) return null;
-  return owner[state].read(definition.primaryKey ?? model(owner).primaryKey);
+  const { ownerAttribute } = linkOf(definition, model(owner), definition.target());
+  return owner[state].read(ownerAttribute);
 }
