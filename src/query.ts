@@ -30,6 +30,8 @@ export interface QueryDescription {
   model: ModelClass<ModelBase>;
   conditions: readonly Condition[];
   order: readonly OrderTerm[];
+  /** From `reorder()`: the order replaces any other when merged, even an empty one. */
+  reordered?: boolean;
   limit?: number;
   offset?: number;
   /** Attributes to load; undefined loads every column. */
@@ -113,8 +115,12 @@ function sameList<T>(
   return a.length === b.length && a.every((item, index) => same(item, b[index] as T));
 }
 
-/** Whether a clause was set explicitly; an empty order or an unset flag counts as not set. */
+/**
+ * Whether a clause was set explicitly; an empty order or an unset flag counts as not set,
+ * unless the order came from `reorder()`.
+ */
 function isSet(query: QueryDescription, clause: ShapeClause): boolean {
+  if (clause === "order" && query.reordered) return true;
   const value = query[clause];
   return Array.isArray(value) ? value.length > 0 : value !== undefined && value !== false;
 }
@@ -155,6 +161,7 @@ export function merged(a: QueryDescription, b: QueryDescription): QueryDescripti
   for (const clause of SHAPE_CLAUSES) {
     if (isSet(b, clause)) Object.assign(result, { [clause]: b[clause] });
   }
+  if (b.reordered) result.reordered = true;
   return result;
 }
 

@@ -47,6 +47,20 @@ describe("ordering extras", () => {
     expect(await users.order({ id: "desc" }).reorder().first()).toMatchObject({ id: 1 });
   });
 
+  test("merging a reorder() replaces the order, even with nothing, as in Rails", async () => {
+    const users = connect(binding).model(User);
+
+    expect(await users.order({ id: "desc" }).merge(users.reorder()).first()).toMatchObject({
+      id: 1,
+    });
+    expect(
+      await users
+        .order({ id: "desc" })
+        .merge(users.reorder({ email: "asc" }))
+        .pluck("id"),
+    ).toEqual([2, 4, 3, 1]);
+  });
+
   test("order takes an sql fragment for expressions, and appends like any order", async () => {
     const users = connect(binding).model(User);
 
