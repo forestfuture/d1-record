@@ -95,18 +95,64 @@ export function compileUpdate(
   storedKey: unknown,
 ): CompiledQuery {
   const params: unknown[] = [];
-  const sets = assignments.map(([name, value]) => {
-    const { column, type } = attributeOf(model, name);
-    params.push(writeValue(type, value));
-    return `${quoteIdentifier(column)} = ?`;
-  });
+  const sets = compileSets(model, assignments, params);
   const primaryKey = attributeOf(model, model.primaryKey);
   params.push(storedKey);
   return {
-    sql: `UPDATE ${quoteIdentifier(model.tableName)} SET ${sets.join(", ")} WHERE ${quoteIdentifier(primaryKey.column)} = ?`,
+    sql: `UPDATE ${quoteIdentifier(model.tableName)} SET ${sets} WHERE ${quoteIdentifier(primaryKey.column)} = ?`,
     params,
     model,
   };
+}
+
+/** `"col" = ?, …` for attribute values, or an `sql` fragment's own text. */
+function compileSets(
+  model: ModelClass<ModelBase>,
+  changes: readonly Assignment[] | SafeSql,
+  params: unknown[],
+): string {
+  if (changes instanceof SafeSql) return compileFragment(changes, model, params);
+  return changes
+    .map(([name, value]) => {
+      const { column, type } = attributeOf(model, name);
+      params.push(writeValue(type, value));
+      return `${quoteIdentifier(column)} = ?`;
+    })
+    .join(", ");
+}
+
+/**
+ * The WHERE clause for writing to the rows `query` describes, as Rails does it: its conditions;
+ * with a limit or offset, `<primary key> IN (SELECT <primary key> … ORDER … LIMIT … OFFSET)`;
+ * `1 = 0` for `none()`. Order without a limit, select and includes don't matter to a write.
+ */
+function compileTarget(query: QueryDescription, params: unknown[]): string {
+  if (query.none) return " WHERE 1 = 0";
+  if (query.limit === undefined && query.offset === undefined) return compileWhere(query, params);
+  const key = quoteIdentifier(attributeOf(query.model, query.model.primaryKey).column);
+  const inner = compileSelect({ ...query, distinct: false }, key);
+  params.push(...inner.params);
+  return ` WHERE ${key} IN (${inner.sql})`;
+}
+
+/** `UPDATE … SET … WHERE …` for every row `query` describes. */
+export function compileUpdateAll(
+  query: QueryDescription,
+  changes: readonly Assignment[] | SafeSql,
+): CompiledQuery {
+  const params: unknown[] = [];
+  const sets = compileSets(query.model, changes, params);
+  const target = compileTarget(query, params);
+  const sql = `UPDATE ${quoteIdentifier(query.model.tableName)} SET ${sets}${target}`;
+  return { sql, params, model: query.model };
+}
+
+/** `DELETE … WHERE …` for every row `query` describes. */
+export function compileDeleteAll(query: QueryDescription): CompiledQuery {
+  const params: unknown[] = [];
+  const target = compileTarget(query, params);
+  const sql = `DELETE FROM ${quoteIdentifier(query.model.tableName)}${target}`;
+  return { sql, params, model: query.model };
 }
 
 /** `DELETE … WHERE <primary key> = ?`, with the key as stored in D1. */

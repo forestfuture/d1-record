@@ -143,13 +143,14 @@ function accessorFor(
         const relation = relationFor(this[state].executor, target).where({
           [definition.foreignKey]: key,
         });
+        const { foreignKey } = definition;
         if (this[state].hasPreloaded(name)) {
-          return relation[ofOwner]({ preloaded: this[state].preloaded(name) as ModelBase[] });
+          const preloaded = this[state].preloaded(name) as ModelBase[];
+          return relation[ofOwner]({ foreignKey, preloaded });
         }
         // An owner without a key has no records yet; building through it still gets the (null) key.
-        return key === null
-          ? relation[ofOwner]({ unsavedOwner: missingKeyReason(this, definition) })
-          : relation;
+        const unsavedOwner = key === null ? missingKeyReason(this, definition) : undefined;
+        return relation[ofOwner]({ foreignKey, unsavedOwner });
       };
   }
 }

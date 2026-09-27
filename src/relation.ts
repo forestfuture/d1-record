@@ -1,4 +1,12 @@
-import { compileColumns, compileCount, compileSelect, type CompiledQuery } from "./compiler.ts";
+import {
+  compileColumns,
+  compileCount,
+  compileDeleteAll,
+  compileSelect,
+  compileUpdateAll,
+  type Assignment,
+  type CompiledQuery,
+} from "./compiler.ts";
 import { IncompatibleRelation, RecordNotFound, RecordNotSaved } from "./errors.ts";
 import { includeTree, keysForIncludes, preload } from "./preload.ts";
 import {
@@ -26,7 +34,7 @@ import {
 } from "./model.ts";
 import { readValue } from "./conversion.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
-import { insertStatement, type Statement } from "./statement.ts";
+import { insertStatement, Statement } from "./statement.ts";
 
 /**
  * Attribute conditions for `where`/`findBy`: a value, or an array meaning "any of these".
@@ -89,6 +97,11 @@ export type IncludeSpec<M> =
  * never sees it.
  */
 export interface OwnerLink {
+  /**
+   * The target attribute pointing at the owner. `deleteAll()` sets it to NULL rather than
+   * deleting, as Rails' has_many does without `dependent:`. Dropped when chained.
+   */
+  foreignKey?: string;
   /** Why records can't be created through it: its owner has no key yet. Kept when chained. */
   unsavedOwner?: string;
   /** Records already preloaded; `toArray()` answers from them. Dropped when chained. */
@@ -251,6 +264,30 @@ export class Relation<M extends ModelBase, S = {}> {
     return insertStatement(this.#executor, this.#model, { ...inherited, ...attributes });
   }
 
+  /**
+   * An UPDATE statement for every row this Relation matches, setting attribute values or an
+   * `sql` fragment: ``updateAll(sql`${column("views")} = ${column("views")} + 1`)``. Skips
+   * validations and callbacks, and leaves `updatedAt` alone, as in Rails.
+   */
+  updateAll(changes: Partial<AttributesOf<M>> | SafeSql): Statement {
+    const checked = this.#checkChanges(changes);
+    return this.#statement(compileUpdateAll(this.#writableQuery("updateAll"), checked));
+  }
+
+  /**
+   * A DELETE statement for every row this Relation matches. On a hasMany association itself
+   * (`user.posts().deleteAll()`), the rows' foreign key is set to NULL instead, as in Rails.
+   */
+  deleteAll(): Statement {
+    const query = this.#writableQuery("deleteAll");
+    const { foreignKey } = this.#owner;
+    return this.#statement(
+      foreignKey === undefined
+        ? compileDeleteAll(query)
+        : compileUpdateAll(query, [[foreignKey, null]]),
+    );
+  }
+
   /** Builds and saves a record; resolves to it whether or not it was saved (check `isPersisted()`). */
   async create(attributes: Partial<AttributesOf<M>> = {}): Promise<M> {
     this.#requireSavedOwner();
@@ -388,6 +425,29 @@ export class Relation<M extends ModelBase, S = {}> {
       attributeOf(this.#model, name);
       rejectUndefined(value, name, method);
     }
+  }
+
+  /** Attribute changes for `updateAll`, checked like conditions: declared, and not undefined. */
+  #checkChanges(changes: Partial<AttributesOf<M>> | SafeSql): Assignment[] | SafeSql {
+    this.#checkConditions(changes as Conditions<M> | SafeSql, "updateAll");
+    if (changes instanceof SafeSql) return changes;
+    const assignments = Object.entries(changes);
+    if (assignments.length === 0) {
+      throw new TypeError("updateAll() needs at least one attribute to change");
+    }
+    return assignments;
+  }
+
+  /** The query a write statement targets; rows from `distinct()` have no identity to write to. */
+  #writableQuery(method: string): QueryDescription {
+    if (this.#query.distinct) {
+      throw new IncompatibleRelation(`${method}() can't be combined with distinct()`);
+    }
+    return this.#query;
+  }
+
+  #statement(query: CompiledQuery): Statement {
+    return new Statement(this.#executor, query);
   }
 
   /** The one place a Relation runs SQL; a `none()` relation never reaches D1. */
