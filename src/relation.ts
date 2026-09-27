@@ -40,7 +40,7 @@ import {
   type ModelClass,
 } from "./model.ts";
 import { readValue } from "./conversion.ts";
-import type { Comparison } from "./comparisons.ts";
+import { Comparison } from "./comparisons.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
 import { insertStatement, Statement } from "./statement.ts";
 
@@ -53,8 +53,11 @@ export type Conditions<M> = {
   [K in keyof AttributesOf<M>]?:
     | AttributesOf<M>[K]
     | readonly AttributesOf<M>[K][]
-    | Comparison<NonNullable<AttributesOf<M>[K]>>;
+    | ComparisonOf<NonNullable<AttributesOf<M>[K]>>;
 };
+
+/** Numbers, strings and dates are ordered, so they can be compared; booleans and json can't. */
+type ComparisonOf<V> = [V] extends [number | string | Date] ? Comparison<V> : never;
 
 /** `{ attribute: "asc" | "desc" }`; key order sets precedence. */
 export type OrderSpec<M> = {
@@ -76,6 +79,15 @@ function rejectUndefined(value: unknown, name: string, method: string): void {
   if (value === undefined || (Array.isArray(value) && value.includes(undefined))) {
     throw new TypeError(
       `${method}() got undefined for "${name}"; use null to match NULL, or leave the key out`,
+    );
+  }
+}
+
+/** Only ordered values compare meaningfully; booleans (0/1) and json text don't. */
+function requireOrdered(type: AttributeType, name: string, method: string): void {
+  if (type === "boolean" || type === "json") {
+    throw new TypeError(
+      `${method}() can't compare "${name}", a ${type} attribute; match values instead`,
     );
   }
 }
@@ -509,8 +521,9 @@ export class Relation<M extends ModelBase, S = {}> {
       return;
     }
     for (const [name, value] of Object.entries(conditions)) {
-      attributeOf(this.#model, name);
+      const { type } = attributeOf(this.#model, name);
       rejectUndefined(value, name, method);
+      if (value instanceof Comparison) requireOrdered(type, name, method);
     }
   }
 

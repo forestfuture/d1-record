@@ -90,6 +90,12 @@ describe("comparison conditions", () => {
     expect(user.age).toBeNull();
   });
 
+  test("boolean and json attributes can't be compared: TypeError when written", () => {
+    const samples = connect(binding).model(Sample);
+
+    expect(() => samples.where({ settings: gt(1) })).toThrow(TypeError);
+  });
+
   test("a json attribute's object value is still compared for equality", async () => {
     const samples = connect(binding).model(Sample);
     await samples.insert({ id: 1, settings: { gt: 1 } }).run();
