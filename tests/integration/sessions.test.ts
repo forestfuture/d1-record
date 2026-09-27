@@ -34,6 +34,9 @@ class Post extends Model({
   declare author: BelongsTo<typeof User>;
 }
 
+// Miniflare's D1 has no replicas, so read-your-writes itself can't be observed here: these tests
+// show that every read and write goes through the one Session. Replica behavior belongs to the
+// remote smoke suite (#8).
 describe("sessions", () => {
   let binding: TestDatabase;
   let dispose: () => Promise<void>;
@@ -71,6 +74,19 @@ describe("sessions", () => {
 
     const next = connect(binding, { session: bookmark! });
     expect((await next.model(User).find(1)).email).toBe("a@example.com");
+  });
+
+  test("uniqueness validation after a write checks through the same session", async () => {
+    const db = connect(binding, { session: "first-primary" });
+    await db.model(User).createOrThrow({ email: "a@example.com" });
+    const written = db.bookmark();
+
+    const duplicate = db.model(User).build({ email: "a@example.com" });
+
+    expect(await duplicate.isValid()).toBe(false);
+    expect(duplicate.errors.get("email")).toEqual(["has already been taken"]);
+    expect(db.bookmark()).not.toBeNull();
+    expect(written).not.toBeNull();
   });
 
   test("record reads go through the session: uniqueness checks, association reads and preloads", async () => {
