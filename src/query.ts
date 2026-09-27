@@ -1,14 +1,21 @@
 import { Comparison } from "./comparisons.ts";
 import { IncompatibleRelation } from "./errors.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
-import { SafeSql } from "./sql.ts";
+import { ColumnReference, SafeSql } from "./sql.ts";
 
 export type OrderDirection = "asc" | "desc";
 
-export interface OrderTerm {
+export type NullsPlacement = "first" | "last";
+
+/** Sorting by an attribute; `nulls` places NULLs (SQLite puts them first when ascending). */
+interface AttributeOrder {
   attribute: string;
   direction: OrderDirection;
+  nulls?: NullsPlacement;
 }
+
+/** One ORDER BY term: an attribute, or an `sql` fragment for an expression. */
+export type OrderTerm = AttributeOrder | SafeSql;
 
 /** Association names to preload, each with the names to preload on its records in turn. */
 export interface IncludeTree {
@@ -72,14 +79,29 @@ function sameClause(clause: ShapeClause, a: QueryDescription, b: QueryDescriptio
     case "select":
       return sameList(a.select, b.select, (x, y) => x === y);
     case "order":
-      return sameList(
-        a.order,
-        b.order,
-        (x, y) => x.attribute === y.attribute && x.direction === y.direction,
-      );
+      return sameList(a.order, b.order, sameOrderTerm);
     default:
       return Object.is(a[clause], b[clause]);
   }
+}
+
+function sameOrderTerm(x: OrderTerm, y: OrderTerm): boolean {
+  if (x instanceof SafeSql || y instanceof SafeSql) {
+    return x instanceof SafeSql && y instanceof SafeSql && sameFragment(x, y);
+  }
+  return x.attribute === y.attribute && x.direction === y.direction && x.nulls === y.nulls;
+}
+
+/** Fragments with the same text and the same values (columns by attribute). */
+function sameFragment(x: SafeSql, y: SafeSql): boolean {
+  return (
+    sameList(x.strings, y.strings, (a, b) => a === b) &&
+    sameList(x.values, y.values, (a, b) =>
+      a instanceof ColumnReference && b instanceof ColumnReference
+        ? a.attribute === b.attribute
+        : Object.is(a, b),
+    )
+  );
 }
 
 function sameList<T>(

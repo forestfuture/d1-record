@@ -9,6 +9,7 @@ export {
   ConstraintViolation,
   D1RecordError,
   IncompatibleRelation,
+  IrreversibleOrder,
   InvalidForeignKey,
   InvalidModel,
   MissingAttribute,

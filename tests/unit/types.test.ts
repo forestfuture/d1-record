@@ -75,6 +75,22 @@ describe("types", () => {
     expectTypeOf(typeOnly).toBeFunction();
   });
 
+  test("order and reorder take directions, nulls placement, or an sql fragment", () => {
+    const users = db.model(User);
+
+    // Checked by the type checker only; never called.
+    const typeOnly = () => {
+      users.order({ createdAt: { direction: "desc", nulls: "last" }, id: "asc" });
+      users.reorder(sql`lower(email)`);
+      users.reorder();
+      // @ts-expect-error nulls is "first" or "last"
+      users.order({ createdAt: { direction: "desc", nulls: "never" } });
+      // @ts-expect-error plain strings aren't orders
+      users.order("email");
+    };
+    expectTypeOf(typeOnly).toBeFunction();
+  });
+
   test("finders and pluck return precise types", () => {
     const users = db.model(User);
 
