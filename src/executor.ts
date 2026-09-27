@@ -1,4 +1,4 @@
-import type { CompiledQuery } from "./compiler.ts";
+import type { CompiledSql } from "./compiler.ts";
 import { translateConstraintError } from "./constraints.ts";
 
 /** Reported to `onQuery` once for every statement sent to D1. */
@@ -27,12 +27,12 @@ export class Executor {
   }
 
   /** Runs one statement and resolves to its rows. */
-  async all(query: CompiledQuery): Promise<Record<string, unknown>[]> {
+  async all(query: CompiledSql): Promise<Record<string, unknown>[]> {
     return (await this.#one(query)).results;
   }
 
   /** Runs one statement for its effect and resolves to D1's `meta`. */
-  async run(query: CompiledQuery): Promise<D1Meta> {
+  async run(query: CompiledSql): Promise<D1Meta> {
     return (await this.#one(query)).meta;
   }
 
@@ -40,29 +40,29 @@ export class Executor {
    * Runs statements atomically with D1's `batch()` and resolves to each one's `meta`. D1 fails
    * a batch as a whole, so on failure every statement is reported with the error.
    */
-  async batch(queries: readonly CompiledQuery[]): Promise<D1Meta[]> {
-    if (queries.length === 0) return [];
+  async batch(statements: readonly CompiledSql[]): Promise<D1Meta[]> {
+    if (statements.length === 0) return [];
     const started = performance.now();
     let results: D1Result[];
     try {
-      results = await this.#binding.batch(queries.map((query) => this.#prepare(query)));
+      results = await this.#binding.batch(statements.map((statement) => this.#prepare(statement)));
     } catch (error) {
       const durationMs = performance.now() - started;
-      for (const { sql, params } of queries) this.#onQuery?.({ sql, params, durationMs, error });
+      for (const { sql, params } of statements) this.#onQuery?.({ sql, params, durationMs, error });
       throw translateConstraintError(
         error,
-        queries.map(({ model }) => model),
+        statements.map(({ model }) => model),
       );
     }
     // D1 times each statement of a batch itself.
-    queries.forEach(({ sql, params }, index) => {
+    statements.forEach(({ sql, params }, index) => {
       const { meta } = results[index]!;
       this.#onQuery?.({ sql, params, durationMs: meta.duration, meta });
     });
     return results.map(({ meta }) => meta);
   }
 
-  async #one(query: CompiledQuery): Promise<D1Result<Record<string, unknown>>> {
+  async #one(query: CompiledSql): Promise<D1Result<Record<string, unknown>>> {
     const { sql, params, model } = query;
     const started = performance.now();
     let result: D1Result<Record<string, unknown>>;
@@ -77,7 +77,7 @@ export class Executor {
     return result;
   }
 
-  #prepare({ sql, params }: CompiledQuery): D1PreparedStatement {
+  #prepare({ sql, params }: CompiledSql): D1PreparedStatement {
     return this.#binding.prepare(sql).bind(...params);
   }
 }

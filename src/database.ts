@@ -67,7 +67,7 @@ export class Database {
    * interactive `transaction()`, because D1 can't hold one open across awaits.
    */
   async batch(statements: readonly Statement[]): Promise<D1Meta[]> {
-    const queries = statements.map((statement) => {
+    const compiled = statements.map((statement) => {
       const { executor, query } = statement[statementParts];
       if (executor !== this.#executor) {
         throw new IncompatibleRelation(
@@ -76,7 +76,7 @@ export class Database {
       }
       return query;
     });
-    return this.#executor.batch(queries);
+    return this.#executor.batch(compiled);
   }
 }
 

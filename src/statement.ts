@@ -1,6 +1,6 @@
-import { compileInsert, type Assignment, type CompiledQuery } from "./compiler.ts";
+import { compileInsert, type Assignment, type CompiledSql } from "./compiler.ts";
 import type { Executor } from "./executor.ts";
-import { attributeOf } from "./metadata.ts";
+import { attributeOf, evaluateDefaults, requireDefined } from "./metadata.ts";
 import type { ModelClass } from "./model.ts";
 import { timestampsFor } from "./timestamps.ts";
 
@@ -14,10 +14,10 @@ export const statementParts = Symbol("statementParts");
  */
 export class Statement {
   readonly #executor: Executor;
-  readonly #query: CompiledQuery;
+  readonly #query: CompiledSql;
 
   /** @internal Statements are built by Relations: `insert`, `updateAll`, `deleteAll`. */
-  constructor(executor: Executor, query: CompiledQuery) {
+  constructor(executor: Executor, query: CompiledSql) {
     this.#executor = executor;
     this.#query = query;
   }
@@ -28,7 +28,7 @@ export class Statement {
   }
 
   /** The Database's Executor it runs on, and its compiled SQL. */
-  get [statementParts](): { executor: Executor; query: CompiledQuery } {
+  get [statementParts](): { executor: Executor; query: CompiledSql } {
     return { executor: this.#executor, query: this.#query };
   }
 }
@@ -39,17 +39,9 @@ export class Statement {
  */
 function insertAssignments(model: ModelClass, attributes: Record<string, unknown>): Assignment[] {
   for (const name of Object.keys(attributes)) attributeOf(model, name);
-  const defaults = [...model.attributeDefinitions]
-    .filter(([name, definition]) => definition.default !== undefined && !(name in attributes))
-    .map(([name, definition]): Assignment => [name, definition.default!()]);
-  const values = [...Object.entries(attributes), ...defaults];
-  for (const [name, value] of values) {
-    // As with assignment: undefined would silently store NULL.
-    if (value === undefined) {
-      throw new TypeError(`${model.name}: got undefined for "${name}"; use null to store NULL`);
-    }
-  }
-  return [...values, ...timestampsFor(model, true, values)];
+  const values = [...Object.entries(attributes), ...evaluateDefaults(model, attributes)];
+  for (const [name, value] of values) requireDefined(model, name, value);
+  return [...values, ...timestampsFor(model, "insert", values)];
 }
 
 /** `INSERT` of `attributes` into `model`'s table, as a Statement. */

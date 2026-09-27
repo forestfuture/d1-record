@@ -12,12 +12,13 @@ function hasTimestamp(model: ModelClass, name: "createdAt" | "updatedAt"): boole
  */
 export function timestampsFor(
   model: ModelClass,
-  isInsert: boolean,
+  write: "insert" | "update",
   own: readonly Assignment[],
 ): Assignment[] {
   const now = new Date();
   const assigned = new Set(own.map(([name]) => name));
-  const names = isInsert ? (["createdAt", "updatedAt"] as const) : (["updatedAt"] as const);
+  const names =
+    write === "insert" ? (["createdAt", "updatedAt"] as const) : (["updatedAt"] as const);
   return names
     .filter((name) => hasTimestamp(model, name) && !assigned.has(name))
     .map((name): Assignment => [name, now]);

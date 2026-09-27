@@ -152,7 +152,7 @@ async function beforeWrite(record: ModelBase, isInsert: boolean): Promise<boolea
 async function insertRecord(record: ModelBase): Promise<void> {
   const recordState = record[state];
   const own = recordState.insertAssignments();
-  const stamps = timestampsFor(modelOf(record), true, own);
+  const stamps = timestampsFor(modelOf(record), "insert", own);
   const insert = compileInsert(modelOf(record), [...own, ...stamps]);
   const [row] = await recordState.executor.all(insert);
   recordState.commitInsert(row);
@@ -166,7 +166,7 @@ async function updateRecord(record: ModelBase): Promise<void> {
     recordState.commitClean();
     return;
   }
-  const stamps = timestampsFor(modelOf(record), false, own);
+  const stamps = timestampsFor(modelOf(record), "update", own);
   const update = compileUpdate(modelOf(record), [...own, ...stamps], recordState.storedKey);
   await recordState.executor.all(update);
   recordState.commitUpdate(stamps);
