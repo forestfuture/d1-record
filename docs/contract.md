@@ -146,7 +146,7 @@ Any error thrown by a callback other than an `abort(...)` propagates unchanged. 
 
 ## Constraint errors
 
-- `RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation` and `CheckViolation`, all subclasses of `ConstraintViolation`, are recognised from D1 error messages on insert, update and delete. They carry the original error as `cause`, and `.table`, `.columns` and `.attributes` where the message names them (SQLite's foreign-key and check messages don't name a column). The same errors come from statements and batches. For a failed batch, the Model is the one whose table D1's message names, or else the batch's only Model. When a batch writes to several tables and the message names none (foreign-key and check failures), `.table` is `null` and the message starts with `batch:`.
+- `RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation` and `CheckViolation`, all subclasses of `ConstraintViolation`, are recognised from D1 error messages on insert, update and delete. They carry the original error as `cause`, and `.table`, `.columns` and `.attributes` where the message names them (SQLite's foreign-key and check messages don't name a column). The same errors come from statements and batches. `.table` is the table D1's message names, and `.attributes` are mapped when that table is one being written to (a trigger's write to another table leaves them empty). When the message names no table (foreign-key and check failures), it's the only table written to. A batch that writes to several then has `.table` `null`, and the message starts with `batch:`.
 - Both the throwing and non-throwing methods throw them. After a constraint error the caller's own changes are kept and `errors` is not changed, because nothing was persisted. Timestamps are only applied once D1 accepts a write, so a failed save doesn't leave `createdAt`/`updatedAt` behind.
 - Uniqueness validation is a friendly early check, not race-safe. The database constraint has the final say.
 
@@ -285,7 +285,7 @@ await db
 ## Instrumentation
 
 - `connect(env.DB, { onQuery(event) })` is called once per statement, batches included, with `{ sql, params, durationMs, meta, error? }`. The integration tests' query-count checks use this same hook. No logger is built in.
-- In a batch, each statement's `durationMs` is D1's own timing for it (`meta.duration`). When a batch fails, D1 doesn't say which statement failed, so every statement is reported with the error and the batch's elapsed time.
+- In a batch, each statement's `durationMs` is D1's own timing for it (`meta.duration`). When a batch fails, D1 doesn't say which statement failed, so every statement is reported with the error and the batch's elapsed time. `event.error` is D1's own error; the caller gets the translated `ConstraintViolation`, with D1's error as its `cause`.
 
 ## Errors
 

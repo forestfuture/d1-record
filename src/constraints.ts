@@ -21,25 +21,17 @@ const KINDS: readonly (readonly [pattern: RegExp, kind: ViolationClass, label: s
   [/CHECK constraint failed/, CheckViolation, "check constraint failed"],
 ];
 
-/** "users.email, users.role" → ["email", "role"] (columns of the Model's table only). */
-function columnsIn(list: string | undefined, table: string): string[] {
-  if (list === undefined) return [];
-  return list
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.startsWith(`${table}.`))
-    .map((entry) => entry.slice(table.length + 1));
+/** What D1's message names: "users.email, users.role" → users, [email, role]. */
+interface Named {
+  table: string | undefined;
+  columns: string[];
 }
 
-/**
- * The Model a failure belongs to: the one whose table D1's message names, or else the only
- * Model written to. Null when a batch writes to several and D1 doesn't say which failed.
- */
-function failedModel(list: string | undefined, models: readonly ModelClass[]): ModelClass | null {
-  const named = models.find((model) => columnsIn(list, model.tableName).length > 0);
-  if (named !== undefined) return named;
-  const distinct = new Set(models);
-  return distinct.size === 1 ? models[0]! : null;
+function namedIn(list: string | undefined): Named {
+  const entries = (list ?? "").split(",").map((entry) => entry.trim().split("."));
+  const table = entries[0]?.length === 2 ? entries[0][0] : undefined;
+  const columns = entries.filter(([name]) => name === table).map(([, column]) => column!);
+  return { table, columns };
 }
 
 /**
@@ -50,26 +42,38 @@ export function translateConstraintError(error: unknown, models: readonly ModelC
   const message = error instanceof Error ? error.message : String(error);
   for (const [pattern, Kind, label] of KINDS) {
     const match = pattern.exec(message);
-    if (match !== null)
-      return violation([Kind, label], failedModel(match[1], models), match[1], error);
+    if (match !== null) return violation([Kind, label], namedIn(match[1]), models, error);
   }
   return error;
 }
 
+/**
+ * The Model a failure belongs to: the one whose table D1's message names, or, when it names
+ * none, the only Model written to. Undefined when it names another table (a trigger's), or
+ * when a batch writes to several.
+ */
+function failedModel(
+  table: string | undefined,
+  models: readonly ModelClass[],
+): ModelClass | undefined {
+  if (table !== undefined) return models.find((model) => model.tableName === table);
+  return new Set(models).size === 1 ? models[0] : undefined;
+}
+
+/** `table` is the one D1's message names, or else the failed Model's; null if neither. */
 function violation(
   [Kind, label]: readonly [ViolationClass, string],
-  model: ModelClass | null,
-  list: string | undefined,
+  { table, columns }: Named,
+  models: readonly ModelClass[],
   cause: unknown,
 ): ConstraintViolation {
-  if (model === null) {
-    return new Kind(`batch: ${label}`, { table: null, columns: [], attributes: [], cause });
-  }
-  const columns = columnsIn(list, model.tableName);
-  const attributes = columns.flatMap((column) => attributesForColumn(model, column));
+  const model = failedModel(table, models);
+  const attributes =
+    model === undefined ? [] : columns.flatMap((column) => attributesForColumn(model, column));
+  const failedTable = table ?? model?.tableName ?? null;
   const named = columns.length > 0 ? ` (${columns.join(", ")})` : "";
-  return new Kind(`${model.name}${named}: ${label}`, {
-    table: model.tableName,
+  return new Kind(`${model?.name ?? failedTable ?? "batch"}${named}: ${label}`, {
+    table: failedTable,
     columns,
     attributes,
     cause,

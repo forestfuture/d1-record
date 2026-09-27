@@ -495,6 +495,28 @@ describe("statements", () => {
       expect((error as Error).message).toMatch(/^batch: /);
     });
 
+    test("a constraint on a table the batch doesn't write to isn't pinned on the batch's Model", async () => {
+      const db = connect(binding);
+      await db.model(User).insert({ id: 1, email: "taken@example.com" }).run();
+      // A trigger makes inserting a post also insert a user with a taken email.
+      await binding
+        .prepare(
+          "CREATE TRIGGER post_signs_up AFTER INSERT ON posts BEGIN INSERT INTO users (email) VALUES ('taken@example.com'); END",
+        )
+        .run();
+
+      try {
+        const error: unknown = await db
+          .batch([db.model(Post).insert({ userId: 1, title: "Hello", published: true })])
+          .catch((caught: unknown) => caught);
+
+        expect(error).toBeInstanceOf(RecordNotUnique);
+        expect(error).toMatchObject({ table: "users", columns: ["email"], attributes: [] });
+      } finally {
+        await binding.prepare("DROP TRIGGER post_signs_up").run();
+      }
+    });
+
     test("onQuery hears once per statement, with D1's meta for each", async () => {
       const events: QueryEvent[] = [];
       const db = connect(binding, { onQuery: (event) => events.push(event) });
