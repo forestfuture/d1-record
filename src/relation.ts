@@ -172,11 +172,19 @@ export class Relation<M extends ModelBase, S = {}> {
   readonly #executor: Executor;
   readonly #model: ModelClass<M>;
   readonly #query: SelectQuery;
+  /** Records already preloaded for this hasMany; `toArray()` answers from them. Not query data. */
+  readonly #preloaded: readonly ModelBase[] | undefined;
 
-  constructor(executor: Executor, model: ModelClass<M>, query?: SelectQuery) {
+  constructor(
+    executor: Executor,
+    model: ModelClass<M>,
+    query?: SelectQuery,
+    preloaded?: readonly ModelBase[],
+  ) {
     this.#executor = executor;
     this.#model = model;
     this.#query = query ?? { model, conditions: [], order: [] };
+    this.#preloaded = preloaded;
   }
 
   where(conditions: Conditions<M> | SafeSql): Scoped<M, S> {
@@ -284,7 +292,8 @@ export class Relation<M extends ModelBase, S = {}> {
 
   /** A hasMany Relation whose `toArray()` answers from records already preloaded. */
   [withPreloaded](records: readonly ModelBase[]): Scoped<M, S> {
-    return this.#with({ preloaded: records });
+    const Class = this.constructor as new (...args: RelationArgs<M>) => Scoped<M, S>;
+    return new Class(this.#executor, this.#model, this.#query, records);
   }
 
   /** A new, unsaved record of this Relation's Model. */
@@ -410,8 +419,7 @@ export class Relation<M extends ModelBase, S = {}> {
   }
 
   async toArray(): Promise<M[]> {
-    const { preloaded } = this.#query;
-    if (preloaded !== undefined) return [...preloaded] as M[];
+    if (this.#preloaded !== undefined) return [...this.#preloaded] as M[];
     return this.#load(this.#query);
   }
 
@@ -480,8 +488,8 @@ export class Relation<M extends ModelBase, S = {}> {
   /** A copy with `changes`, of this same class, so a Model's scope methods survive chaining. */
   #with(changes: Partial<SelectQuery>): Scoped<M, S> {
     const Class = this.constructor as new (...args: RelationArgs<M>) => Scoped<M, S>;
-    // Any change means the preloaded records no longer answer the query.
-    const query = { ...this.#query, preloaded: undefined, ...changes };
+    // A changed query is a new Relation without preloaded records: they'd no longer answer it.
+    const query = { ...this.#query, ...changes };
     // Preloading needs keys a distinct select leaves out; adding them would undo the distinct.
     if (query.includes !== undefined && query.select !== undefined && query.distinct) {
       throw new IncompatibleRelation(
@@ -542,4 +550,5 @@ export type RelationArgs<M extends ModelBase> = [
   executor: Executor,
   model: ModelClass<M>,
   query?: SelectQuery,
+  preloaded?: readonly ModelBase[],
 ];
