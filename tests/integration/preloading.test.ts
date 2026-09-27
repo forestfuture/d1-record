@@ -41,6 +41,10 @@ class Post extends Model({
 
   declare comments: HasMany<typeof Comment>;
 
+  static scopes = this.defineScopes({
+    titled: (q, title: string) => q.where({ title }),
+  });
+
   declare author: BelongsTo<typeof User>;
 }
 
@@ -255,5 +259,15 @@ describe("preloading with includes", () => {
 
     expect(() => posts.select("title").distinct().includes("author")).toThrow(IncompatibleRelation);
     expect(() => posts.includes("author").select("title").distinct()).toThrow(/includes.*distinct/);
+  });
+
+  test("chaining a scope on a preloaded hasMany queries as normal", async () => {
+    const user = await db().model(User).includes("posts").find(1);
+    queries.length = 0;
+
+    const titled = await user.posts().titled("A2").toArray();
+
+    expect(titled.map((post) => post.title)).toEqual(["A2"]);
+    expect(queries).toHaveLength(1);
   });
 });
