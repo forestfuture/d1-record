@@ -41,6 +41,7 @@ import {
 import { readValue } from "./conversion.ts";
 import type { Comparison } from "./comparisons.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
+import { state } from "./record-state.ts";
 import { insertStatement, Statement } from "./statement.ts";
 
 /**
@@ -348,8 +349,27 @@ export class Relation<M extends ModelBase, S = {}> {
     return record;
   }
 
-  /** The record with this primary key, keeping this Relation's conditions. */
-  async find(id: string | number): Promise<M> {
+  /**
+   * The record with this primary key, keeping this Relation's conditions. With several ids,
+   * `find(1, 2)` or `find([1, 2])`, the records in the ids' order (or this Relation's order,
+   * if it has one), as Rails does; `RecordNotFound` if any is missing.
+   */
+  async find(id: string | number): Promise<M>;
+  async find(ids: readonly (string | number)[]): Promise<M[]>;
+  async find(
+    first: string | number,
+    second: string | number,
+    ...rest: (string | number)[]
+  ): Promise<M[]>;
+  async find(...args: (string | number | readonly (string | number)[])[]): Promise<M | M[]> {
+    const [only] = args;
+    if (args.length === 1 && !Array.isArray(only)) return this.#findById(only as string | number);
+    // Each id once, as Rails does.
+    const ids = [...new Map(args.flat().map((id) => [String(id), id])).values()];
+    return ids.length === 0 ? [] : this.#findSome(ids);
+  }
+
+  async #findById(id: string | number): Promise<M> {
     const record = await this.#findOne({ [this.#model.primaryKey]: id });
     if (record === null) {
       throw new RecordNotFound(
@@ -357,6 +377,21 @@ export class Relation<M extends ModelBase, S = {}> {
       );
     }
     return record;
+  }
+
+  async #findSome(ids: readonly (string | number)[]): Promise<M[]> {
+    const { primaryKey, name } = this.#model;
+    const query = { ...this.#finderQuery({ [primaryKey]: ids }), order: this.#query.order };
+    const records = await this.#load(query);
+    if (records.length < ids.length) {
+      throw new RecordNotFound(
+        `Couldn't find all ${name} records with ${primaryKey}: (${ids.join(", ")}) ` +
+          `(found ${records.length} results, but was looking for ${ids.length})`,
+      );
+    }
+    if (this.#query.order.length > 0) return records;
+    const byId = new Map(records.map((record) => [String(record[state].read(primaryKey)), record]));
+    return ids.map((id) => byId.get(String(id))!);
   }
 
   /** The first record matching `conditions` (in no particular order), or null. */
@@ -585,12 +620,15 @@ export class Relation<M extends ModelBase, S = {}> {
 
   /** One matching row by the finder rules: keeps conditions, ignores order and pagination. */
   async #findOne(extra?: Condition): Promise<M | null> {
+    const [record] = await this.#load({ ...this.#finderQuery(extra), limit: 1 });
+    return record ?? null;
+  }
+
+  /** The finder rules: this Relation's conditions (plus `extra`) and includes, full rows. */
+  #finderQuery(extra?: Condition): QueryDescription {
     const conditions =
       extra === undefined ? this.#query.conditions : [...this.#query.conditions, extra];
-    const { includes } = this.#query;
-    const query = { model: this.#model, conditions, order: [], limit: 1, includes };
-    const [record] = await this.#load(query);
-    return record ?? null;
+    return { model: this.#model, conditions, order: [], includes: this.#query.includes };
   }
 }
 
