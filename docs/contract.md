@@ -20,7 +20,8 @@ const users = db.model(User); // request-bound model facade (canonical)
 const models = db.models({ User, Post }); // convenience: models.User has the same type as db.model(User)
 ```
 
-- A Database with a session sends every query through that one session, so the request reads its own writes. Apps that want a primary Database and a replica Database call `connect()` twice.
+- A Database with a session sends every query through that one D1 Session: record reads and writes, uniqueness checks, association reads, preloads, statements and batches. So the request reads its own writes even when reads are served by replicas. `session` takes D1's own values: `"first-primary"`, `"first-unconstrained"`, or a bookmark. Apps that want a primary Database and a replica Database call `connect()` twice.
+- `db.bookmark()` is the Session's latest bookmark (D1's `getBookmark()`), `null` before its first query. Pass it to the next request's `connect(env.DB, { session: bookmark })` to read at least as new as this request wrote. On a Database opened without a session it throws `NoSession`, since a `null` there would quietly mean "no session" next time.
 - No request state is ever stored on a Model class (ADR-0003).
 - Every record keeps the Database it was built or loaded through. Records come only from `build()`, `create()` or a query. A record constructed directly with `new User()` throws `NoDatabase` on any operation that needs D1.
 
@@ -58,7 +59,7 @@ class User extends Model({
 - Types: `string`, `integer`, `real`, `boolean` (0/1), `datetime` (a `Date`, stored as ISO-8601 TEXT), `json` (stored as TEXT). As in SQLite, an attribute can be null unless it's declared `null: false`, and its TypeScript type includes `| null` to match.
 - Attribute properties are prototype accessors. The first time a Model is used, `db.model(X)` throws `InvalidModel` if it has no `tableName`, if a class field hides an accessor (e.g. `email!: string` in the class body), or if an attribute is named like a record method (`attributes`, `save`, `constructor`, …). Rename such an attribute and map it with `{ column }`.
 - SQL fragments are SQL, so they use column names (``sql`created_at > ${since}` ``), or `column("createdAt")` to look the column up from the attribute (ADR-0006).
-- `db.model(X).build(attrs)` makes a new record without querying. Before an attribute is assigned, it reads as `null`. Defaults are evaluated at `build()` (a default returning `undefined` throws `TypeError`, as for any assignment), so app-generated keys (UUID, CUID, ULID) exist before saving and can be used to link rows inside one `batch()`.
+- `db.model(X).build(attrs)` makes a new record without querying. Before an attribute is assigned, it reads as `null`. Defaults are evaluated at `build()` (a default returning `undefined` throws `TypeError`, as for any assignment), so app-generated keys (UUID, CUID, ULID) exist before saving.
 - A record built or created from a Relation starts with that Relation's single equality values: `where({ role: "admin" }).build()` has `role: "admin"`. Arrays, `whereNot`, `or` and `sql` fragments carry nothing over, and explicit attributes win.
 - `record.assign(attrs)` assigns several attributes without saving. `update(attrs)` is `assign` then `save`. An unknown key throws `UnknownAttribute` and an `undefined` value throws `TypeError` (use `null` to store NULL), in `build`, `create`, `assign`, `update`, and when setting a property (`user.email = undefined`).
 - An insert writes only **assigned** attributes: given to `build`/`create`, set through a property, or filled by a `default`. Anything else is left out, so the column's database default applies. `RETURNING *` then loads what D1 actually stored, including generated keys and defaults.
@@ -124,7 +125,8 @@ class Post extends Model({ id: "integer", userId: "integer" }) {
 - `record.loaded("posts")` returns preloaded data synchronously (records for a `hasMany`, a record or `null` otherwise), typed from the `declare`. A list is returned as a copy. It throws `AssociationNotLoaded` if it wasn't preloaded. `reload()` drops preloaded associations.
 - `or()` needs the same `includes`, and `merge()` combines both sides' includes.
 - A subclass has its parent's associations plus its own (spread `...Parent.associations` to keep them typed, as with scopes). Replacing `associations` after a Model's first use throws `InvalidModel`.
-- Polymorphic associations, counter caches, inverse inference and `dependent` strategies are out of scope.
+- `user.posts().insert(attrs)`, `updateAll(...)` and `deleteAll()` build statements (see _Batches_). As in Rails' `has_many`, `deleteAll()` on the association itself sets the records' foreign key to `NULL` rather than deleting them (a NOT NULL foreign key raises `NotNullViolation`). Once narrowed (`user.posts().where(...)`, `.limit(…)`, a scope), `deleteAll()` deletes, as a Rails association relation does. For an owner without a key, `insert` throws `RecordNotSaved`, and `updateAll`/`deleteAll` match nothing.
+- `dependent:` strategies are deferred (#32). Polymorphic associations, counter caches and inverse inference are out of scope.
 
 ## Persistence results
 
@@ -144,7 +146,7 @@ Any error thrown by a callback other than an `abort(...)` propagates unchanged. 
 
 ## Constraint errors
 
-- `RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation` and `CheckViolation`, all subclasses of `ConstraintViolation`, are recognised from D1 error messages on insert, update and delete. They carry the original error as `cause`, and `.table`, `.columns` and `.attributes` where the message names them (SQLite's foreign-key message doesn't name a column).
+- `RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation` and `CheckViolation`, all subclasses of `ConstraintViolation`, are recognised from D1 error messages on insert, update and delete. They carry the original error as `cause`, and `.table`, `.columns` and `.attributes` where the message names them (SQLite's foreign-key and check messages don't name a column). The same errors come from statements and batches. For a failed batch, the Model is the one whose table D1's message names, or else the batch's only Model. When a batch writes to several tables and the message names none (foreign-key and check failures), `.table` is `null` and the message starts with `batch:`.
 - Both the throwing and non-throwing methods throw them. After a constraint error the caller's own changes are kept and `errors` is not changed, because nothing was persisted. Timestamps are only applied once D1 accepts a write, so a failed save doesn't leave `createdAt`/`updatedAt` behind.
 - Uniqueness validation is a friendly early check, not race-safe. The database constraint has the final say.
 
@@ -256,19 +258,39 @@ this.beforeSave((account) => {
 
 ## Batches
 
-- `db.batch([...])` runs D1's atomic `batch()` with statements built beforehand by `db.model(X).insert(...)`, `updateAll(...)` and `deleteAll()`. These skip validations, callbacks and hydration. Record-aware batching is deferred.
-- There's no interactive `transaction(async tx => …)`, because D1 can't guarantee it.
-- A single statement runs on its own with `await stmt.run()`, which resolves to D1's `meta`.
+```ts
+const userId = crypto.randomUUID(); // ids generated in code link rows inside one batch
+await db.batch([
+  db.model(User).insert({ id: userId, email: "a@example.com" }),
+  db.model(Post).insert({ userId, title: "Hello" }),
+  db.model(Post).where({ published: false }).deleteAll(),
+]);
+await db.model(Post).where({ id: postId }).updateAll({ published: true }).run();
+await db
+  .model(Post)
+  .updateAll(sql`${column("views")} = ${column("views")} + ${1}`)
+  .run();
+```
+
+- A **Statement** is a write compiled when it's built: `relation.insert(attrs)`, `relation.updateAll(changes)` or `relation.deleteAll()`. It skips validations, callbacks and hydration, and runs on the Database it was built from. Unknown attributes, `undefined` values and plain strings throw when it's built.
+- `await stmt.run()` runs one statement and resolves to D1's `meta` (`changes`, `last_row_id`, `duration`, …).
+- `db.batch([...])` runs statements atomically with D1's `batch()`: all of them are written, or none. It resolves to each statement's `meta`, in order. `[]` resolves to `[]` without a query. A statement from another Database rejects with `IncompatibleRelation`.
+- There's no interactive `transaction(async tx => …)`. D1 can't hold a transaction open across awaits, so a callback that reads and then decides what to write can't be made atomic; a batch of statements built beforehand can. Record-aware batching (saving records in a batch) is deferred (#16).
+- `insert(attrs)` writes one row. Declared attribute defaults fill attributes that aren't given (unlike Rails' `insert_all`, because in D1 app-side defaults are where keys are generated), and `createdAt`/`updatedAt` are set unless given, as Rails does. A Relation's equality conditions are inserted too, as with `build()`. A constraint failure throws, as everywhere (ADR-0005). Skipping duplicates and upserts are deferred (#33).
+- `updateAll(changes)` takes an object of declared attributes (converted like any write) or an `sql` fragment, and leaves `updatedAt` alone, as in Rails. `{}` throws `TypeError`.
+- Which rows `updateAll`/`deleteAll` write follows Rails. With a `limit` or `offset`, it's `WHERE <primary key> IN (SELECT <primary key> … ORDER BY … LIMIT … OFFSET …)`, so the Relation's order picks the rows. Otherwise it's the Relation's conditions, and `order`, `select` and `includes` don't matter. `distinct()` throws `IncompatibleRelation`.
+- A `none()` Relation's statement is still sent, as `WHERE 1 = 0`, and reports `changes: 0`. Rails sends nothing, but a statement's result is D1's `meta`, which only D1 can give.
 - Neither Relations nor statements are awaitable directly (they have no `then`), so an `async` function that returns one never runs it by accident.
 
 ## Instrumentation
 
 - `connect(env.DB, { onQuery(event) })` is called once per statement, batches included, with `{ sql, params, durationMs, meta, error? }`. The integration tests' query-count checks use this same hook. No logger is built in.
+- In a batch, each statement's `durationMs` is D1's own timing for it (`meta.duration`). When a batch fails, D1 doesn't say which statement failed, so every statement is reported with the error and the batch's elapsed time.
 
 ## Errors
 
 Everything extends `D1RecordError`:
 
 - **Lifecycle:** `RecordNotFound`, `RecordInvalid` (`.record`), `RecordNotSaved`, `RecordNotDestroyed`, `RecordDestroyed`, `CallbackAbort` (from `abort()`), `AbortAfterPersistence` (`.callback`, `.reason`)
-- **Usage:** `UnknownAssociation`, `InvalidModel` (a problem in a Model's declaration, detected the first time it's used), `UnknownAttribute`, `MissingAttribute`, `IncompatibleRelation`, `AssociationNotLoaded`, `NoDatabase`
+- **Usage:** `UnknownAssociation`, `InvalidModel` (a problem in a Model's declaration, detected the first time it's used), `UnknownAttribute`, `MissingAttribute`, `IncompatibleRelation`, `AssociationNotLoaded`, `NoDatabase`, `NoSession`
 - **Constraints:** `ConstraintViolation`, with subclasses `RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation` and `CheckViolation`
