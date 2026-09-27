@@ -136,8 +136,10 @@ describe.skipIf(!configured)("remote D1 smoke", () => {
     expect(await db.model(Post).count()).toBe(0);
   });
 
+  // With read replication on (see docs/agents/remote-smoke.md), "first-unconstrained" lets reads
+  // go to a replica, so only the Session keeps them consistent with the writes.
   test("a session reads its own writes, and its bookmark carries them to the next request", async () => {
-    const first = connect(remote.binding, { session: "first-primary" });
+    const first = connect(remote.binding, { session: "first-unconstrained" });
     const user = await first.model(User).createOrThrow({ email: "a@example.com" });
     await user.updateOrThrow({ role: "admin" });
     await user.reload();
@@ -147,16 +149,19 @@ describe.skipIf(!configured)("remote D1 smoke", () => {
     expect(typeof bookmark).toBe("string");
 
     const next = connect(remote.binding, { session: bookmark! });
+    // Starting from the bookmark, a replica read waits until it has caught up with the write.
     expect((await next.model(User).find(user.id)).role).toBe("admin");
   });
 
   test("preloading more than 100 owners stays within D1's 100 bound parameters", async () => {
     const db = connect(remote.binding);
     const ids = Array.from({ length: 150 }, (_, index) => index + 1);
-    await db.batch([
-      ...ids.map((id) => db.model(User).insert({ id, email: `u${id}@example.com` })),
-      ...ids.map((id) => db.model(Post).insert({ userId: id, title: `Post ${id}` })),
-    ]);
+    // In batches of 25, under D1's per-invocation query limit (50 on the Free plan).
+    for (let start = 0; start < ids.length; start += 25) {
+      const group = ids.slice(start, start + 25);
+      await db.batch(group.map((id) => db.model(User).insert({ id, email: `u${id}@example.com` })));
+      await db.batch(group.map((id) => db.model(Post).insert({ userId: id, title: `Post ${id}` })));
+    }
 
     const users = await db.model(User).includes("posts").toArray();
 

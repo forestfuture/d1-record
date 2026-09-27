@@ -12,16 +12,17 @@ Without the three environment variables below the suite is skipped, so `vp test`
    ```sh
    pnpm dlx wrangler d1 create d1-record-smoke
    ```
-   Note the `database_id` it prints.
-2. **An API token** (Cloudflare dashboard → My Profile → API Tokens → Create Custom Token), scoped to the one account, with:
+   Note the `database_id` it prints. The name isn't used; the suite connects by id.
+2. **Turn on read replication** for it, so the Session test proves read-your-writes: without replicas every read goes to the primary, and the test would pass whatever the library did. In the Cloudflare dashboard: Storage & databases → D1 → `d1-record-smoke` → Settings → Read replication → Enable. (Or through the API: `PUT /accounts/{account_id}/d1/database/{database_id}` with `{"read_replication": {"mode": "auto"}}`.) Where the setting lives may change; check Cloudflare's D1 read replication docs if it isn't there.
+3. **An API token** (Cloudflare dashboard → My Profile → API Tokens → Create Custom Token), scoped to the one account, with:
    - Account → **D1** → Edit
    - Account → **Workers Scripts** → Edit (remote bindings run through a temporary edge-preview Worker)
    - The account needs a `workers.dev` subdomain, which edge previews use.
-3. **Run it locally:**
+4. **Run it locally:**
    ```sh
    CLOUDFLARE_ACCOUNT_ID=… CLOUDFLARE_API_TOKEN=… D1_SMOKE_DATABASE_ID=… vp run test:remote
    ```
-4. **In CI:** add `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` and `D1_SMOKE_DATABASE_ID` as repository secrets, then run the **Remote D1 smoke** workflow from the Actions tab. It only runs when started by hand (`workflow_dispatch`), never on push.
+5. **In CI:** add `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` and `D1_SMOKE_DATABASE_ID` as repository secrets, then run the **Remote D1 smoke** workflow from the Actions tab. It only runs when started by hand (`workflow_dispatch`), never on push.
 
 ## When it fails
 
