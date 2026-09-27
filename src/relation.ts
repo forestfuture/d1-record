@@ -26,6 +26,7 @@ import {
 } from "./model.ts";
 import { readValue } from "./conversion.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
+import { insertStatement, type Statement } from "./statement.ts";
 
 /**
  * Attribute conditions for `where`/`findBy`: a value, or an array meaning "any of these".
@@ -237,6 +238,17 @@ export class Relation<M extends ModelBase, S = {}> {
     if (reason !== undefined) {
       throw new RecordNotSaved(`You cannot create a ${this.#model.name} here: ${reason}`);
     }
+  }
+
+  /**
+   * An INSERT statement for one row: `await db.model(Post).insert({ title }).run()`, or inside
+   * `db.batch([...])`. Skips validations and callbacks; declared defaults and timestamps apply,
+   * and this Relation's equality conditions are inserted too, as with `build()`.
+   */
+  insert(attributes: Partial<AttributesOf<M>>): Statement {
+    this.#requireSavedOwner();
+    const inherited = inheritedAttributes(this.#query.conditions);
+    return insertStatement(this.#executor, this.#model, { ...inherited, ...attributes });
   }
 
   /** Builds and saves a record; resolves to it whether or not it was saved (check `isPersisted()`). */
