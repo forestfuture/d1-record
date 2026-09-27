@@ -17,6 +17,7 @@ import {
   RecordNotSaved,
   UnknownAssociation,
 } from "./errors.ts";
+import { prepareModel } from "./associations.ts";
 import { preload } from "./preload.ts";
 import type { Executor } from "./executor.ts";
 import { attributeOf } from "./metadata.ts";
@@ -564,7 +565,10 @@ function includeTree(model: ModelClass, specs: readonly unknown[]): IncludeTree 
       if (definition === undefined) {
         throw new UnknownAssociation(`${model.name} has no association "${name}"`);
       }
-      tree = mergeTrees(tree, { [name]: includeTree(definition.target(), nested) });
+      const target = definition.target();
+      // A Model reached only through includes is still verified and gets its accessors.
+      prepareModel(target);
+      tree = mergeTrees(tree, { [name]: includeTree(target, nested) });
     }
   }
   return tree;
