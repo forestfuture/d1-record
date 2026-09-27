@@ -1,6 +1,9 @@
 import { describe, expectTypeOf, test } from "vite-plus/test";
 import {
+  between,
   connect,
+  gte,
+  lt,
   Model,
   sql,
   type BelongsTo,
@@ -63,6 +66,11 @@ describe("types", () => {
       users.where({ email: ["a@example.com", null] });
       // @ts-expect-error array items must have the attribute's type
       users.where({ id: ["1"] });
+      users.where({ id: gte(2), createdAt: between(new Date(), new Date()), email: lt("m") });
+      // @ts-expect-error a comparison's value must have the attribute's type
+      users.where({ id: gte("2") });
+      // @ts-expect-error nor can a comparison compare with null
+      users.where({ createdAt: gte(null) });
     };
     expectTypeOf(typeOnly).toBeFunction();
   });

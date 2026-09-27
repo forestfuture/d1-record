@@ -1,3 +1,4 @@
+import { Comparison } from "./comparisons.ts";
 import { IncompatibleRelation } from "./errors.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { SafeSql } from "./sql.ts";
@@ -137,7 +138,7 @@ export function merged(a: QueryDescription, b: QueryDescription): QueryDescripti
 
 /**
  * The single equality values of the conditions (a value or null), which a record built from a
- * Relation starts with. Arrays, `whereNot`, `or` and fragments carry nothing over.
+ * Relation starts with. Arrays, comparisons, `whereNot`, `or` and fragments carry nothing over.
  */
 export function inheritedAttributes(conditions: readonly Condition[]): Record<string, unknown> {
   const inherited: Record<string, unknown> = {};
@@ -150,7 +151,7 @@ export function inheritedAttributes(conditions: readonly Condition[]): Record<st
       continue;
     }
     for (const [name, value] of Object.entries(condition)) {
-      if (!Array.isArray(value)) inherited[name] = value;
+      if (!Array.isArray(value) && !(value instanceof Comparison)) inherited[name] = value;
     }
   }
   return inherited;
