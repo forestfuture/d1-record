@@ -252,7 +252,8 @@ export class Relation<M extends ModelBase, S = {}> {
 
   /** Replaces the order so far, as in Rails; `reorder()` removes it. */
   reorder(spec?: OrderSpec<M> | SafeSql): Scoped<M, S> {
-    return this.#with({ order: spec === undefined ? [] : this.#orderTerms(spec, "reorder") });
+    const order = spec === undefined ? [] : this.#orderTerms(spec, "reorder");
+    return this.#with({ order, reordered: true });
   }
 
   limit(count: number): Scoped<M, S> {
