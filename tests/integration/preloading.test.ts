@@ -240,4 +240,13 @@ describe("preloading with includes", () => {
 
     expect(() => user.loaded("posts")).toThrow(AssociationNotLoaded);
   });
+
+  test("loaded() returns a copy of a preloaded list", async () => {
+    const user = await db().model(User).includes("posts").find(1);
+
+    user.loaded("posts").pop();
+
+    expect(user.loaded("posts")).toHaveLength(2);
+    expect(await user.posts().toArray()).toHaveLength(2);
+  });
 });
