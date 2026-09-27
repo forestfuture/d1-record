@@ -13,6 +13,7 @@ export {
   InvalidModel,
   MissingAttribute,
   NoDatabase,
+  NoSession,
   NotNullViolation,
   RecordDestroyed,
   RecordNotDestroyed,

@@ -17,10 +17,11 @@ export type QueryListener = (event: QueryEvent) => void;
  * constraint failure becomes the matching `ConstraintViolation` for the statement's Model.
  */
 export class Executor {
-  readonly #binding: D1Database;
+  readonly #binding: D1Database | D1DatabaseSession;
   readonly #onQuery: QueryListener | undefined;
 
-  constructor(binding: D1Database, onQuery?: QueryListener) {
+  /** `binding` is the D1 binding itself, or one D1 Session every query goes through. */
+  constructor(binding: D1Database | D1DatabaseSession, onQuery?: QueryListener) {
     this.#binding = binding;
     this.#onQuery = onQuery;
   }

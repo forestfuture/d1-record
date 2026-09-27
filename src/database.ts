@@ -1,4 +1,4 @@
-import { IncompatibleRelation } from "./errors.ts";
+import { IncompatibleRelation, NoSession } from "./errors.ts";
 import { Executor, type QueryListener } from "./executor.ts";
 import { prepareModel } from "./associations.ts";
 import type { ModelBase, ModelClass, ScopesOf } from "./model.ts";
@@ -14,14 +14,37 @@ export type RelationsFor<T extends Record<string, ModelClass<ModelBase>>> = {
 export interface ConnectOptions {
   /** Called once for every statement sent to D1. */
   onQuery?: QueryListener;
+  /**
+   * Sends every query through one D1 Session, so the request reads its own writes even when
+   * reads are served by replicas: `"first-primary"`, `"first-unconstrained"`, or a bookmark
+   * from an earlier request's `db.bookmark()`.
+   */
+  // `& {}` keeps the two constraint names suggested alongside any bookmark string.
+  session?: D1SessionConstraint | (D1SessionBookmark & {});
 }
 
 /** A per-request wrapper around a D1 binding; every query goes through it. */
 export class Database {
   readonly #executor: Executor;
+  readonly #session: D1DatabaseSession | undefined;
 
   constructor(binding: D1Database, options: ConnectOptions = {}) {
-    this.#executor = new Executor(binding, options.onQuery);
+    const { session, onQuery } = options;
+    this.#session = session === undefined ? undefined : binding.withSession(session);
+    this.#executor = new Executor(this.#session ?? binding, onQuery);
+  }
+
+  /**
+   * The Session's latest bookmark (null before its first query). Pass it to the next request's
+   * `connect(env.DB, { session: bookmark })` to read at least as new as this request wrote.
+   */
+  bookmark(): D1SessionBookmark | null {
+    if (this.#session === undefined) {
+      throw new NoSession(
+        "bookmark() needs a Database opened with a session: connect(env.DB, { session })",
+      );
+    }
+    return this.#session.getBookmark();
   }
 
   /** A request-bound Relation over the Model's records, with its scopes as methods. */
