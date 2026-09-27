@@ -38,6 +38,15 @@ export type ScopesOf<C> = C extends { scopes: infer S }
     : S
   : {};
 
+/** A Model's association by name; `UnknownAssociation` for any other name. */
+export function associationOf(model: ModelClass, name: string): AssociationDefinition {
+  const definition = model.associations[name];
+  if (definition === undefined) {
+    throw new UnknownAssociation(`${model.name} has no association "${name}"`);
+  }
+  return definition;
+}
+
 /** What `loaded()` returns for an association accessor: its records, or its record or null. */
 export type LoadedValue<F> = F extends () => Promise<infer R>
   ? R
@@ -197,9 +206,7 @@ export class ModelBase {
    */
   loaded<K extends AssociationName<this>>(name: K): LoadedValue<this[K]> {
     const model = this.constructor as ModelClass;
-    if (model.associations[name] === undefined) {
-      throw new UnknownAssociation(`${model.name} has no association "${name}"`);
-    }
+    associationOf(model, name);
     if (!this[state].hasPreloaded(name)) {
       throw new AssociationNotLoaded(
         `${model.name} record hasn't loaded "${name}"; preload it with includes("${name}")`,

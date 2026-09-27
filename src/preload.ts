@@ -1,7 +1,7 @@
-import { prepareModel, type AssociationDefinition } from "./associations.ts";
+import { linkOf, prepareModel, type AssociationDefinition } from "./associations.ts";
 import type { IncludeTree } from "./compiler.ts";
 import type { Executor } from "./executor.ts";
-import type { ModelBase, ModelClass } from "./model.ts";
+import { associationOf, type ModelBase, type ModelClass } from "./model.ts";
 import { state } from "./record-state.ts";
 import { relationFor } from "./scoped-relation.ts";
 
@@ -28,47 +28,22 @@ export async function preload(
   }
 }
 
+/**
+ * Loads one association for `records` and attaches it: each record gets the targets whose
+ * linking attribute matches its own (hasMany: all of them; belongsTo/hasOne: the first, or null).
+ */
 async function preloadOne(
   records: readonly ModelBase[],
   name: string,
   definition: AssociationDefinition,
   executor: Executor,
 ): Promise<ModelBase[]> {
-  return definition.kind === "belongsTo"
-    ? preloadOwners(records, name, definition, executor)
-    : preloadTargets(records, name, definition, executor);
-}
-
-/** belongsTo: each record gets the one target its foreign key points at, or null. */
-async function preloadOwners(
-  records: readonly ModelBase[],
-  name: string,
-  definition: AssociationDefinition,
-  executor: Executor,
-): Promise<ModelBase[]> {
-  const target = definition.target();
-  const keyAttribute = definition.primaryKey ?? target.primaryKey;
-  const keys = records.map((record) => record[state].read(definition.foreignKey));
-  const targets = await loadByKeys(executor, target, keyAttribute, keys);
-  const byKey = groupBy(targets, keyAttribute);
-  for (const [index, record] of records.entries()) {
-    record[state].setPreloaded(name, byKey.get(keys[index])?.[0] ?? null);
-  }
-  return targets;
-}
-
-/** hasMany/hasOne: each record gets the targets pointing at it (hasOne: the first, or null). */
-async function preloadTargets(
-  records: readonly ModelBase[],
-  name: string,
-  definition: AssociationDefinition,
-  executor: Executor,
-): Promise<ModelBase[]> {
   const owner = (records[0] as ModelBase).constructor as ModelClass;
-  const ownerKey = definition.primaryKey ?? owner.primaryKey;
-  const keys = records.map((record) => record[state].read(ownerKey));
-  const targets = await loadByKeys(executor, definition.target(), definition.foreignKey, keys);
-  const byKey = groupBy(targets, definition.foreignKey);
+  const target = definition.target();
+  const { ownerAttribute, targetAttribute } = linkOf(definition, owner, target);
+  const keys = records.map((record) => record[state].read(ownerAttribute));
+  const targets = await loadByKeys(executor, target, targetAttribute, keys);
+  const byKey = groupBy(targets, targetAttribute);
   for (const [index, record] of records.entries()) {
     const group = byKey.get(keys[index]) ?? [];
     record[state].setPreloaded(name, definition.kind === "hasMany" ? group : (group[0] ?? null));
@@ -81,7 +56,9 @@ function groupBy(records: readonly ModelBase[], attribute: string): Map<unknown,
   const groups = new Map<unknown, ModelBase[]>();
   for (const record of records) {
     const key = record[state].read(attribute);
-    groups.set(key, [...(groups.get(key) ?? []), record]);
+    const group = groups.get(key);
+    if (group === undefined) groups.set(key, [record]);
+    else group.push(record);
   }
   return groups;
 }
@@ -104,4 +81,50 @@ async function loadByKeys(
     loaded.push(...(await relation.toArray()));
   }
   return loaded;
+}
+
+/** Normalizes `includes()` arguments into a tree, checking every name against its Model. */
+export function includeTree(model: ModelClass, specs: readonly unknown[]): IncludeTree {
+  let tree: IncludeTree = {};
+  for (const spec of specs) {
+    const entries: [string, readonly unknown[]][] =
+      typeof spec === "string"
+        ? [[spec, []]]
+        : Object.entries(spec as Record<string, unknown>).map(([name, nested]) => [
+            name,
+            Array.isArray(nested) ? nested : [nested],
+          ]);
+    for (const [name, nested] of entries) {
+      const definition = associationOf(model, name);
+      const target = definition.target();
+      // A Model reached only through includes is still verified and gets its accessors.
+      prepareModel(target);
+      tree = mergeTrees(tree, { [name]: includeTree(target, nested) });
+    }
+  }
+  return tree;
+}
+
+/** The union of two include trees. */
+export function mergeTrees(a: IncludeTree, b: IncludeTree): IncludeTree {
+  const merged: Record<string, IncludeTree> = { ...a };
+  for (const [name, nested] of Object.entries(b)) {
+    merged[name] = mergeTrees(merged[name] ?? {}, nested);
+  }
+  return merged;
+}
+
+/** Whether two include trees name the same associations at every level. */
+export function sameTree(a: IncludeTree, b: IncludeTree): boolean {
+  const names = Object.keys(a);
+  if (names.length !== Object.keys(b).length) return false;
+  return names.every((name) => b[name] !== undefined && sameTree(a[name]!, b[name]!));
+}
+
+/** The attributes a record must have loaded for its includes to be preloaded. */
+export function keysForIncludes(model: ModelClass, includes: IncludeTree | undefined): string[] {
+  return Object.keys(includes ?? {}).map((name) => {
+    const definition = associationOf(model, name);
+    return linkOf(definition, model, definition.target()).ownerAttribute;
+  });
 }
