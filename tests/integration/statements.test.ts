@@ -73,6 +73,13 @@ class ApiKey extends Model({
   static tableName = "api_keys";
 }
 
+class Account extends Model({
+  id: { type: "integer", null: false },
+  externalAccountId: "string",
+}) {
+  static tableName = "accounts";
+}
+
 const past = new Date(Date.UTC(2020, 0, 1));
 
 describe("statements", () => {
@@ -90,6 +97,7 @@ describe("statements", () => {
       binding.prepare("DELETE FROM posts"),
       binding.prepare("DELETE FROM users"),
       binding.prepare("DELETE FROM api_keys"),
+      binding.prepare("DELETE FROM accounts"),
     ]);
   });
 
@@ -416,7 +424,6 @@ describe("statements", () => {
   describe("db.batch", () => {
     test("runs the statements in order, atomically, and resolves to each one's meta", async () => {
       const db = connect(binding);
-      // Ids generated in code link rows inside one batch.
       const userId = 7;
 
       const metas = await db.batch([
@@ -429,6 +436,19 @@ describe("statements", () => {
       const user = await db.model(User).find(userId);
       expect(user.role).toBe("author");
       expect(await user.posts().pluck("title")).toEqual(["Hello"]);
+    });
+
+    test("ids generated in code link rows inside one batch", async () => {
+      const db = connect(binding);
+      const keyId = crypto.randomUUID();
+
+      await db.batch([
+        db.model(ApiKey).insert({ id: keyId, label: "deploy" }),
+        db.model(Account).insert({ externalAccountId: keyId }),
+      ]);
+
+      const account = await db.model(Account).findByOrThrow({ externalAccountId: keyId });
+      expect((await db.model(ApiKey).find(account.externalAccountId!)).label).toBe("deploy");
     });
 
     test("a failing statement rolls the whole batch back and throws its ConstraintViolation", async () => {
@@ -484,9 +504,9 @@ describe("statements", () => {
         db.model(User).where({ id: 1 }).deleteAll(),
       ]);
 
-      expect(events.map((event) => [event.sql.split(" ")[0], event.meta?.changes])).toEqual([
-        ["INSERT", 1],
-        ["DELETE", 1],
+      expect(events.map((event) => [event.params, event.meta?.changes])).toEqual([
+        [[1, "a@example.com"], 1],
+        [[1], 1],
       ]);
       expect(events.every((event) => event.durationMs >= 0 && event.error === undefined)).toBe(
         true,
