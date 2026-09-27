@@ -1,5 +1,6 @@
 import { attributeOf, type AttributeDefinition } from "./metadata.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
+import { Comparison } from "./comparisons.ts";
 import { Either, Negated, type Condition, type QueryDescription } from "./query.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
 import { writeUntypedValue, writeValue } from "./conversion.ts";
@@ -58,7 +59,9 @@ function compileCondition(
   }
   if (condition instanceof SafeSql) return `(${compileFragment(condition, model, params)})`;
   const parts = Object.entries(condition).map(([name, value]) =>
-    compileEquality(attributeOf(model, name), value, params),
+    value instanceof Comparison
+      ? compileComparison(attributeOf(model, name), value, params)
+      : compileEquality(attributeOf(model, name), value, params),
   );
   return `(${parts.join(" AND ")})`;
 }
@@ -188,6 +191,24 @@ export function compileCount(query: QueryDescription, attribute?: string): Compi
   const column = quoteIdentifier(attributeOf(query.model, attribute).column);
   const counted = query.distinct ? `DISTINCT ${column}` : column;
   return { ...inner, sql: `SELECT COUNT(${counted}) AS count FROM (${inner.sql})` };
+}
+
+/** `attr >= ?`, `attr BETWEEN ? AND ?`, …, with the values converted like the attribute's. */
+function compileComparison(
+  attribute: AttributeDefinition,
+  { operator, values }: Comparison,
+  params: unknown[],
+): string {
+  const column = quoteIdentifier(attribute.column);
+  params.push(...values.map((value) => writeValue(attribute.type, value)));
+  switch (operator) {
+    case "between":
+      return `${column} BETWEEN ? AND ?`;
+    case "from":
+      return `(${column} >= ? AND ${column} < ?)`;
+    default:
+      return `${column} ${operator} ?`;
+  }
 }
 
 /** `attr = value`, with NULL and arrays (IN) handled the way the contract specifies. */

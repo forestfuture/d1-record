@@ -33,15 +33,20 @@ import {
   type ModelClass,
 } from "./model.ts";
 import { readValue } from "./conversion.ts";
+import type { Comparison } from "./comparisons.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
 import { insertStatement, Statement } from "./statement.ts";
 
 /**
- * Attribute conditions for `where`/`findBy`: a value, or an array meaning "any of these".
- * `null` (alone or in an array) matches NULL, and is only allowed for nullable attributes.
+ * Attribute conditions for `where`/`findBy`: a value, an array meaning "any of these", or a
+ * comparison (`gte(18)`, `between(a, b)`). `null` (alone or in an array) matches NULL, and is
+ * only allowed for nullable attributes.
  */
 export type Conditions<M> = {
-  [K in keyof AttributesOf<M>]?: AttributesOf<M>[K] | readonly AttributesOf<M>[K][];
+  [K in keyof AttributesOf<M>]?:
+    | AttributesOf<M>[K]
+    | readonly AttributesOf<M>[K][]
+    | Comparison<NonNullable<AttributesOf<M>[K]>>;
 };
 
 /** `{ attribute: "asc" | "desc" }`; key order sets precedence. */

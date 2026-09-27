@@ -43,4 +43,5 @@ export {
   type Scoped,
 } from "./relation.ts";
 export type { Statement } from "./statement.ts";
+export { between, gt, gte, lt, lte, type Comparison } from "./comparisons.ts";
 export { column, sql, type ColumnReference, type SafeSql } from "./sql.ts";
