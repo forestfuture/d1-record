@@ -41,4 +41,21 @@ export class Executor {
     this.#onQuery?.({ sql, params, durationMs: performance.now() - started, meta: result.meta });
     return result.results;
   }
+
+  /** Runs one statement for its effect and resolves to D1's `meta`. */
+  async run({ sql, params, model }: CompiledQuery): Promise<D1Meta> {
+    const started = performance.now();
+    let result: D1Result;
+    try {
+      result = await this.#binding
+        .prepare(sql)
+        .bind(...params)
+        .run();
+    } catch (error) {
+      this.#onQuery?.({ sql, params, durationMs: performance.now() - started, error });
+      throw translateConstraintError(error, model);
+    }
+    this.#onQuery?.({ sql, params, durationMs: performance.now() - started, meta: result.meta });
+    return result.meta;
+  }
 }

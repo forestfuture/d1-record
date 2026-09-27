@@ -41,4 +41,5 @@ export {
   type ScopeMethods,
   type Scoped,
 } from "./relation.ts";
+export type { Statement } from "./statement.ts";
 export { column, sql, type ColumnReference, type SafeSql } from "./sql.ts";

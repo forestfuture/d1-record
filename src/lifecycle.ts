@@ -1,10 +1,4 @@
-import {
-  compileDelete,
-  compileInsert,
-  compileSelect,
-  compileUpdate,
-  type Assignment,
-} from "./compiler.ts";
+import { compileDelete, compileInsert, compileSelect, compileUpdate } from "./compiler.ts";
 import { AbortAfterPersistence, CallbackAbort, RecordNotFound } from "./errors.ts";
 import { clearErrors } from "./errors-collection.ts";
 import {
@@ -17,33 +11,11 @@ import type { ModelBase, ModelClass } from "./model.ts";
 import { Negated, type Condition } from "./query.ts";
 import { state } from "./record-state.ts";
 import { column, sql } from "./sql.ts";
+import { timestampsFor } from "./timestamps.ts";
 import { runValidations, type UniquenessOptions } from "./validations.ts";
 
 function modelOf(record: ModelBase): ModelClass {
   return record.constructor as ModelClass;
-}
-
-/** Whether the Model declares `name` as a datetime attribute, which turns its timestamp on. */
-function hasTimestamp(record: ModelBase, name: "createdAt" | "updatedAt"): boolean {
-  return modelOf(record).attributeDefinitions.get(name)?.type === "datetime";
-}
-
-/**
- * The timestamps to add to a write: `createdAt` and `updatedAt` on insert, `updatedAt` on
- * update. Never one the caller assigned. They join the pending write and reach the record
- * only after D1 accepts it, so a failed save leaves nothing but the caller's own changes.
- */
-function timestampsFor(
-  record: ModelBase,
-  isInsert: boolean,
-  own: readonly Assignment[],
-): Assignment[] {
-  const now = new Date();
-  const assigned = new Set(own.map(([name]) => name));
-  const names = isInsert ? (["createdAt", "updatedAt"] as const) : (["updatedAt"] as const);
-  return names
-    .filter((name) => hasTimestamp(record, name) && !assigned.has(name))
-    .map((name): Assignment => [name, now]);
 }
 
 /**
@@ -180,7 +152,7 @@ async function beforeWrite(record: ModelBase, isInsert: boolean): Promise<boolea
 async function insertRecord(record: ModelBase): Promise<void> {
   const recordState = record[state];
   const own = recordState.insertAssignments();
-  const stamps = timestampsFor(record, true, own);
+  const stamps = timestampsFor(modelOf(record), true, own);
   const insert = compileInsert(modelOf(record), [...own, ...stamps]);
   const [row] = await recordState.executor.all(insert);
   recordState.commitInsert(row);
@@ -194,7 +166,7 @@ async function updateRecord(record: ModelBase): Promise<void> {
     recordState.commitClean();
     return;
   }
-  const stamps = timestampsFor(record, false, own);
+  const stamps = timestampsFor(modelOf(record), false, own);
   const update = compileUpdate(modelOf(record), [...own, ...stamps], recordState.storedKey);
   await recordState.executor.all(update);
   recordState.commitUpdate(stamps);
