@@ -122,8 +122,10 @@ function accessorFor(
         if (this[state].hasPreloaded(name)) {
           return relation[withPreloaded](this[state].preloaded(name) as readonly ModelBase[]);
         }
-        // An unsaved owner has no records yet; building through it still gets the (null) key.
-        return key === null ? relation[markUnsavedOwner](model(this).name) : relation;
+        // An owner without a key has no records yet; building through it still gets the (null) key.
+        return key === null
+          ? relation[markUnsavedOwner](missingKeyReason(this, definition))
+          : relation;
       };
   }
 }
@@ -137,6 +139,14 @@ function targetOf(definition: AssociationDefinition): ModelClass {
 
 function model(record: ModelBase): ModelClass {
   return record.constructor as ModelClass;
+}
+
+/** Why an owner has no key for its targets to point at. */
+function missingKeyReason(owner: ModelBase, definition: AssociationDefinition): string {
+  const { name, primaryKey } = model(owner);
+  return owner[state].isNew
+    ? `the ${name} hasn't been saved; save the ${name} first`
+    : `the ${name} has no ${definition.primaryKey ?? primaryKey}`;
 }
 
 /** The owner's value that targets point at (its primary key, by default); null if unsaved. */

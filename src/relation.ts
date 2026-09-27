@@ -300,18 +300,16 @@ export class Relation<M extends ModelBase, S = {}> {
     return buildRecord(this.#model, { ...inherited, ...attributes }, this.#executor);
   }
 
-  /** The association Relation of an unsaved owner: reads find nothing, `create` refuses. */
-  [markUnsavedOwner](ownerName: string): Scoped<M, S> {
-    return this.#with({ none: true, unsavedOwner: ownerName });
+  /** The association Relation of an owner without a key: reads find nothing, `create` refuses. */
+  [markUnsavedOwner](reason: string): Scoped<M, S> {
+    return this.#with({ none: true, unsavedOwner: reason });
   }
 
-  /** As in Rails, records can't be created through an owner that hasn't been saved. */
+  /** As in Rails, records can't be created through an owner that has no key yet. */
   #requireSavedOwner(): void {
-    const owner = this.#query.unsavedOwner;
-    if (owner !== undefined) {
-      throw new RecordNotSaved(
-        `You cannot create a ${this.#model.name} through an unsaved ${owner}: save the ${owner} first`,
-      );
+    const reason = this.#query.unsavedOwner;
+    if (reason !== undefined) {
+      throw new RecordNotSaved(`You cannot create a ${this.#model.name} here: ${reason}`);
     }
   }
 
