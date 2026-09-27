@@ -1,6 +1,6 @@
 import { attributeOf, type AttributeDefinition } from "./metadata.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
-import { Comparison } from "./comparisons.ts";
+import { Comparison, type Operator } from "./comparisons.ts";
 import { Either, Negated, type Condition, type QueryDescription } from "./query.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
 import { writeUntypedValue, writeValue } from "./conversion.ts";
@@ -199,17 +199,19 @@ function compileComparison(
   { operator, values }: Comparison,
   params: unknown[],
 ): string {
-  const column = quoteIdentifier(attribute.column);
   params.push(...values.map((value) => writeValue(attribute.type, value)));
-  switch (operator) {
-    case "between":
-      return `${column} BETWEEN ? AND ?`;
-    case "from":
-      return `(${column} >= ? AND ${column} < ?)`;
-    default:
-      return `${column} ${operator} ?`;
-  }
+  return COMPARISON_SQL[operator](quoteIdentifier(attribute.column));
 }
+
+/** Each comparison's SQL for a quoted column; values are bound in order. */
+const COMPARISON_SQL: Record<Operator, (column: string) => string> = {
+  ">": (column) => `${column} > ?`,
+  ">=": (column) => `${column} >= ?`,
+  "<": (column) => `${column} < ?`,
+  "<=": (column) => `${column} <= ?`,
+  between: (column) => `${column} BETWEEN ? AND ?`,
+  betweenExcludingEnd: (column) => `(${column} >= ? AND ${column} < ?)`,
+};
 
 /** `attr = value`, with NULL and arrays (IN) handled the way the contract specifies. */
 function compileEquality(
