@@ -42,18 +42,19 @@ export class RecordDestroyed extends D1RecordError {
 
 /**
  * D1 rejected a write because of a database constraint. `table`, `columns` and `attributes`
- * are filled in when D1's message names them. The original D1 error is the `cause`.
+ * are filled in when D1's message names them. `table` is null only for a batch writing to
+ * several tables, when D1 doesn't say which one failed. The original D1 error is the `cause`.
  */
 export class ConstraintViolation extends D1RecordError {
   override name = "ConstraintViolation";
-  readonly table: string;
+  readonly table: string | null;
   readonly columns: readonly string[];
   readonly attributes: readonly string[];
 
   constructor(
     message: string,
     details: {
-      table: string;
+      table: string | null;
       columns: readonly string[];
       attributes: readonly string[];
       cause: unknown;

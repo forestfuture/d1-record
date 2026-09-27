@@ -1,8 +1,10 @@
+import { IncompatibleRelation } from "./errors.ts";
 import { Executor, type QueryListener } from "./executor.ts";
 import { prepareModel } from "./associations.ts";
 import type { ModelBase, ModelClass, ScopesOf } from "./model.ts";
 import type { Scoped } from "./relation.ts";
 import { relationFor } from "./scoped-relation.ts";
+import { statementParts, type Statement } from "./statement.ts";
 
 /** One request-bound Relation per Model, keyed like the object passed to `db.models()`. */
 export type RelationsFor<T extends Record<string, ModelClass<ModelBase>>> = {
@@ -34,6 +36,24 @@ export class Database {
     return Object.fromEntries(
       Object.entries(models).map(([name, model]) => [name, this.model(model)]),
     ) as unknown as RelationsFor<T>;
+  }
+
+  /**
+   * Runs statements from `insert`, `updateAll` and `deleteAll` atomically, with D1's `batch()`:
+   * all of them are written, or none. Resolves to D1's `meta` for each, in order. There's no
+   * interactive `transaction()`, because D1 can't hold one open across awaits.
+   */
+  async batch(statements: readonly Statement[]): Promise<D1Meta[]> {
+    const queries = statements.map((statement) => {
+      const { executor, query } = statement[statementParts];
+      if (executor !== this.#executor) {
+        throw new IncompatibleRelation(
+          "batch() needs statements built on this Database; one comes from another connect() call",
+        );
+      }
+      return query;
+    });
+    return this.#executor.batch(queries);
   }
 }
 

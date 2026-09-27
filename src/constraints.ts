@@ -32,23 +32,46 @@ function columnsIn(list: string | undefined, table: string): string[] {
 }
 
 /**
- * Translates a D1 constraint failure from a write to `model`'s table into the matching
- * `ConstraintViolation`. Any other error is returned unchanged.
+ * The Model a failure belongs to: the one whose table D1's message names, or else the only
+ * Model written to. Null when a batch writes to several and D1 doesn't say which failed.
  */
-export function translateConstraintError(error: unknown, model: ModelClass): unknown {
+function failedModel(list: string | undefined, models: readonly ModelClass[]): ModelClass | null {
+  const named = models.find((model) => columnsIn(list, model.tableName).length > 0);
+  if (named !== undefined) return named;
+  const distinct = new Set(models);
+  return distinct.size === 1 ? models[0]! : null;
+}
+
+/**
+ * Translates a D1 constraint failure from a write to the tables of `models` (one statement's,
+ * or a batch's) into the matching `ConstraintViolation`. Any other error is returned unchanged.
+ */
+export function translateConstraintError(error: unknown, models: readonly ModelClass[]): unknown {
   const message = error instanceof Error ? error.message : String(error);
   for (const [pattern, Kind, label] of KINDS) {
     const match = pattern.exec(message);
-    if (match === null) continue;
-    const columns = columnsIn(match[1], model.tableName);
-    const attributes = columns.flatMap((column) => attributesForColumn(model, column));
-    const named = columns.length > 0 ? ` (${columns.join(", ")})` : "";
-    return new Kind(`${model.name}${named}: ${label}`, {
-      table: model.tableName,
-      columns,
-      attributes,
-      cause: error,
-    });
+    if (match !== null)
+      return violation([Kind, label], failedModel(match[1], models), match[1], error);
   }
   return error;
+}
+
+function violation(
+  [Kind, label]: readonly [ViolationClass, string],
+  model: ModelClass | null,
+  list: string | undefined,
+  cause: unknown,
+): ConstraintViolation {
+  if (model === null) {
+    return new Kind(`batch: ${label}`, { table: null, columns: [], attributes: [], cause });
+  }
+  const columns = columnsIn(list, model.tableName);
+  const attributes = columns.flatMap((column) => attributesForColumn(model, column));
+  const named = columns.length > 0 ? ` (${columns.join(", ")})` : "";
+  return new Kind(`${model.name}${named}: ${label}`, {
+    table: model.tableName,
+    columns,
+    attributes,
+    cause,
+  });
 }

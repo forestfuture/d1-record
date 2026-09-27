@@ -3,6 +3,7 @@ import {
   column,
   connect,
   IncompatibleRelation,
+  InvalidForeignKey,
   Model,
   NotNullViolation,
   RecordNotSaved,
@@ -409,6 +410,122 @@ describe("statements", () => {
           [3, 2],
         ]);
       });
+    });
+  });
+
+  describe("db.batch", () => {
+    test("runs the statements in order, atomically, and resolves to each one's meta", async () => {
+      const db = connect(binding);
+      // Ids generated in code link rows inside one batch.
+      const userId = 7;
+
+      const metas = await db.batch([
+        db.model(User).insert({ id: userId, email: "a@example.com", role: "member" }),
+        db.model(Post).insert({ userId, title: "Hello", published: true }),
+        db.model(User).where({ id: userId }).updateAll({ role: "author" }),
+      ]);
+
+      expect(metas.map((meta) => meta.changes)).toEqual([1, 1, 1]);
+      const user = await db.model(User).find(userId);
+      expect(user.role).toBe("author");
+      expect(await user.posts().pluck("title")).toEqual(["Hello"]);
+    });
+
+    test("a failing statement rolls the whole batch back and throws its ConstraintViolation", async () => {
+      const db = connect(binding);
+      await db.model(User).insert({ id: 1, email: "a@example.com" }).run();
+
+      const error: unknown = await db
+        .batch([
+          db.model(User).insert({ id: 2, email: "b@example.com" }),
+          db.model(Post).insert({ userId: 2, title: "Hello", published: true }),
+          db.model(User).insert({ id: 3, email: "a@example.com" }),
+        ])
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(RecordNotUnique);
+      expect(error).toMatchObject({ table: "users", columns: ["email"], attributes: ["email"] });
+      expect(await db.model(User).pluck("id")).toEqual([1]);
+      expect(await db.model(Post).count()).toBe(0);
+    });
+
+    test("a constraint D1 doesn't name a table for is the batch's Model if it has only one", async () => {
+      const db = connect(binding);
+
+      const error: unknown = await db
+        .batch([db.model(Post).insert({ userId: 99, title: "Orphan", published: true })])
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(InvalidForeignKey);
+      expect(error).toMatchObject({ table: "posts" });
+    });
+
+    test("…and no table when the batch writes to several", async () => {
+      const db = connect(binding);
+
+      const error: unknown = await db
+        .batch([
+          db.model(User).insert({ id: 1, email: "a@example.com" }),
+          db.model(Post).insert({ userId: 99, title: "Orphan", published: true }),
+        ])
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(InvalidForeignKey);
+      expect(error).toMatchObject({ table: null, columns: [], attributes: [] });
+      expect((error as Error).message).toMatch(/^batch: /);
+    });
+
+    test("onQuery hears once per statement, with D1's meta for each", async () => {
+      const events: QueryEvent[] = [];
+      const db = connect(binding, { onQuery: (event) => events.push(event) });
+
+      await db.batch([
+        db.model(User).insert({ id: 1, email: "a@example.com" }),
+        db.model(User).where({ id: 1 }).deleteAll(),
+      ]);
+
+      expect(events.map((event) => [event.sql.split(" ")[0], event.meta?.changes])).toEqual([
+        ["INSERT", 1],
+        ["DELETE", 1],
+      ]);
+      expect(events.every((event) => event.durationMs >= 0 && event.error === undefined)).toBe(
+        true,
+      );
+    });
+
+    test("…and when the batch fails, every statement is reported with the error", async () => {
+      const events: QueryEvent[] = [];
+      const db = connect(binding, { onQuery: (event) => events.push(event) });
+
+      await db
+        .batch([
+          db.model(User).insert({ id: 1, email: "a@example.com" }),
+          db.model(User).insert({ id: 2, email: "a@example.com" }),
+        ])
+        .catch(() => undefined);
+
+      expect(events).toHaveLength(2);
+      expect(events.every((event) => event.error !== undefined && event.meta === undefined)).toBe(
+        true,
+      );
+    });
+
+    test("an empty batch sends nothing", async () => {
+      const events: QueryEvent[] = [];
+      const db = connect(binding, { onQuery: (event) => events.push(event) });
+
+      expect(await db.batch([])).toEqual([]);
+      expect(events).toEqual([]);
+    });
+
+    test("statements built on another Database are refused", async () => {
+      const db = connect(binding);
+      const other = connect(binding);
+
+      await expect(
+        db.batch([other.model(User).insert({ email: "a@example.com" })]),
+      ).rejects.toThrow(IncompatibleRelation);
+      expect(await db.model(User).count()).toBe(0);
     });
   });
 });

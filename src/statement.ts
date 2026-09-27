@@ -4,6 +4,9 @@ import { attributeOf } from "./metadata.ts";
 import type { ModelClass } from "./model.ts";
 import { timestampsFor } from "./timestamps.ts";
 
+/** The library's key for what `db.batch` needs from a Statement; not exported. */
+export const statementParts = Symbol("statementParts");
+
 /**
  * A write compiled in advance (`insert`, `updateAll`, `deleteAll`). It runs only through
  * `run()` or `db.batch([...])`, on the Database it was built from, and skips validations,
@@ -22,6 +25,11 @@ export class Statement {
   /** Runs this statement on its own and resolves to D1's `meta` for it. */
   async run(): Promise<D1Meta> {
     return this.#executor.run(this.#query);
+  }
+
+  /** The Database's Executor it runs on, and its compiled SQL. */
+  get [statementParts](): { executor: Executor; query: CompiledQuery } {
+    return { executor: this.#executor, query: this.#query };
   }
 }
 

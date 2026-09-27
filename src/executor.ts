@@ -25,37 +25,58 @@ export class Executor {
     this.#onQuery = onQuery;
   }
 
-  async all({ sql, params, model }: CompiledQuery): Promise<Record<string, unknown>[]> {
-    const started = performance.now();
-    let result: D1Result<Record<string, unknown>>;
-    try {
-      result = await this.#binding
-        .prepare(sql)
-        .bind(...params)
-        .all<Record<string, unknown>>();
-    } catch (error) {
-      this.#onQuery?.({ sql, params, durationMs: performance.now() - started, error });
-      throw translateConstraintError(error, model);
-    }
-    // Reported outside the try, so a listener that throws isn't mistaken for a D1 failure.
-    this.#onQuery?.({ sql, params, durationMs: performance.now() - started, meta: result.meta });
-    return result.results;
+  /** Runs one statement and resolves to its rows. */
+  async all(query: CompiledQuery): Promise<Record<string, unknown>[]> {
+    return (await this.#one(query)).results;
   }
 
   /** Runs one statement for its effect and resolves to D1's `meta`. */
-  async run({ sql, params, model }: CompiledQuery): Promise<D1Meta> {
+  async run(query: CompiledQuery): Promise<D1Meta> {
+    return (await this.#one(query)).meta;
+  }
+
+  /**
+   * Runs statements atomically with D1's `batch()` and resolves to each one's `meta`. D1 fails
+   * a batch as a whole, so on failure every statement is reported with the error.
+   */
+  async batch(queries: readonly CompiledQuery[]): Promise<D1Meta[]> {
+    if (queries.length === 0) return [];
     const started = performance.now();
-    let result: D1Result;
+    let results: D1Result[];
     try {
-      result = await this.#binding
-        .prepare(sql)
-        .bind(...params)
-        .run();
+      results = await this.#binding.batch(queries.map((query) => this.#prepare(query)));
+    } catch (error) {
+      const durationMs = performance.now() - started;
+      for (const { sql, params } of queries) this.#onQuery?.({ sql, params, durationMs, error });
+      throw translateConstraintError(
+        error,
+        queries.map(({ model }) => model),
+      );
+    }
+    // D1 times each statement of a batch itself.
+    queries.forEach(({ sql, params }, index) => {
+      const { meta } = results[index]!;
+      this.#onQuery?.({ sql, params, durationMs: meta.duration, meta });
+    });
+    return results.map(({ meta }) => meta);
+  }
+
+  async #one(query: CompiledQuery): Promise<D1Result<Record<string, unknown>>> {
+    const { sql, params, model } = query;
+    const started = performance.now();
+    let result: D1Result<Record<string, unknown>>;
+    try {
+      result = await this.#prepare(query).all<Record<string, unknown>>();
     } catch (error) {
       this.#onQuery?.({ sql, params, durationMs: performance.now() - started, error });
-      throw translateConstraintError(error, model);
+      throw translateConstraintError(error, [model]);
     }
+    // Reported outside the try, so a listener that throws isn't mistaken for a D1 failure.
     this.#onQuery?.({ sql, params, durationMs: performance.now() - started, meta: result.meta });
-    return result.meta;
+    return result;
+  }
+
+  #prepare({ sql, params }: CompiledQuery): D1PreparedStatement {
+    return this.#binding.prepare(sql).bind(...params);
   }
 }
