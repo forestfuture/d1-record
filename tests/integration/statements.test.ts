@@ -1,12 +1,16 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 import {
+  column,
   connect,
+  IncompatibleRelation,
   Model,
+  NotNullViolation,
   RecordNotSaved,
   RecordNotUnique,
   UnknownAttribute,
   type HasMany,
   type QueryEvent,
+  sql,
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
@@ -16,6 +20,7 @@ class User extends Model({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   role: "string",
+  age: "integer",
 }) {
   static tableName = "users";
 
@@ -41,6 +46,20 @@ class Post extends Model({
   updatedAt: "datetime",
 }) {
   static tableName = "posts";
+
+  static associations = this.defineAssociations({
+    comments: this.hasMany(() => Comment, { foreignKey: "postId" }),
+  });
+
+  declare comments: HasMany<typeof Comment>;
+}
+
+class Comment extends Model({
+  id: { type: "integer", null: false },
+  postId: "integer",
+  body: "string",
+}) {
+  static tableName = "comments";
 }
 
 let counter = 0;
@@ -66,6 +85,7 @@ describe("statements", () => {
   beforeEach(async () => {
     log.length = 0;
     await binding.batch([
+      binding.prepare("DELETE FROM comments"),
       binding.prepare("DELETE FROM posts"),
       binding.prepare("DELETE FROM users"),
       binding.prepare("DELETE FROM api_keys"),
@@ -174,6 +194,221 @@ describe("statements", () => {
       expect("then" in statement).toBe(false);
       expect(events).toEqual([]);
       expect(await db.model(User).count()).toBe(0);
+    });
+  });
+
+  describe("updateAll and deleteAll", () => {
+    async function seedUsers(db: ReturnType<typeof connect>): Promise<void> {
+      for (const [id, role] of [
+        [1, "admin"],
+        [2, "member"],
+        [3, "member"],
+        [4, "member"],
+      ] as const) {
+        await db
+          .model(User)
+          .insert({ id, email: `u${id}@example.com`, role, age: 20 })
+          .run();
+      }
+    }
+
+    async function roles(db: ReturnType<typeof connect>): Promise<unknown[]> {
+      return db.model(User).order({ id: "asc" }).pluck("id", "role");
+    }
+
+    test("updateAll sets attributes on the matching rows and resolves to D1's meta", async () => {
+      const db = connect(binding);
+      await seedUsers(db);
+
+      const meta = await db
+        .model(User)
+        .where({ role: "member" })
+        .updateAll({ role: "guest" })
+        .run();
+
+      expect(meta.changes).toBe(3);
+      expect(await roles(db)).toEqual([
+        [1, "admin"],
+        [2, "guest"],
+        [3, "guest"],
+        [4, "guest"],
+      ]);
+      expect(log).toEqual([]);
+    });
+
+    test("updateAll leaves updatedAt alone, as in Rails", async () => {
+      const db = connect(binding);
+      await db.model(User).insert({ id: 1, email: "a@example.com" }).run();
+      await db
+        .model(Post)
+        .insert({ id: 1, userId: 1, title: "Old", published: false, updatedAt: past })
+        .run();
+
+      await db.model(Post).updateAll({ title: "New", published: true }).run();
+
+      const post = await db.model(Post).find(1);
+      expect([post.title, post.published, post.updatedAt]).toEqual(["New", true, past]);
+    });
+
+    test("updateAll takes an sql fragment for changes that refer to columns", async () => {
+      const db = connect(binding);
+      await seedUsers(db);
+
+      await db
+        .model(User)
+        .where({ id: [1, 2] })
+        .updateAll(sql`${column("age")} = ${column("age")} + ${1}`)
+        .run();
+
+      expect(await db.model(User).order({ id: "asc" }).pluck("age")).toEqual([21, 21, 20, 20]);
+    });
+
+    test("updateAll refuses no changes, unknown attributes, undefined and plain strings", () => {
+      const users = connect(binding).model(User);
+
+      expect(() => users.updateAll({})).toThrow(TypeError);
+      expect(() => users.updateAll({ nope: 1 } as never)).toThrow(UnknownAttribute);
+      expect(() => users.updateAll({ role: undefined })).toThrow(TypeError);
+      expect(() => users.updateAll("role = 'x'" as never)).toThrow(TypeError);
+    });
+
+    test("deleteAll deletes the matching rows", async () => {
+      const db = connect(binding);
+      await seedUsers(db);
+
+      const meta = await db.model(User).where({ role: "member" }).deleteAll().run();
+
+      expect(meta.changes).toBe(3);
+      expect(await roles(db)).toEqual([[1, "admin"]]);
+    });
+
+    test("with limit and offset, only the rows of that page are changed, in the Relation's order", async () => {
+      const db = connect(binding);
+      await seedUsers(db);
+
+      await db.model(User).order({ id: "desc" }).limit(2).deleteAll().run();
+      await db.model(User).order({ id: "asc" }).offset(1).limit(1).updateAll({ role: "x" }).run();
+
+      expect(await roles(db)).toEqual([
+        [1, "admin"],
+        [2, "x"],
+      ]);
+    });
+
+    test("select, includes and an order without a limit don't change which rows are written", async () => {
+      const db = connect(binding);
+      await seedUsers(db);
+
+      await db
+        .model(User)
+        .where({ role: "member" })
+        .select("email")
+        .order({ id: "desc" })
+        .deleteAll()
+        .run();
+      await db.model(User).includes("posts").updateAll({ role: "owner" }).run();
+
+      expect(await roles(db)).toEqual([[1, "owner"]]);
+    });
+
+    test("distinct can't be written through", () => {
+      const users = connect(binding).model(User).select("role").distinct();
+
+      expect(() => users.deleteAll()).toThrow(IncompatibleRelation);
+      expect(() => users.updateAll({ role: "x" })).toThrow(IncompatibleRelation);
+    });
+
+    test("a none() statement is still sent, matches nothing, and reports no changes", async () => {
+      const events: QueryEvent[] = [];
+      const db = connect(binding, { onQuery: (event) => events.push(event) });
+      await seedUsers(db);
+      events.length = 0;
+
+      const deleted = await db.model(User).none().deleteAll().run();
+      const updated = await db.model(User).none().updateAll({ role: "x" }).run();
+
+      expect([deleted.changes, updated.changes]).toEqual([0, 0]);
+      expect(events).toHaveLength(2);
+      expect(await db.model(User).count()).toBe(4);
+    });
+
+    describe("through a hasMany", () => {
+      async function seedComments(db: ReturnType<typeof connect>): Promise<void> {
+        await db.model(User).insert({ id: 1, email: "a@example.com" }).run();
+        await db.model(Post).insert({ id: 1, userId: 1, title: "A", published: true }).run();
+        await db.model(Post).insert({ id: 2, userId: 1, title: "B", published: false }).run();
+        await db.model(Comment).insert({ id: 1, postId: 1, body: "one" }).run();
+        await db.model(Comment).insert({ id: 2, postId: 1, body: "two" }).run();
+        await db.model(Comment).insert({ id: 3, postId: 2, body: "three" }).run();
+      }
+
+      async function comments(db: ReturnType<typeof connect>): Promise<unknown[]> {
+        return db.model(Comment).order({ id: "asc" }).pluck("id", "postId");
+      }
+
+      test("deleteAll on the association nullifies the foreign key, as Rails' has_many does", async () => {
+        const db = connect(binding);
+        await seedComments(db);
+        const post = await db.model(Post).find(1);
+
+        await post.comments().deleteAll().run();
+
+        expect(await comments(db)).toEqual([
+          [1, null],
+          [2, null],
+          [3, 2],
+        ]);
+      });
+
+      test("…so a NOT NULL foreign key raises instead of losing rows", async () => {
+        const db = connect(binding);
+        await seedComments(db);
+        const user = await db.model(User).find(1);
+
+        await expect(user.posts().deleteAll().run()).rejects.toThrow(NotNullViolation);
+        expect(await db.model(Post).count()).toBe(2);
+      });
+
+      test("once the association is narrowed, deleteAll deletes, as a Rails association relation does", async () => {
+        const db = connect(binding);
+        await seedComments(db);
+        const post = await db.model(Post).find(1);
+
+        await post.comments().where({ body: "one" }).deleteAll().run();
+
+        expect(await comments(db)).toEqual([
+          [2, 1],
+          [3, 2],
+        ]);
+      });
+
+      test("updateAll on the association updates its records only", async () => {
+        const db = connect(binding);
+        await seedComments(db);
+        const post = await db.model(Post).find(1);
+
+        await post.comments().updateAll({ body: "edited" }).run();
+
+        expect(await db.model(Comment).order({ id: "asc" }).pluck("body")).toEqual([
+          "edited",
+          "edited",
+          "three",
+        ]);
+      });
+
+      test("the association of an unsaved owner changes nothing", async () => {
+        const db = connect(binding);
+        await seedComments(db);
+        const post = db.model(Post).build({ title: "New" });
+
+        expect((await post.comments().deleteAll().run()).changes).toBe(0);
+        expect((await post.comments().updateAll({ body: "x" }).run()).changes).toBe(0);
+        expect(await comments(db)).toEqual([
+          [1, 1],
+          [2, 1],
+          [3, 2],
+        ]);
+      });
     });
   });
 });
