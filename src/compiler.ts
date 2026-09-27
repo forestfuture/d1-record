@@ -36,8 +36,6 @@ export interface SelectQuery {
   unsavedOwner?: string;
   /** Associations to preload for every record loaded: `includes(...)`. */
   includes?: IncludeTree;
-  /** Records already preloaded for this hasMany; `toArray()` answers from them. */
-  preloaded?: readonly ModelBase[];
 }
 
 export type Condition = Record<string, unknown> | SafeSql | Negated | Either;
