@@ -28,10 +28,11 @@ import {
   type QueryDescription,
 } from "./query.ts";
 import type { Executor } from "./executor.ts";
-import { attributeOf } from "./metadata.ts";
+import { attributeOf, type AttributeType } from "./metadata.ts";
 import {
   buildRecord,
   hydrate,
+  primaryKeyOf,
   type AssociationName,
   type AttributesOf,
   type LoadedValue,
@@ -41,7 +42,6 @@ import {
 import { readValue } from "./conversion.ts";
 import type { Comparison } from "./comparisons.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
-import { state } from "./record-state.ts";
 import { insertStatement, Statement } from "./statement.ts";
 
 /**
@@ -83,6 +83,16 @@ function rejectUndefined(value: unknown, name: string, method: string): void {
 /** `{}` adds no condition at all (common when an object is built from optional filters). */
 function isEmptyConditions(conditions: object): boolean {
   return !(conditions instanceof SafeSql) && Object.keys(conditions).length === 0;
+}
+
+/** An id as the key attribute holds it, as Rails casts ids: `"01"` is `1` for an integer key. */
+function castKey(type: AttributeType, id: string | number): string | number {
+  if (type === "string") return String(id);
+  if ((type === "integer" || type === "real") && typeof id === "string" && id.trim() !== "") {
+    const number = Number(id);
+    if (!Number.isNaN(number)) return number;
+  }
+  return id;
 }
 
 /** `"desc"` or `{ direction: "desc", nulls: "last" }` for `attribute`, checked. */
@@ -364,8 +374,9 @@ export class Relation<M extends ModelBase, S = {}> {
   async find(...args: (string | number | readonly (string | number)[])[]): Promise<M | M[]> {
     const [only] = args;
     if (args.length === 1 && !Array.isArray(only)) return this.#findById(only as string | number);
-    // Each id once, as Rails does.
-    const ids = [...new Map(args.flat().map((id) => [String(id), id])).values()];
+    // Cast to the key's type, then each id once, as Rails does.
+    const { type } = attributeOf(this.#model, this.#model.primaryKey);
+    const ids = [...new Set(args.flat().map((id) => castKey(type, id)))];
     return ids.length === 0 ? [] : this.#findSome(ids);
   }
 
@@ -390,8 +401,8 @@ export class Relation<M extends ModelBase, S = {}> {
       );
     }
     if (this.#query.order.length > 0) return records;
-    const byId = new Map(records.map((record) => [String(record[state].read(primaryKey)), record]));
-    return ids.map((id) => byId.get(String(id))!);
+    const byId = new Map(records.map((record) => [primaryKeyOf(record), record]));
+    return ids.map((id) => byId.get(id) as M);
   }
 
   /** The first record matching `conditions` (in no particular order), or null. */
