@@ -7,7 +7,12 @@ import {
   type Assignment,
   type CompiledSql,
 } from "./compiler.ts";
-import { IncompatibleRelation, RecordNotFound, RecordNotSaved } from "./errors.ts";
+import {
+  IncompatibleRelation,
+  IrreversibleOrder,
+  RecordNotFound,
+  RecordNotSaved,
+} from "./errors.ts";
 import { includeTree, keysForIncludes, preload } from "./preload.ts";
 import {
   allOf,
@@ -17,6 +22,7 @@ import {
   mergeTrees,
   Negated,
   type Condition,
+  type NullsPlacement,
   type OrderDirection,
   type OrderTerm,
   type QueryDescription,
@@ -50,7 +56,11 @@ export type Conditions<M> = {
 };
 
 /** `{ attribute: "asc" | "desc" }`; key order sets precedence. */
-export type OrderSpec<M> = { [K in keyof AttributesOf<M>]?: OrderDirection };
+export type OrderSpec<M> = {
+  [K in keyof AttributesOf<M>]?:
+    | OrderDirection
+    | { direction: OrderDirection; nulls?: NullsPlacement };
+};
 
 function requireConditionObject(conditions: unknown, method: string): void {
   if (typeof conditions !== "object" || conditions === null || Array.isArray(conditions)) {
@@ -72,6 +82,33 @@ function rejectUndefined(value: unknown, name: string, method: string): void {
 /** `{}` adds no condition at all (common when an object is built from optional filters). */
 function isEmptyConditions(conditions: object): boolean {
   return !(conditions instanceof SafeSql) && Object.keys(conditions).length === 0;
+}
+
+/** `"desc"` or `{ direction: "desc", nulls: "last" }` for `attribute`, checked. */
+function attributeOrder(attribute: string, value: unknown, method: string): OrderTerm {
+  const { direction, nulls } =
+    typeof value === "object" && value !== null
+      ? (value as { direction?: unknown; nulls?: unknown })
+      : { direction: value, nulls: undefined };
+  if (direction !== "asc" && direction !== "desc") {
+    throw new TypeError(`${method}() direction for "${attribute}" must be "asc" or "desc"`);
+  }
+  if (nulls !== undefined && nulls !== "first" && nulls !== "last") {
+    throw new TypeError(`${method}() nulls for "${attribute}" must be "first" or "last"`);
+  }
+  return nulls === undefined ? { attribute, direction } : { attribute, direction, nulls };
+}
+
+/** The same term sorting the other way; NULLs move to the other end too, as in Rails. */
+function reversed(term: OrderTerm): OrderTerm {
+  if (term instanceof SafeSql) {
+    throw new IrreversibleOrder(
+      "last() can't reverse an order given as an sql fragment; order by attributes, or reverse the fragment yourself and use first()",
+    );
+  }
+  const direction = term.direction === "asc" ? "desc" : "asc";
+  if (term.nulls === undefined) return { attribute: term.attribute, direction };
+  return { ...term, direction, nulls: term.nulls === "first" ? "last" : "first" };
 }
 
 /** One record from the page: `limit(0)` stays empty, and `offset` is kept by the caller. */
@@ -194,16 +231,17 @@ export class Relation<M extends ModelBase, S = {}> {
     return this.#describing(merged(this.#query, other.#query));
   }
 
-  /** Sorts by each key in turn; repeated calls append. */
-  order(spec: OrderSpec<M>): Scoped<M, S> {
-    const terms: OrderTerm[] = Object.entries(spec).map(([attribute, direction]) => {
-      attributeOf(this.#model, attribute);
-      if (direction !== "asc" && direction !== "desc") {
-        throw new TypeError(`order() direction for "${attribute}" must be "asc" or "desc"`);
-      }
-      return { attribute, direction };
-    });
-    return this.#with({ order: [...this.#query.order, ...terms] });
+  /**
+   * Sorts by each key in turn (`{ createdAt: "desc" }`, or `{ role: { direction: "asc",
+   * nulls: "last" } }`), or by an `sql` fragment expression. Repeated calls append.
+   */
+  order(spec: OrderSpec<M> | SafeSql): Scoped<M, S> {
+    return this.#with({ order: [...this.#query.order, ...this.#orderTerms(spec, "order")] });
+  }
+
+  /** Replaces the order so far, as in Rails; `reorder()` removes it. */
+  reorder(spec?: OrderSpec<M> | SafeSql): Scoped<M, S> {
+    return this.#with({ order: spec === undefined ? [] : this.#orderTerms(spec, "reorder") });
   }
 
   limit(count: number): Scoped<M, S> {
@@ -348,11 +386,7 @@ export class Relation<M extends ModelBase, S = {}> {
       const page = await this.#load({ ...this.#query, order: this.#orderOrPrimaryKey() });
       return page.at(-1) ?? null;
     }
-    const reversed = this.#orderOrPrimaryKey().map(({ attribute, direction }): OrderTerm => ({
-      attribute,
-      direction: direction === "asc" ? "desc" : "asc",
-    }));
-    return this.#one(reversed);
+    return this.#one(this.#orderOrPrimaryKey().map(reversed));
   }
 
   /** One record in whatever order D1 returns, or null. */
@@ -520,6 +554,19 @@ export class Relation<M extends ModelBase, S = {}> {
     const records = rows.map((row) => hydrate(this.#model, row, this.#executor));
     if (query.includes !== undefined) await preload(records, query.includes, this.#executor);
     return records;
+  }
+
+  /** Checks an order spec when it's written, not when it runs. */
+  #orderTerms(spec: OrderSpec<M> | SafeSql, method: string): OrderTerm[] {
+    requireConditionObject(spec, method);
+    if (spec instanceof SafeSql) {
+      this.#checkConditions(spec, method);
+      return [spec];
+    }
+    return Object.entries(spec).map(([attribute, value]) => {
+      attributeOf(this.#model, attribute);
+      return attributeOrder(attribute, value, method);
+    });
   }
 
   #orderOrPrimaryKey(): readonly OrderTerm[] {

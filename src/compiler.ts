@@ -24,7 +24,7 @@ export function compileSelect(query: QueryDescription, projection?: string): Com
   let sql = `SELECT ${query.distinct ? "DISTINCT " : ""}${list}`;
   sql += ` FROM ${quoteIdentifier(query.model.tableName)}`;
   sql += compileWhere(query, params);
-  sql += compileOrder(query);
+  sql += compileOrder(query, params);
   sql += compilePagination(query, params);
   return { sql, params, model: query.model };
 }
@@ -233,12 +233,14 @@ function compileEquality(
   return parts.length > 0 ? `(${parts.join(" OR ")})` : "1 = 0";
 }
 
-function compileOrder({ model, order }: QueryDescription): string {
+function compileOrder({ model, order }: QueryDescription, params: unknown[]): string {
   if (order.length === 0) return "";
-  const terms = order.map(
-    ({ attribute, direction }) =>
-      `${quoteIdentifier(attributeOf(model, attribute).column)} ${direction.toUpperCase()}`,
-  );
+  const terms = order.map((term) => {
+    if (term instanceof SafeSql) return compileFragment(term, model, params);
+    const { attribute, direction, nulls } = term;
+    const column = quoteIdentifier(attributeOf(model, attribute).column);
+    return `${column} ${direction.toUpperCase()}${nulls ? ` NULLS ${nulls.toUpperCase()}` : ""}`;
+  });
   return ` ORDER BY ${terms.join(", ")}`;
 }
 
