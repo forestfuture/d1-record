@@ -91,10 +91,21 @@ describe("types", () => {
     expectTypeOf(typeOnly).toBeFunction();
   });
 
+  test("find with one id returns a record, with several or an array, records", () => {
+    const users = db.model(User);
+
+    // Checked by the type checker only; never called.
+    const typeOnly = async () => {
+      expectTypeOf(await users.find(1)).toEqualTypeOf<User>();
+      expectTypeOf(await users.find(1, 2)).toEqualTypeOf<User[]>();
+      expectTypeOf(await users.find([1, 2])).toEqualTypeOf<User[]>();
+    };
+    expectTypeOf(typeOnly).toBeFunction();
+  });
+
   test("finders and pluck return precise types", () => {
     const users = db.model(User);
 
-    expectTypeOf<ReturnType<typeof users.find>>().toEqualTypeOf<Promise<User>>();
     expectTypeOf<ReturnType<typeof users.findBy>>().toEqualTypeOf<Promise<User | null>>();
     expectTypeOf<ReturnType<typeof users.first>>().toEqualTypeOf<Promise<User | null>>();
 

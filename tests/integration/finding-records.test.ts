@@ -24,7 +24,8 @@ describe("finding records", () => {
       .prepare(
         `INSERT INTO users (id, email, role) VALUES
            (1, 'a@example.com', 'admin'),
-           (2, 'b@example.com', 'member')`,
+           (2, 'b@example.com', 'member'),
+           (3, 'c@example.com', 'member')`,
       )
       .run();
   });
@@ -73,5 +74,53 @@ describe("finding records", () => {
 
     await expect(paged.find(2)).resolves.toMatchObject({ id: 2 });
     await expect(paged.findBy({ role: "member" })).resolves.toMatchObject({ id: 2 });
+  });
+
+  describe("find with several ids", () => {
+    test("find(a, b) and find([a, b]) return the records in the ids' order", async () => {
+      const users = connect(binding).model(User);
+
+      expect((await users.find(3, 1)).map((user) => user.id)).toEqual([3, 1]);
+      expect((await users.find([2, 3, 1])).map((user) => user.id)).toEqual([2, 3, 1]);
+    });
+
+    test("with an order on the Relation, the records come in that order instead", async () => {
+      const users = connect(binding).model(User).order({ email: "desc" });
+
+      expect((await users.find(1, 3)).map((user) => user.id)).toEqual([3, 1]);
+    });
+
+    test("a missing id throws RecordNotFound naming what was found", async () => {
+      const lookup = connect(binding).model(User).find(1, 99);
+
+      await expect(lookup).rejects.toThrow(RecordNotFound);
+      await expect(lookup).rejects.toThrow(
+        "Couldn't find all User records with id: (1, 99) (found 1 results, but was looking for 2)",
+      );
+    });
+
+    test("the Relation's conditions still apply, so an excluded id is missing", async () => {
+      const members = connect(binding).model(User).where({ role: "member" });
+
+      await expect(members.find([1, 2])).rejects.toThrow(RecordNotFound);
+      expect((await members.find([2, 3])).map((user) => user.id)).toEqual([2, 3]);
+    });
+
+    test("repeated ids are found once, an array of one gives an array, and [] gives []", async () => {
+      const users = connect(binding).model(User);
+
+      expect((await users.find(2, 2, 1)).map((user) => user.id)).toEqual([2, 1]);
+      expect((await users.find([2])).map((user) => user.id)).toEqual([2]);
+      expect(await users.find([])).toEqual([]);
+    });
+
+    test("it's one query", async () => {
+      let queries = 0;
+      const users = connect(binding, { onQuery: () => queries++ }).model(User);
+
+      await users.find(1, 2, 3);
+
+      expect(queries).toBe(1);
+    });
   });
 });
