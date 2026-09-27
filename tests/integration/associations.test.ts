@@ -160,4 +160,18 @@ describe("associations", () => {
       /save the User first/,
     );
   });
+
+  test("a saved owner whose key is null reads nothing, and create says why", async () => {
+    class Member extends Model({ id: { type: "integer", null: false }, age: "integer" }) {
+      static tableName = "users";
+      static associations = this.defineAssociations({
+        posts: this.hasMany(() => Post, { foreignKey: "userId", primaryKey: "age" }),
+      });
+      declare posts: HasMany<typeof Post>;
+    }
+    const member = await connect(binding).model(Member).find(1); // age is NULL
+
+    expect(await member.posts().count()).toBe(0);
+    await expect(member.posts().create({ title: "x" })).rejects.toThrow(/Member has no age/);
+  });
 });

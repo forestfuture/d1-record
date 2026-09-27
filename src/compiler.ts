@@ -32,7 +32,7 @@ export interface SelectQuery {
   distinct?: boolean;
   /** From `none()`: matches nothing, so it's never sent to D1. */
   none?: boolean;
-  /** The Model name of an unsaved owner whose hasMany this is: `create` must refuse. */
+  /** Why records can't be created through this hasMany (its owner has no key yet). */
   unsavedOwner?: string;
   /** Associations to preload for every record loaded: `includes(...)`. */
   includes?: IncludeTree;
