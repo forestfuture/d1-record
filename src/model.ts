@@ -205,7 +205,9 @@ export class ModelBase {
         `${model.name} record hasn't loaded "${name}"; preload it with includes("${name}")`,
       );
     }
-    return this[state].preloaded(name) as LoadedValue<this[K]>;
+    const value = this[state].preloaded(name);
+    // A copy of a list, so changing what's returned never changes the preloaded data.
+    return (Array.isArray(value) ? [...value] : value) as LoadedValue<this[K]>;
   }
 
   /** Why a callback last refused a save or destroy (`abort(reason)`); never copied into `errors`. */
