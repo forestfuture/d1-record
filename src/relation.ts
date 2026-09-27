@@ -396,7 +396,7 @@ export class Relation<M extends ModelBase, S = {}> {
     const records = await this.#load(query);
     if (records.length < ids.length) {
       throw new RecordNotFound(
-        `Couldn't find all ${name} records with ${primaryKey}: (${ids.join(", ")}) ` +
+        `Couldn't find all ${name} records with '${primaryKey}': (${ids.join(", ")}) ` +
           `(found ${records.length} results, but was looking for ${ids.length})`,
       );
     }

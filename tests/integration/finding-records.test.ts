@@ -95,7 +95,7 @@ describe("finding records", () => {
 
       await expect(lookup).rejects.toThrow(RecordNotFound);
       await expect(lookup).rejects.toThrow(
-        "Couldn't find all User records with id: (1, 99) (found 1 results, but was looking for 2)",
+        "Couldn't find all User records with 'id': (1, 99) (found 1 results, but was looking for 2)",
       );
     });
 
@@ -119,6 +119,17 @@ describe("finding records", () => {
 
       expect((await users.find("03", 2)).map((user) => user.id)).toEqual([3, 2]);
       expect((await users.find("1", "01", 1)).map((user) => user.id)).toEqual([1]);
+    });
+
+    test("on none() nothing is found without a query, and [] is still []", async () => {
+      let queries = 0;
+      const users = connect(binding, { onQuery: () => queries++ })
+        .model(User)
+        .none();
+
+      await expect(users.find(1, 2)).rejects.toThrow(RecordNotFound);
+      expect(await users.find([])).toEqual([]);
+      expect(queries).toBe(0);
     });
 
     test("it's one query", async () => {

@@ -57,6 +57,18 @@ describe("ordering extras", () => {
     expect(await adminsFirst.pluck("id")).toEqual([3, 1, 2, 4]);
   });
 
+  test("a fragment order's values bind in place, alongside where and limit values, in count too", async () => {
+    const users = connect(binding)
+      .model(User)
+      .where({ id: [1, 2, 3, 4] })
+      .order(sql`${column("role")} = ${"member"} DESC`)
+      .order({ id: "asc" })
+      .limit(2);
+
+    expect(await users.pluck("id")).toEqual([1, 3]);
+    expect(await users.count()).toBe(2);
+  });
+
   test("nulls: first or last places NULLs regardless of direction", async () => {
     const users = connect(binding).model(User);
 
