@@ -15,6 +15,11 @@ export class UnknownAttribute extends D1RecordError {
   override name = "UnknownAttribute";
 }
 
+/** `bookmark()` was called on a Database opened without a `session`. */
+export class NoSession extends D1RecordError {
+  override name = "NoSession";
+}
+
 /** A record constructed directly (`new User()`) was used for something that needs D1. */
 export class NoDatabase extends D1RecordError {
   override name = "NoDatabase";
