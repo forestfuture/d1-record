@@ -66,7 +66,7 @@ export type OrderSpec<M> = {
     | { direction: OrderDirection; nulls?: NullsPlacement };
 };
 
-function requireConditionObject(conditions: unknown, method: string): void {
+function requireObjectOrFragment(conditions: unknown, method: string): void {
   if (typeof conditions !== "object" || conditions === null || Array.isArray(conditions)) {
     throw new TypeError(
       `${method}() takes an object of attribute values or an sql\`…\` fragment; plain strings are not accepted`,
@@ -109,10 +109,10 @@ function castKey(type: AttributeType, id: string | number): string | number {
 
 /** `"desc"` or `{ direction: "desc", nulls: "last" }` for `attribute`, checked. */
 function attributeOrder(attribute: string, value: unknown, method: string): OrderTerm {
-  const { direction, nulls } =
+  const [direction, nulls] =
     typeof value === "object" && value !== null
-      ? (value as { direction?: unknown; nulls?: unknown })
-      : { direction: value, nulls: undefined };
+      ? [Reflect.get(value, "direction"), Reflect.get(value, "nulls")]
+      : [value, undefined];
   if (direction !== "asc" && direction !== "desc") {
     throw new TypeError(`${method}() direction for "${attribute}" must be "asc" or "desc"`);
   }
@@ -130,8 +130,8 @@ function reversed(term: OrderTerm): OrderTerm {
     );
   }
   const direction = term.direction === "asc" ? "desc" : "asc";
-  if (term.nulls === undefined) return { attribute: term.attribute, direction };
-  return { ...term, direction, nulls: term.nulls === "first" ? "last" : "first" };
+  const nulls = term.nulls && (term.nulls === "first" ? "last" : "first");
+  return { ...term, direction, ...(nulls && { nulls }) };
 }
 
 /** One record from the page: `limit(0)` stays empty, and `offset` is kept by the caller. */
@@ -386,7 +386,9 @@ export class Relation<M extends ModelBase, S = {}> {
   ): Promise<M[]>;
   async find(...args: (string | number | readonly (string | number)[])[]): Promise<M | M[]> {
     const [only] = args;
-    if (args.length === 1 && !Array.isArray(only)) return this.#findById(only as string | number);
+    if (args.length === 1 && (typeof only === "string" || typeof only === "number")) {
+      return this.#findById(only);
+    }
     // Cast to the key's type, then each id once, as Rails does.
     const { type } = attributeOf(this.#model, this.#model.primaryKey);
     const ids = [...new Set(args.flat().map((id) => castKey(type, id)))];
@@ -513,11 +515,9 @@ export class Relation<M extends ModelBase, S = {}> {
    * unknown attributes, and undefined values (which would otherwise silently match nothing).
    */
   #checkConditions(conditions: object, method: string): void {
-    requireConditionObject(conditions, method);
+    requireObjectOrFragment(conditions, method);
     if (conditions instanceof SafeSql) {
-      for (const value of conditions.values) {
-        if (value instanceof ColumnReference) attributeOf(this.#model, value.attribute);
-      }
+      this.#checkFragment(conditions);
       return;
     }
     for (const [name, value] of Object.entries(conditions)) {
@@ -616,11 +616,18 @@ export class Relation<M extends ModelBase, S = {}> {
     return records;
   }
 
+  /** A fragment's `column()` references must name declared attributes. */
+  #checkFragment(fragment: SafeSql): void {
+    for (const value of fragment.values) {
+      if (value instanceof ColumnReference) attributeOf(this.#model, value.attribute);
+    }
+  }
+
   /** Checks an order spec when it's written, not when it runs. */
   #orderTerms(spec: OrderSpec<M> | SafeSql, method: string): OrderTerm[] {
-    requireConditionObject(spec, method);
+    requireObjectOrFragment(spec, method);
     if (spec instanceof SafeSql) {
-      this.#checkConditions(spec, method);
+      this.#checkFragment(spec);
       return [spec];
     }
     return Object.entries(spec).map(([attribute, value]) => {

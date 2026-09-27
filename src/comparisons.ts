@@ -1,6 +1,6 @@
 declare const comparedType: unique symbol;
 
-type Operator = ">" | ">=" | "<" | "<=" | "between" | "from";
+export type Operator = ">" | ">=" | "<" | "<=" | "between" | "betweenExcludingEnd";
 
 /**
  * A comparison condition for one attribute: `where({ age: gte(18) })`. Made by `gt`, `gte`,
@@ -56,5 +56,5 @@ export function between<T>(
   end: T,
   options: { excludeEnd?: boolean } = {},
 ): Comparison<T> {
-  return new Comparison(options.excludeEnd ? "from" : "between", [start, end]);
+  return new Comparison(options.excludeEnd ? "betweenExcludingEnd" : "between", [start, end]);
 }
