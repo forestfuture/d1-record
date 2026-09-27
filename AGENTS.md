@@ -22,7 +22,7 @@ Follow `docs/agents/workflow.md` for every issue. In short: orient (the issue an
 
 - Read `CONTEXT.md` (glossary), `docs/contract.md` (agreed behavior) and `docs/adr/` before changing the public API. `docs/brief.md` is the build brief, updated to match the ADRs. Where it disagrees with the contract or an ADR, the contract and ADR win.
 - Library code in `src/` must run on Cloudflare Workers. It's type-checked against `@cloudflare/workers-types` only (`src/tsconfig.json`), with no Node APIs.
-- Tests: `tests/unit/**` (no database) and `tests/integration/**` (real D1 through Miniflare in Node; see ADR-0002 and `tests/support/d1.ts`). Run one project with `vp test --project unit`.
+- Tests: `tests/unit/**` (no database), `tests/integration/**` (real D1 through Miniflare in Node; see ADR-0002 and `tests/support/d1.ts`), and `tests/remote/**` (a smoke suite against a real remote D1, skipped unless configured; see `docs/agents/remote-smoke.md`). Run one project with `vp test --project unit`.
 - Behavior is the contract: every public behavior needs a test, and integration tests prove it against D1.
 - `vp check` enforces size and complexity limits (Oxlint `complexity`, `max-depth`, `max-params`, `max-lines-per-function` in `vite.config.ts`). Split code that hits them rather than raising the limits. `vp run knip` reports unused files, exports and dependencies.
 

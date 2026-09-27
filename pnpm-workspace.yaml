@@ -9,4 +9,5 @@ peerDependencyRules:
   allowedVersions:
     vite: "*"
 allowBuilds:
+  esbuild: true
   workerd: true
