@@ -3,9 +3,7 @@ import {
   compileInsert,
   compileSelect,
   compileUpdate,
-  Negated,
   type Assignment,
-  type Condition,
 } from "./compiler.ts";
 import { AbortAfterPersistence, CallbackAbort, RecordNotFound } from "./errors.ts";
 import { clearErrors } from "./errors-collection.ts";
@@ -16,6 +14,7 @@ import {
   type CallbackKind,
 } from "./declarations.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
+import { Negated, type Condition } from "./query.ts";
 import { state } from "./record-state.ts";
 import { column, sql } from "./sql.ts";
 import { runValidations, type UniquenessOptions } from "./validations.ts";

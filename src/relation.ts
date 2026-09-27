@@ -1,17 +1,18 @@
+import { compileColumns, compileCount, compileSelect, type CompiledQuery } from "./compiler.ts";
+import { IncompatibleRelation, RecordNotFound, RecordNotSaved } from "./errors.ts";
+import { includeTree, keysForIncludes, preload } from "./preload.ts";
 import {
-  compileColumns,
-  compileCount,
-  compileSelect,
-  Either,
+  allOf,
+  either,
+  inheritedAttributes,
+  merged,
+  mergeTrees,
   Negated,
   type Condition,
   type OrderDirection,
-  type CompiledQuery,
   type OrderTerm,
-  type SelectQuery,
-} from "./compiler.ts";
-import { IncompatibleRelation, RecordNotFound, RecordNotSaved } from "./errors.ts";
-import { includeTree, keysForIncludes, mergeTrees, preload, sameTree } from "./preload.ts";
+  type QueryDescription,
+} from "./query.ts";
 import type { Executor } from "./executor.ts";
 import { attributeOf } from "./metadata.ts";
 import {
@@ -37,42 +38,6 @@ export type Conditions<M> = {
 /** `{ attribute: "asc" | "desc" }`; key order sets precedence. */
 export type OrderSpec<M> = { [K in keyof AttributesOf<M>]?: OrderDirection };
 
-/** Everything but the conditions: what `or` requires to match and `merge` may replace. */
-const SHAPE_CLAUSES = ["select", "order", "limit", "offset", "distinct"] as const;
-
-type ShapeClause = (typeof SHAPE_CLAUSES)[number];
-
-/** Whether two queries agree on one shape clause, by that clause's own rule. */
-function sameClause(clause: ShapeClause, a: SelectQuery, b: SelectQuery): boolean {
-  switch (clause) {
-    case "select":
-      return sameList(a.select, b.select, (x, y) => x === y);
-    case "order":
-      return sameList(
-        a.order,
-        b.order,
-        (x, y) => x.attribute === y.attribute && x.direction === y.direction,
-      );
-    default:
-      return Object.is(a[clause], b[clause]);
-  }
-}
-
-function sameList<T>(
-  a: readonly T[] | undefined,
-  b: readonly T[] | undefined,
-  same: (x: T, y: T) => boolean,
-): boolean {
-  if (a === undefined || b === undefined) return a === b;
-  return a.length === b.length && a.every((item, index) => same(item, b[index] as T));
-}
-
-/** Whether a clause was set explicitly; an empty order or an unset flag counts as not set. */
-function isSet(query: SelectQuery, clause: ShapeClause): boolean {
-  const value = query[clause];
-  return Array.isArray(value) ? value.length > 0 : value !== undefined && value !== false;
-}
-
 function requireConditionObject(conditions: unknown, method: string): void {
   if (typeof conditions !== "object" || conditions === null || Array.isArray(conditions)) {
     throw new TypeError(
@@ -90,27 +55,6 @@ function rejectUndefined(value: unknown, name: string, method: string): void {
   }
 }
 
-/**
- * The single equality values of a Relation's `where` conditions (a value or null), which a
- * record built from it starts with. Arrays, `whereNot`, `or` and fragments carry nothing over.
- */
-function inheritedAttributes(conditions: readonly Condition[]): Record<string, unknown> {
-  const inherited: Record<string, unknown> = {};
-  for (const condition of conditions) {
-    if (
-      condition instanceof SafeSql ||
-      condition instanceof Negated ||
-      condition instanceof Either
-    ) {
-      continue;
-    }
-    for (const [name, value] of Object.entries(condition)) {
-      if (!Array.isArray(value)) inherited[name] = value;
-    }
-  }
-  return inherited;
-}
-
 /** `{}` adds no condition at all (common when an object is built from optional filters). */
 function isEmptyConditions(conditions: object): boolean {
   return !(conditions instanceof SafeSql) && Object.keys(conditions).length === 0;
@@ -122,9 +66,6 @@ function atMostOne(limit: number | undefined): number {
 }
 
 declare const scopeTypes: unique symbol;
-
-/** The library's key for a hasMany Relation answered from preloaded records; not exported. */
-export const withPreloaded = Symbol("withPreloaded");
 
 /** The record type an association accessor loads: `Post` for `HasMany<typeof Post>`. */
 type TargetRecord<F> =
@@ -142,8 +83,19 @@ export type IncludeSpec<M> =
         | readonly IncludeSpec<TargetRecord<M[K]>>[];
     };
 
-/** The library's key for marking an association Relation of an unsaved owner; not exported. */
-export const markUnsavedOwner = Symbol("markUnsavedOwner");
+/**
+ * What a hasMany Relation knows about its owner. It isn't part of the query, so the compiler
+ * never sees it.
+ */
+export interface OwnerLink {
+  /** Why records can't be created through it: its owner has no key yet. Kept when chained. */
+  unsavedOwner?: string;
+  /** Records already preloaded; `toArray()` answers from them. Dropped when chained. */
+  preloaded?: readonly ModelBase[];
+}
+
+/** The library's key for making a hasMany Relation of an owner; not exported. */
+export const ofOwner = Symbol("ofOwner");
 
 /** The library's key for running a scope on a Relation; not exported from the package. */
 export const applyScope = Symbol("applyScope");
@@ -171,20 +123,19 @@ export class Relation<M extends ModelBase, S = {}> {
 
   readonly #executor: Executor;
   readonly #model: ModelClass<M>;
-  readonly #query: SelectQuery;
-  /** Records already preloaded for this hasMany; `toArray()` answers from them. Not query data. */
-  readonly #preloaded: readonly ModelBase[] | undefined;
+  readonly #query: QueryDescription;
+  readonly #owner: OwnerLink;
 
   constructor(
     executor: Executor,
     model: ModelClass<M>,
-    query?: SelectQuery,
-    preloaded?: readonly ModelBase[],
+    query?: QueryDescription,
+    owner: OwnerLink = {},
   ) {
     this.#executor = executor;
     this.#model = model;
-    this.#query = query ?? { model, conditions: [], order: [] };
-    this.#preloaded = preloaded;
+    this.#query = query ?? allOf(model);
+    this.#owner = owner;
   }
 
   where(conditions: Conditions<M> | SafeSql): Scoped<M, S> {
@@ -211,22 +162,7 @@ export class Relation<M extends ModelBase, S = {}> {
    */
   or(other: Relation<M, S>): Scoped<M, S> {
     this.#requireSameModel(other, "or");
-    if (this.#query.none) return this.#scoped(other);
-    if (other.#query.none) return this.#scoped(this);
-    for (const clause of SHAPE_CLAUSES) {
-      if (!sameClause(clause, this.#query, other.#query)) {
-        throw new IncompatibleRelation(
-          `or() needs relations that differ only in their conditions, but their ${clause} differs`,
-        );
-      }
-    }
-    if (!sameTree(this.#query.includes ?? {}, other.#query.includes ?? {})) {
-      throw new IncompatibleRelation(
-        "or() needs relations that differ only in their conditions, but their includes differ",
-      );
-    }
-    const either = new Either(this.#query.conditions, other.#query.conditions);
-    return this.#with({ conditions: [either] });
+    return this.#describing(either(this.#query, other.#query));
   }
 
   /**
@@ -236,18 +172,7 @@ export class Relation<M extends ModelBase, S = {}> {
    */
   merge(other: Relation<M, S>): Scoped<M, S> {
     this.#requireSameModel(other, "merge");
-    const theirs = other.#query;
-    const changes: Partial<SelectQuery> = {
-      conditions: [...this.#query.conditions, ...theirs.conditions],
-      ...(theirs.none === true && { none: true }),
-      ...(theirs.includes !== undefined && {
-        includes: mergeTrees(this.#query.includes ?? {}, theirs.includes),
-      }),
-    };
-    for (const clause of SHAPE_CLAUSES) {
-      if (isSet(theirs, clause)) Object.assign(changes, { [clause]: theirs[clause] });
-    }
-    return this.#with(changes);
+    return this.#describing(merged(this.#query, other.#query));
   }
 
   /** Sorts by each key in turn; repeated calls append. */
@@ -290,10 +215,14 @@ export class Relation<M extends ModelBase, S = {}> {
     return this.#with({ includes: mergeTrees(this.#query.includes ?? {}, added) });
   }
 
-  /** A hasMany Relation whose `toArray()` answers from records already preloaded. */
-  [withPreloaded](records: readonly ModelBase[]): Scoped<M, S> {
+  /**
+   * This Relation as a hasMany of an owner: answered from preloaded records, or, for an owner
+   * without a key, finding nothing and refusing `create`.
+   */
+  [ofOwner](owner: OwnerLink): Scoped<M, S> {
     const Class = this.constructor as new (...args: RelationArgs<M>) => Scoped<M, S>;
-    return new Class(this.#executor, this.#model, this.#query, records);
+    const query = owner.unsavedOwner === undefined ? this.#query : { ...this.#query, none: true };
+    return new Class(this.#executor, this.#model, query, owner);
   }
 
   /** A new, unsaved record of this Relation's Model. */
@@ -302,14 +231,9 @@ export class Relation<M extends ModelBase, S = {}> {
     return buildRecord(this.#model, { ...inherited, ...attributes }, this.#executor);
   }
 
-  /** The association Relation of an owner without a key: reads find nothing, `create` refuses. */
-  [markUnsavedOwner](reason: string): Scoped<M, S> {
-    return this.#with({ none: true, unsavedOwner: reason });
-  }
-
   /** As in Rails, records can't be created through an owner that has no key yet. */
   #requireSavedOwner(): void {
-    const reason = this.#query.unsavedOwner;
+    const reason = this.#owner.unsavedOwner;
     if (reason !== undefined) {
       throw new RecordNotSaved(`You cannot create a ${this.#model.name} here: ${reason}`);
     }
@@ -418,7 +342,8 @@ export class Relation<M extends ModelBase, S = {}> {
   }
 
   async toArray(): Promise<M[]> {
-    if (this.#preloaded !== undefined) return [...this.#preloaded] as M[];
+    const { preloaded } = this.#owner;
+    if (preloaded !== undefined) return [...preloaded] as M[];
     return this.#load(this.#query);
   }
 
@@ -484,21 +409,26 @@ export class Relation<M extends ModelBase, S = {}> {
     return relation as unknown as Scoped<M, S>;
   }
 
-  /** A copy with `changes`, of this same class, so a Model's scope methods survive chaining. */
-  #with(changes: Partial<SelectQuery>): Scoped<M, S> {
+  /** A copy with `changes` to its query. */
+  #with(changes: Partial<QueryDescription>): Scoped<M, S> {
+    return this.#describing({ ...this.#query, ...changes });
+  }
+
+  /** A Relation of this same class for `query`, so a Model's scope methods survive chaining. */
+  #describing(query: QueryDescription): Scoped<M, S> {
     const Class = this.constructor as new (...args: RelationArgs<M>) => Scoped<M, S>;
-    // A changed query is a new Relation without preloaded records: they'd no longer answer it.
-    const query = { ...this.#query, ...changes };
     // Preloading needs keys a distinct select leaves out; adding them would undo the distinct.
     if (query.includes !== undefined && query.select !== undefined && query.distinct) {
       throw new IncompatibleRelation(
         "includes() can't be combined with select(...).distinct(): preloading needs keys the distinct select leaves out",
       );
     }
-    return new Class(this.#executor, this.#model, query);
+    // A changed query is a new Relation without preloaded records: they'd no longer answer it.
+    const { unsavedOwner } = this.#owner;
+    return new Class(this.#executor, this.#model, query, { unsavedOwner });
   }
 
-  async #load(query: SelectQuery): Promise<M[]> {
+  async #load(query: QueryDescription): Promise<M[]> {
     // A partial record keeps its primary key, so it keeps its identity — except after
     // distinct(), where adding the key would make every row distinct.
     const { primaryKey } = this.#model;
@@ -547,6 +477,6 @@ export class Relation<M extends ModelBase, S = {}> {
 export type RelationArgs<M extends ModelBase> = [
   executor: Executor,
   model: ModelClass<M>,
-  query?: SelectQuery,
-  preloaded?: readonly ModelBase[],
+  query?: QueryDescription,
+  owner?: OwnerLink,
 ];

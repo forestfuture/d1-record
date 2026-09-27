@@ -1,7 +1,7 @@
 import { linkOf, prepareModel, type AssociationDefinition } from "./associations.ts";
-import type { IncludeTree } from "./compiler.ts";
 import type { Executor } from "./executor.ts";
 import { associationOf, type ModelBase, type ModelClass } from "./model.ts";
+import { mergeTrees, type IncludeTree } from "./query.ts";
 import { state } from "./record-state.ts";
 import { relationFor } from "./scoped-relation.ts";
 
@@ -103,22 +103,6 @@ export function includeTree(model: ModelClass, specs: readonly unknown[]): Inclu
     }
   }
   return tree;
-}
-
-/** The union of two include trees. */
-export function mergeTrees(a: IncludeTree, b: IncludeTree): IncludeTree {
-  const merged: Record<string, IncludeTree> = { ...a };
-  for (const [name, nested] of Object.entries(b)) {
-    merged[name] = mergeTrees(merged[name] ?? {}, nested);
-  }
-  return merged;
-}
-
-/** Whether two include trees name the same associations at every level. */
-export function sameTree(a: IncludeTree, b: IncludeTree): boolean {
-  const names = Object.keys(a);
-  if (names.length !== Object.keys(b).length) return false;
-  return names.every((name) => b[name] !== undefined && sameTree(a[name]!, b[name]!));
 }
 
 /** The attributes a record must have loaded for its includes to be preloaded. */

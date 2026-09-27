@@ -1,5 +1,6 @@
 import { attributeOf, type AttributeDefinition } from "./metadata.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
+import { Either, Negated, type Condition, type QueryDescription } from "./query.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
 import { writeUntypedValue, writeValue } from "./conversion.ts";
 
@@ -10,65 +11,13 @@ export interface CompiledQuery {
   model: ModelClass<ModelBase>;
 }
 
-export type OrderDirection = "asc" | "desc";
-
-export interface OrderTerm {
-  attribute: string;
-  direction: OrderDirection;
-}
-
-/** Association names to preload, each with the names to preload on its records in turn. */
-export interface IncludeTree {
-  readonly [association: string]: IncludeTree;
-}
-
-/** Everything a Relation knows about its query; Relations copy it, never mutate it. */
-export interface SelectQuery {
-  model: ModelClass<ModelBase>;
-  conditions: readonly Condition[];
-  order: readonly OrderTerm[];
-  limit?: number;
-  offset?: number;
-  /** Attributes to load; undefined loads every column. */
-  select?: readonly string[];
-  distinct?: boolean;
-  /** From `none()`: matches nothing, so it's never sent to D1. */
-  none?: boolean;
-  /** Why records can't be created through this hasMany (its owner has no key yet). */
-  unsavedOwner?: string;
-  /** Associations to preload for every record loaded: `includes(...)`. */
-  includes?: IncludeTree;
-}
-
-export type Condition = Record<string, unknown> | SafeSql | Negated | Either;
-
-/** A condition from `or`: either side's conditions (each ANDed together) may match. */
-export class Either {
-  readonly left: readonly Condition[];
-  readonly right: readonly Condition[];
-
-  constructor(left: readonly Condition[], right: readonly Condition[]) {
-    this.left = left;
-    this.right = right;
-  }
-}
-
-/** A condition from `whereNot`: the whole condition is negated, `NOT (…)`. */
-export class Negated {
-  readonly condition: Condition;
-
-  constructor(condition: Condition) {
-    this.condition = condition;
-  }
-}
-
 /** Quotes a SQLite identifier; embedded double quotes are doubled. */
 function quoteIdentifier(name: string): string {
   return `"${name.replaceAll('"', '""')}"`;
 }
 
 /** `projection` is the SELECT list; the library builds it, never the caller. */
-export function compileSelect(query: SelectQuery, projection?: string): CompiledQuery {
+export function compileSelect(query: QueryDescription, projection?: string): CompiledQuery {
   const params: unknown[] = [];
   const list = projection ?? compileColumns(query.model, query.select);
   let sql = `SELECT ${query.distinct ? "DISTINCT " : ""}${list}`;
@@ -79,7 +28,7 @@ export function compileSelect(query: SelectQuery, projection?: string): Compiled
   return { sql, params, model: query.model };
 }
 
-function compileWhere({ model, conditions }: SelectQuery, params: unknown[]): string {
+function compileWhere({ model, conditions }: QueryDescription, params: unknown[]): string {
   return conditions.length === 0 ? "" : ` WHERE ${compileAll(conditions, model, params)}`;
 }
 
@@ -184,7 +133,7 @@ export function compileColumns(
  * rows `toArray()` would return (including limit, offset, select and distinct).
  * `count(attr)` counts non-null values, or distinct non-null values after `distinct()`.
  */
-export function compileCount(query: SelectQuery, attribute?: string): CompiledQuery {
+export function compileCount(query: QueryDescription, attribute?: string): CompiledQuery {
   if (attribute === undefined) {
     const inner = compileSelect(query);
     return { ...inner, sql: `SELECT COUNT(*) AS count FROM (${inner.sql})` };
@@ -217,7 +166,7 @@ function compileEquality(
   return parts.length > 0 ? `(${parts.join(" OR ")})` : "1 = 0";
 }
 
-function compileOrder({ model, order }: SelectQuery): string {
+function compileOrder({ model, order }: QueryDescription): string {
   if (order.length === 0) return "";
   const terms = order.map(
     ({ attribute, direction }) =>
@@ -226,7 +175,7 @@ function compileOrder({ model, order }: SelectQuery): string {
   return ` ORDER BY ${terms.join(", ")}`;
 }
 
-function compilePagination({ limit, offset }: SelectQuery, params: unknown[]): string {
+function compilePagination({ limit, offset }: QueryDescription, params: unknown[]): string {
   if (limit === undefined && offset === undefined) return "";
   // SQLite only accepts OFFSET after a LIMIT; -1 means "no limit".
   params.push(limit ?? -1);
