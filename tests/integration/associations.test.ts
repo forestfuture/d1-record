@@ -174,4 +174,17 @@ describe("associations", () => {
     expect(await member.posts().count()).toBe(0);
     await expect(member.posts().create({ title: "x" })).rejects.toThrow(/Member has no age/);
   });
+
+  test("with several matching rows, hasOne picks the lowest primary key, lazily or preloaded", async () => {
+    await binding
+      .prepare("INSERT INTO profiles (id, user_id, bio) VALUES (7, 1, 'Later'), (3, 1, 'Earlier')")
+      .run();
+    const users = connect(binding).model(User);
+
+    const lazy = await (await users.find(1)).profile();
+    const preloaded = (await users.includes("profile").find(1)).loaded("profile");
+
+    expect(lazy?.bio).toBe("Earlier");
+    expect(preloaded?.bio).toBe("Earlier");
+  });
 });

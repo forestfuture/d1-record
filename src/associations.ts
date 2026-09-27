@@ -110,7 +110,11 @@ function accessorFor(
         const key = ownerKey(this, definition);
         if (key === null) return null;
         const target = targetOf(definition);
-        return relationFor(this[state].executor, target).findBy({ [definition.foreignKey]: key });
+        // Target primary-key order, as preloading uses, so both pick the same record.
+        return relationFor(this[state].executor, target)
+          .where({ [definition.foreignKey]: key })
+          .order({ [target.primaryKey]: "asc" })
+          .first();
       };
     case "hasMany":
       return function hasMany(this: ModelBase) {
