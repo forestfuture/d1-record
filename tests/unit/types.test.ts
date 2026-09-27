@@ -71,6 +71,8 @@ describe("types", () => {
       users.where({ id: gte("2") });
       // @ts-expect-error nor can a comparison compare with null
       users.where({ createdAt: gte(null) });
+      // @ts-expect-error booleans aren't ordered, so they can't be compared
+      users.where({ isActive: gte(true) });
     };
     expectTypeOf(typeOnly).toBeFunction();
   });
