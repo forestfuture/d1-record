@@ -5,10 +5,8 @@ import {
   compileUpdate,
   Negated,
   type Assignment,
-  type CompiledQuery,
   type Condition,
 } from "./compiler.ts";
-import { translateConstraintError } from "./constraints.ts";
 import { AbortAfterPersistence, CallbackAbort, RecordNotFound } from "./errors.ts";
 import { clearErrors } from "./errors-collection.ts";
 import {
@@ -24,19 +22,6 @@ import { runValidations, type UniquenessOptions } from "./validations.ts";
 
 function modelOf(record: ModelBase): ModelClass {
   return record.constructor as ModelClass;
-}
-
-/** Runs a write for `record`, translating D1 constraint failures into `ConstraintViolation`s. */
-async function write(
-  record: ModelBase,
-  { sql, params }: CompiledQuery,
-): Promise<Record<string, unknown>[]> {
-  const { executor } = record[state];
-  try {
-    return await executor.all(sql, params);
-  } catch (error) {
-    throw translateConstraintError(error, modelOf(record));
-  }
 }
 
 /** Whether the Model declares `name` as a datetime attribute, which turns its timestamp on. */
@@ -96,8 +81,8 @@ async function isTaken(
     recordState.requireKey("be checked for uniqueness");
     conditions.push(new Negated({ [model.primaryKey]: recordState.storedKeyValue }));
   }
-  const { sql: text, params } = compileSelect({ model, conditions, order: [], limit: 1 }, "1");
-  return (await recordState.executor.all(text, params)).length > 0;
+  const query = compileSelect({ model, conditions, order: [], limit: 1 }, "1");
+  return (await recordState.executor.all(query)).length > 0;
 }
 
 /** Runs the Model's callbacks of `kind` in declaration order, awaiting each. */
@@ -197,7 +182,8 @@ async function insertRecord(record: ModelBase): Promise<void> {
   const recordState = record[state];
   const own = recordState.insertAssignments();
   const stamps = timestampsFor(record, true, own);
-  const [row] = await write(record, compileInsert(modelOf(record), [...own, ...stamps]));
+  const insert = compileInsert(modelOf(record), [...own, ...stamps]);
+  const [row] = await recordState.executor.all(insert);
   recordState.commitInsert(row);
 }
 
@@ -211,7 +197,7 @@ async function updateRecord(record: ModelBase): Promise<void> {
   }
   const stamps = timestampsFor(record, false, own);
   const update = compileUpdate(modelOf(record), [...own, ...stamps], recordState.storedKey);
-  await write(record, update);
+  await recordState.executor.all(update);
   recordState.commitUpdate(stamps);
 }
 
@@ -228,7 +214,7 @@ export async function destroyLifecycle(record: ModelBase): Promise<DestroyOutcom
     return { status: "aborted", reason: recordState.abortReason ?? "" };
   }
   if (!recordState.isNew) {
-    await write(record, compileDelete(modelOf(record), recordState.storedKey));
+    await recordState.executor.all(compileDelete(modelOf(record), recordState.storedKey));
   }
   recordState.markDestroyed();
   await runAfterCallbacks(record, "afterDestroy", "destroy");
@@ -248,8 +234,7 @@ export async function reloadRecord(record: ModelBase): Promise<void> {
   }
   const key = recordState.storedKeyValue;
   const query = { model, conditions: [{ [model.primaryKey]: key }], order: [], limit: 1 };
-  const { sql, params } = compileSelect(query);
-  const [row] = await executor.all(sql, params);
+  const [row] = await executor.all(compileSelect(query));
   if (row === undefined) {
     throw new RecordNotFound(`${model.name} with ${model.primaryKey} ${String(key)} not found`);
   }

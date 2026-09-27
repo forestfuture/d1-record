@@ -3,9 +3,11 @@ import type { ModelBase, ModelClass } from "./model.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
 import { writeUntypedValue, writeValue } from "./conversion.ts";
 
+/** One SQL statement ready for D1, with the Model whose table it reads or writes. */
 export interface CompiledQuery {
   sql: string;
   params: unknown[];
+  model: ModelClass<ModelBase>;
 }
 
 export type OrderDirection = "asc" | "desc";
@@ -74,7 +76,7 @@ export function compileSelect(query: SelectQuery, projection?: string): Compiled
   sql += compileWhere(query, params);
   sql += compileOrder(query);
   sql += compilePagination(query, params);
-  return { sql, params };
+  return { sql, params, model: query.model };
 }
 
 function compileWhere({ model, conditions }: SelectQuery, params: unknown[]): string {
@@ -122,7 +124,7 @@ export function compileInsert(
 ): CompiledQuery {
   const table = quoteIdentifier(model.tableName);
   if (assignments.length === 0) {
-    return { sql: `INSERT INTO ${table} DEFAULT VALUES RETURNING *`, params: [] };
+    return { sql: `INSERT INTO ${table} DEFAULT VALUES RETURNING *`, params: [], model };
   }
   const definitions = assignments.map(([name]) => attributeOf(model, name));
   const columns = definitions.map(({ column }) => quoteIdentifier(column)).join(", ");
@@ -130,6 +132,7 @@ export function compileInsert(
   return {
     sql: `INSERT INTO ${table} (${columns}) VALUES (${placeholders}) RETURNING *`,
     params: assignments.map(([, value], index) => writeValue(definitions[index]!.type, value)),
+    model,
   };
 }
 
@@ -153,6 +156,7 @@ export function compileUpdate(
   return {
     sql: `UPDATE ${quoteIdentifier(model.tableName)} SET ${sets.join(", ")} WHERE ${quoteIdentifier(primaryKey.column)} = ?`,
     params,
+    model,
   };
 }
 
@@ -162,6 +166,7 @@ export function compileDelete(model: ModelClass<ModelBase>, storedKey: unknown):
   return {
     sql: `DELETE FROM ${quoteIdentifier(model.tableName)} WHERE ${quoteIdentifier(column)} = ?`,
     params: [storedKey],
+    model,
   };
 }
 
@@ -182,12 +187,12 @@ export function compileColumns(
 export function compileCount(query: SelectQuery, attribute?: string): CompiledQuery {
   if (attribute === undefined) {
     const inner = compileSelect(query);
-    return { sql: `SELECT COUNT(*) AS count FROM (${inner.sql})`, params: inner.params };
+    return { ...inner, sql: `SELECT COUNT(*) AS count FROM (${inner.sql})` };
   }
   const inner = compileSelect({ ...query, select: undefined, distinct: false });
   const column = quoteIdentifier(attributeOf(query.model, attribute).column);
   const counted = query.distinct ? `DISTINCT ${column}` : column;
-  return { sql: `SELECT COUNT(${counted}) AS count FROM (${inner.sql})`, params: inner.params };
+  return { ...inner, sql: `SELECT COUNT(${counted}) AS count FROM (${inner.sql})` };
 }
 
 /** `attr = value`, with NULL and arrays (IN) handled the way the contract specifies. */
