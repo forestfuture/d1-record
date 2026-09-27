@@ -489,6 +489,12 @@ export class Relation<M extends ModelBase, S = {}> {
     const Class = this.constructor as new (...args: RelationArgs<M>) => Scoped<M, S>;
     // Any change means the preloaded records no longer answer the query.
     const query = { ...this.#query, preloaded: undefined, ...changes };
+    // Preloading needs keys a distinct select leaves out; adding them would undo the distinct.
+    if (query.includes !== undefined && query.select !== undefined && query.distinct) {
+      throw new IncompatibleRelation(
+        "includes() can't be combined with select(...).distinct(): preloading needs keys the distinct select leaves out",
+      );
+    }
     return new Class(this.#executor, this.#model, query);
   }
 

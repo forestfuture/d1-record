@@ -249,4 +249,11 @@ describe("preloading with includes", () => {
     expect(user.loaded("posts")).toHaveLength(2);
     expect(await user.posts().toArray()).toHaveLength(2);
   });
+
+  test("includes can't be combined with select(...).distinct(), in either order", () => {
+    const posts = db().model(Post);
+
+    expect(() => posts.select("title").distinct().includes("author")).toThrow(IncompatibleRelation);
+    expect(() => posts.includes("author").select("title").distinct()).toThrow(/includes.*distinct/);
+  });
 });
