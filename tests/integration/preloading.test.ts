@@ -200,6 +200,13 @@ describe("preloading with includes", () => {
     expect(foundBy?.loaded("posts")).toHaveLength(2);
   });
 
+  test("find with several ids preloads too, in two queries", async () => {
+    const users = await db().model(User).includes("posts").find(2, 1);
+
+    expect(users.map((user) => user.loaded("posts").length)).toEqual([1, 2]);
+    expect(queries).toHaveLength(2);
+  });
+
   test("the keys preloading needs are loaded even when select leaves them out", async () => {
     const posts = await db()
       .model(Post)

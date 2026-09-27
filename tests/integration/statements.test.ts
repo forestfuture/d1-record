@@ -304,6 +304,34 @@ describe("statements", () => {
       ]);
     });
 
+    test("a fragment order with values picks the page's rows, its values bound in order", async () => {
+      const db = connect(binding);
+      await seedUsers(db);
+      const page = db
+        .model(User)
+        .where({ age: 20 })
+        .order(sql`${column("role")} = ${"admin"} DESC`)
+        .order({ id: "desc" })
+        .limit(2);
+
+      await page.updateAll({ role: "x" }).run();
+      expect(await roles(db)).toEqual([
+        [1, "x"],
+        [2, "member"],
+        [3, "member"],
+        [4, "x"],
+      ]);
+
+      await db
+        .model(User)
+        .where({ age: 20 })
+        .order(sql`${column("id")} = ${3} DESC`)
+        .limit(1)
+        .deleteAll()
+        .run();
+      expect(await db.model(User).order({ id: "asc" }).pluck("id")).toEqual([1, 2, 4]);
+    });
+
     test("select, includes and an order without a limit don't change which rows are written", async () => {
       const db = connect(binding);
       await seedUsers(db);
