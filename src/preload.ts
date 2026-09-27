@@ -1,4 +1,4 @@
-import type { AssociationDefinition } from "./associations.ts";
+import { prepareModel, type AssociationDefinition } from "./associations.ts";
 import type { IncludeTree } from "./compiler.ts";
 import type { Executor } from "./executor.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
@@ -93,6 +93,7 @@ async function loadByKeys(
   attribute: string,
   keys: readonly unknown[],
 ): Promise<ModelBase[]> {
+  prepareModel(target);
   const distinct = [...new Set(keys.filter((key) => key !== null && key !== undefined))];
   const loaded: ModelBase[] = [];
   for (let start = 0; start < distinct.length; start += KEYS_PER_QUERY) {
