@@ -1,5 +1,8 @@
 declare const comparedType: unique symbol;
 
+/** The library's key for reading a Comparison's parts; not exported from the package. */
+export const comparisonParts = Symbol("comparisonParts");
+
 export type Operator = ">" | ">=" | "<" | "<=" | "between" | "betweenExcludingEnd";
 
 /**
@@ -10,8 +13,8 @@ export class Comparison<T = unknown> {
   /** Type-only: the compared value's type, checked against the attribute's. */
   declare readonly [comparedType]?: T;
 
-  readonly operator: Operator;
-  readonly values: readonly unknown[];
+  readonly #operator: Operator;
+  readonly #values: readonly unknown[];
 
   /** @internal Use `gt`, `gte`, `lt`, `lte` or `between`. */
   constructor(operator: Operator, values: readonly unknown[]) {
@@ -22,8 +25,13 @@ export class Comparison<T = unknown> {
         );
       }
     }
-    this.operator = operator;
-    this.values = values;
+    this.#operator = operator;
+    this.#values = values;
+  }
+
+  /** What the compiler needs: the operator, and the values to bind in order. */
+  get [comparisonParts](): { operator: Operator; values: readonly unknown[] } {
+    return { operator: this.#operator, values: this.#values };
   }
 }
 

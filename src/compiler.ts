@@ -1,6 +1,6 @@
 import { attributeOf, type AttributeDefinition } from "./metadata.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
-import { Comparison, type Operator } from "./comparisons.ts";
+import { Comparison, comparisonParts, type Operator } from "./comparisons.ts";
 import { Either, Negated, type Condition, type QueryDescription } from "./query.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
 import { writeUntypedValue, writeValue } from "./conversion.ts";
@@ -196,9 +196,10 @@ export function compileCount(query: QueryDescription, attribute?: string): Compi
 /** `attr >= ?`, `attr BETWEEN ? AND ?`, …, with the values converted like the attribute's. */
 function compileComparison(
   attribute: AttributeDefinition,
-  { operator, values }: Comparison,
+  comparison: Comparison,
   params: unknown[],
 ): string {
+  const { operator, values } = comparison[comparisonParts];
   params.push(...values.map((value) => writeValue(attribute.type, value)));
   return COMPARISON_SQL[operator](quoteIdentifier(attribute.column));
 }

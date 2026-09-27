@@ -73,6 +73,10 @@ describe("types", () => {
       users.where({ createdAt: gte(null) });
       // @ts-expect-error booleans aren't ordered, so they can't be compared
       users.where({ isActive: gte(true) });
+      // @ts-expect-error a comparison's parts are internal: build one with gt, gte, lt, lte or between
+      void gte(1).operator;
+      // @ts-expect-error likewise its values
+      void between(1, 2).values;
     };
     expectTypeOf(typeOnly).toBeFunction();
   });
