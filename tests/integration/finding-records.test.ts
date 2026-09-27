@@ -114,6 +114,13 @@ describe("finding records", () => {
       expect(await users.find([])).toEqual([]);
     });
 
+    test('ids are cast to the key\'s type first, as Rails does, so "01" and 1 are the same id', async () => {
+      const users = connect(binding).model(User);
+
+      expect((await users.find("03", 2)).map((user) => user.id)).toEqual([3, 2]);
+      expect((await users.find("1", "01", 1)).map((user) => user.id)).toEqual([1]);
+    });
+
     test("it's one query", async () => {
       let queries = 0;
       const users = connect(binding, { onQuery: () => queries++ }).model(User);

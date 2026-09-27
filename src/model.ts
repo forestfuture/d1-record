@@ -368,6 +368,11 @@ export function Model<const A extends AttributeSpecs>(
   return DefinedModel as never;
 }
 
+/** The record's primary key value. */
+export function primaryKeyOf(record: ModelBase): unknown {
+  return record[state].read((record.constructor as ModelClass).primaryKey);
+}
+
 /** Builds a persisted record of `model` from a D1 row. */
 export function hydrate<M extends ModelBase>(
   model: ModelClass<M>,
