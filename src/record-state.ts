@@ -3,7 +3,12 @@ import { readValue, writeValue } from "./conversion.ts";
 import { Errors } from "./errors-collection.ts";
 import { MissingAttribute, NoDatabase, RecordDestroyed } from "./errors.ts";
 import type { Executor } from "./executor.ts";
-import { attributeOf, type AttributeDefinition } from "./metadata.ts";
+import {
+  attributeOf,
+  evaluateDefaults,
+  requireDefined,
+  type AttributeDefinition,
+} from "./metadata.ts";
 import type { ModelClass } from "./model.ts";
 
 /** The hidden slot where a Record keeps its `RecordState`; never exported from the package. */
@@ -124,11 +129,7 @@ export class RecordState {
    */
   write(name: string, value: unknown): void {
     this.#requireNotDestroyed("be changed");
-    if (value === undefined) {
-      throw new TypeError(
-        `${this.#model.name}: got undefined for "${name}"; use null to store NULL`,
-      );
-    }
+    requireDefined(this.#model, name, value);
     this.#values[name] = value;
     this.#assigned.add(name);
   }
@@ -143,10 +144,8 @@ export class RecordState {
 
   /** A new record: every attribute reads as null until assigned, and defaults are evaluated now. */
   build(attributes: Record<string, unknown>): void {
-    for (const [name, definition] of this.#model.attributeDefinitions) {
-      this.#values[name] = null;
-      if (definition.default !== undefined) this.write(name, definition.default());
-    }
+    for (const name of this.#model.attributeDefinitions.keys()) this.#values[name] = null;
+    for (const [name, value] of evaluateDefaults(this.#model)) this.write(name, value);
     this.assign(attributes);
   }
 

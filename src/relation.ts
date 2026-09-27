@@ -5,7 +5,7 @@ import {
   compileSelect,
   compileUpdateAll,
   type Assignment,
-  type CompiledQuery,
+  type CompiledSql,
 } from "./compiler.ts";
 import { IncompatibleRelation, RecordNotFound, RecordNotSaved } from "./errors.ts";
 import { includeTree, keysForIncludes, preload } from "./preload.ts";
@@ -271,7 +271,8 @@ export class Relation<M extends ModelBase, S = {}> {
    */
   updateAll(changes: Partial<AttributesOf<M>> | SafeSql): Statement {
     const checked = this.#checkChanges(changes);
-    return this.#statement(compileUpdateAll(this.#writableQuery("updateAll"), checked));
+    const query = compileUpdateAll(this.#writableQuery("updateAll"), checked);
+    return new Statement(this.#executor, query);
   }
 
   /**
@@ -281,11 +282,11 @@ export class Relation<M extends ModelBase, S = {}> {
   deleteAll(): Statement {
     const query = this.#writableQuery("deleteAll");
     const { foreignKey } = this.#owner;
-    return this.#statement(
+    const compiled =
       foreignKey === undefined
         ? compileDeleteAll(query)
-        : compileUpdateAll(query, [[foreignKey, null]]),
-    );
+        : compileUpdateAll(query, [[foreignKey, null]]);
+    return new Statement(this.#executor, compiled);
   }
 
   /** Builds and saves a record; resolves to it whether or not it was saved (check `isPersisted()`). */
@@ -413,7 +414,7 @@ export class Relation<M extends ModelBase, S = {}> {
    * Validates conditions when they're written, not when they run: rejects plain strings,
    * unknown attributes, and undefined values (which would otherwise silently match nothing).
    */
-  #checkConditions(conditions: Conditions<M> | SafeSql, method: string): void {
+  #checkConditions(conditions: object, method: string): void {
     requireConditionObject(conditions, method);
     if (conditions instanceof SafeSql) {
       for (const value of conditions.values) {
@@ -429,7 +430,7 @@ export class Relation<M extends ModelBase, S = {}> {
 
   /** Attribute changes for `updateAll`, checked like conditions: declared, and not undefined. */
   #checkChanges(changes: Partial<AttributesOf<M>> | SafeSql): Assignment[] | SafeSql {
-    this.#checkConditions(changes as Conditions<M> | SafeSql, "updateAll");
+    this.#checkConditions(changes, "updateAll");
     if (changes instanceof SafeSql) return changes;
     const assignments = Object.entries(changes);
     if (assignments.length === 0) {
@@ -446,12 +447,8 @@ export class Relation<M extends ModelBase, S = {}> {
     return this.#query;
   }
 
-  #statement(query: CompiledQuery): Statement {
-    return new Statement(this.#executor, query);
-  }
-
   /** The one place a Relation runs SQL; a `none()` relation never reaches D1. */
-  async #all(query: CompiledQuery): Promise<Record<string, unknown>[]> {
+  async #all(query: CompiledSql): Promise<Record<string, unknown>[]> {
     return this.#query.none ? [] : this.#executor.all(query);
   }
 

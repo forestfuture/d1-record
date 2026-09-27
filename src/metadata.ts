@@ -67,3 +67,17 @@ export function attributesForColumn(model: ModelClass, column: string): string[]
     .filter(([, definition]) => definition.column === column)
     .map(([name]) => name);
 }
+
+/** `undefined` would silently store NULL, so writing it throws `TypeError` (use `null`). */
+export function requireDefined(model: ModelClass, name: string, value: unknown): void {
+  if (value === undefined) {
+    throw new TypeError(`${model.name}: got undefined for "${name}"; use null to store NULL`);
+  }
+}
+
+/** The Model's declared defaults, evaluated now, for every attribute not in `given`. */
+export function evaluateDefaults(model: ModelClass, given: object = {}): [string, unknown][] {
+  return [...model.attributeDefinitions]
+    .filter(([name, definition]) => definition.default !== undefined && !(name in given))
+    .map(([name, definition]) => [name, definition.default!()]);
+}

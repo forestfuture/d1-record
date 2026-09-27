@@ -5,7 +5,7 @@ import { ColumnReference, SafeSql } from "./sql.ts";
 import { writeUntypedValue, writeValue } from "./conversion.ts";
 
 /** One SQL statement ready for D1, with the Model whose table it reads or writes. */
-export interface CompiledQuery {
+export interface CompiledSql {
   sql: string;
   params: unknown[];
   model: ModelClass<ModelBase>;
@@ -17,7 +17,7 @@ function quoteIdentifier(name: string): string {
 }
 
 /** `projection` is the SELECT list; the library builds it, never the caller. */
-export function compileSelect(query: QueryDescription, projection?: string): CompiledQuery {
+export function compileSelect(query: QueryDescription, projection?: string): CompiledSql {
   const params: unknown[] = [];
   const list = projection ?? compileColumns(query.model, query.select);
   let sql = `SELECT ${query.distinct ? "DISTINCT " : ""}${list}`;
@@ -70,7 +70,7 @@ export type Assignment = readonly [attribute: string, value: unknown];
 export function compileInsert(
   model: ModelClass<ModelBase>,
   assignments: readonly Assignment[],
-): CompiledQuery {
+): CompiledSql {
   const table = quoteIdentifier(model.tableName);
   if (assignments.length === 0) {
     return { sql: `INSERT INTO ${table} DEFAULT VALUES RETURNING *`, params: [], model };
@@ -93,7 +93,7 @@ export function compileUpdate(
   model: ModelClass<ModelBase>,
   assignments: readonly Assignment[],
   storedKey: unknown,
-): CompiledQuery {
+): CompiledSql {
   const params: unknown[] = [];
   const sets = compileSets(model, assignments, params);
   const primaryKey = attributeOf(model, model.primaryKey);
@@ -139,7 +139,7 @@ function compileTarget(query: QueryDescription, params: unknown[]): string {
 export function compileUpdateAll(
   query: QueryDescription,
   changes: readonly Assignment[] | SafeSql,
-): CompiledQuery {
+): CompiledSql {
   const params: unknown[] = [];
   const sets = compileSets(query.model, changes, params);
   const target = compileTarget(query, params);
@@ -148,7 +148,7 @@ export function compileUpdateAll(
 }
 
 /** `DELETE … WHERE …` for every row `query` describes. */
-export function compileDeleteAll(query: QueryDescription): CompiledQuery {
+export function compileDeleteAll(query: QueryDescription): CompiledSql {
   const params: unknown[] = [];
   const target = compileTarget(query, params);
   const sql = `DELETE FROM ${quoteIdentifier(query.model.tableName)}${target}`;
@@ -156,7 +156,7 @@ export function compileDeleteAll(query: QueryDescription): CompiledQuery {
 }
 
 /** `DELETE … WHERE <primary key> = ?`, with the key as stored in D1. */
-export function compileDelete(model: ModelClass<ModelBase>, storedKey: unknown): CompiledQuery {
+export function compileDelete(model: ModelClass<ModelBase>, storedKey: unknown): CompiledSql {
   const { column } = attributeOf(model, model.primaryKey);
   return {
     sql: `DELETE FROM ${quoteIdentifier(model.tableName)} WHERE ${quoteIdentifier(column)} = ?`,
@@ -179,7 +179,7 @@ export function compileColumns(
  * rows `toArray()` would return (including limit, offset, select and distinct).
  * `count(attr)` counts non-null values, or distinct non-null values after `distinct()`.
  */
-export function compileCount(query: QueryDescription, attribute?: string): CompiledQuery {
+export function compileCount(query: QueryDescription, attribute?: string): CompiledSql {
   if (attribute === undefined) {
     const inner = compileSelect(query);
     return { ...inner, sql: `SELECT COUNT(*) AS count FROM (${inner.sql})` };

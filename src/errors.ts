@@ -35,7 +35,10 @@ export class MissingAttribute extends D1RecordError {
   override name = "MissingAttribute";
 }
 
-/** Combining relations that can't be combined (`or`, `merge`), e.g. of different Models. */
+/**
+ * Things that can't be combined: relations in `or`/`merge` (e.g. of different Models),
+ * `includes` or a write statement with `distinct()`, or statements of two Databases in a batch.
+ */
 export class IncompatibleRelation extends D1RecordError {
   override name = "IncompatibleRelation";
 }
