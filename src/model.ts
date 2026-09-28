@@ -27,7 +27,7 @@ import type {
   HasMany,
   HasOne,
 } from "./associations.ts";
-import type { Scope } from "./relation.ts";
+import type { Relation, Scope } from "./relation.ts";
 import type { Validation, ValidationOptions } from "./validations.ts";
 
 /** Any Model's scope, whatever its record type and arguments. */
@@ -243,9 +243,10 @@ export class ModelBase {
   async reloadAssociation<K extends AssociationName<this>>(name: K): Promise<LoadedValue<this[K]>> {
     const { kind } = associationOf(this.constructor as ModelClass, name);
     this[state].clearAssociation(name);
-    const read = (this[name] as () => unknown).call(this);
-    const value =
-      kind === "hasMany" ? await (read as { toArray(): unknown }).toArray() : await read;
+    // The accessor installed for this association: a Relation for a hasMany, else a promise.
+    const accessor = this[name] as () => Relation<ModelBase> | Promise<ModelBase | null>;
+    const read = accessor.call(this);
+    const value = kind === "hasMany" ? await (read as Relation<ModelBase>).toArray() : await read;
     return value as LoadedValue<this[K]>;
   }
 
