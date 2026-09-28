@@ -183,6 +183,9 @@ export interface AssociationCache {
   clear(): void;
 }
 
+/** The library's key for checking a Relation can be preloaded in groups; not exported. */
+export const requirePreloadable = Symbol("requirePreloadable");
+
 /** The library's key for making a hasMany Relation of an owner; not exported. */
 export const ofOwner = Symbol("ofOwner");
 
@@ -314,6 +317,20 @@ export class Relation<M extends ModelBase, S = {}> {
     const Class = this.constructor as new (...args: RelationArgs<M>) => Scoped<M, S>;
     const query = owner.unsavedOwner === undefined ? this.#query : { ...this.#query, none: true };
     return new Class(this.#executor, this.#model, query, owner);
+  }
+
+  /**
+   * This Relation, if an association scope can be preloaded with it: a limit, offset or
+   * distinct would apply to every owner's records together, not to each owner's.
+   */
+  [requirePreloadable](association: string): this {
+    const { limit, offset, distinct } = this.#query;
+    if (limit !== undefined || offset !== undefined || distinct) {
+      throw new IncompatibleRelation(
+        `${association} can't be preloaded: its scope uses limit, offset or distinct, which would apply to every owner's records together; read it lazily instead`,
+      );
+    }
+    return this;
   }
 
   /** A new, unsaved record of this Relation's Model. */
@@ -528,8 +545,8 @@ export class Relation<M extends ModelBase, S = {}> {
     if (cached !== undefined) return [...cached];
     const { cache } = this.#owner;
     if (cache === undefined) return this.#load(this.#query);
-    // Loaded into the owner's cache in target primary-key order, as preloading loads it.
-    const records = await this.#load({ ...this.#query, order: this.#orderOrPrimaryKey() });
+    // Loaded into the owner's cache in its order, then target primary-key order, as preloaded.
+    const records = await this.#load({ ...this.#query, order: this.#withPrimaryKeyOrder() });
     cache.set(records);
     return [...records];
   }
@@ -676,6 +693,11 @@ export class Relation<M extends ModelBase, S = {}> {
       attributeOf(this.#model, attribute);
       return attributeOrder(attribute, value, method);
     });
+  }
+
+  /** This Relation's order, then the primary key ascending, so ties come back the same way. */
+  #withPrimaryKeyOrder(): readonly OrderTerm[] {
+    return [...this.#query.order, { attribute: this.#model.primaryKey, direction: "asc" }];
   }
 
   #orderOrPrimaryKey(): readonly OrderTerm[] {
