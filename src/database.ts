@@ -1,4 +1,14 @@
-import { IncompatibleRelation, NoSession } from "./errors.ts";
+import {
+  IncompatibleRelation,
+  NoSession,
+  RecordInvalid,
+  RecordNotDestroyed,
+  RecordNotSaved,
+} from "./errors.ts";
+import { prepareDestroy, prepareSave } from "./lifecycle.ts";
+import { RecordStatement, recordStatementParts } from "./record-statement.ts";
+import { state } from "./record-state.ts";
+import { runAfter, writeAll, type PreparedWrite } from "./unit-of-work.ts";
 import { Executor, type QueryListener } from "./executor.ts";
 import { prepareModel } from "./associations.ts";
 import type { ModelBase, ModelClass, ScopesOf } from "./model.ts";
@@ -62,22 +72,77 @@ export class Database {
   }
 
   /**
-   * Runs statements from `insert`, `updateAll` and `deleteAll` atomically, with D1's `batch()`:
-   * all of them are written, or none. Resolves to D1's `meta` for each, in order. There's no
-   * interactive `transaction()`, because D1 can't hold one open across awaits.
+   * Runs statements and record statements atomically, with D1's `batch()`: all of them are
+   * written, or none. Record statements (`user.saveStatement()`, `post.destroyStatement()`) run
+   * their validations and before-callbacks first, in order; the first record that's invalid or
+   * aborts throws (`RecordInvalid`, `RecordNotSaved`, `RecordNotDestroyed`) and nothing is sent.
+   * After the batch, each record takes its saved state and runs its after-callbacks, in order.
+   * Resolves to each entry's result: D1's `meta` for a statement, the record for a record
+   * statement. There's no interactive `transaction()`, because D1 can't hold one open across
+   * awaits.
    */
-  async batch(statements: readonly Statement[]): Promise<D1Meta[]> {
-    const compiled = statements.map((statement) => {
-      const { executor, query } = statement[statementParts];
-      if (executor !== this.#executor) {
-        throw new IncompatibleRelation(
-          "batch() needs statements built on this Database; one comes from another connect() call",
-        );
-      }
-      return query;
-    });
-    return (await this.#executor.batch(compiled)).map(({ meta }) => meta);
+  async batch<const T extends readonly BatchEntry[]>(entries: T): Promise<BatchResults<T>> {
+    for (const entry of entries) this.#requireOwn(entry);
+    const prepared: PreparedEntry[] = [];
+    for (const entry of entries) {
+      prepared.push(
+        entry instanceof RecordStatement ? await recordEntry(entry) : statementEntry(entry),
+      );
+    }
+    const writes = prepared.flatMap(({ writes }) => writes);
+    await writeAll(this.#executor, writes);
+    await runAfter(writes);
+    return prepared.map(({ result }) => result()) as BatchResults<T>;
   }
+
+  /** A batch entry must have been built on this Database. */
+  #requireOwn(entry: BatchEntry): void {
+    const executor =
+      entry instanceof RecordStatement
+        ? entry[recordStatementParts].record[state].executor
+        : entry[statementParts].executor;
+    if (executor !== this.#executor) {
+      throw new IncompatibleRelation(
+        "batch() needs statements and records of this Database; one comes from another connect() call",
+      );
+    }
+  }
+}
+
+/** What `db.batch` accepts: statements, and records' save or destroy. */
+export type BatchEntry = Statement | RecordStatement;
+
+/** `db.batch`'s result for each entry: D1's `meta`, or the saved or destroyed record. */
+export type BatchResults<T extends readonly BatchEntry[]> = {
+  -readonly [K in keyof T]: T[K] extends RecordStatement<infer R> ? R : D1Meta;
+};
+
+interface PreparedEntry {
+  writes: PreparedWrite[];
+  result: () => unknown;
+}
+
+function statementEntry(statement: Statement): PreparedEntry {
+  let meta: D1Meta | undefined;
+  const write: PreparedWrite = {
+    statements: [statement[statementParts].query],
+    commit: ([result]) => {
+      meta = result?.meta;
+    },
+    after: async () => {},
+  };
+  return { writes: [write], result: () => meta };
+}
+
+/** A record's prepared save or destroy; a refusal throws, as a Rails transaction's `save!` does. */
+async function recordEntry(statement: RecordStatement): Promise<PreparedEntry> {
+  const { record, kind } = statement[recordStatementParts];
+  const plan = await (kind === "save" ? prepareSave(record) : prepareDestroy(record));
+  if (plan.status === "invalid") throw new RecordInvalid(record);
+  if (plan.status !== "ready") {
+    throw kind === "save" ? new RecordNotSaved(plan.reason) : new RecordNotDestroyed(plan.reason);
+  }
+  return { writes: plan.writes, result: () => record };
 }
 
 export function connect(binding: D1Database, options?: ConnectOptions): Database {

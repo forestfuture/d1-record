@@ -17,6 +17,7 @@ import {
   UnknownAssociation,
 } from "./errors.ts";
 import { destroyLifecycle, reloadRecord, saveLifecycle, validateRecord } from "./lifecycle.ts";
+import { RecordStatement } from "./record-statement.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
 import type {
   AssociationDefinition,
@@ -324,6 +325,19 @@ export class ModelBase {
    */
   async destroy(): Promise<this | false> {
     return (await destroyLifecycle(this)).status === "destroyed" ? this : false;
+  }
+
+  /**
+   * This record's save, for `db.batch([...])`: its validations and callbacks run when the batch
+   * runs, and every record in the batch is written atomically.
+   */
+  saveStatement(): RecordStatement<this> {
+    return new RecordStatement(this, "save");
+  }
+
+  /** This record's destroy, dependents included, for `db.batch([...])`. */
+  destroyStatement(): RecordStatement<this> {
+    return new RecordStatement(this, "destroy");
   }
 
   /** Like `destroy()`, but throws `RecordNotDestroyed` instead of returning `false`. */

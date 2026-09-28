@@ -130,7 +130,7 @@ export async function saveLifecycle(record: ModelBase): Promise<Outcome> {
 }
 
 /** Everything a save does before writing: validation and the before-callbacks. */
-async function prepareSave(record: ModelBase): Promise<Plan> {
+export async function prepareSave(record: ModelBase): Promise<Plan> {
   const recordState = record[state];
   recordState.requireLive("be saved");
   const validity = await validation(record);

@@ -218,6 +218,19 @@ describe("types", () => {
     expectTypeOf(typeOnly).toBeFunction();
   });
 
+  test("db.batch resolves to each entry's result: the record, or D1's meta", () => {
+    // Checked by the type checker only; never called.
+    const typeOnly = async (user: User) => {
+      const [saved, meta] = await db.batch([
+        user.saveStatement(),
+        db.model(User).where({ id: 1 }).deleteAll(),
+      ]);
+      expectTypeOf(saved).toEqualTypeOf<User>();
+      expectTypeOf(meta.changes).toEqualTypeOf<number>();
+    };
+    expectTypeOf(typeOnly).toBeFunction();
+  });
+
   test("upsert's uniqueBy names the Model's attributes", () => {
     const users = db.model(User);
 
