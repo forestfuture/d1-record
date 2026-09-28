@@ -175,6 +175,18 @@ describe.skipIf(!configured)("remote D1 smoke", () => {
     ]);
   });
 
+  test("a record batch loads each new record's generated key from the batch's RETURNING rows", async () => {
+    const db = connect(remote.binding);
+    const first = db.model(User).build({ email: "a@example.com" });
+    const second = db.model(User).build({ email: "b@example.com" });
+
+    await db.batch([first.saveStatement(), second.saveStatement()]);
+
+    expect([first.isPersisted(), second.isPersisted()]).toEqual([true, true]);
+    expect(first.id).not.toBe(second.id);
+    expect((await db.model(User).find(second.id)).email).toBe("b@example.com");
+  });
+
   test("preloading more than 100 owners stays within D1's 100 bound parameters", async () => {
     const db = connect(remote.binding);
     const ids = Array.from({ length: 150 }, (_, index) => index + 1);
