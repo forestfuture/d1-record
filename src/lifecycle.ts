@@ -1,4 +1,5 @@
 import { compileDelete, compileInsert, compileSelect, compileUpdate } from "./compiler.ts";
+import { autosavesOf, linkRecords, ownerKeysKnown } from "./autosave.ts";
 import { prepareDependents } from "./dependents.ts";
 import { AbortAfterPersistence, CallbackAbort, RecordNotFound } from "./errors.ts";
 import { clearErrors } from "./errors-collection.ts";
@@ -104,16 +105,32 @@ async function validation(record: ModelBase): Promise<Validity> {
     errors: recordState.errors,
     isTaken: (attribute, value, options) => isTaken(record, attribute, value, options),
   });
+  await validateAutosaves(record);
   if (!(await runAbortableCallbacks(record, "afterValidation"))) return "aborted";
   return recordState.errors.isEmpty() ? "valid" : "invalid";
 }
 
-/** A record's save or destroy, prepared: its writes, or why it was refused. */
+/**
+ * A record's save or destroy, prepared: its writes, or why it was refused. `followUp` is a
+ * second write that needs the first one's results (autosaved records waiting for the key D1
+ * generates for their new owner); the two can't be one atomic batch.
+ */
 export type Plan =
-  | { status: "ready"; writes: PreparedWrite[] }
+  | { status: "ready"; writes: PreparedWrite[]; followUp?: () => PreparedWrite[] }
   | { status: "invalid" }
   | { status: "aborted"; reason: string }
   | { status: "restricted"; reason: string };
+
+/**
+ * New records built through the record's hasMany associations are validated with it, as
+ * Rails' `validate: true` does: an invalid one adds "is invalid" to the association's name.
+ */
+async function validateAutosaves(record: ModelBase): Promise<void> {
+  for (const { name, records } of autosavesOf(record)) {
+    const valid = await Promise.all(records.map((each) => validateRecord(each)));
+    if (valid.includes(false)) record[state].errors.add(name, "is invalid");
+  }
+}
 
 /**
  * The save lifecycle, in the contract's order:
@@ -125,7 +142,7 @@ export async function saveLifecycle(record: ModelBase): Promise<Outcome> {
   const plan = await prepareSave(record);
   if (plan.status === "restricted") throw new TypeError("a save is never restricted");
   if (plan.status !== "ready") return plan;
-  await runPlan(record[state].executor, plan.writes);
+  await runPlan(record[state].executor, plan);
   return { status: "saved" };
 }
 
@@ -139,13 +156,43 @@ export async function prepareSave(record: ModelBase): Promise<Plan> {
   if (validity === "aborted" || !(await beforeWrite(record, isInsert))) {
     return { status: "aborted", reason: recordState.abortReason ?? "" };
   }
-  return { status: "ready", writes: [saveWrite(record, isInsert)] };
+  return withAutosaves(record, saveWrite(record, isInsert));
 }
 
-/** Writes prepared writes as one unit, then runs their after-callbacks in order. */
-async function runPlan(executor: Executor, writes: readonly PreparedWrite[]): Promise<void> {
-  await writeAll(executor, writes);
-  await runAfter(writes);
+/**
+ * The owner's write plus its autosaved records': their before-callbacks run now, after the
+ * owner's. If the owner's key is known, every record points at it and all of it is one batch;
+ * if D1 generates it, the records follow once the owner is written.
+ */
+async function withAutosaves(owner: ModelBase, own: PreparedWrite): Promise<Plan> {
+  const autosaves = autosavesOf(owner);
+  for (const record of autosaves.flatMap(({ records }) => records)) {
+    if (!(await beforeWrite(record, true))) {
+      return { status: "aborted", reason: record[state].abortReason ?? "" };
+    }
+  }
+  if (autosaves.length === 0) return { status: "ready", writes: [own] };
+  const records = () => {
+    linkRecords(owner, autosaves);
+    return autosaves.flatMap(({ records }) => records.map((record) => saveWrite(record, true)));
+  };
+  return ownerKeysKnown(owner, autosaves)
+    ? { status: "ready", writes: [own, ...records()] }
+    : { status: "ready", writes: [own], followUp: records };
+}
+
+/**
+ * Writes a plan's writes as one unit (then its follow-up, if any), then runs every write's
+ * after-callbacks in order.
+ */
+async function runPlan(
+  executor: Executor,
+  plan: Extract<Plan, { status: "ready" }>,
+): Promise<void> {
+  await writeAll(executor, plan.writes);
+  const later = plan.followUp?.() ?? [];
+  await writeAll(executor, later);
+  await runAfter([...plan.writes, ...later]);
 }
 
 /**
@@ -213,7 +260,7 @@ export async function destroyLifecycle(record: ModelBase): Promise<DestroyOutcom
   const plan = await prepareDestroy(record);
   if (plan.status === "invalid") throw new TypeError("a destroy is never invalid");
   if (plan.status !== "ready") return plan;
-  await runPlan(record[state].executor, plan.writes);
+  await runPlan(record[state].executor, plan);
   return { status: "destroyed" };
 }
 

@@ -9,7 +9,7 @@ import {
   requireDefined,
   type AttributeDefinition,
 } from "./metadata.ts";
-import type { ModelClass } from "./model.ts";
+import type { ModelBase, ModelClass } from "./model.ts";
 
 /** The hidden slot where a Record keeps its `RecordState`; never exported from the package. */
 export const state = Symbol("state");
@@ -45,6 +45,7 @@ export class RecordState {
   readonly #errors = new Errors();
   #abortReason: string | undefined;
   readonly #associations = new Map<string, CachedAssociation>();
+  readonly #built = new Map<string, ModelBase[]>();
 
   constructor(model: ModelClass) {
     this.#model = model;
@@ -175,6 +176,26 @@ export class RecordState {
 
   clearAssociation(name: string): void {
     this.#associations.delete(name);
+  }
+
+  /** Records built through one of this record's hasMany associations, for autosave. */
+  addBuilt(name: string, record: ModelBase): void {
+    this.#built.set(name, [...(this.#built.get(name) ?? []), record]);
+  }
+
+  /** The records built through the association, in the order they were built. */
+  built(name: string): readonly ModelBase[] {
+    return this.#built.get(name) ?? [];
+  }
+
+  /** Every association's built records that are still new: what saving this record autosaves. */
+  unsavedBuilt(): [name: string, records: ModelBase[]][] {
+    return [...this.#built]
+      .map(([name, records]): [string, ModelBase[]] => [
+        name,
+        records.filter((record) => record[state].isNew),
+      ])
+      .filter(([, records]) => records.length > 0);
   }
 
   /** Drops every cached association (`reload()`). */
