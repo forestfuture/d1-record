@@ -243,7 +243,7 @@ export class ModelBase {
    */
   async reloadAssociation<K extends AssociationName<this>>(name: K): Promise<LoadedValue<this[K]>> {
     const { kind } = associationOf(this.constructor as ModelClass, name);
-    this[state].clearAssociation(name);
+    this[state].resetAssociation(name);
     // The accessor installed for this association: a Relation for a hasMany, else a promise.
     const accessor = this[name] as () => Relation<ModelBase> | Promise<ModelBase | null>;
     const read = accessor.call(this);

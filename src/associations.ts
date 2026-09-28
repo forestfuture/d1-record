@@ -206,15 +206,7 @@ function hasManyRelation(owner: ModelBase, name: string, definition: Association
   const cache = cacheOf(owner, name, ownerAttribute, key);
   // As Rails' collection delete_all: rows are deleted with destroy or deleteAll, else nullified.
   const deletes = definition.dependent === "destroy" || definition.dependent === "deleteAll";
-  return relation[ofOwner]({
-    foreignKey: deletes ? undefined : foreignKey,
-    cache,
-    register: (record) => {
-      register(record);
-      const loaded = cache.get();
-      if (loaded !== undefined) cache.set([...loaded, record]);
-    },
-  });
+  return relation[ofOwner]({ foreignKey: deletes ? undefined : foreignKey, cache, register });
 }
 
 /** An unsaved owner's hasMany: just the records built through it; nothing to fill or clear. */
@@ -255,7 +247,14 @@ function cacheOf(
 ): AssociationCache {
   const recordState = owner[state];
   return {
-    get: () => recordState.cachedAssociation(name)?.value as readonly ModelBase[] | undefined,
+    // The stored records, then those built through the association and not among them, as
+    // Rails merges new records into what it loads.
+    get: () => {
+      const loaded = recordState.cachedAssociation(name)?.value as ModelBase[] | undefined;
+      if (loaded === undefined) return undefined;
+      const built = recordState.built(name).filter((record) => !loaded.includes(record));
+      return [...loaded, ...built];
+    },
     set: (records) => recordState.cacheAssociation(name, { attribute, key, value: records }),
     clear: () => recordState.clearAssociation(name),
   };

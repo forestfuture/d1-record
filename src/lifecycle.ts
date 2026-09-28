@@ -1,7 +1,14 @@
 import { compileDelete, compileInsert, compileSelect, compileUpdate } from "./compiler.ts";
 import { autosavesOf, linkRecords, ownerKeysKnown } from "./autosave.ts";
 import { prepareDependents } from "./dependents.ts";
-import { AbortAfterPersistence, CallbackAbort, RecordNotFound } from "./errors.ts";
+import {
+  AbortAfterPersistence,
+  CallbackAbort,
+  RecordInvalid,
+  RecordNotDestroyed,
+  RecordNotFound,
+  RecordNotSaved,
+} from "./errors.ts";
 import { clearErrors } from "./errors-collection.ts";
 import type { Executor } from "./executor.ts";
 import {
@@ -87,14 +94,14 @@ async function runAbortableCallbacks(
 
 /** Whether the record is valid: `isValid()`'s answer. */
 export async function validateRecord(record: ModelBase): Promise<boolean> {
-  return (await validation(record)) === "valid";
+  return (await validation(record, new Set())) === "valid";
 }
 
 /**
  * Clears `errors` and `abortReason`, then beforeValidation → validators → afterValidation.
  * An `abort()` in either callback makes the record "aborted" (not valid).
  */
-async function validation(record: ModelBase): Promise<Validity> {
+async function validation(record: ModelBase, claimed: Claimed): Promise<Validity> {
   const recordState = record[state];
   recordState.errors[clearErrors]();
   recordState.abortReason = undefined;
@@ -105,30 +112,65 @@ async function validation(record: ModelBase): Promise<Validity> {
     errors: recordState.errors,
     isTaken: (attribute, value, options) => isTaken(record, attribute, value, options),
   });
-  await validateAutosaves(record);
+  await validateAutosaves(record, claimed);
   if (!(await runAbortableCallbacks(record, "afterValidation"))) return "aborted";
   return recordState.errors.isEmpty() ? "valid" : "invalid";
 }
 
+/** One batch of a plan: its writes, built when it runs so foreign keys can be linked first. */
+type Stage = () => PreparedWrite[];
+
 /**
- * A record's save or destroy, prepared: its writes, or why it was refused. `followUp` is a
- * second write that needs the first one's results (autosaved records waiting for the key D1
- * generates for their new owner); the two can't be one atomic batch.
+ * A prepared save or destroy, ready to write: stages written one after another, each as one
+ * atomic batch. There's more than one only when autosaved records need a key D1 generates for
+ * their new owner, so they can't be written in the same batch.
  */
-export type Plan =
-  | { status: "ready"; writes: PreparedWrite[]; followUp?: () => PreparedWrite[] }
-  | { status: "invalid" }
+export interface Ready {
+  status: "ready";
+  stages: Stage[];
+}
+
+/** A save, prepared: every before-callback has run, autosaved records' included. */
+export type SavePlan = Ready | { status: "invalid" } | { status: "aborted"; reason: string };
+
+/** A destroy, prepared: `beforeDestroy` and its dependents' callbacks and checks have run. */
+export type DestroyPlan =
+  | Ready
   | { status: "aborted"; reason: string }
   | { status: "restricted"; reason: string };
 
 /**
- * New records built through the record's hasMany associations are validated with it, as
- * Rails' `validate: true` does: an invalid one adds "is invalid" to the association's name.
+ * Records already part of the write being prepared, so a batch writes each record once: one
+ * saved through its owner's autosave isn't saved again, nor is a record listed twice.
  */
-async function validateAutosaves(record: ModelBase): Promise<void> {
-  for (const { name, records } of autosavesOf(record)) {
-    const valid = await Promise.all(records.map((each) => validateRecord(each)));
-    if (valid.includes(false)) record[state].errors.add(name, "is invalid");
+export type Claimed = Set<ModelBase>;
+
+/** The error a refused save or destroy throws where there's no `false` to return. */
+export function refusalError(
+  record: ModelBase,
+  plan: Exclude<SavePlan | DestroyPlan, Ready>,
+  kind: "save" | "destroy",
+): Error {
+  if (plan.status === "invalid") return new RecordInvalid(record);
+  return kind === "save" ? new RecordNotSaved(plan.reason) : new RecordNotDestroyed(plan.reason);
+}
+
+function aborted(record: ModelBase): { status: "aborted"; reason: string } {
+  return { status: "aborted", reason: record[state].abortReason ?? "" };
+}
+
+/**
+ * New records built through the record's hasMany associations are validated with it, one
+ * after another, as Rails' `validate: true` does: an invalid one adds "is invalid" to the
+ * association's name.
+ */
+async function validateAutosaves(record: ModelBase, claimed: Claimed): Promise<void> {
+  for (const { name, records } of autosavesOf(record, claimed)) {
+    let valid = true;
+    for (const each of records) {
+      if ((await validation(each, claimed)) !== "valid") valid = false;
+    }
+    if (!valid) record[state].errors.add(name, "is invalid");
   }
 }
 
@@ -139,60 +181,79 @@ async function validateAutosaves(record: ModelBase): Promise<void> {
  * → afterCreate | afterUpdate → afterSave.
  */
 export async function saveLifecycle(record: ModelBase): Promise<Outcome> {
-  const plan = await prepareSave(record);
-  if (plan.status === "restricted") throw new TypeError("a save is never restricted");
+  const plan = await prepareSave(record, new Set());
   if (plan.status !== "ready") return plan;
   await runPlan(record[state].executor, plan);
   return { status: "saved" };
 }
 
 /** Everything a save does before writing: validation and the before-callbacks. */
-export async function prepareSave(record: ModelBase): Promise<Plan> {
+export async function prepareSave(record: ModelBase, claimed: Claimed): Promise<SavePlan> {
+  if (claimed.has(record)) return { status: "ready", stages: [] };
   const recordState = record[state];
   recordState.requireLive("be saved");
-  const validity = await validation(record);
+  const validity = await validation(record, claimed);
   if (validity === "invalid") return { status: "invalid" };
-  const isInsert = recordState.isNew;
-  if (validity === "aborted" || !(await beforeWrite(record, isInsert))) {
-    return { status: "aborted", reason: recordState.abortReason ?? "" };
-  }
-  return withAutosaves(record, saveWrite(record, isInsert));
+  if (validity === "aborted") return aborted(record);
+  return prepareWrites(record, claimed);
 }
 
 /**
- * The owner's write plus its autosaved records': their before-callbacks run now, after the
- * owner's. If the owner's key is known, every record points at it and all of it is one batch;
- * if D1 generates it, the records follow once the owner is written.
+ * A validated record's before-callbacks and writes, then its autosaved records' (and theirs,
+ * at every level). If the owner's key is known, its records join its batch; if D1 generates
+ * it, they follow in the next one, once the owner is written.
  */
-async function withAutosaves(owner: ModelBase, own: PreparedWrite): Promise<Plan> {
-  const autosaves = autosavesOf(owner);
-  for (const record of autosaves.flatMap(({ records }) => records)) {
-    if (!(await beforeWrite(record, true))) {
-      return { status: "aborted", reason: record[state].abortReason ?? "" };
-    }
+async function prepareWrites(record: ModelBase, claimed: Claimed): Promise<SavePlan> {
+  claimed.add(record);
+  const isInsert = record[state].isNew;
+  if (!(await beforeWrite(record, isInsert))) return aborted(record);
+  const own: Stage = () => [saveWrite(record, isInsert)];
+  const autosaves = autosavesOf(record, claimed);
+  const plans: Ready[] = [];
+  for (const child of autosaves.flatMap(({ records }) => records)) {
+    const plan = await prepareWrites(child, claimed);
+    if (plan.status !== "ready") return plan;
+    plans.push(plan);
   }
-  if (autosaves.length === 0) return { status: "ready", writes: [own] };
-  const records = () => {
-    linkRecords(owner, autosaves);
-    return autosaves.flatMap(({ records }) => records.map((record) => saveWrite(record, true)));
+  if (plans.length === 0) return { status: "ready", stages: [own] };
+  const children = combine(plans.map(({ stages }) => stages));
+  // Link the records to their owner just before their first stage builds its statements.
+  const [first, ...rest] = children;
+  const linked: Stage[] = [() => (linkRecords(record, autosaves), first!()), ...rest];
+  return {
+    status: "ready",
+    stages: ownerKeysKnown(record, autosaves) ? combine([[own], linked]) : [own, ...linked],
   };
-  return ownerKeysKnown(owner, autosaves)
-    ? { status: "ready", writes: [own, ...records()] }
-    : { status: "ready", writes: [own], followUp: records };
+}
+
+/** Stage lists merged position by position: every plan's first stage in one batch, and so on. */
+function combine(stageLists: readonly (readonly Stage[])[]): Stage[] {
+  const length = Math.max(...stageLists.map((stages) => stages.length));
+  return Array.from(
+    { length },
+    (_, index) => () => stageLists.flatMap((stages) => stages[index]?.() ?? []),
+  );
 }
 
 /**
- * Writes a plan's writes as one unit (then its follow-up, if any), then runs every write's
- * after-callbacks in order.
+ * Writes a plan's stages one after another, each as one atomic batch, then runs the written
+ * writes' after-callbacks in order. If a later stage fails, the earlier ones stay written, so
+ * their after-callbacks still run before the error is thrown.
  */
-async function runPlan(
-  executor: Executor,
-  plan: Extract<Plan, { status: "ready" }>,
-): Promise<void> {
-  await writeAll(executor, plan.writes);
-  const later = plan.followUp?.() ?? [];
-  await writeAll(executor, later);
-  await runAfter([...plan.writes, ...later]);
+async function runPlan(executor: Executor, plan: Ready): Promise<void> {
+  const written: PreparedWrite[] = [];
+  let failure: { error: unknown } | undefined;
+  try {
+    for (const stage of plan.stages) {
+      const writes = stage();
+      await writeAll(executor, writes);
+      written.push(...writes);
+    }
+  } catch (error) {
+    failure = { error };
+  }
+  await runAfter(written);
+  if (failure !== undefined) throw failure.error;
 }
 
 /**
@@ -257,34 +318,35 @@ function saveWrite(record: ModelBase, isInsert: boolean): PreparedWrite {
  * → mark destroyed → afterDestroy. Every write, dependents' included, is one atomic batch.
  */
 export async function destroyLifecycle(record: ModelBase): Promise<DestroyOutcome> {
-  const plan = await prepareDestroy(record);
-  if (plan.status === "invalid") throw new TypeError("a destroy is never invalid");
+  const plan = await prepareDestroy(record, new Set());
   if (plan.status !== "ready") return plan;
   await runPlan(record[state].executor, plan);
   return { status: "destroyed" };
 }
 
 /** Everything a destroy does before writing: beforeDestroy, then its dependents' plans. */
-export async function prepareDestroy(record: ModelBase): Promise<Plan> {
+export async function prepareDestroy(record: ModelBase, claimed: Claimed): Promise<DestroyPlan> {
+  if (claimed.has(record)) return { status: "ready", stages: [] };
+  claimed.add(record);
   const recordState = record[state];
   recordState.requireLive("be destroyed");
   recordState.abortReason = undefined;
-  if (!(await runAbortableCallbacks(record, "beforeDestroy"))) {
-    return { status: "aborted", reason: recordState.abortReason ?? "" };
-  }
-  const dependents = recordState.isNew ? { writes: [] } : await prepareDependents(record);
-  if ("status" in dependents) return dependents;
+  if (!(await runAbortableCallbacks(record, "beforeDestroy"))) return aborted(record);
+  const dependents = recordState.isNew
+    ? { status: "ready" as const, writes: () => [] }
+    : await prepareDependents(record, claimed);
+  if (dependents.status !== "ready") return dependents;
   const deletion = recordState.isNew ? [] : [compileDelete(modelOf(record), recordState.storedKey)];
   // Dependents first: their records go before the owner's row, which they may point at.
-  const writes = [
-    ...dependents.writes,
+  const stage: Stage = () => [
+    ...dependents.writes(),
     {
       statements: deletion,
       commit: () => recordState.markDestroyed(),
       after: () => runAfterCallbacks(record, "afterDestroy", "destroy"),
     },
   ];
-  return { status: "ready", writes };
+  return { status: "ready", stages: [stage] };
 }
 
 /** Loads the record's row again by its stored primary key, discarding unsaved changes. */

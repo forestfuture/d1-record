@@ -1,11 +1,5 @@
-import {
-  IncompatibleRelation,
-  NoSession,
-  RecordInvalid,
-  RecordNotDestroyed,
-  RecordNotSaved,
-} from "./errors.ts";
-import { prepareDestroy, prepareSave } from "./lifecycle.ts";
+import { IncompatibleRelation, NoSession, RecordNotSaved } from "./errors.ts";
+import { prepareDestroy, prepareSave, refusalError, type Claimed } from "./lifecycle.ts";
 import { RecordStatement, recordStatementParts } from "./record-statement.ts";
 import { state } from "./record-state.ts";
 import { runAfter, writeAll, type PreparedWrite } from "./unit-of-work.ts";
@@ -83,13 +77,17 @@ export class Database {
    */
   async batch<const T extends readonly BatchEntry[]>(entries: T): Promise<BatchResults<T>> {
     for (const entry of entries) this.#requireOwn(entry);
+    // Each record is written once, even if listed twice or already saved by its owner.
+    const claimed: Claimed = new Set();
     const prepared: PreparedEntry[] = [];
     for (const entry of entries) {
       prepared.push(
-        entry instanceof RecordStatement ? await recordEntry(entry) : statementEntry(entry),
+        entry instanceof RecordStatement
+          ? await recordEntry(entry, claimed)
+          : statementEntry(entry),
       );
     }
-    const writes = prepared.flatMap(({ writes }) => writes);
+    const writes = prepared.flatMap(({ writes }) => writes());
     await writeAll(this.#executor, writes);
     await runAfter(writes);
     return prepared.map(({ result }) => result()) as BatchResults<T>;
@@ -118,7 +116,8 @@ export type BatchResults<T extends readonly BatchEntry[]> = {
 };
 
 interface PreparedEntry {
-  writes: PreparedWrite[];
+  /** Built when the batch is: every entry is prepared first, so foreign keys are linked. */
+  writes: () => PreparedWrite[];
   result: () => unknown;
 }
 
@@ -131,24 +130,23 @@ function statementEntry(statement: Statement): PreparedEntry {
     },
     after: async () => {},
   };
-  return { writes: [write], result: () => meta };
+  return { writes: () => [write], result: () => meta };
 }
 
 /** A record's prepared save or destroy; a refusal throws, as a Rails transaction's `save!` does. */
-async function recordEntry(statement: RecordStatement): Promise<PreparedEntry> {
+async function recordEntry(statement: RecordStatement, claimed: Claimed): Promise<PreparedEntry> {
   const { record, kind } = statement[recordStatementParts];
-  const plan = await (kind === "save" ? prepareSave(record) : prepareDestroy(record));
-  if (plan.status === "invalid") throw new RecordInvalid(record);
-  if (plan.status !== "ready") {
-    throw kind === "save" ? new RecordNotSaved(plan.reason) : new RecordNotDestroyed(plan.reason);
-  }
-  if (plan.followUp !== undefined) {
-    const { name } = record.constructor as { name: string };
+  const plan = await (kind === "save"
+    ? prepareSave(record, claimed)
+    : prepareDestroy(record, claimed));
+  if (plan.status !== "ready") throw refusalError(record, plan, kind);
+  if (plan.stages.length > 1) {
+    const { name } = record.constructor;
     throw new RecordNotSaved(
       `${name} can't autosave its new records in a batch: they need the ${name}'s key, which D1 only generates when it's written. Generate keys in code, or save it on its own`,
     );
   }
-  return { writes: plan.writes, result: () => record };
+  return { writes: () => plan.stages.flatMap((stage) => stage()), result: () => record };
 }
 
 export function connect(binding: D1Database, options?: ConnectOptions): Database {

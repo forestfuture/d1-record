@@ -5,16 +5,21 @@ import {
   type AssociationDefinition,
 } from "./associations.ts";
 import type { CompiledSql } from "./compiler.ts";
-import { DeleteRestriction, RecordNotDestroyed } from "./errors.ts";
-import { prepareDestroy } from "./lifecycle.ts";
+import { DeleteRestriction } from "./errors.ts";
+import { prepareDestroy, refusalError, type Claimed } from "./lifecycle.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { state } from "./record-state.ts";
 import type { Scoped } from "./relation.ts";
 import { statementParts, type Statement } from "./statement.ts";
 import { statementWrite, type PreparedWrite } from "./unit-of-work.ts";
 
-/** What an owner's `dependent:` associations add to its destroy, or why they refuse it. */
-export type DependentsPlan = { writes: PreparedWrite[] } | { status: "restricted"; reason: string };
+/**
+ * What an owner's `dependent:` associations add to its destroy (built when its batch is), or
+ * why they refuse it.
+ */
+export type DependentsPlan =
+  | { status: "ready"; writes: () => PreparedWrite[] }
+  | { status: "restricted"; reason: string };
 
 type Dependency = [name: string, definition: AssociationDefinition];
 
@@ -24,7 +29,10 @@ type Dependency = [name: string, definition: AssociationDefinition];
  * callbacks and dependents); then the `deleteAll`/`delete`/`nullify` statements. The caller
  * writes all of it in one batch with the owner's DELETE.
  */
-export async function prepareDependents(owner: ModelBase): Promise<DependentsPlan> {
+export async function prepareDependents(
+  owner: ModelBase,
+  claimed: Claimed,
+): Promise<DependentsPlan> {
   const model = owner.constructor as ModelClass;
   const dependencies = Object.entries(model.associations).filter(
     ([, definition]) => definition.dependent !== undefined,
@@ -33,10 +41,15 @@ export async function prepareDependents(owner: ModelBase): Promise<DependentsPla
     const reason = await checkRestriction(owner, dependency);
     if (reason !== undefined) return { status: "restricted", reason };
   }
-  const writes: PreparedWrite[] = [];
-  for (const dependency of dependencies) writes.push(...(await destroyRecords(owner, dependency)));
+  const stages: (() => PreparedWrite[])[] = [];
+  for (const dependency of dependencies) {
+    stages.push(...(await destroyRecords(owner, dependency, claimed)));
+  }
   const statements = dependencies.flatMap((dependency) => statementFor(owner, dependency));
-  return { writes: [...writes, statementWrite(statements)] };
+  return {
+    status: "ready",
+    writes: () => [...stages.flatMap((stage) => stage()), statementWrite(statements)],
+  };
 }
 
 /** The association's records for this owner (a hasOne's first one only), with its scope. */
@@ -73,17 +86,19 @@ async function checkRestriction(
  * `destroy`: each record's prepared destroy, callbacks and dependents included. A record that
  * refuses stops the owner's destroy before anything is written.
  */
-async function destroyRecords(owner: ModelBase, dependency: Dependency): Promise<PreparedWrite[]> {
+async function destroyRecords(
+  owner: ModelBase,
+  dependency: Dependency,
+  claimed: Claimed,
+): Promise<(() => PreparedWrite[])[]> {
   if (dependency[1].dependent !== "destroy") return [];
-  const writes: PreparedWrite[] = [];
+  const stages: (() => PreparedWrite[])[] = [];
   for (const record of await recordsOf(owner, dependency).toArray()) {
-    const plan = await prepareDestroy(record);
-    if (plan.status !== "ready") {
-      throw new RecordNotDestroyed("reason" in plan ? plan.reason : "");
-    }
-    writes.push(...plan.writes);
+    const plan = await prepareDestroy(record, claimed);
+    if (plan.status !== "ready") throw refusalError(record, plan, "destroy");
+    stages.push(...plan.stages);
   }
-  return writes;
+  return stages;
 }
 
 /** The statement for `deleteAll`, `delete` or `nullify`, if that's the strategy. */

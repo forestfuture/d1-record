@@ -199,6 +199,17 @@ describe("saving and destroying records in a batch", () => {
     expect(stored.id).toBe(account.id);
   });
 
+  test("a record listed twice is written once", async () => {
+    const database = db();
+    const post = await database.model(Post).find(11);
+    events.length = 0;
+
+    await database.batch([post.destroyStatement(), post.destroyStatement()]);
+
+    expect(events).toHaveLength(1);
+    expect(log).toEqual(["after destroy Second"]);
+  });
+
   test("a destroy statement brings its dependents into the batch", async () => {
     const database = db();
     const user = await database.model(User).find(1);

@@ -619,7 +619,7 @@ export class Relation<M extends ModelBase, S = {}> {
     // Loaded into the owner's cache in its order, then target primary-key order, as preloaded.
     const records = await this.#load({ ...this.#query, order: this.#withPrimaryKeyOrder() });
     cache.set(records);
-    return [...records];
+    return [...(this.#cached() ?? records)];
   }
 
   /** The owner's loaded records for this hasMany, if it has them. */
