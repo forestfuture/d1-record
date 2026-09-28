@@ -8,6 +8,7 @@ export {
   CheckViolation,
   ConstraintViolation,
   D1RecordError,
+  DeleteRestriction,
   IncompatibleRelation,
   IrreversibleOrder,
   InvalidForeignKey,

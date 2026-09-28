@@ -21,7 +21,33 @@ export interface AssociationOptions {
   primaryKey?: string;
   /** Narrows or orders the target's records for this association: `(q) => q.order(…)`. */
   scope?: AssociationScope;
+  /** What destroying the owner does to this association's records (hasMany and hasOne). */
+  dependent?: Dependent;
 }
+
+/** Rails' `dependent:` strategies for a hasMany. */
+export type HasManyDependent =
+  | "destroy"
+  | "deleteAll"
+  | "nullify"
+  | "restrictWithException"
+  | "restrictWithError";
+
+/** Rails' `dependent:` strategies for a hasOne: `delete` in place of `deleteAll`. */
+export type HasOneDependent =
+  | "destroy"
+  | "delete"
+  | "nullify"
+  | "restrictWithException"
+  | "restrictWithError";
+
+type Dependent = HasManyDependent | HasOneDependent;
+
+const DEPENDENTS: Record<AssociationDefinition["kind"], readonly Dependent[]> = {
+  belongsTo: [],
+  hasMany: ["destroy", "deleteAll", "nullify", "restrictWithException", "restrictWithError"],
+  hasOne: ["destroy", "delete", "nullify", "restrictWithException", "restrictWithError"],
+};
 
 /** One declared association: its kind, its target Model, and its options. */
 export interface AssociationDefinition extends AssociationOptions {
@@ -109,6 +135,13 @@ function checkAssociation(
   const { ownerAttribute, targetAttribute } = linkOf(definition, model, target as ModelClass);
   requireAttribute(label, model, ownerAttribute);
   requireAttribute(label, target as ModelClass, targetAttribute);
+  const { dependent, kind } = definition;
+  if (dependent !== undefined && !DEPENDENTS[kind].includes(dependent)) {
+    const allowed = DEPENDENTS[kind].map((each) => `"${each}"`).join(", ");
+    throw new InvalidModel(
+      `${label}: a ${kind} can't be dependent: "${dependent}"${allowed ? `; use one of ${allowed}` : ""}`,
+    );
+  }
 }
 
 function requireAttribute(label: string, model: ModelClass, name: string): void {
@@ -157,7 +190,10 @@ function accessorFor(
           });
         }
         const { ownerAttribute } = linkOf(definition, model(this), target);
-        return relation[ofOwner]({ foreignKey, cache: cacheOf(this, name, ownerAttribute, key) });
+        const cache = cacheOf(this, name, ownerAttribute, key);
+        // As Rails' collection delete_all: rows are deleted with destroy or deleteAll, else nullified.
+        const deletes = definition.dependent === "destroy" || definition.dependent === "deleteAll";
+        return relation[ofOwner]({ foreignKey: deletes ? undefined : foreignKey, cache });
       };
   }
 }

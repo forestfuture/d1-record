@@ -35,6 +35,11 @@ export class MissingAttribute extends D1RecordError {
   override name = "MissingAttribute";
 }
 
+/** Destroying a record whose `dependent: "restrictWithException"` association still has records. */
+export class DeleteRestriction extends D1RecordError {
+  override name = "DeleteRestriction";
+}
+
 /** `last()` can't reverse an order given as an `sql` fragment (Rails' IrreversibleOrderError). */
 export class IrreversibleOrder extends D1RecordError {
   override name = "IrreversibleOrder";

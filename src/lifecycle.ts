@@ -11,6 +11,7 @@ import type { ModelBase, ModelClass } from "./model.ts";
 import { Negated, type Condition } from "./query.ts";
 import { state } from "./record-state.ts";
 import { column, sql } from "./sql.ts";
+import { runDependents } from "./dependents.ts";
 import { timestampsFor } from "./timestamps.ts";
 import { runValidations, type UniquenessOptions } from "./validations.ts";
 
@@ -185,7 +186,13 @@ export async function destroyLifecycle(record: ModelBase): Promise<DestroyOutcom
     return { status: "aborted", reason: recordState.abortReason ?? "" };
   }
   if (!recordState.isNew) {
-    await recordState.executor.all(compileDelete(modelOf(record), recordState.storedKey));
+    const dependents = await runDependents(record);
+    if (dependents.status === "restricted") return { status: "aborted", reason: dependents.reason };
+    const deletion = compileDelete(modelOf(record), recordState.storedKey);
+    // Dependent statements go in one batch with the owner's DELETE: all of it, or none.
+    await (dependents.statements.length === 0
+      ? recordState.executor.all(deletion)
+      : recordState.executor.batch([...dependents.statements, deletion]));
   }
   recordState.markDestroyed();
   await runAfterCallbacks(record, "afterDestroy", "destroy");
