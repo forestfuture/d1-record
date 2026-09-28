@@ -9,17 +9,29 @@ export interface Autosave {
   records: ModelBase[];
 }
 
-/** What saving `owner` autosaves: the new records built through its hasMany associations. */
-export function autosavesOf(owner: ModelBase): Autosave[] {
-  const model = owner.constructor as ModelClass;
+/**
+ * What saving `owner` autosaves: the records built through its hasMany associations that are
+ * still new, leaving out any already claimed by the write being prepared.
+ */
+export function autosavesOf(owner: ModelBase, claimed: ReadonlySet<ModelBase>): Autosave[] {
+  const model = modelOf(owner);
   return owner[state]
-    .unsavedBuilt()
-    .map(([name, records]) => ({ name, definition: associationOf(model, name), records }));
+    .builtRecords()
+    .map(([name, built]) => ({
+      name,
+      definition: associationOf(model, name),
+      records: built.filter((record) => record[state].isNew && !claimed.has(record)),
+    }))
+    .filter(({ records }) => records.length > 0);
+}
+
+function modelOf(record: ModelBase): ModelClass {
+  return record.constructor as ModelClass;
 }
 
 /** The owner's value its records point at; null until D1 generates it, for a new owner. */
 function ownerValue(owner: ModelBase, { definition }: Autosave): unknown {
-  const owned = linkOf(definition, owner.constructor as ModelClass, definition.target());
+  const owned = linkOf(definition, modelOf(owner), definition.target());
   return owner[state].read(owned.ownerAttribute);
 }
 

@@ -37,10 +37,29 @@ class Post extends Model({
 }) {
   static tableName = "posts";
 
+  static associations = this.defineAssociations({
+    comments: this.hasMany(() => Comment, { foreignKey: "postId" }),
+  });
+
+  declare comments: HasMany<typeof Comment>;
+
   static {
     this.validates("title", { presence: true });
     this.beforeSave((post) => void log.push(`before save ${post.title}`));
     this.afterSave((post) => void log.push(`after save ${post.title}`));
+  }
+}
+
+class Comment extends Model({
+  id: { type: "integer", null: false },
+  postId: "integer",
+  body: "string",
+}) {
+  static tableName = "comments";
+
+  static {
+    this.beforeValidation((comment) => void log.push(`validating ${comment.body}`));
+    this.afterValidation((comment) => void log.push(`validated ${comment.body}`));
   }
 }
 
@@ -79,6 +98,7 @@ describe("autosave: records built through a hasMany are saved with their owner",
   beforeEach(async () => {
     log.length = 0;
     await binding.batch([
+      binding.prepare("DELETE FROM comments"),
       binding.prepare("DELETE FROM posts"),
       binding.prepare("DELETE FROM users"),
       binding.prepare("DELETE FROM accounts"),
@@ -221,5 +241,90 @@ describe("autosave: records built through a hasMany are saved with their owner",
 
     await expect(database.batch([user.saveStatement()])).rejects.toThrow(RecordNotSaved);
     expect(await database.model(User).count()).toBe(0);
+  });
+
+  test("autosave reaches every level: a built record's own built records are saved too", async () => {
+    const user = db().model(User).build({ email: "a@example.com" });
+    const post = user.posts().build({ title: "Hello" });
+    const comment = post.comments().build({ body: "First!" });
+
+    await user.saveOrThrow();
+
+    expect(comment.isPersisted()).toBe(true);
+    expect(comment.postId).toBe(post.id);
+    expect(post.userId).toBe(user.id);
+  });
+
+  test("built records are validated one after another, in the order they were built", async () => {
+    const user = await db().model(User).createOrThrow({ email: "a@example.com" });
+    const post = await user.posts().createOrThrow({ title: "Hello" });
+    post.comments().build({ body: "one" });
+    post.comments().build({ body: "two" });
+    log.length = 0;
+
+    await post.saveOrThrow();
+
+    expect(log.filter((line) => line.startsWith("validat"))).toEqual([
+      "validating one",
+      "validated one",
+      "validating two",
+      "validated two",
+    ]);
+  });
+
+  test("in a batch, a record already saved through its owner's autosave is written once", async () => {
+    const database = db();
+    const key = database.model(ApiKey).build({ label: "deploy" });
+    const account = key.accounts().build({ id: 1 });
+    const other = database.model(Account).build({ id: 2 });
+    events.length = 0;
+
+    await database.batch([
+      key.saveStatement(),
+      account.saveStatement(),
+      other.saveStatement(),
+      other.saveStatement(),
+    ]);
+
+    expect(events).toHaveLength(3);
+    expect(await database.model(Account).order({ id: "asc" }).pluck("id")).toEqual([1, 2]);
+  });
+
+  test("reload() discards built records, as does reloadAssociation()", async () => {
+    const user = await db().model(User).createOrThrow({ email: "a@example.com" });
+    user.posts().build({ title: "Dropped by reload" });
+    await user.reload();
+    await user.saveOrThrow();
+    user.posts().build({ title: "Dropped by reloadAssociation" });
+    await user.reloadAssociation("posts");
+    await user.saveOrThrow();
+
+    expect(await db().model(Post).count()).toBe(0);
+  });
+
+  test("when a record fails after its new owner was written, the owner's after-callbacks still run", async () => {
+    await binding.prepare("INSERT INTO users (id, email) VALUES (1, 'x@example.com')").run();
+    await binding.prepare("INSERT INTO posts (id, user_id, title) VALUES (10, 1, 'Taken')").run();
+    const user = db().model(User).build({ email: "a@example.com" });
+    user.posts().build({ id: 10, title: "Clash" });
+
+    await expect(user.save()).rejects.toThrow(RecordNotUnique);
+
+    expect(log).toContain("after save a@example.com");
+    expect(log).not.toContain("after save Clash");
+  });
+
+  test("a saved owner's loaded association shows its built records after the stored ones, however it's loaded", async () => {
+    const user = await db().model(User).createOrThrow({ email: "a@example.com" });
+    await binding
+      .prepare(`INSERT INTO posts (id, user_id, title) VALUES (10, ${user.id}, 'Stored')`)
+      .run();
+    user.posts().build({ title: "Built" });
+
+    const titles = async () => (await user.posts().toArray()).map((post) => post.title);
+
+    expect(await titles()).toEqual(["Stored", "Built"]);
+    await user.posts().updateAll({ title: "Changed" }).run();
+    expect(await titles()).toEqual(["Changed", "Built"]);
   });
 });

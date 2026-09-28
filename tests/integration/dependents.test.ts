@@ -66,6 +66,9 @@ class Destroying extends Model(userAttributes) {
     posts: this.hasMany(() => Post, { foreignKey: "userId", dependent: "destroy" }),
   });
   declare posts: HasMany<typeof Post>;
+  static {
+    this.afterDestroy((user) => void log.push(`destroyed user ${user.id}`));
+  }
 }
 
 class DeletingAll extends Model(userAttributes) {
@@ -222,7 +225,8 @@ describe("dependent: strategies", () => {
 
     expect(await user.destroy()).toBe(user);
 
-    expect(log).toEqual(["destroyed post 10", "destroyed post 11"]);
+    // Every afterDestroy runs after the one batch: the records' first, then the owner's.
+    expect(log).toEqual(["destroyed post 10", "destroyed post 11", "destroyed user 1"]);
     expect(await db().model(Post).pluck("id")).toEqual([12]);
     // Each post's own dependent ran too: its comments were nullified.
     expect(await db().model(Comment).order({ id: "asc" }).pluck("postId")).toEqual([null, 12]);

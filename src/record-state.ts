@@ -188,19 +188,21 @@ export class RecordState {
     return this.#built.get(name) ?? [];
   }
 
-  /** Every association's built records that are still new: what saving this record autosaves. */
-  unsavedBuilt(): [name: string, records: ModelBase[]][] {
-    return [...this.#built]
-      .map(([name, records]): [string, ModelBase[]] => [
-        name,
-        records.filter((record) => record[state].isNew),
-      ])
-      .filter(([, records]) => records.length > 0);
+  /** Every association's built records, by association name. */
+  builtRecords(): [name: string, records: readonly ModelBase[]][] {
+    return [...this.#built];
   }
 
-  /** Drops every cached association (`reload()`). */
+  /** Forgets an association: what's cached and what was built through it (`reloadAssociation`). */
+  resetAssociation(name: string): void {
+    this.#associations.delete(name);
+    this.#built.delete(name);
+  }
+
+  /** Forgets every association, cached and built (`reload()`), as Rails' reload does. */
   clearAssociations(): void {
     this.#associations.clear();
+    this.#built.clear();
   }
 
   /** Loads a D1 row; the record becomes persisted and clean. */
