@@ -39,6 +39,19 @@ class Post extends Model({
   declare author: BelongsTo<typeof User>;
 }
 
+class Comment extends Model({
+  id: { type: "integer", null: false },
+  postId: "integer",
+}) {
+  static tableName = "comments";
+
+  static associations = this.defineAssociations({
+    post: this.belongsTo(() => Post, { foreignKey: "postId" }),
+  });
+
+  declare post: BelongsTo<typeof Post>;
+}
+
 class Profile extends Model({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
@@ -93,6 +106,15 @@ describe("caching lazily loaded associations", () => {
     expect(await user.profile()).toBeNull();
 
     expect(queries).toHaveLength(1);
+  });
+
+  test("a belongsTo with no key reads as null without a query, and counts as loaded", async () => {
+    const comment = db().model(Comment).build({ postId: null });
+
+    expect(await comment.post()).toBeNull();
+    expect(comment.isLoaded("post")).toBe(true);
+    expect(comment.loaded("post")).toBeNull();
+    expect(queries).toHaveLength(0);
   });
 
   test("hasMany toArray() loads once, in target primary-key order, then answers from the record", async () => {

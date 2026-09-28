@@ -159,7 +159,7 @@ function accessorFor(
   switch (definition.kind) {
     case "belongsTo":
       return async function belongsTo(this: ModelBase) {
-        return cachedRead(this, name, definition, (key, target, targetAttribute) =>
+        return cachedRead(this, name, definition, (key, targetAttribute) =>
           scopedTarget(this[state].executor, model(this), name, definition).findBy({
             [targetAttribute]: key,
           }),
@@ -168,7 +168,7 @@ function accessorFor(
     case "hasOne":
       return async function hasOne(this: ModelBase) {
         // The scope's order, or the target's primary key, as preloading uses: the same record.
-        return cachedRead(this, name, definition, (key, _target, targetAttribute) =>
+        return cachedRead(this, name, definition, (key, targetAttribute) =>
           scopedTarget(this[state].executor, model(this), name, definition)
             .where({ [targetAttribute]: key })
             .first(),
@@ -206,7 +206,7 @@ async function cachedRead(
   owner: ModelBase,
   name: string,
   definition: AssociationDefinition,
-  load: (key: unknown, target: ModelClass, targetAttribute: string) => Promise<ModelBase | null>,
+  load: (key: unknown, targetAttribute: string) => Promise<ModelBase | null>,
 ): Promise<ModelBase | null> {
   const cached = owner[state].cachedAssociation(name);
   if (cached !== undefined) return cached.value as ModelBase | null;
@@ -216,8 +216,8 @@ async function cachedRead(
     definition.kind === "belongsTo"
       ? owner[state].read(ownerAttribute)
       : ownerKey(owner, definition);
-  if (key === null) return null;
-  const value = await load(key, target, targetAttribute);
+  // No key: nothing to find, and nothing to query; that null is cached like any result.
+  const value = key === null ? null : await load(key, targetAttribute);
   owner[state].cacheAssociation(name, { attribute: ownerAttribute, key, value });
   return value;
 }
