@@ -81,5 +81,9 @@ A write compiled in advance (`insert`, `updateAll`, `deleteAll`) that skips vali
 _Avoid_: Query, command
 
 **Batch**:
-An atomic group of **Statements** run together with D1's `batch()`: all are written, or none.
+An atomic group of **Statements** and **Record statements** run together with D1's `batch()`: all are written, or none.
 _Avoid_: Transaction
+
+**Record statement**:
+A **Record**'s save or destroy as part of a **Batch** (`user.saveStatement()`). Unlike a **Statement**, it isn't compiled in advance: the record's validations and callbacks run when the batch runs. It's never run by being awaited.
+_Avoid_: Pending save, deferred write

@@ -1,5 +1,12 @@
 export type { BelongsTo, HasMany, HasOne } from "./associations.ts";
-export { connect, Database, type ConnectOptions, type RelationsFor } from "./database.ts";
+export {
+  connect,
+  Database,
+  type BatchEntry,
+  type BatchResults,
+  type ConnectOptions,
+  type RelationsFor,
+} from "./database.ts";
 export {
   abort,
   AssociationNotLoaded,
@@ -47,5 +54,6 @@ export {
   type UpsertOptions,
 } from "./relation.ts";
 export type { Statement } from "./statement.ts";
+export type { RecordStatement } from "./record-statement.ts";
 export { between, gt, gte, lt, lte, type Comparison } from "./comparisons.ts";
 export { column, sql, type ColumnReference, type SafeSql } from "./sql.ts";
