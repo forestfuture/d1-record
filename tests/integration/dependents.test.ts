@@ -228,13 +228,14 @@ describe("dependent: strategies", () => {
     expect(await db().model(Comment).order({ id: "asc" }).pluck("postId")).toEqual([null, 12]);
   });
 
-  test("destroy isn't atomic: a record that aborts stops the owner's destroy, but earlier records stay destroyed", async () => {
+  test("destroy is atomic: if one record's destroy aborts, nothing is destroyed", async () => {
     await binding.prepare("UPDATE posts SET title = 'Keep' WHERE id = 11").run();
     const user = await db().model(Destroying).find(1);
 
     await expect(user.destroy()).rejects.toThrow(RecordNotDestroyed);
 
-    expect(await db().model(Post).order({ id: "asc" }).pluck("id")).toEqual([11, 12]);
+    expect(log).toEqual([]);
+    expect(await db().model(Post).order({ id: "asc" }).pluck("id")).toEqual([10, 11, 12]);
     expect(await count("users")).toBe(2);
   });
 
