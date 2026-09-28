@@ -167,11 +167,14 @@ function accessorFor(
       };
     case "hasOne":
       return async function hasOne(this: ModelBase) {
-        // The scope's order, or the target's primary key, as preloading uses: the same record.
+        // The scope's order, then the target's primary key, as preloading uses: the same record.
         return cachedRead(this, name, definition, (key, targetAttribute) =>
-          scopedTarget(this[state].executor, model(this), name, definition)
-            .where({ [targetAttribute]: key })
-            .first(),
+          inAssociationOrder(
+            scopedTarget(this[state].executor, model(this), name, definition).where({
+              [targetAttribute]: key,
+            }),
+            targetOf(definition),
+          ).first(),
         );
       };
     case "hasMany":
@@ -252,6 +255,17 @@ export function scopedTarget(
     scope as Scope<ModelBase>,
     [],
   ) as Scoped<ModelBase>;
+}
+
+/**
+ * An association's records in its scope's order, then the target's primary key, so lazy
+ * reads, preloads and dependents agree on order, and a hasOne on its one record.
+ */
+export function inAssociationOrder(
+  relation: Scoped<ModelBase>,
+  target: ModelClass,
+): Scoped<ModelBase> {
+  return relation.order({ [target.primaryKey]: "asc" });
 }
 
 /** The target Model, ready for use. */

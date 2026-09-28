@@ -153,6 +153,17 @@ describe("association scopes", () => {
     expect(preloaded.loaded("latestPost")?.id).toBe(11);
   });
 
+  test("on a tie in the scope's order, lazy and preloaded hasOne pick the same record: the lowest key", async () => {
+    await binding
+      .prepare("UPDATE posts SET created_at = '2026-03-01T00:00:00.000Z' WHERE id = 10")
+      .run();
+    const user = await db().model(User).find(1);
+    const preloaded = await db().model(User).includes("latestPost").find(1);
+
+    expect((await user.latestPost())?.id).toBe(10);
+    expect(preloaded.loaded("latestPost")?.id).toBe(10);
+  });
+
   test("a belongsTo scope's conditions apply: no match reads as null", async () => {
     const posts = await db().model(Post).includes("admin").order({ id: "asc" }).toArray();
     const other = await db().model(Post).find(13);

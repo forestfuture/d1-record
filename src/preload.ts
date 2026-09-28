@@ -1,4 +1,10 @@
-import { linkOf, prepareModel, scopedTarget, type AssociationDefinition } from "./associations.ts";
+import {
+  inAssociationOrder,
+  linkOf,
+  prepareModel,
+  scopedTarget,
+  type AssociationDefinition,
+} from "./associations.ts";
 import type { Executor } from "./executor.ts";
 import { associationOf, type ModelBase, type ModelClass } from "./model.ts";
 import { mergeTrees, type IncludeTree } from "./query.ts";
@@ -81,7 +87,7 @@ async function loadByKeys(
   const loaded: ModelBase[] = [];
   for (let start = 0; start < distinct.length; start += KEYS_PER_QUERY) {
     const group = distinct.slice(start, start + KEYS_PER_QUERY);
-    const relation = targets.where({ [attribute]: group }).order({ [target.primaryKey]: "asc" });
+    const relation = inAssociationOrder(targets.where({ [attribute]: group }), target);
     loaded.push(...(await relation.toArray()));
   }
   return loaded;

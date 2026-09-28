@@ -1,4 +1,9 @@
-import { linkOf, scopedTarget, type AssociationDefinition } from "./associations.ts";
+import {
+  inAssociationOrder,
+  linkOf,
+  scopedTarget,
+  type AssociationDefinition,
+} from "./associations.ts";
 import type { CompiledSql } from "./compiler.ts";
 import { DeleteRestriction } from "./errors.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
@@ -41,9 +46,7 @@ function childrenOf(owner: ModelBase, [name, definition]: Dependency): Scoped<Mo
   const children = scopedTarget(owner[state].executor, model, name, definition).where({
     [targetAttribute]: owner[state].read(ownerAttribute),
   });
-  return definition.kind === "hasOne"
-    ? children.order({ [target.primaryKey]: "asc" }).limit(1)
-    : children;
+  return definition.kind === "hasOne" ? inAssociationOrder(children, target).limit(1) : children;
 }
 
 /** Why a restrict strategy refuses the destroy, if it does (Rails' wording). */
