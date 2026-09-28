@@ -1,7 +1,7 @@
 import { InvalidModel } from "./errors.ts";
 import { ModelBase, verifyModel, type ModelClass, type ScopesOf } from "./model.ts";
 import { state } from "./record-state.ts";
-import { ofOwner, type Scoped } from "./relation.ts";
+import { ofOwner, type AssociationCache, type Scoped } from "./relation.ts";
 import { relationFor } from "./scoped-relation.ts";
 
 /** One declared association: its kind, its target Model, and the keys that link them. */
@@ -117,24 +117,19 @@ function accessorFor(
   switch (definition.kind) {
     case "belongsTo":
       return async function belongsTo(this: ModelBase) {
-        if (this[state].hasPreloaded(name)) return this[state].preloaded(name);
-        const target = targetOf(definition);
-        const { ownerAttribute, targetAttribute } = linkOf(definition, model(this), target);
-        const key = this[state].read(ownerAttribute);
-        if (key === null) return null;
-        return relationFor(this[state].executor, target).findBy({ [targetAttribute]: key });
+        return cachedRead(this, name, definition, (key, target, targetAttribute) =>
+          relationFor(this[state].executor, target).findBy({ [targetAttribute]: key }),
+        );
       };
     case "hasOne":
       return async function hasOne(this: ModelBase) {
-        if (this[state].hasPreloaded(name)) return this[state].preloaded(name);
-        const key = ownerKey(this, definition);
-        if (key === null) return null;
-        const target = targetOf(definition);
         // Target primary-key order, as preloading uses, so both pick the same record.
-        return relationFor(this[state].executor, target)
-          .where({ [definition.foreignKey]: key })
-          .order({ [target.primaryKey]: "asc" })
-          .first();
+        return cachedRead(this, name, definition, (key, target, targetAttribute) =>
+          relationFor(this[state].executor, target)
+            .where({ [targetAttribute]: key })
+            .order({ [target.primaryKey]: "asc" })
+            .first(),
+        );
       };
     case "hasMany":
       return function hasMany(this: ModelBase) {
@@ -144,15 +139,56 @@ function accessorFor(
           [definition.foreignKey]: key,
         });
         const { foreignKey } = definition;
-        if (this[state].hasPreloaded(name)) {
-          const preloaded = this[state].preloaded(name) as ModelBase[];
-          return relation[ofOwner]({ foreignKey, preloaded });
-        }
         // An owner without a key has no records yet; building through it still gets the (null) key.
-        const unsavedOwner = key === null ? missingKeyReason(this, definition) : undefined;
-        return relation[ofOwner]({ foreignKey, unsavedOwner });
+        if (key === null) {
+          return relation[ofOwner]({
+            foreignKey,
+            unsavedOwner: missingKeyReason(this, definition),
+          });
+        }
+        const { ownerAttribute } = linkOf(definition, model(this), target);
+        return relation[ofOwner]({ foreignKey, cache: cacheOf(this, name, ownerAttribute, key) });
       };
   }
+}
+
+/**
+ * A belongsTo or hasOne read: the cached record (or null) while the key it was loaded for is
+ * current, otherwise `load` for the key the owner holds now, then cached.
+ */
+async function cachedRead(
+  owner: ModelBase,
+  name: string,
+  definition: AssociationDefinition,
+  load: (key: unknown, target: ModelClass, targetAttribute: string) => Promise<ModelBase | null>,
+): Promise<ModelBase | null> {
+  const cached = owner[state].cachedAssociation(name);
+  if (cached !== undefined) return cached.value as ModelBase | null;
+  const target = targetOf(definition);
+  const { ownerAttribute, targetAttribute } = linkOf(definition, model(owner), target);
+  const key =
+    definition.kind === "belongsTo"
+      ? owner[state].read(ownerAttribute)
+      : ownerKey(owner, definition);
+  if (key === null) return null;
+  const value = await load(key, target, targetAttribute);
+  owner[state].cacheAssociation(name, { attribute: ownerAttribute, key, value });
+  return value;
+}
+
+/** The owner's cache for one hasMany, for its Relation to read, fill and clear. */
+function cacheOf(
+  owner: ModelBase,
+  name: string,
+  attribute: string,
+  key: unknown,
+): AssociationCache {
+  const recordState = owner[state];
+  return {
+    get: () => recordState.cachedAssociation(name)?.value as readonly ModelBase[] | undefined,
+    set: (records) => recordState.cacheAssociation(name, { attribute, key, value: records }),
+    clear: () => recordState.clearAssociation(name),
+  };
 }
 
 /** The target Model, ready for use. */

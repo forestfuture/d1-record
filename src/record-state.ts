@@ -14,6 +14,13 @@ import type { ModelClass } from "./model.ts";
 /** The hidden slot where a Record keeps its `RecordState`; never exported from the package. */
 export const state = Symbol("state");
 
+/** A loaded association, with the owner's attribute and key value it was loaded for. */
+export interface CachedAssociation {
+  attribute: string;
+  key: unknown;
+  value: unknown;
+}
+
 /** `{ attribute: [before, after] }` */
 export type Changes = Record<string, [before: unknown, after: unknown]>;
 
@@ -37,7 +44,7 @@ export class RecordState {
   #savedChanges: Changes = {};
   readonly #errors = new Errors();
   #abortReason: string | undefined;
-  readonly #preloaded = new Map<string, unknown>();
+  readonly #associations = new Map<string, CachedAssociation>();
 
   constructor(model: ModelClass) {
     this.#model = model;
@@ -149,22 +156,34 @@ export class RecordState {
     this.assign(attributes);
   }
 
-  /** Associations loaded by `includes`: a record, an array of records, or null. */
-  setPreloaded(name: string, value: unknown): void {
-    this.#preloaded.set(name, value);
+  /**
+   * Caches a loaded association (preloaded or lazily loaded): a record, an array of records,
+   * or null. It stays current while `attribute` still holds `key`.
+   */
+  cacheAssociation(name: string, entry: CachedAssociation): void {
+    this.#associations.set(name, entry);
   }
 
-  hasPreloaded(name: string): boolean {
-    return this.#preloaded.has(name);
+  /** The cached association, if it was loaded for the key the record holds now. */
+  cachedAssociation(name: string): { value: unknown } | undefined {
+    const entry = this.#associations.get(name);
+    if (entry === undefined || !Object.is(this.#values[entry.attribute] ?? null, entry.key)) {
+      return undefined;
+    }
+    return entry;
   }
 
-  preloaded(name: string): unknown {
-    return this.#preloaded.get(name);
+  clearAssociation(name: string): void {
+    this.#associations.delete(name);
   }
 
-  /** Loads a D1 row; the record becomes persisted and clean, and preloaded associations are dropped. */
+  /** Drops every cached association (`reload()`). */
+  clearAssociations(): void {
+    this.#associations.clear();
+  }
+
+  /** Loads a D1 row; the record becomes persisted and clean. */
   loadRow(row: Record<string, unknown>): void {
-    this.#preloaded.clear();
     for (const [name, { type, column }] of this.#model.attributeDefinitions) {
       if (column in row) this.#values[name] = readValue(type, row[column]);
     }
