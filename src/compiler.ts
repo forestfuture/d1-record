@@ -89,7 +89,9 @@ export function compileInsert(
 }
 
 /** What an insert does when a row conflicts with a unique index: skip it, or update it. */
-export type Conflict = { kind: "skip" } | { kind: "update"; uniqueBy: readonly string[] };
+export type Conflict =
+  | { kind: "skip" }
+  | { kind: "update"; uniqueBy: readonly string[]; update?: readonly string[] };
 
 /**
  * `INSERT` of several rows, all with the attributes `names`, bound as one JSON parameter:
@@ -116,8 +118,8 @@ export function compileInsertRows(
 }
 
 /**
- * `ON CONFLICT DO NOTHING`, or `ON CONFLICT (…) DO UPDATE SET` every inserted column but the
- * `uniqueBy` ones and `createdAt`, as Rails' upsert does.
+ * `ON CONFLICT DO NOTHING`, or `ON CONFLICT (…) DO UPDATE SET` the `update` attributes (every
+ * inserted one by default) except the `uniqueBy` ones and `createdAt`, as Rails' upsert does.
  */
 function compileConflict(
   model: ModelClass<ModelBase>,
@@ -128,7 +130,9 @@ function compileConflict(
   if (conflict.kind === "skip") return " ON CONFLICT DO NOTHING";
   const column = (name: string) => quoteIdentifier(attributeOf(model, name).column);
   const target = conflict.uniqueBy.map(column).join(", ");
-  const updated = names.filter((name) => !conflict.uniqueBy.includes(name) && name !== "createdAt");
+  const updated = (conflict.update ?? names).filter(
+    (name) => !conflict.uniqueBy.includes(name) && name !== "createdAt",
+  );
   if (updated.length === 0) return ` ON CONFLICT (${target}) DO NOTHING`;
   const sets = updated.map((name) => `${column(name)} = excluded.${column(name)}`).join(", ");
   return ` ON CONFLICT (${target}) DO UPDATE SET ${sets}`;

@@ -556,6 +556,59 @@ describe("statements", () => {
       ]);
     });
 
+    test("upsert only updates the attributes it was given, never filled-in defaults or the key", async () => {
+      class Member extends Model({
+        id: { type: "integer", null: false, default: () => 999 },
+        email: { type: "string", null: false },
+        role: { type: "string", default: () => "member" },
+      }) {
+        static tableName = "users";
+      }
+      const members = connect(binding).model(Member);
+      await members.insert({ id: 2, email: "b@example.com", role: "admin" }).run();
+
+      await members.upsert({ email: "b@example.com" }, { uniqueBy: "email" }).run();
+
+      expect(await members.where({ email: "b@example.com" }).pluck("id", "role")).toEqual([
+        [2, "admin"],
+      ]);
+    });
+
+    test("upsert matches on the primary key by default, even when it isn't given", async () => {
+      const posts = connect(binding).model(Post);
+      await posts.insert(post(1, "A")).run();
+
+      await posts.upsert({ userId: 1, title: "B", published: false }).run();
+
+      expect(await posts.order({ id: "asc" }).pluck("title")).toEqual(["A", "B"]);
+    });
+
+    test("rows are compared as given, in any key order", () => {
+      const posts = connect(binding).model(Post);
+
+      expect(() =>
+        posts.insertAll([
+          { id: 1, userId: 1, title: "A", published: false },
+          { published: true, title: "B", userId: 1, id: 2 },
+        ]),
+      ).not.toThrow();
+      expect(() =>
+        posts.insertAll([{ ...post(1, "A"), createdAt: past }, { ...post(2, "B") }]),
+      ).toThrow(TypeError);
+    });
+
+    test("with nothing to insert, a skip, an upsert or several rows throw; insert({}) writes defaults", async () => {
+      class Bare extends Model({ id: { type: "integer", null: false } }) {
+        static tableName = "comments";
+      }
+      const bare = connect(binding).model(Bare);
+
+      expect(() => bare.insert({}, { onDuplicate: "skip" })).toThrow(TypeError);
+      expect(() => bare.upsert({})).toThrow(TypeError);
+      expect(() => bare.insertAll([{}, {}])).toThrow(TypeError);
+      expect((await bare.insert({}).run()).changes).toBe(1);
+    });
+
     test("rows must share their attributes; an empty list and unknown attributes throw", () => {
       const posts = connect(binding).model(Post);
 
