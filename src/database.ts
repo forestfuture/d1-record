@@ -142,6 +142,12 @@ async function recordEntry(statement: RecordStatement): Promise<PreparedEntry> {
   if (plan.status !== "ready") {
     throw kind === "save" ? new RecordNotSaved(plan.reason) : new RecordNotDestroyed(plan.reason);
   }
+  if (plan.followUp !== undefined) {
+    const { name } = record.constructor as { name: string };
+    throw new RecordNotSaved(
+      `${name} can't autosave its new records in a batch: they need the ${name}'s key, which D1 only generates when it's written. Generate keys in code, or save it on its own`,
+    );
+  }
   return { writes: plan.writes, result: () => record };
 }
 

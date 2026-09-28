@@ -179,26 +179,47 @@ function accessorFor(
       };
     case "hasMany":
       return function hasMany(this: ModelBase) {
-        const key = ownerKey(this, definition);
-        const target = targetOf(definition);
-        const relation = scopedTarget(this[state].executor, model(this), name, definition).where({
-          [definition.foreignKey]: key,
-        });
-        const { foreignKey } = definition;
-        // An owner without a key has no records yet; building through it still gets the (null) key.
-        if (key === null) {
-          return relation[ofOwner]({
-            foreignKey,
-            unsavedOwner: missingKeyReason(this, definition),
-          });
-        }
-        const { ownerAttribute } = linkOf(definition, model(this), target);
-        const cache = cacheOf(this, name, ownerAttribute, key);
-        // As Rails' collection delete_all: rows are deleted with destroy or deleteAll, else nullified.
-        const deletes = definition.dependent === "destroy" || definition.dependent === "deleteAll";
-        return relation[ofOwner]({ foreignKey: deletes ? undefined : foreignKey, cache });
+        return hasManyRelation(this, name, definition);
       };
   }
+}
+
+/**
+ * A hasMany's Relation for `owner`. An owner without a key has no stored records: the
+ * association holds what was built through it, which saving the owner saves too (autosave).
+ * Otherwise it reads through the owner's cache, and a record built through it joins the loaded
+ * records at once, as in Rails.
+ */
+function hasManyRelation(owner: ModelBase, name: string, definition: AssociationDefinition) {
+  const key = ownerKey(owner, definition);
+  const target = targetOf(definition);
+  const relation = scopedTarget(owner[state].executor, model(owner), name, definition).where({
+    [definition.foreignKey]: key,
+  });
+  const { foreignKey } = definition;
+  const register = (record: ModelBase) => owner[state].addBuilt(name, record);
+  if (key === null) {
+    const unsavedOwner = missingKeyReason(owner, definition);
+    return relation[ofOwner]({ foreignKey, unsavedOwner, cache: builtOf(owner, name), register });
+  }
+  const { ownerAttribute } = linkOf(definition, model(owner), target);
+  const cache = cacheOf(owner, name, ownerAttribute, key);
+  // As Rails' collection delete_all: rows are deleted with destroy or deleteAll, else nullified.
+  const deletes = definition.dependent === "destroy" || definition.dependent === "deleteAll";
+  return relation[ofOwner]({
+    foreignKey: deletes ? undefined : foreignKey,
+    cache,
+    register: (record) => {
+      register(record);
+      const loaded = cache.get();
+      if (loaded !== undefined) cache.set([...loaded, record]);
+    },
+  });
+}
+
+/** An unsaved owner's hasMany: just the records built through it; nothing to fill or clear. */
+function builtOf(owner: ModelBase, name: string): AssociationCache {
+  return { get: () => [...owner[state].built(name)], set: () => {}, clear: () => {} };
 }
 
 /**

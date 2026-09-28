@@ -197,6 +197,8 @@ export interface OwnerLink {
    * the owner's loaded records, as Rails' association relation does, but reads query.
    */
   appendTo?: AssociationCache;
+  /** Receives each record built through the association, for autosave. Kept when chained. */
+  register?: (record: ModelBase) => void;
 }
 
 /** Where a hasMany's loaded records are kept: on the owner record, per association. */
@@ -356,8 +358,17 @@ export class Relation<M extends ModelBase, S = {}> {
     return this;
   }
 
-  /** A new, unsaved record of this Relation's Model. */
+  /**
+   * A new, unsaved record of this Relation's Model. Built through a hasMany, it joins the
+   * association, and saving the owner saves it too (autosave).
+   */
   build(attributes: Partial<AttributesOf<M>> = {}): M {
+    const record = this.#build(attributes);
+    this.#owner.register?.(record);
+    return record;
+  }
+
+  #build(attributes: Partial<AttributesOf<M>>): M {
     const inherited = inheritedAttributes(this.#query.conditions);
     return buildRecord(this.#model, { ...inherited, ...attributes }, this.#executor);
   }
@@ -448,7 +459,7 @@ export class Relation<M extends ModelBase, S = {}> {
   /** Builds and saves a record; resolves to it whether or not it was saved (check `isPersisted()`). */
   async create(attributes: Partial<AttributesOf<M>> = {}): Promise<M> {
     this.#requireSavedOwner();
-    const record = this.build(attributes);
+    const record = this.#build(attributes);
     if (await record.save()) this.#appendToCache(record);
     return record;
   }
@@ -456,7 +467,7 @@ export class Relation<M extends ModelBase, S = {}> {
   /** Builds and saves a record, throwing if it can't be saved. */
   async createOrThrow(attributes: Partial<AttributesOf<M>> = {}): Promise<M> {
     this.#requireSavedOwner();
-    const record = this.build(attributes);
+    const record = this.#build(attributes);
     await record.saveOrThrow();
     this.#appendToCache(record);
     return record;
@@ -711,10 +722,11 @@ export class Relation<M extends ModelBase, S = {}> {
       );
     }
     // A changed query is a new Relation without the owner's cache: it would no longer answer it.
-    const { unsavedOwner, cache, appendTo } = this.#owner;
+    const { unsavedOwner, cache, appendTo, register } = this.#owner;
     return new Class(this.#executor, this.#model, query, {
       unsavedOwner,
       appendTo: cache ?? appendTo,
+      register,
     });
   }
 
