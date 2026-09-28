@@ -1,9 +1,9 @@
-import { linkOf, prepareModel, type AssociationDefinition } from "./associations.ts";
+import { linkOf, prepareModel, scopedTarget, type AssociationDefinition } from "./associations.ts";
 import type { Executor } from "./executor.ts";
 import { associationOf, type ModelBase, type ModelClass } from "./model.ts";
 import { mergeTrees, type IncludeTree } from "./query.ts";
 import { state } from "./record-state.ts";
-import { relationFor } from "./scoped-relation.ts";
+import { requirePreloadable, type Scoped } from "./relation.ts";
 
 /** D1 allows at most 100 bound parameters per statement, so keys are sent in groups of 100. */
 const KEYS_PER_QUERY = 100;
@@ -42,7 +42,10 @@ async function preloadOne(
   const target = definition.target();
   const { ownerAttribute, targetAttribute } = linkOf(definition, owner, target);
   const keys = records.map((record) => record[state].read(ownerAttribute));
-  const targets = await loadByKeys(executor, target, targetAttribute, keys);
+  const scoped = scopedTarget(executor, owner, name, definition)[requirePreloadable](
+    `${owner.name}.${name}`,
+  );
+  const targets = await loadByKeys(scoped, target, targetAttribute, keys);
   const byKey = groupBy(targets, targetAttribute);
   for (const [index, record] of records.entries()) {
     const group = byKey.get(keys[index]) ?? [];
@@ -64,21 +67,21 @@ function groupBy(records: readonly ModelBase[], attribute: string): Map<unknown,
   return groups;
 }
 
-/** Target records whose `attribute` is one of `keys`, in target primary-key order. */
+/**
+ * Records of `targets` (the association's scoped Relation) whose `attribute` is one of `keys`,
+ * in the scope's order, then target primary-key order.
+ */
 async function loadByKeys(
-  executor: Executor,
+  targets: Scoped<ModelBase>,
   target: ModelClass,
   attribute: string,
   keys: readonly unknown[],
 ): Promise<ModelBase[]> {
-  prepareModel(target);
   const distinct = [...new Set(keys.filter((key) => key !== null && key !== undefined))];
   const loaded: ModelBase[] = [];
   for (let start = 0; start < distinct.length; start += KEYS_PER_QUERY) {
     const group = distinct.slice(start, start + KEYS_PER_QUERY);
-    const relation = relationFor(executor, target)
-      .where({ [attribute]: group })
-      .order({ [target.primaryKey]: "asc" });
+    const relation = targets.where({ [attribute]: group }).order({ [target.primaryKey]: "asc" });
     loaded.push(...(await relation.toArray()));
   }
   return loaded;

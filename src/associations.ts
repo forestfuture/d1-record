@@ -1,18 +1,33 @@
 import { InvalidModel } from "./errors.ts";
 import { ModelBase, verifyModel, type ModelClass, type ScopesOf } from "./model.ts";
 import { state } from "./record-state.ts";
-import { ofOwner, type AssociationCache, type Scoped } from "./relation.ts";
+import type { Executor } from "./executor.ts";
+import { applyScope, ofOwner, type AssociationCache, type Scope, type Scoped } from "./relation.ts";
 import { relationFor } from "./scoped-relation.ts";
 
-/** One declared association: its kind, its target Model, and the keys that link them. */
-export interface AssociationDefinition {
-  kind: "belongsTo" | "hasMany" | "hasOne";
-  /** A thunk, so Models can point at each other before both are defined. */
-  target: () => ModelClass;
+/**
+ * An association's scope, as Rails' `has_many :posts, -> { order(:created_at) }`. It receives
+ * the target's Relation, untyped (as the keys are, so Models can point at each other), and is
+ * checked when it first runs; annotate it (`(q: Relation<Post>) => …`) for full typing.
+ */
+// oxlint-disable-next-line typescript/no-explicit-any -- typed like the keys: checked on first use
+type AssociationScope = (relation: any) => unknown;
+
+/** What an association declaration takes: the keys that link the Models, and a scope. */
+export interface AssociationOptions {
   /** The attribute holding the link: on the owner for belongsTo, on the target otherwise. */
   foreignKey: string;
   /** The attribute the foreign key points at; defaults to the pointed-at Model's primary key. */
   primaryKey?: string;
+  /** Narrows or orders the target's records for this association: `(q) => q.order(…)`. */
+  scope?: AssociationScope;
+}
+
+/** One declared association: its kind, its target Model, and its options. */
+export interface AssociationDefinition extends AssociationOptions {
+  kind: "belongsTo" | "hasMany" | "hasOne";
+  /** A thunk, so Models can point at each other before both are defined. */
+  target: () => ModelClass;
 }
 
 /**
@@ -34,12 +49,6 @@ export function linkOf(
         ownerAttribute: definition.primaryKey ?? owner.primaryKey,
         targetAttribute: definition.foreignKey,
       };
-}
-
-/** The keys linking two Models. */
-export interface AssociationKeys {
-  foreignKey: string;
-  primaryKey?: string;
 }
 
 /** `await post.author()`: the owning record, or null. */
@@ -118,16 +127,17 @@ function accessorFor(
     case "belongsTo":
       return async function belongsTo(this: ModelBase) {
         return cachedRead(this, name, definition, (key, target, targetAttribute) =>
-          relationFor(this[state].executor, target).findBy({ [targetAttribute]: key }),
+          scopedTarget(this[state].executor, model(this), name, definition).findBy({
+            [targetAttribute]: key,
+          }),
         );
       };
     case "hasOne":
       return async function hasOne(this: ModelBase) {
-        // Target primary-key order, as preloading uses, so both pick the same record.
-        return cachedRead(this, name, definition, (key, target, targetAttribute) =>
-          relationFor(this[state].executor, target)
+        // The scope's order, or the target's primary key, as preloading uses: the same record.
+        return cachedRead(this, name, definition, (key, _target, targetAttribute) =>
+          scopedTarget(this[state].executor, model(this), name, definition)
             .where({ [targetAttribute]: key })
-            .order({ [target.primaryKey]: "asc" })
             .first(),
         );
       };
@@ -135,7 +145,7 @@ function accessorFor(
       return function hasMany(this: ModelBase) {
         const key = ownerKey(this, definition);
         const target = targetOf(definition);
-        const relation = relationFor(this[state].executor, target).where({
+        const relation = scopedTarget(this[state].executor, model(this), name, definition).where({
           [definition.foreignKey]: key,
         });
         const { foreignKey } = definition;
@@ -189,6 +199,23 @@ function cacheOf(
     set: (records) => recordState.cacheAssociation(name, { attribute, key, value: records }),
     clear: () => recordState.clearAssociation(name),
   };
+}
+
+/** A Relation over the association's target records, with its scope applied. */
+export function scopedTarget(
+  executor: Executor,
+  owner: ModelClass,
+  name: string,
+  definition: AssociationDefinition,
+): Scoped<ModelBase> {
+  const relation = relationFor(executor, targetOf(definition)) as Scoped<ModelBase>;
+  const { scope } = definition;
+  if (scope === undefined) return relation;
+  return relation[applyScope](
+    `${owner.name}.${name}`,
+    scope as Scope<ModelBase>,
+    [],
+  ) as Scoped<ModelBase>;
 }
 
 /** The target Model, ready for use. */
