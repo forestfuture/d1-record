@@ -21,6 +21,8 @@ import { RecordState, state, type Changes } from "./record-state.ts";
 import type {
   AssociationDefinition,
   AssociationOptions,
+  HasManyDependent,
+  HasOneDependent,
   BelongsTo,
   HasMany,
   HasOne,
@@ -97,17 +99,26 @@ export class ModelBase {
   // point at each other (User ↔ Post) circular for TypeScript. Accessor types come from `declare`.
 
   /** This Model's records point at one `target` record through `foreignKey` (their own attribute). */
-  static belongsTo(target: () => unknown, options: AssociationOptions): AssociationDefinition {
+  static belongsTo(
+    target: () => unknown,
+    options: Omit<AssociationOptions, "dependent">,
+  ): AssociationDefinition {
     return { kind: "belongsTo", target: target as () => ModelClass, ...options };
   }
 
   /** Many `target` records point at this Model's records through `foreignKey` (theirs). */
-  static hasMany(target: () => unknown, options: AssociationOptions): AssociationDefinition {
+  static hasMany(
+    target: () => unknown,
+    options: AssociationOptions & { dependent?: HasManyDependent },
+  ): AssociationDefinition {
     return { kind: "hasMany", target: target as () => ModelClass, ...options };
   }
 
   /** One `target` record points at this Model's records through `foreignKey` (its own). */
-  static hasOne(target: () => unknown, options: AssociationOptions): AssociationDefinition {
+  static hasOne(
+    target: () => unknown,
+    options: AssociationOptions & { dependent?: HasOneDependent },
+  ): AssociationDefinition {
     return { kind: "hasOne", target: target as () => ModelClass, ...options };
   }
 
