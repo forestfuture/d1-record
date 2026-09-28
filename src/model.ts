@@ -328,7 +328,7 @@ export class ModelBase {
   /** Like `destroy()`, but throws `RecordNotDestroyed` instead of returning `false`. */
   async destroyOrThrow(): Promise<this> {
     const outcome = await destroyLifecycle(this);
-    if (outcome.status === "aborted") throw new RecordNotDestroyed(outcome.reason);
+    if (outcome.status !== "destroyed") throw new RecordNotDestroyed(outcome.reason);
     return this;
   }
 

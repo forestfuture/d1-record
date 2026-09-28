@@ -9,6 +9,7 @@ import {
   RecordNotDestroyed,
   type HasMany,
   type HasOne,
+  type QueryEvent,
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
@@ -115,6 +116,65 @@ class Aborting extends Model(userAttributes) {
   }
 }
 
+class PostWithReplies extends Model({
+  id: { type: "integer", null: false },
+  userId: { type: "integer", null: false },
+  title: { type: "string", null: false },
+}) {
+  static tableName = "posts";
+  static associations = this.defineAssociations({
+    // Only the comments this scope picks are nullified.
+    loud: this.hasMany(() => Comment, {
+      foreignKey: "postId",
+      dependent: "nullify",
+      scope: (q) => q.where({ body: "x" }),
+    }),
+    quiet: this.hasMany(() => Comment, { foreignKey: "postId", dependent: "deleteAll" }),
+  });
+}
+
+class Account extends Model({
+  id: { type: "integer", null: false },
+  userId: "integer",
+}) {
+  static tableName = "accounts";
+  static {
+    this.afterDestroy((account) => void log.push(`destroyed account ${account.id}`));
+  }
+}
+
+class DeletingAccount extends Model(userAttributes) {
+  static tableName = "users";
+  static associations = this.defineAssociations({
+    account: this.hasOne(() => Account, { foreignKey: "userId", dependent: "delete" }),
+  });
+}
+
+class NullifyingAccount extends Model(userAttributes) {
+  static tableName = "users";
+  static associations = this.defineAssociations({
+    account: this.hasOne(() => Account, { foreignKey: "userId", dependent: "nullify" }),
+  });
+}
+
+class DestroyingAccount extends Model(userAttributes) {
+  static tableName = "users";
+  static associations = this.defineAssociations({
+    account: this.hasOne(() => Account, { foreignKey: "userId", dependent: "destroy" }),
+  });
+}
+
+class RestrictingFirst extends Model(userAttributes) {
+  static tableName = "users";
+  static associations = this.defineAssociations({
+    posts: this.hasMany(() => Post, { foreignKey: "userId", dependent: "destroy" }),
+    profile: this.hasOne(() => Profile, {
+      foreignKey: "userId",
+      dependent: "restrictWithException",
+    }),
+  });
+}
+
 class Misdeclared extends Model(userAttributes) {
   static tableName = "users";
   static associations = this.defineAssociations({
@@ -157,7 +217,7 @@ describe("dependent: strategies", () => {
     expect(await count("users")).toBe(2);
   });
 
-  test("destroy runs each child's destroy lifecycle, then deletes the owner", async () => {
+  test("destroy runs each record's destroy lifecycle, then deletes the owner", async () => {
     const user = await db().model(Destroying).find(1);
 
     expect(await user.destroy()).toBe(user);
@@ -168,7 +228,7 @@ describe("dependent: strategies", () => {
     expect(await db().model(Comment).order({ id: "asc" }).pluck("postId")).toEqual([null, 12]);
   });
 
-  test("destroy isn't atomic: a child that aborts stops the owner's destroy, but earlier children stay destroyed", async () => {
+  test("destroy isn't atomic: a record that aborts stops the owner's destroy, but earlier records stay destroyed", async () => {
     await binding.prepare("UPDATE posts SET title = 'Keep' WHERE id = 11").run();
     const user = await db().model(Destroying).find(1);
 
@@ -178,18 +238,24 @@ describe("dependent: strategies", () => {
     expect(await count("users")).toBe(2);
   });
 
-  test("deleteAll deletes the children in the same batch as the owner, without their callbacks", async () => {
+  test("deleteAll deletes the records in the same batch as the owner, without their callbacks", async () => {
     await binding.prepare("DELETE FROM comments").run();
-    const user = await db().model(DeletingAll).find(1);
+    const events: QueryEvent[] = [];
+    const user = await connect(binding, { onQuery: (event) => events.push(event) })
+      .model(DeletingAll)
+      .find(1);
+    events.length = 0;
 
     await user.destroyOrThrow();
 
+    // Just the records' DELETE and the owner's, sent together; nothing read first.
+    expect(events).toHaveLength(2);
     expect(log).toEqual([]);
     expect(await db().model(Post).pluck("id")).toEqual([12]);
     expect(await count("users")).toBe(1);
   });
 
-  test("…so if the owner's DELETE fails, the children's deletion is rolled back too", async () => {
+  test("…so if the owner's DELETE fails, the records's deletion is rolled back too", async () => {
     await binding.batch([
       binding.prepare("DELETE FROM comments"),
       binding.prepare("INSERT INTO profiles (id, user_id) VALUES (1, 1)"),
@@ -201,7 +267,7 @@ describe("dependent: strategies", () => {
     expect(await db().model(Post).order({ id: "asc" }).pluck("id")).toEqual([10, 11, 12]);
   });
 
-  test("nullify sets the children's foreign key to NULL", async () => {
+  test("nullify sets the records's foreign key to NULL", async () => {
     const post = await db().model(Post).find(10);
 
     await post.destroyOrThrow();
@@ -222,7 +288,7 @@ describe("dependent: strategies", () => {
     expect(await db().model(Profile).pluck("id")).toEqual([2]);
   });
 
-  test("restrictWithException throws DeleteRestriction while there are children", async () => {
+  test("restrictWithException throws DeleteRestriction while there are records", async () => {
     const user = await db().model(Restricting).find(1);
 
     const error: unknown = await user.destroy().catch((caught: unknown) => caught);
@@ -252,7 +318,7 @@ describe("dependent: strategies", () => {
     expect(await count("users")).toBe(2);
   });
 
-  test("restricting lets an owner without children be destroyed", async () => {
+  test("restricting lets an owner without records be destroyed", async () => {
     await binding.batch([
       binding.prepare("DELETE FROM comments"),
       binding.prepare("DELETE FROM posts"),
@@ -262,7 +328,7 @@ describe("dependent: strategies", () => {
     expect(await user.destroy()).toBe(user);
   });
 
-  test("strategies run after the owner's beforeDestroy callbacks, so an abort leaves the children alone", async () => {
+  test("strategies run after the owner's beforeDestroy callbacks, so an abort leaves the records alone", async () => {
     const user = await db().model(Aborting).find(1);
 
     expect(await user.destroy()).toBe(false);
@@ -281,6 +347,62 @@ describe("dependent: strategies", () => {
 
     expect(await db().model(Post).pluck("id")).toEqual([12]);
     expect(await db().model(Comment).pluck("postId")).toEqual([null]);
+  });
+
+  test("nullify only touches the records the association's scope picks", async () => {
+    const post = await db().model(PostWithReplies).find(10);
+    await binding.prepare("INSERT INTO comments (id, post_id, body) VALUES (3, 10, 'z')").run();
+
+    await post.destroyOrThrow();
+
+    expect(await db().model(Comment).order({ id: "asc" }).pluck("id", "postId")).toEqual([
+      [1, null],
+      [2, 12],
+    ]);
+  });
+
+  describe("a hasOne touches only its first record", () => {
+    beforeEach(async () => {
+      await binding.batch([
+        binding.prepare("DELETE FROM comments"),
+        binding.prepare("DELETE FROM posts"),
+        binding.prepare("DELETE FROM accounts"),
+        // accounts.user_id has no foreign key, so a second match doesn't block the owner's DELETE.
+        binding.prepare("INSERT INTO accounts (id, user_id) VALUES (1, 2), (2, 2)"),
+      ]);
+    });
+
+    test("delete", async () => {
+      await (await db().model(DeletingAccount).find(2)).destroyOrThrow();
+
+      expect(await db().model(Account).pluck("id")).toEqual([2]);
+    });
+
+    test("nullify", async () => {
+      await (await db().model(NullifyingAccount).find(2)).destroyOrThrow();
+
+      expect(await db().model(Account).order({ id: "asc" }).pluck("id", "userId")).toEqual([
+        [1, null],
+        [2, 2],
+      ]);
+    });
+
+    test("destroy", async () => {
+      await (await db().model(DestroyingAccount).find(2)).destroyOrThrow();
+
+      expect(log).toEqual(["destroyed account 1"]);
+      expect(await db().model(Account).pluck("id")).toEqual([2]);
+    });
+  });
+
+  test("every restriction is checked before any record is destroyed", async () => {
+    await binding.prepare("INSERT INTO profiles (id, user_id) VALUES (1, 1)").run();
+    const user = await db().model(RestrictingFirst).find(1);
+
+    await expect(user.destroy()).rejects.toThrow(DeleteRestriction);
+
+    expect(log).toEqual([]);
+    expect(await db().model(Post).count()).toBe(3);
   });
 
   test("a strategy the association kind doesn't have is an InvalidModel", () => {

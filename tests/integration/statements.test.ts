@@ -478,6 +478,15 @@ describe("statements", () => {
       expect(new Set(keys.map((key) => key.id)).size).toBe(2);
     });
 
+    test("datetime values are converted like any write", async () => {
+      await connect(binding)
+        .model(Post)
+        .insertAll([{ ...post(1, "A"), createdAt: past }])
+        .run();
+
+      expect((await connect(binding).model(Post).find(1)).createdAt).toEqual(past);
+    });
+
     test("createdAt and updatedAt are set on every row, as Rails' insert_all does", async () => {
       const before = Date.now();
 
