@@ -84,6 +84,10 @@ _Avoid_: Query, command
 An atomic group of **Statements** and **Record statements** run together with D1's `batch()`: all are written, or none.
 _Avoid_: Transaction
 
+**Autosave**:
+Saving a **Record** also saves the new records built through its has-many **Associations** (and theirs, at every level), with its key. The records are validated with it.
+_Avoid_: Nested save, cascade save
+
 **Record statement**:
 A **Record**'s save or destroy as part of a **Batch** (`user.saveStatement()`). Unlike a **Statement**, it isn't compiled in advance: the record's validations and callbacks run when the batch runs. It's never run by being awaited.
 _Avoid_: Pending save, deferred write
