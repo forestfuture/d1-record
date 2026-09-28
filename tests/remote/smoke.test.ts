@@ -153,6 +153,28 @@ describe.skipIf(!configured)("remote D1 smoke", () => {
     expect((await next.model(User).find(user.id)).role).toBe("admin");
   });
 
+  test("insertAll binds its rows as one JSON value, and upsert updates on conflict", async () => {
+    const db = connect(remote.binding);
+    const users = db.model(User);
+
+    await users
+      .insertAll([
+        { id: 1, email: "a@example.com", settings: { theme: "dark" } },
+        { id: 2, email: "b@example.com", settings: null },
+      ])
+      .run();
+    await users.upsertAll([{ id: 1, email: "a@example.com", role: "admin" }]).run();
+    const skipped = await users
+      .insert({ id: 2, email: "b@example.com" }, { onDuplicate: "skip" })
+      .run();
+
+    expect(skipped.changes).toBe(0);
+    expect(await users.order({ id: "asc" }).pluck("role", "settings")).toEqual([
+      ["admin", { theme: "dark" }],
+      [null, null],
+    ]);
+  });
+
   test("preloading more than 100 owners stays within D1's 100 bound parameters", async () => {
     const db = connect(remote.binding);
     const ids = Array.from({ length: 150 }, (_, index) => index + 1);

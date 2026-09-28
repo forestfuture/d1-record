@@ -1,4 +1,10 @@
-import { compileInsert, type Assignment, type CompiledSql } from "./compiler.ts";
+import {
+  compileInsert,
+  compileInsertRows,
+  type Assignment,
+  type CompiledSql,
+  type Conflict,
+} from "./compiler.ts";
 import type { Executor } from "./executor.ts";
 import { attributeOf, evaluateDefaults, requireDefined } from "./metadata.ts";
 import type { ModelClass } from "./model.ts";
@@ -44,11 +50,29 @@ function insertAssignments(model: ModelClass, attributes: Record<string, unknown
   return [...values, ...timestampsFor(model, "insert", values)];
 }
 
-/** `INSERT` of `attributes` into `model`'s table, as a Statement. */
+/**
+ * `INSERT` of `rows` into `model`'s table, as one Statement. Every row must have the same
+ * attributes, as in Rails; `conflict` skips or updates rows that clash with a unique index.
+ */
 export function insertStatement(
   executor: Executor,
   model: ModelClass,
-  attributes: Record<string, unknown>,
+  rows: readonly Record<string, unknown>[],
+  conflict?: Conflict,
 ): Statement {
-  return new Statement(executor, compileInsert(model, insertAssignments(model, attributes)));
+  const [first, ...rest] = rows.map((row) => new Map(insertAssignments(model, row)));
+  if (first === undefined) throw new TypeError("insertAll() needs at least one row");
+  const names = [...first.keys()];
+  for (const [index, row] of rest.entries()) {
+    if (row.size !== names.length || !names.every((name) => row.has(name))) {
+      throw new TypeError(
+        `insertAll() rows must all have the same attributes: row ${index + 2} differs from the first (${names.join(", ")})`,
+      );
+    }
+  }
+  if (names.length === 0 && rest.length === 0 && conflict === undefined) {
+    return new Statement(executor, compileInsert(model, []));
+  }
+  const values = [first, ...rest].map((row) => names.map((name) => row.get(name)));
+  return new Statement(executor, compileInsertRows(model, names, values, conflict));
 }

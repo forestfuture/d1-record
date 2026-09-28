@@ -218,6 +218,21 @@ describe("types", () => {
     expectTypeOf(typeOnly).toBeFunction();
   });
 
+  test("upsert's uniqueBy names the Model's attributes", () => {
+    const users = db.model(User);
+
+    // Checked by the type checker only; never called.
+    const typeOnly = () => {
+      users.upsertAll([{ email: "a@example.com" }], { uniqueBy: "email" });
+      users.upsert({ id: 1 }, { uniqueBy: ["id", "email"] });
+      // @ts-expect-error unknown attribute
+      users.upsert({ id: 1 }, { uniqueBy: "nope" });
+      // @ts-expect-error onDuplicate only skips; updating is upsert
+      users.insert({ id: 1 }, { onDuplicate: "update" });
+    };
+    expectTypeOf(typeOnly).toBeFunction();
+  });
+
   test("dependent: takes the strategies of the association's kind", () => {
     // Checked by the type checker only; never called.
     const typeOnly = () => {

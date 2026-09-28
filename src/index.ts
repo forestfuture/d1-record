@@ -39,10 +39,12 @@ export type { AttributeSpec, AttributeSpecs, AttributeType } from "./metadata.ts
 export {
   Relation,
   type Conditions,
+  type InsertOptions,
   type OrderSpec,
   type Scope,
   type ScopeMethods,
   type Scoped,
+  type UpsertOptions,
 } from "./relation.ts";
 export type { Statement } from "./statement.ts";
 export { between, gt, gte, lt, lte, type Comparison } from "./comparisons.ts";

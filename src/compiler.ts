@@ -88,6 +88,52 @@ export function compileInsert(
   };
 }
 
+/** What an insert does when a row conflicts with a unique index: skip it, or update it. */
+export type Conflict = { kind: "skip" } | { kind: "update"; uniqueBy: readonly string[] };
+
+/**
+ * `INSERT` of several rows, all with the attributes `names`, bound as one JSON parameter:
+ * `INSERT … SELECT value ->> '$[0]', … FROM json_each(?)`. One statement and one bound value,
+ * whatever the number of rows, within D1's limit of 100 bound parameters per statement.
+ */
+export function compileInsertRows(
+  model: ModelClass<ModelBase>,
+  names: readonly string[],
+  rows: readonly (readonly unknown[])[],
+  conflict?: Conflict,
+): CompiledSql {
+  const definitions = names.map((name) => attributeOf(model, name));
+  const columns = definitions.map(({ column }) => quoteIdentifier(column)).join(", ");
+  const values = definitions.map((_, index) => `value ->> '$[${index}]'`).join(", ");
+  const json = JSON.stringify(
+    rows.map((row) => row.map((value, index) => writeValue(definitions[index]!.type, value))),
+  );
+  // `WHERE true` keeps SQLite from reading ON CONFLICT as part of the SELECT.
+  const sql =
+    `INSERT INTO ${quoteIdentifier(model.tableName)} (${columns}) ` +
+    `SELECT ${values} FROM json_each(?) WHERE true${compileConflict(model, names, conflict)}`;
+  return { sql, params: [json], model };
+}
+
+/**
+ * `ON CONFLICT DO NOTHING`, or `ON CONFLICT (…) DO UPDATE SET` every inserted column but the
+ * `uniqueBy` ones and `createdAt`, as Rails' upsert does.
+ */
+function compileConflict(
+  model: ModelClass<ModelBase>,
+  names: readonly string[],
+  conflict: Conflict | undefined,
+): string {
+  if (conflict === undefined) return "";
+  if (conflict.kind === "skip") return " ON CONFLICT DO NOTHING";
+  const column = (name: string) => quoteIdentifier(attributeOf(model, name).column);
+  const target = conflict.uniqueBy.map(column).join(", ");
+  const updated = names.filter((name) => !conflict.uniqueBy.includes(name) && name !== "createdAt");
+  if (updated.length === 0) return ` ON CONFLICT (${target}) DO NOTHING`;
+  const sets = updated.map((name) => `${column(name)} = excluded.${column(name)}`).join(", ");
+  return ` ON CONFLICT (${target}) DO UPDATE SET ${sets}`;
+}
+
 /**
  * `UPDATE … SET … WHERE <primary key> = ?` for the given attribute values. `storedKey` is
  * the key as stored in D1 (the row's key before any change to it), so it's bound as-is.

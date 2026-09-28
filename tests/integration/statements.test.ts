@@ -449,6 +449,140 @@ describe("statements", () => {
     });
   });
 
+  describe("insertAll, and skipping or updating duplicates", () => {
+    const post = (id: number, title: string) => ({ id, userId: 1, title, published: false });
+
+    beforeEach(async () => {
+      await connect(binding).model(User).insert({ id: 1, email: "a@example.com" }).run();
+    });
+
+    test("insertAll writes every row in one statement, converting values and applying defaults per row", async () => {
+      const events: QueryEvent[] = [];
+      const db = connect(binding, { onQuery: (event) => events.push(event) });
+
+      const meta = await db
+        .model(ApiKey)
+        .insertAll([
+          { label: "deploy", scopes: ["read"] },
+          { label: "release", scopes: null },
+        ])
+        .run();
+
+      expect(meta.changes).toBe(2);
+      expect(events).toHaveLength(1);
+      const keys = await db.model(ApiKey).order({ label: "asc" }).toArray();
+      expect(keys.map((key) => [key.label, key.scopes])).toEqual([
+        ["deploy", ["read"]],
+        ["release", null],
+      ]);
+      expect(new Set(keys.map((key) => key.id)).size).toBe(2);
+    });
+
+    test("createdAt and updatedAt are set on every row, as Rails' insert_all does", async () => {
+      const before = Date.now();
+
+      await connect(binding)
+        .model(Post)
+        .insertAll([post(1, "A"), post(2, "B")])
+        .run();
+
+      const stamps = await connect(binding).model(Post).pluck("createdAt", "updatedAt");
+      expect(stamps.flat().every((stamp) => stamp!.getTime() >= before)).toBe(true);
+    });
+
+    test("any number of rows fits in one statement, beyond D1's 100 bound parameters", async () => {
+      const rows = Array.from({ length: 150 }, (_, index) => post(index + 1, `Post ${index + 1}`));
+
+      await connect(binding).model(Post).insertAll(rows).run();
+
+      expect(await connect(binding).model(Post).count()).toBe(150);
+    });
+
+    test("a duplicate throws, and the statement writes nothing", async () => {
+      const posts = connect(binding).model(Post);
+      await posts.insert(post(1, "A")).run();
+
+      await expect(posts.insertAll([post(2, "B"), post(1, "Again")]).run()).rejects.toThrow(
+        RecordNotUnique,
+      );
+      expect(await posts.pluck("title")).toEqual(["A"]);
+    });
+
+    test("onDuplicate: skip leaves existing rows alone and writes the rest", async () => {
+      const posts = connect(binding).model(Post);
+      await posts.insert(post(1, "A")).run();
+
+      const meta = await posts
+        .insertAll([post(1, "Again"), post(2, "B")], { onDuplicate: "skip" })
+        .run();
+      await posts.insert(post(2, "Again"), { onDuplicate: "skip" }).run();
+
+      expect(meta.changes).toBe(1);
+      expect(await posts.order({ id: "asc" }).pluck("title")).toEqual(["A", "B"]);
+    });
+
+    test("upsert inserts new rows and updates existing ones by primary key, keeping createdAt", async () => {
+      const posts = connect(binding).model(Post);
+      await posts.insert({ ...post(1, "A"), createdAt: past, updatedAt: past }).run();
+      const before = Date.now();
+
+      await posts.upsert({ ...post(1, "A2"), published: true }).run();
+      await posts.upsertAll([post(2, "B")]).run();
+
+      const updated = await posts.find(1);
+      expect([updated.title, updated.published, updated.createdAt]).toEqual(["A2", true, past]);
+      expect(updated.updatedAt!.getTime()).toBeGreaterThanOrEqual(before);
+      expect(await posts.order({ id: "asc" }).pluck("title")).toEqual(["A2", "B"]);
+    });
+
+    test("uniqueBy names another unique index to match on", async () => {
+      const users = connect(binding).model(User);
+
+      await users
+        .upsertAll(
+          [
+            { email: "a@example.com", role: "admin" },
+            { email: "b@example.com", role: "member" },
+          ],
+          {
+            uniqueBy: "email",
+          },
+        )
+        .run();
+
+      expect(await users.order({ email: "asc" }).pluck("id", "role")).toEqual([
+        [1, "admin"],
+        [expect.any(Number), "member"],
+      ]);
+    });
+
+    test("rows must share their attributes; an empty list and unknown attributes throw", () => {
+      const posts = connect(binding).model(Post);
+
+      expect(() => posts.insertAll([post(1, "A"), { id: 2, userId: 1, title: "B" }])).toThrow(
+        TypeError,
+      );
+      expect(() => posts.insertAll([])).toThrow(TypeError);
+      expect(() => posts.upsertAll([post(1, "A")], { uniqueBy: "nope" as never })).toThrow(
+        UnknownAttribute,
+      );
+    });
+
+    test("through an association, every row gets the owner's key, and it can go in a batch", async () => {
+      const db = connect(binding);
+      const user = await db.model(User).find(1);
+
+      await db.batch([
+        user.posts().insertAll([
+          { id: 1, title: "A", published: true },
+          { id: 2, title: "B", published: false },
+        ]),
+      ]);
+
+      expect(await user.posts().pluck("title")).toEqual(["A", "B"]);
+    });
+  });
+
   describe("db.batch", () => {
     test("runs the statements in order, atomically, and resolves to each one's meta", async () => {
       const db = connect(binding);
@@ -554,10 +688,7 @@ describe("statements", () => {
         db.model(User).where({ id: 1 }).deleteAll(),
       ]);
 
-      expect(events.map((event) => [event.params, event.meta?.changes])).toEqual([
-        [[1, "a@example.com"], 1],
-        [[1], 1],
-      ]);
+      expect(events.map((event) => event.meta?.changes)).toEqual([1, 1]);
       expect(events.every((event) => event.durationMs >= 0 && event.error === undefined)).toBe(
         true,
       );

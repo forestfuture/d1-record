@@ -6,6 +6,7 @@ import {
   compileUpdateAll,
   type Assignment,
   type CompiledSql,
+  type Conflict,
 } from "./compiler.ts";
 import {
   IncompatibleRelation,
@@ -58,6 +59,16 @@ export type Conditions<M> = {
 
 /** Numbers, strings and dates are ordered, so they can be compared; booleans and json can't. */
 type ComparisonOf<V> = [V] extends [number | string | Date] ? Comparison<V> : never;
+
+/** `insert`/`insertAll` options: `onDuplicate: "skip"` skips rows that clash with a unique index. */
+export interface InsertOptions {
+  onDuplicate?: "skip";
+}
+
+/** `upsert`/`upsertAll` options: the attributes of the unique index to match on. */
+export interface UpsertOptions<M> {
+  uniqueBy?: (keyof AttributesOf<M> & string) | readonly (keyof AttributesOf<M> & string)[];
+}
 
 /** `{ attribute: "asc" | "desc" }`; key order sets precedence. */
 export type OrderSpec<M> = {
@@ -350,13 +361,44 @@ export class Relation<M extends ModelBase, S = {}> {
   /**
    * An INSERT statement for one row: `await db.model(Post).insert({ title }).run()`, or inside
    * `db.batch([...])`. Skips validations and callbacks; declared defaults and timestamps apply,
-   * and this Relation's equality conditions are inserted too, as with `build()`.
+   * and this Relation's equality conditions are inserted too, as with `build()`. A duplicate
+   * throws, unless `onDuplicate: "skip"` (Rails' `insert`).
    */
-  insert(attributes: Partial<AttributesOf<M>>): Statement {
+  insert(attributes: Partial<AttributesOf<M>>, options: InsertOptions = {}): Statement {
+    return this.insertAll([attributes], options);
+  }
+
+  /** An INSERT statement for several rows with the same attributes (Rails' `insert_all!`). */
+  insertAll(rows: readonly Partial<AttributesOf<M>>[], options: InsertOptions = {}): Statement {
+    const { onDuplicate } = options;
+    if (onDuplicate !== undefined && onDuplicate !== "skip") {
+      throw new TypeError(`insertAll() onDuplicate must be "skip"`);
+    }
+    return this.#insertStatement(rows, onDuplicate === "skip" ? { kind: "skip" } : undefined);
+  }
+
+  /**
+   * An INSERT statement that updates a row instead when it clashes with the unique index on
+   * `uniqueBy` (the primary key by default): every given attribute but those and `createdAt`,
+   * with `updatedAt` set, as Rails' `upsert` does.
+   */
+  upsert(attributes: Partial<AttributesOf<M>>, options: UpsertOptions<M> = {}): Statement {
+    return this.upsertAll([attributes], options);
+  }
+
+  /** `upsert` for several rows with the same attributes (Rails' `upsert_all`). */
+  upsertAll(rows: readonly Partial<AttributesOf<M>>[], options: UpsertOptions<M> = {}): Statement {
+    const uniqueBy = [options.uniqueBy ?? this.#model.primaryKey].flat() as string[];
+    for (const name of uniqueBy) attributeOf(this.#model, name);
+    return this.#insertStatement(rows, { kind: "update", uniqueBy });
+  }
+
+  #insertStatement(rows: readonly object[], conflict: Conflict | undefined): Statement {
     this.#requireSavedOwner();
     this.#owner.cache?.clear();
     const inherited = inheritedAttributes(this.#query.conditions);
-    return insertStatement(this.#executor, this.#model, { ...inherited, ...attributes });
+    const withInherited = rows.map((row) => ({ ...inherited, ...row }));
+    return insertStatement(this.#executor, this.#model, withInherited, conflict);
   }
 
   /**
