@@ -36,6 +36,10 @@ class Post extends Model({
     author: this.belongsTo(() => User, { foreignKey: "userId" }),
   });
 
+  static {
+    this.validates("title", { presence: true });
+  }
+
   declare author: BelongsTo<typeof User>;
 }
 
@@ -209,6 +213,27 @@ describe("caching lazily loaded associations", () => {
 
     expect((await user.posts().toArray()).at(-1)).toBe(created);
     expect(queries).toHaveLength(0);
+  });
+
+  test("create through a narrowed association appends too, as Rails' association relation does", async () => {
+    const user = await db().model(User).find(1);
+    await user.posts().toArray();
+
+    const created = await user.posts().where({ title: "A3" }).createOrThrow();
+    queries.length = 0;
+
+    expect((await user.posts().toArray()).at(-1)).toBe(created);
+    expect(queries).toHaveLength(0);
+  });
+
+  test("a create that doesn't save doesn't join the loaded records", async () => {
+    const user = await db().model(User).find(1);
+    await user.posts().toArray();
+
+    const invalid = await user.posts().create({ title: "" });
+
+    expect(invalid.isPersisted()).toBe(false);
+    expect(await user.posts().pluck("id")).toEqual([10, 11]);
   });
 
   test("statements built through a hasMany clear its cache", async () => {
