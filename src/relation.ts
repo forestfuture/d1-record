@@ -185,6 +185,11 @@ export interface OwnerLink {
    * loaded, `create` appends to it and statements clear it. Dropped when chained.
    */
   cache?: AssociationCache;
+  /**
+   * The same cache, once chained: `create` through a narrowed association still appends to
+   * the owner's loaded records, as Rails' association relation does, but reads query.
+   */
+  appendTo?: AssociationCache;
 }
 
 /** Where a hasMany's loaded records are kept: on the owner record, per association. */
@@ -447,8 +452,9 @@ export class Relation<M extends ModelBase, S = {}> {
 
   /** A record created through a loaded hasMany joins its records, as in Rails. */
   #appendToCache(record: M): void {
-    const cached = this.#owner.cache?.get();
-    if (cached !== undefined) this.#owner.cache?.set([...cached, record]);
+    const cache = this.#owner.cache ?? this.#owner.appendTo;
+    const cached = cache?.get();
+    if (cached !== undefined) cache?.set([...cached, record]);
   }
 
   /**
@@ -693,8 +699,11 @@ export class Relation<M extends ModelBase, S = {}> {
       );
     }
     // A changed query is a new Relation without the owner's cache: it would no longer answer it.
-    const { unsavedOwner } = this.#owner;
-    return new Class(this.#executor, this.#model, query, { unsavedOwner });
+    const { unsavedOwner, cache, appendTo } = this.#owner;
+    return new Class(this.#executor, this.#model, query, {
+      unsavedOwner,
+      appendTo: cache ?? appendTo,
+    });
   }
 
   async #load(query: QueryDescription): Promise<M[]> {
