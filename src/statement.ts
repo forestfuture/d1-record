@@ -52,7 +52,8 @@ function insertAssignments(model: ModelClass, attributes: Record<string, unknown
 
 /**
  * `INSERT` of `rows` into `model`'s table, as one Statement. Every row must have the same
- * attributes, as in Rails; `conflict` skips or updates rows that clash with a unique index.
+ * attributes as given, as in Rails; `conflict` skips or updates rows that clash with a unique
+ * index. An update sets only the given attributes (and `updatedAt`), never filled-in defaults.
  */
 export function insertStatement(
   executor: Executor,
@@ -60,19 +61,33 @@ export function insertStatement(
   rows: readonly Record<string, unknown>[],
   conflict?: Conflict,
 ): Statement {
-  const [first, ...rest] = rows.map((row) => new Map(insertAssignments(model, row)));
+  const given = sameAttributes(rows);
+  const assigned = rows.map((row) => new Map(insertAssignments(model, row)));
+  const names = [...(assigned[0]?.keys() ?? [])];
+  if (names.length === 0) {
+    if (rows.length === 1 && conflict === undefined) {
+      return new Statement(executor, compileInsert(model, []));
+    }
+    throw new TypeError(`${model.name}: nothing to insert; give each row at least one attribute`);
+  }
+  const values = assigned.map((row) => names.map((name) => row.get(name)));
+  const resolved =
+    conflict?.kind === "update"
+      ? { ...conflict, update: [...given, ...(names.includes("updatedAt") ? ["updatedAt"] : [])] }
+      : conflict;
+  return new Statement(executor, compileInsertRows(model, names, values, resolved));
+}
+
+/** The attributes every row was given; they must be the same for all rows, in any order. */
+function sameAttributes(rows: readonly Record<string, unknown>[]): string[] {
+  const [first, ...rest] = rows.map((row) => Object.keys(row));
   if (first === undefined) throw new TypeError("insertAll() needs at least one row");
-  const names = [...first.keys()];
-  for (const [index, row] of rest.entries()) {
-    if (row.size !== names.length || !names.every((name) => row.has(name))) {
+  for (const [index, keys] of rest.entries()) {
+    if (keys.length !== first.length || !first.every((name) => keys.includes(name))) {
       throw new TypeError(
-        `insertAll() rows must all have the same attributes: row ${index + 2} differs from the first (${names.join(", ")})`,
+        `insertAll() rows must all have the same attributes: row ${index + 2} differs from the first (${first.join(", ")})`,
       );
     }
   }
-  if (names.length === 0 && rest.length === 0 && conflict === undefined) {
-    return new Statement(executor, compileInsert(model, []));
-  }
-  const values = [first, ...rest].map((row) => names.map((name) => row.get(name)));
-  return new Statement(executor, compileInsertRows(model, names, values, conflict));
+  return first;
 }
