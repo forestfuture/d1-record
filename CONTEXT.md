@@ -57,8 +57,20 @@ A named link from one **Model** to another through a foreign-key **Attribute**: 
 _Avoid_: Relationship, relation (a Relation is a query)
 
 **Preload**:
-Loading an **Association** for many **Records** at once, in a small, bounded number of queries, so reading it later needs no query at all. You ask for it with `includes`.
+Loading an **Association** for many **Records** at once, in a small, bounded number of queries, so each becomes a **Loaded association**. You ask for it with `includes`.
 _Avoid_: Eager load, join
+
+**Loaded association**:
+An **Association** a **Record** already holds, preloaded or read once, so reading it again needs no query. It stays loaded while the key it was loaded for is unchanged, until the record is reloaded.
+_Avoid_: Cached association (outside the implementation), memoized
+
+**Association scope**:
+A change to an **Association**'s **Relation** declared with the association (its order or conditions), applied whenever the association is read, preloaded or written through. Unlike a **Scope**, it has no name of its own.
+_Avoid_: Scope (on its own), default scope
+
+**Dependent strategy**:
+What destroying a **Record** does to an **Association**'s records: destroy them, delete them, nullify their foreign key, or refuse while they exist (a restriction, which isn't an **Abort**).
+_Avoid_: Cascade (that's the database's), dependent destroy (for all of them)
 
 **Session**:
 A D1 session that one **Database** can be opened with. Every query in that request goes through it, so the request reads its own writes even when reads are served by replicas.
