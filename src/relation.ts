@@ -39,7 +39,7 @@ import {
   type ModelBase,
   type ModelClass,
 } from "./model.ts";
-import { readValue } from "./conversion.ts";
+import { readValue, writeValue } from "./conversion.ts";
 import { Comparison } from "./comparisons.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
 import { insertStatement, Statement } from "./statement.ts";
@@ -169,8 +169,18 @@ export interface OwnerLink {
   foreignKey?: string;
   /** Why records can't be created through it: its owner has no key yet. Kept when chained. */
   unsavedOwner?: string;
-  /** Records already preloaded; `toArray()` answers from them. Dropped when chained. */
-  preloaded?: readonly ModelBase[];
+  /**
+   * The owner's cache for this hasMany: `toArray()` fills it, reads answer from it while it's
+   * loaded, `create` appends to it and statements clear it. Dropped when chained.
+   */
+  cache?: AssociationCache;
+}
+
+/** Where a hasMany's loaded records are kept: on the owner record, per association. */
+export interface AssociationCache {
+  get(): readonly ModelBase[] | undefined;
+  set(records: readonly ModelBase[]): void;
+  clear(): void;
 }
 
 /** The library's key for making a hasMany Relation of an owner; not exported. */
@@ -297,8 +307,8 @@ export class Relation<M extends ModelBase, S = {}> {
   }
 
   /**
-   * This Relation as a hasMany of an owner: answered from preloaded records, or, for an owner
-   * without a key, finding nothing and refusing `create`.
+   * This Relation as a hasMany of an owner: answered from the owner's cache once loaded, or,
+   * for an owner without a key, finding nothing and refusing `create`.
    */
   [ofOwner](owner: OwnerLink): Scoped<M, S> {
     const Class = this.constructor as new (...args: RelationArgs<M>) => Scoped<M, S>;
@@ -327,6 +337,7 @@ export class Relation<M extends ModelBase, S = {}> {
    */
   insert(attributes: Partial<AttributesOf<M>>): Statement {
     this.#requireSavedOwner();
+    this.#owner.cache?.clear();
     const inherited = inheritedAttributes(this.#query.conditions);
     return insertStatement(this.#executor, this.#model, { ...inherited, ...attributes });
   }
@@ -339,6 +350,7 @@ export class Relation<M extends ModelBase, S = {}> {
   updateAll(changes: Partial<AttributesOf<M>> | SafeSql): Statement {
     const checked = this.#checkChanges(changes);
     const query = compileUpdateAll(this.#writableQuery("updateAll"), checked);
+    this.#owner.cache?.clear();
     return new Statement(this.#executor, query);
   }
 
@@ -348,7 +360,8 @@ export class Relation<M extends ModelBase, S = {}> {
    */
   deleteAll(): Statement {
     const query = this.#writableQuery("deleteAll");
-    const { foreignKey } = this.#owner;
+    const { foreignKey, cache } = this.#owner;
+    cache?.clear();
     const compiled =
       foreignKey === undefined
         ? compileDeleteAll(query)
@@ -360,7 +373,7 @@ export class Relation<M extends ModelBase, S = {}> {
   async create(attributes: Partial<AttributesOf<M>> = {}): Promise<M> {
     this.#requireSavedOwner();
     const record = this.build(attributes);
-    await record.save();
+    if (await record.save()) this.#appendToCache(record);
     return record;
   }
 
@@ -369,7 +382,14 @@ export class Relation<M extends ModelBase, S = {}> {
     this.#requireSavedOwner();
     const record = this.build(attributes);
     await record.saveOrThrow();
+    this.#appendToCache(record);
     return record;
+  }
+
+  /** A record created through a loaded hasMany joins its records, as in Rails. */
+  #appendToCache(record: M): void {
+    const cached = this.#owner.cache?.get();
+    if (cached !== undefined) this.#owner.cache?.set([...cached, record]);
   }
 
   /**
@@ -434,6 +454,8 @@ export class Relation<M extends ModelBase, S = {}> {
 
   /** The first record by this Relation's order, or by primary key if it has none. */
   async first(): Promise<M | null> {
+    const cached = this.#cached();
+    if (cached !== undefined) return cached[0] ?? null;
     return this.#one(this.#orderOrPrimaryKey());
   }
 
@@ -442,6 +464,8 @@ export class Relation<M extends ModelBase, S = {}> {
    * the last record of that page (loaded, then taken from the end).
    */
   async last(): Promise<M | null> {
+    const cached = this.#cached();
+    if (cached !== undefined) return cached.at(-1) ?? null;
     const { limit, offset } = this.#query;
     if (limit !== undefined || offset !== undefined) {
       const page = await this.#load({ ...this.#query, order: this.#orderOrPrimaryKey() });
@@ -452,6 +476,8 @@ export class Relation<M extends ModelBase, S = {}> {
 
   /** One record in whatever order D1 returns, or null. */
   async take(): Promise<M | null> {
+    const cached = this.#cached();
+    if (cached !== undefined) return cached[0] ?? null;
     return this.#one(this.#query.order);
   }
 
@@ -482,19 +508,35 @@ export class Relation<M extends ModelBase, S = {}> {
   async pluck(...attributes: string[]): Promise<unknown[]> {
     if (attributes.length === 0) throw new TypeError("pluck() needs at least one attribute");
     const definitions = attributes.map((name) => attributeOf(this.#model, name));
-    const rows = await this.#all(
-      compileSelect(this.#query, compileColumns(this.#model, attributes)),
-    );
-    const values = rows.map((row) =>
-      definitions.map(({ type, column }) => readValue(type, row[column])),
-    );
+    const cached = this.#cached();
+    const values =
+      cached === undefined
+        ? (
+            await this.#all(compileSelect(this.#query, compileColumns(this.#model, attributes)))
+          ).map((row) => definitions.map(({ type, column }) => readValue(type, row[column])))
+        : cached.map((record) =>
+            // Copies, as a query would give, never the records' own objects.
+            definitions.map(({ type }, index) =>
+              readValue(type, writeValue(type, Reflect.get(record, attributes[index]!))),
+            ),
+          );
     return attributes.length === 1 ? values.map(([value]) => value) : values;
   }
 
   async toArray(): Promise<M[]> {
-    const { preloaded } = this.#owner;
-    if (preloaded !== undefined) return [...preloaded] as M[];
-    return this.#load(this.#query);
+    const cached = this.#cached();
+    if (cached !== undefined) return [...cached];
+    const { cache } = this.#owner;
+    if (cache === undefined) return this.#load(this.#query);
+    // Loaded into the owner's cache in target primary-key order, as preloading loads it.
+    const records = await this.#load({ ...this.#query, order: this.#orderOrPrimaryKey() });
+    cache.set(records);
+    return [...records];
+  }
+
+  /** The owner's loaded records for this hasMany, if it has them. */
+  #cached(): M[] | undefined {
+    return this.#owner.cache?.get() as M[] | undefined;
   }
 
   #requireSameModel(other: Relation<M, S>, method: string): void {
@@ -591,7 +633,7 @@ export class Relation<M extends ModelBase, S = {}> {
         "includes() can't be combined with select(...).distinct(): preloading needs keys the distinct select leaves out",
       );
     }
-    // A changed query is a new Relation without preloaded records: they'd no longer answer it.
+    // A changed query is a new Relation without the owner's cache: it would no longer answer it.
     const { unsavedOwner } = this.#owner;
     return new Class(this.#executor, this.#model, query, { unsavedOwner });
   }

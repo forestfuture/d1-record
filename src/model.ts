@@ -201,20 +201,41 @@ export class ModelBase {
   }
 
   /**
-   * A preloaded association, synchronously: records for a hasMany, a record or null otherwise.
-   * Throws `AssociationNotLoaded` unless it was preloaded with `includes(...)`.
+   * A loaded association, synchronously: records for a hasMany, a record or null otherwise.
+   * Throws `AssociationNotLoaded` unless it was preloaded with `includes(...)` or already read
+   * (and its key hasn't changed since).
    */
   loaded<K extends AssociationName<this>>(name: K): LoadedValue<this[K]> {
     const model = this.constructor as ModelClass;
     associationOf(model, name);
-    if (!this[state].hasPreloaded(name)) {
+    const cached = this[state].cachedAssociation(name);
+    if (cached === undefined) {
       throw new AssociationNotLoaded(
-        `${model.name} record hasn't loaded "${name}"; preload it with includes("${name}")`,
+        `${model.name} record hasn't loaded "${name}"; preload it with includes("${name}"), or read it first`,
       );
     }
-    const value = this[state].preloaded(name);
-    // A copy of a list, so changing what's returned never changes the preloaded data.
+    // A copy of a list, so changing what's returned never changes the cached data.
+    const { value } = cached;
     return (Array.isArray(value) ? [...value] : value) as LoadedValue<this[K]>;
+  }
+
+  /** Whether the association is loaded: preloaded or already read, for the key held now. */
+  isLoaded<K extends AssociationName<this>>(name: K): boolean {
+    associationOf(this.constructor as ModelClass, name);
+    return this[state].cachedAssociation(name) !== undefined;
+  }
+
+  /**
+   * Loads the association again, replacing what's cached, and returns it: Rails'
+   * `reload_author`, or `user.posts.reload` for a hasMany.
+   */
+  async reloadAssociation<K extends AssociationName<this>>(name: K): Promise<LoadedValue<this[K]>> {
+    const { kind } = associationOf(this.constructor as ModelClass, name);
+    this[state].clearAssociation(name);
+    const read = (this[name] as () => unknown).call(this);
+    const value =
+      kind === "hasMany" ? await (read as { toArray(): unknown }).toArray() : await read;
+    return value as LoadedValue<this[K]>;
   }
 
   /** Why a callback last refused a save or destroy (`abort(reason)`); never copied into `errors`. */

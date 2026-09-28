@@ -209,5 +209,6 @@ export async function reloadRecord(record: ModelBase): Promise<void> {
   if (row === undefined) {
     throw new RecordNotFound(`${model.name} with ${model.primaryKey} ${String(key)} not found`);
   }
+  recordState.clearAssociations();
   recordState.loadRow(row);
 }

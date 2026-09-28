@@ -46,7 +46,8 @@ async function preloadOne(
   const byKey = groupBy(targets, targetAttribute);
   for (const [index, record] of records.entries()) {
     const group = byKey.get(keys[index]) ?? [];
-    record[state].setPreloaded(name, definition.kind === "hasMany" ? group : (group[0] ?? null));
+    const value = definition.kind === "hasMany" ? group : (group[0] ?? null);
+    record[state].cacheAssociation(name, { attribute: ownerAttribute, key: keys[index], value });
   }
   return targets;
 }

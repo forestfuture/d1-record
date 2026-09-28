@@ -161,7 +161,7 @@ export class UnknownAssociation extends D1RecordError {
   override name = "UnknownAssociation";
 }
 
-/** `record.loaded(name)` for an association that wasn't preloaded with `includes`. */
+/** `record.loaded(name)` for an association that wasn't preloaded or read yet. */
 export class AssociationNotLoaded extends D1RecordError {
   override name = "AssociationNotLoaded";
 }

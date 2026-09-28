@@ -254,6 +254,11 @@ describe("types", () => {
       db.model(Author).includes({ articles: "comments" });
       // @ts-expect-error attributes aren't associations
       author.loaded("id");
+      expectTypeOf(author.isLoaded("bio")).toEqualTypeOf<boolean>();
+      expectTypeOf(await author.reloadAssociation("articles")).toEqualTypeOf<Article[]>();
+      expectTypeOf(await article.reloadAssociation("author")).toEqualTypeOf<Author | null>();
+      // @ts-expect-error unknown association
+      await author.reloadAssociation("posts");
     };
     expectTypeOf(typeOnly).toBeFunction();
   });
