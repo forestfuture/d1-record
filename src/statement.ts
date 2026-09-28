@@ -59,16 +59,16 @@ export function insertStatement(
   executor: Executor,
   model: ModelClass,
   rows: readonly Record<string, unknown>[],
-  conflict?: Conflict,
+  { conflict, method }: { conflict?: Conflict | undefined; method: string },
 ): Statement {
-  const given = sameAttributes(rows);
+  const given = sameAttributes(rows, method);
   const assigned = rows.map((row) => new Map(insertAssignments(model, row)));
   const names = [...(assigned[0]?.keys() ?? [])];
   if (names.length === 0) {
     if (rows.length === 1 && conflict === undefined) {
       return new Statement(executor, compileInsert(model, []));
     }
-    throw new TypeError(`${model.name}: nothing to insert; give each row at least one attribute`);
+    throw new TypeError(`${method}(): nothing to insert; give each row at least one attribute`);
   }
   const values = assigned.map((row) => names.map((name) => row.get(name)));
   const resolved =
@@ -79,13 +79,13 @@ export function insertStatement(
 }
 
 /** The attributes every row was given; they must be the same for all rows, in any order. */
-function sameAttributes(rows: readonly Record<string, unknown>[]): string[] {
+function sameAttributes(rows: readonly Record<string, unknown>[], method: string): string[] {
   const [first, ...rest] = rows.map((row) => Object.keys(row));
-  if (first === undefined) throw new TypeError("insertAll() needs at least one row");
+  if (first === undefined) throw new TypeError(`${method}() needs at least one row`);
   for (const [index, keys] of rest.entries()) {
     if (keys.length !== first.length || !first.every((name) => keys.includes(name))) {
       throw new TypeError(
-        `insertAll() rows must all have the same attributes: row ${index + 2} differs from the first (${first.join(", ")})`,
+        `${method}() rows must all have the same attributes: row ${index + 2} differs from the first (${first.join(", ")})`,
       );
     }
   }

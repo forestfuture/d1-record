@@ -145,6 +145,13 @@ function reversed(term: OrderTerm): OrderTerm {
   return { ...term, direction, ...(nulls && { nulls }) };
 }
 
+/** The conflict for `onDuplicate: "skip"`, checked; none without it. */
+function skipOn({ onDuplicate }: InsertOptions, method: string): Conflict | undefined {
+  if (onDuplicate === undefined) return undefined;
+  if (onDuplicate !== "skip") throw new TypeError(`${method}() onDuplicate must be "skip"`);
+  return { kind: "skip" };
+}
+
 /** One record from the page: `limit(0)` stays empty, and `offset` is kept by the caller. */
 function atMostOne(limit: number | undefined): number {
   return Math.min(limit ?? 1, 1);
@@ -370,16 +377,12 @@ export class Relation<M extends ModelBase, S = {}> {
    * throws, unless `onDuplicate: "skip"` (Rails' `insert`).
    */
   insert(attributes: Partial<AttributesOf<M>>, options: InsertOptions = {}): Statement {
-    return this.insertAll([attributes], options);
+    return this.#insertStatement([attributes], skipOn(options, "insert"), "insert");
   }
 
   /** An INSERT statement for several rows with the same attributes (Rails' `insert_all!`). */
   insertAll(rows: readonly Partial<AttributesOf<M>>[], options: InsertOptions = {}): Statement {
-    const { onDuplicate } = options;
-    if (onDuplicate !== undefined && onDuplicate !== "skip") {
-      throw new TypeError(`insertAll() onDuplicate must be "skip"`);
-    }
-    return this.#insertStatement(rows, onDuplicate === "skip" ? { kind: "skip" } : undefined);
+    return this.#insertStatement(rows, skipOn(options, "insertAll"), "insertAll");
   }
 
   /**
@@ -388,22 +391,31 @@ export class Relation<M extends ModelBase, S = {}> {
    * with `updatedAt` set, as Rails' `upsert` does.
    */
   upsert(attributes: Partial<AttributesOf<M>>, options: UpsertOptions<M> = {}): Statement {
-    return this.upsertAll([attributes], options);
+    return this.#insertStatement([attributes], this.#updateOn(options), "upsert");
   }
 
   /** `upsert` for several rows with the same attributes (Rails' `upsert_all`). */
   upsertAll(rows: readonly Partial<AttributesOf<M>>[], options: UpsertOptions<M> = {}): Statement {
-    const uniqueBy = [options.uniqueBy ?? this.#model.primaryKey].flat() as string[];
-    for (const name of uniqueBy) attributeOf(this.#model, name);
-    return this.#insertStatement(rows, { kind: "update", uniqueBy });
+    return this.#insertStatement(rows, this.#updateOn(options), "upsertAll");
   }
 
-  #insertStatement(rows: readonly object[], conflict: Conflict | undefined): Statement {
+  /** An upsert's conflict: update, matching on `uniqueBy` (the primary key by default). */
+  #updateOn(options: UpsertOptions<M>): Conflict {
+    const uniqueBy = [options.uniqueBy ?? this.#model.primaryKey].flat() as string[];
+    for (const name of uniqueBy) attributeOf(this.#model, name);
+    return { kind: "update", uniqueBy };
+  }
+
+  #insertStatement(
+    rows: readonly object[],
+    conflict: Conflict | undefined,
+    method: string,
+  ): Statement {
     this.#requireSavedOwner();
     this.#owner.cache?.clear();
     const inherited = inheritedAttributes(this.#query.conditions);
     const withInherited = rows.map((row) => ({ ...inherited, ...row }));
-    return insertStatement(this.#executor, this.#model, withInherited, conflict);
+    return insertStatement(this.#executor, this.#model, withInherited, { conflict, method });
   }
 
   /**

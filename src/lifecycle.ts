@@ -1,4 +1,5 @@
 import { compileDelete, compileInsert, compileSelect, compileUpdate } from "./compiler.ts";
+import { runDependents } from "./dependents.ts";
 import { AbortAfterPersistence, CallbackAbort, RecordNotFound } from "./errors.ts";
 import { clearErrors } from "./errors-collection.ts";
 import {
@@ -11,7 +12,6 @@ import type { ModelBase, ModelClass } from "./model.ts";
 import { Negated, type Condition } from "./query.ts";
 import { state } from "./record-state.ts";
 import { column, sql } from "./sql.ts";
-import { runDependents } from "./dependents.ts";
 import { timestampsFor } from "./timestamps.ts";
 import { runValidations, type UniquenessOptions } from "./validations.ts";
 
@@ -29,7 +29,10 @@ export type Outcome =
   | { status: "aborted"; reason: string };
 
 /** What a destroy lifecycle run ended with. */
-export type DestroyOutcome = { status: "destroyed" } | { status: "aborted"; reason: string };
+export type DestroyOutcome =
+  | { status: "destroyed" }
+  | { status: "aborted"; reason: string }
+  | { status: "restricted"; reason: string };
 
 type Validity = "valid" | "invalid" | "aborted";
 
@@ -187,7 +190,7 @@ export async function destroyLifecycle(record: ModelBase): Promise<DestroyOutcom
   }
   if (!recordState.isNew) {
     const dependents = await runDependents(record);
-    if (dependents.status === "restricted") return { status: "aborted", reason: dependents.reason };
+    if (dependents.status === "restricted") return dependents;
     const deletion = compileDelete(modelOf(record), recordState.storedKey);
     // Dependent statements go in one batch with the owner's DELETE: all of it, or none.
     await (dependents.statements.length === 0
