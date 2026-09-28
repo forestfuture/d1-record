@@ -37,15 +37,17 @@ export class Executor {
   }
 
   /**
-   * Runs statements atomically with D1's `batch()` and resolves to each one's `meta`. D1 fails
-   * a batch as a whole, so on failure every statement is reported with the error.
+   * Runs statements atomically with D1's `batch()` and resolves to each one's result (rows and
+   * `meta`). D1 fails a batch as a whole, so on failure every statement is reported with the error.
    */
-  async batch(statements: readonly CompiledSql[]): Promise<D1Meta[]> {
+  async batch(statements: readonly CompiledSql[]): Promise<D1Result<Record<string, unknown>>[]> {
     if (statements.length === 0) return [];
     const started = performance.now();
-    let results: D1Result[];
+    let results: D1Result<Record<string, unknown>>[];
     try {
-      results = await this.#binding.batch(statements.map((statement) => this.#prepare(statement)));
+      results = await this.#binding.batch<Record<string, unknown>>(
+        statements.map((statement) => this.#prepare(statement)),
+      );
     } catch (error) {
       const durationMs = performance.now() - started;
       for (const { sql, params } of statements) this.#onQuery?.({ sql, params, durationMs, error });
@@ -59,7 +61,14 @@ export class Executor {
       const { meta } = results[index]!;
       this.#onQuery?.({ sql, params, durationMs: meta.duration, meta });
     });
-    return results.map(({ meta }) => meta);
+    return results;
+  }
+
+  /** Runs statements atomically: one on its own, several as one batch. Resolves to each result. */
+  async write(statements: readonly CompiledSql[]): Promise<D1Result<Record<string, unknown>>[]> {
+    const [only] = statements;
+    if (statements.length === 1 && only !== undefined) return [await this.#one(only)];
+    return this.batch(statements);
   }
 
   async #one(query: CompiledSql): Promise<D1Result<Record<string, unknown>>> {

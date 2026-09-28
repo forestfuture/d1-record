@@ -1,7 +1,8 @@
 import { compileDelete, compileInsert, compileSelect, compileUpdate } from "./compiler.ts";
-import { runDependents } from "./dependents.ts";
+import { prepareDependents } from "./dependents.ts";
 import { AbortAfterPersistence, CallbackAbort, RecordNotFound } from "./errors.ts";
 import { clearErrors } from "./errors-collection.ts";
+import type { Executor } from "./executor.ts";
 import {
   declared,
   type AfterCallbackKind,
@@ -13,6 +14,7 @@ import { Negated, type Condition } from "./query.ts";
 import { state } from "./record-state.ts";
 import { column, sql } from "./sql.ts";
 import { timestampsFor } from "./timestamps.ts";
+import { runAfter, writeAll, type PreparedWrite } from "./unit-of-work.ts";
 import { runValidations, type UniquenessOptions } from "./validations.ts";
 
 function modelOf(record: ModelBase): ModelClass {
@@ -106,6 +108,13 @@ async function validation(record: ModelBase): Promise<Validity> {
   return recordState.errors.isEmpty() ? "valid" : "invalid";
 }
 
+/** A record's save or destroy, prepared: its writes, or why it was refused. */
+export type Plan =
+  | { status: "ready"; writes: PreparedWrite[] }
+  | { status: "invalid" }
+  | { status: "aborted"; reason: string }
+  | { status: "restricted"; reason: string };
+
 /**
  * The save lifecycle, in the contract's order:
  * can this record be used → beforeValidation → validators → afterValidation
@@ -113,6 +122,15 @@ async function validation(record: ModelBase): Promise<Validity> {
  * → afterCreate | afterUpdate → afterSave.
  */
 export async function saveLifecycle(record: ModelBase): Promise<Outcome> {
+  const plan = await prepareSave(record);
+  if (plan.status === "restricted") throw new TypeError("a save is never restricted");
+  if (plan.status !== "ready") return plan;
+  await runPlan(record[state].executor, plan.writes);
+  return { status: "saved" };
+}
+
+/** Everything a save does before writing: validation and the before-callbacks. */
+async function prepareSave(record: ModelBase): Promise<Plan> {
   const recordState = record[state];
   recordState.requireLive("be saved");
   const validity = await validation(record);
@@ -121,10 +139,13 @@ export async function saveLifecycle(record: ModelBase): Promise<Outcome> {
   if (validity === "aborted" || !(await beforeWrite(record, isInsert))) {
     return { status: "aborted", reason: recordState.abortReason ?? "" };
   }
-  await (isInsert ? insertRecord(record) : updateRecord(record));
-  await runAfterCallbacks(record, isInsert ? "afterCreate" : "afterUpdate", "save");
-  await runAfterCallbacks(record, "afterSave", "save");
-  return { status: "saved" };
+  return { status: "ready", writes: [saveWrite(record, isInsert)] };
+}
+
+/** Writes prepared writes as one unit, then runs their after-callbacks in order. */
+async function runPlan(executor: Executor, writes: readonly PreparedWrite[]): Promise<void> {
+  await writeAll(executor, writes);
+  await runAfter(writes);
 }
 
 /**
@@ -152,54 +173,71 @@ async function beforeWrite(record: ModelBase, isInsert: boolean): Promise<boolea
   );
 }
 
-/** INSERT the assigned attributes (plus timestamps); `RETURNING *` loads what D1 stored. */
-async function insertRecord(record: ModelBase): Promise<void> {
+/**
+ * A save's write: INSERT the assigned attributes (`RETURNING *` loads what D1 stored), or
+ * UPDATE the changed ones, plus timestamps; a clean record sends nothing. Its after-callbacks
+ * are afterCreate or afterUpdate, then afterSave.
+ */
+function saveWrite(record: ModelBase, isInsert: boolean): PreparedWrite {
   const recordState = record[state];
-  const own = recordState.insertAssignments();
-  const stamps = timestampsFor(modelOf(record), "insert", own);
-  const insert = compileInsert(modelOf(record), [...own, ...stamps]);
-  const [row] = await recordState.executor.all(insert);
-  recordState.commitInsert(row);
-}
-
-/** UPDATE only the changed attributes (plus `updatedAt`); a clean record sends nothing. */
-async function updateRecord(record: ModelBase): Promise<void> {
-  const recordState = record[state];
-  const own = recordState.updateAssignments();
-  if (own.length === 0) {
-    recordState.commitClean();
-    return;
+  const model = modelOf(record);
+  const after = async () => {
+    await runAfterCallbacks(record, isInsert ? "afterCreate" : "afterUpdate", "save");
+    await runAfterCallbacks(record, "afterSave", "save");
+  };
+  if (isInsert) {
+    const own = recordState.insertAssignments();
+    const insert = compileInsert(model, [...own, ...timestampsFor(model, "insert", own)]);
+    return {
+      statements: [insert],
+      commit: ([result]) => recordState.commitInsert(result?.results[0]),
+      after,
+    };
   }
-  const stamps = timestampsFor(modelOf(record), "update", own);
-  const update = compileUpdate(modelOf(record), [...own, ...stamps], recordState.storedKey);
-  await recordState.executor.all(update);
-  recordState.commitUpdate(stamps);
+  const own = recordState.updateAssignments();
+  if (own.length === 0) return { statements: [], commit: () => recordState.commitClean(), after };
+  const stamps = timestampsFor(model, "update", own);
+  return {
+    statements: [compileUpdate(model, [...own, ...stamps], recordState.storedKey)],
+    commit: () => recordState.commitUpdate(stamps),
+    after,
+  };
 }
 
 /**
- * The destroy lifecycle: can this record be used → beforeDestroy → DELETE by the stored key
- * (skipped for a never-saved record: there's no row, as in Rails) → mark destroyed
- * → afterDestroy.
+ * The destroy lifecycle: can this record be used → beforeDestroy → its `dependent:` strategies
+ * → DELETE by the stored key (skipped for a never-saved record: there's no row, as in Rails)
+ * → mark destroyed → afterDestroy. Every write, dependents' included, is one atomic batch.
  */
 export async function destroyLifecycle(record: ModelBase): Promise<DestroyOutcome> {
+  const plan = await prepareDestroy(record);
+  if (plan.status === "invalid") throw new TypeError("a destroy is never invalid");
+  if (plan.status !== "ready") return plan;
+  await runPlan(record[state].executor, plan.writes);
+  return { status: "destroyed" };
+}
+
+/** Everything a destroy does before writing: beforeDestroy, then its dependents' plans. */
+export async function prepareDestroy(record: ModelBase): Promise<Plan> {
   const recordState = record[state];
   recordState.requireLive("be destroyed");
   recordState.abortReason = undefined;
   if (!(await runAbortableCallbacks(record, "beforeDestroy"))) {
     return { status: "aborted", reason: recordState.abortReason ?? "" };
   }
-  if (!recordState.isNew) {
-    const dependents = await runDependents(record);
-    if (dependents.status === "restricted") return dependents;
-    const deletion = compileDelete(modelOf(record), recordState.storedKey);
-    // Dependent statements go in one batch with the owner's DELETE: all of it, or none.
-    await (dependents.statements.length === 0
-      ? recordState.executor.all(deletion)
-      : recordState.executor.batch([...dependents.statements, deletion]));
-  }
-  recordState.markDestroyed();
-  await runAfterCallbacks(record, "afterDestroy", "destroy");
-  return { status: "destroyed" };
+  const dependents = recordState.isNew ? { writes: [] } : await prepareDependents(record);
+  if ("status" in dependents) return dependents;
+  const deletion = recordState.isNew ? [] : [compileDelete(modelOf(record), recordState.storedKey)];
+  // Dependents first: their records go before the owner's row, which they may point at.
+  const writes = [
+    ...dependents.writes,
+    {
+      statements: deletion,
+      commit: () => recordState.markDestroyed(),
+      after: () => runAfterCallbacks(record, "afterDestroy", "destroy"),
+    },
+  ];
+  return { status: "ready", writes };
 }
 
 /** Loads the record's row again by its stored primary key, discarding unsaved changes. */

@@ -76,7 +76,7 @@ export class Database {
       }
       return query;
     });
-    return this.#executor.batch(compiled);
+    return (await this.#executor.batch(compiled)).map(({ meta }) => meta);
   }
 }
 
