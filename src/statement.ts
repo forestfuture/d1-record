@@ -10,7 +10,7 @@ import { attributeOf, evaluateDefaults, requireDefined } from "./metadata.ts";
 import type { ModelClass } from "./model.ts";
 import { timestampsFor } from "./timestamps.ts";
 
-/** The library's key for what `db.batch` needs from a Statement; not exported. */
+/** @internal The library's key for what `db.batch` needs from a Statement. */
 export const statementParts = Symbol("statementParts");
 
 /**
@@ -33,7 +33,7 @@ export class Statement {
     return this.#executor.run(this.#query);
   }
 
-  /** The Database's Executor it runs on, and its compiled SQL. */
+  /** @internal The Database's Executor it runs on, and its compiled SQL. */
   get [statementParts](): { executor: Executor; query: CompiledSql } {
     return { executor: this.#executor, query: this.#query };
   }

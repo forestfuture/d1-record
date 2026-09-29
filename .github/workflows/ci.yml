@@ -21,5 +21,7 @@ jobs:
       - run: vp check
       - run: vp test
       - run: vp pack
+      # The published types show only the public interface, no library internals.
+      - run: vp run check:public-types
       # Unused files, exports and dependencies.
       - run: vp run knip

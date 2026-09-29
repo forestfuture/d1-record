@@ -1,6 +1,6 @@
 import type { ModelBase } from "./model.ts";
 
-/** The library's key for what `db.batch` needs from a RecordStatement; not exported. */
+/** @internal The library's key for what `db.batch` needs from a RecordStatement. */
 export const recordStatementParts = Symbol("recordStatementParts");
 
 /**
@@ -19,6 +19,7 @@ export class RecordStatement<R extends ModelBase = ModelBase> {
     this.#kind = kind;
   }
 
+  /** @internal What `db.batch` needs: the record, and whether it's saved or destroyed. */
   get [recordStatementParts](): { record: R; kind: "save" | "destroy" } {
     return { record: this.#record, kind: this.#kind };
   }

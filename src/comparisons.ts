@@ -1,6 +1,6 @@
 declare const comparedType: unique symbol;
 
-/** The library's key for reading a Comparison's parts; not exported from the package. */
+/** @internal The library's key for reading a Comparison's parts. */
 export const comparisonParts = Symbol("comparisonParts");
 
 export type Operator = ">" | ">=" | "<" | "<=" | "between" | "betweenExcludingEnd";
@@ -29,7 +29,7 @@ export class Comparison<T = unknown> {
     this.#values = values;
   }
 
-  /** What the compiler needs: the operator, and the values to bind in order. */
+  /** @internal What the compiler needs: the operator, and the values to bind in order. */
   get [comparisonParts](): { operator: Operator; values: readonly unknown[] } {
     return { operator: this.#operator, values: this.#values };
   }

@@ -11,7 +11,7 @@ import {
 } from "./metadata.ts";
 import type { ChangeOptions, ModelBase, ModelClass } from "./model.ts";
 
-/** The hidden slot where a Record keeps its `RecordState`; never exported from the package. */
+/** @internal The hidden slot where a Record keeps its `RecordState`. */
 export const state = Symbol("state");
 
 /** A loaded association, with the owner's attribute and key value it was loaded for. */
