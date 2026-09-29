@@ -12,15 +12,65 @@ npm install @forestfuture/d1-record
 
 ## A quick look
 
+A [Worker](https://developers.cloudflare.com/workers/) is a function that runs at Cloudflare's edge, and [D1](https://developers.cloudflare.com/d1/) is its SQLite database. d1-record sits between the two: you describe each table once as a **Model**, and your Worker reads and writes **records** instead of rows.
+
+### 1. Create the tables
+
+D1 tables are created with SQL migrations. Create the database and a first migration with [Wrangler](https://developers.cloudflare.com/workers/wrangler/), Cloudflare's command-line tool:
+
+```sh
+npx wrangler d1 create my-app-db
+npx wrangler d1 migrations create my-app-db create_users_and_posts
+```
+
+Then write the tables in the migration file it creates (for example `migrations/0001_create_users_and_posts.sql`). Column names are snake_case:
+
+```sql
+CREATE TABLE users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT,
+  updated_at TEXT
+);
+
+CREATE TABLE posts (
+  id INTEGER PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users (id),
+  title TEXT NOT NULL,
+  published_at TEXT
+);
+```
+
+Apply it with `npx wrangler d1 migrations apply my-app-db --local` (or `--remote` for the deployed database).
+
+### 2. Connect the database to your Worker
+
+`wrangler d1 create` prints a snippet for your Wrangler config. It gives your Worker a **binding** called `DB`: a handle to the database that arrives with every request, as `env.DB`.
+
+```jsonc
+// wrangler.jsonc
+{
+  "d1_databases": [
+    { "binding": "DB", "database_name": "my-app-db", "database_id": "<the id it printed>" },
+  ],
+}
+```
+
+### 3. Declare your models
+
+Each Model describes one table: its attributes (camelCase in your code, snake_case in the table), its associations to other Models, and the rules for saving it.
+
 ```ts
-import { connect, Model, type BelongsTo, type HasMany } from "@forestfuture/d1-record";
+// src/models.ts
+import { Model, type BelongsTo, type HasMany } from "@forestfuture/d1-record";
 
 export class User extends Model({
   id: { type: "string", null: false, default: () => crypto.randomUUID() },
   email: { type: "string", null: false },
   isActive: "boolean", // column: is_active
-  createdAt: "datetime",
-  updatedAt: "datetime",
+  createdAt: "datetime", // set for you on create
+  updatedAt: "datetime", // set for you on every change
 }) {
   static tableName = "users";
 
@@ -55,34 +105,56 @@ export class Post extends Model({
   });
   declare author: BelongsTo<typeof User>;
 }
+```
+
+### 4. Use them in your Worker
+
+Each request connects to the database with `connect(env.DB)`, then works through `db.model(...)`. (`npx wrangler types` generates the `Env` type from your Wrangler config.)
+
+```ts
+// src/index.ts
+import { connect } from "@forestfuture/d1-record";
+import { User } from "./models";
 
 export default {
-  async fetch(request: Request, env: { DB: D1Database }) {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const db = connect(env.DB);
 
-    // Queries are lazy and composable; nothing runs until a terminal method.
-    const users = await db
-      .model(User)
-      .active()
-      .includes("posts")
-      .order({ createdAt: "desc" })
-      .limit(20)
-      .toArray();
+    // GET: the 20 newest active users, each with their posts.
+    if (request.method === "GET") {
+      const users = await db
+        .model(User)
+        .active()
+        .includes("posts") // loaded in one extra query, not one per user
+        .order({ createdAt: "desc" })
+        .limit(20)
+        .toArray();
+      return Response.json(users);
+    }
 
-    // Saving runs validations and callbacks; `false` means invalid or aborted.
-    const user = db.model(User).build({ email: "Ada@Example.com" });
-    user.posts().build({ title: "Hello, D1" }); // autosaved with the user
-    if (!(await user.save())) return Response.json(user.errors.fullMessages(), { status: 422 });
+    // POST: sign up a user with a first post, saved together.
+    const { email } = await request.json<{ email: string }>();
+    const user = db.model(User).build({ email });
+    user.posts().build({ title: "Hello, D1" });
 
-    // Writes that must all happen or none: one atomic D1 batch.
-    await db.batch([
-      db.model(Post).where({ publishedAt: null }).updateAll({ publishedAt: new Date() }),
-      user.destroyStatement(), // its posts too (dependent: "destroy")
-    ]);
-
-    return Response.json(users);
+    // save() validates and runs callbacks; false means it wasn't saved, and why is in errors.
+    if (!(await user.save())) {
+      return Response.json({ errors: user.errors.fullMessages() }, { status: 422 });
+    }
+    return Response.json(user, { status: 201 });
   },
-};
+} satisfies ExportedHandler<Env>;
+```
+
+### 5. Write several things at once, or not at all
+
+D1 can't keep a transaction open while your code awaits, so there's no `transaction()` block. Instead, `db.batch([...])` sends a prepared set of writes that all succeed or all fail:
+
+```ts
+await db.batch([
+  db.model(Post).where({ publishedAt: null }).updateAll({ publishedAt: new Date() }),
+  user.destroyStatement(), // and its posts, since posts are dependent: "destroy"
+]);
 ```
 
 ## What's in it
