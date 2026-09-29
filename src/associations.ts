@@ -1,5 +1,12 @@
 import { InvalidModel } from "./errors.ts";
-import { ModelBase, verifyModel, type ModelClass, type ScopesOf } from "./model.ts";
+import { belongsToAccessor, hasOneAccessor } from "./association-writers.ts";
+import {
+  ModelBase,
+  verifyModel,
+  type AttributesOf,
+  type ModelClass,
+  type ScopesOf,
+} from "./model.ts";
 import { state } from "./record-state.ts";
 import type { Executor } from "./executor.ts";
 import { applyScope, ofOwner, type AssociationCache, type Scope, type Scoped } from "./relation.ts";
@@ -77,11 +84,28 @@ export function linkOf(
       };
 }
 
-/** `await post.author()`: the owning record, or null. */
-export type BelongsTo<C extends ModelClass> = () => Promise<InstanceType<C> | null>;
+/**
+ * `await post.author()`: the owning record, or null. `post.author.set(user)` points the post at
+ * another record (Rails' `post.author = user`), and `build`/`create` make a new one for it.
+ */
+export interface BelongsTo<C extends ModelClass> {
+  (): Promise<InstanceType<C> | null>;
+  set(record: InstanceType<C> | null): void;
+  build(attributes?: Partial<AttributesOf<InstanceType<C>>>): InstanceType<C>;
+  create(attributes?: Partial<AttributesOf<InstanceType<C>>>): Promise<InstanceType<C>>;
+  createOrThrow(attributes?: Partial<AttributesOf<InstanceType<C>>>): Promise<InstanceType<C>>;
+}
 
-/** `await user.profile()`: the one associated record, or null. */
-export type HasOne<C extends ModelClass> = () => Promise<InstanceType<C> | null>;
+/**
+ * `await user.profile()`: the one associated record, or null. `user.profile.build(attrs)` and
+ * `create(attrs)` make a new one pointing at the user (Rails' `build_profile`).
+ */
+export interface HasOne<C extends ModelClass> {
+  (): Promise<InstanceType<C> | null>;
+  build(attributes?: Partial<AttributesOf<InstanceType<C>>>): InstanceType<C>;
+  create(attributes?: Partial<AttributesOf<InstanceType<C>>>): Promise<InstanceType<C>>;
+  createOrThrow(attributes?: Partial<AttributesOf<InstanceType<C>>>): Promise<InstanceType<C>>;
+}
 
 /** `user.posts()`: a Relation of the associated records, with the target's scopes. */
 export type HasMany<C extends ModelClass> = () => Scoped<InstanceType<C>, ScopesOf<C>>;
@@ -107,10 +131,7 @@ export function prepareModel(model: ModelClass): void {
   }
   for (const [name, definition] of Object.entries(model.associations)) {
     checkAssociation(model, name, definition);
-    Object.defineProperty(model.prototype, name, {
-      configurable: true,
-      value: accessorFor(name, definition),
-    });
+    Object.defineProperty(model.prototype, name, accessorProperty(name, definition));
   }
   prepared.set(model, model.associations);
 }
@@ -152,36 +173,33 @@ function requireAttribute(label: string, model: ModelClass, name: string): void 
   }
 }
 
-function accessorFor(
-  name: string,
-  definition: AssociationDefinition,
-): (this: ModelBase) => unknown {
-  switch (definition.kind) {
-    case "belongsTo":
-      return async function belongsTo(this: ModelBase) {
-        return cachedRead(this, name, definition, (key, targetAttribute) =>
-          scopedTarget(this[state].executor, model(this), name, definition).findBy({
-            [targetAttribute]: key,
-          }),
-        );
-      };
-    case "hasOne":
-      return async function hasOne(this: ModelBase) {
-        // The scope's order, then the target's primary key, as preloading uses: the same record.
-        return cachedRead(this, name, definition, (key, targetAttribute) =>
-          inAssociationOrder(
-            scopedTarget(this[state].executor, model(this), name, definition).where({
-              [targetAttribute]: key,
-            }),
-            targetOf(definition),
-          ).first(),
-        );
-      };
-    case "hasMany":
-      return function hasMany(this: ModelBase) {
+/** Each record's belongsTo and hasOne accessors, made on first use. Not request state. */
+const accessors = new WeakMap<ModelBase, Map<string, unknown>>();
+
+/**
+ * The property an association adds to its Model's records. A hasMany is a method returning a
+ * Relation; a belongsTo or hasOne is a getter for the record's own accessor, a function
+ * (`await post.author()`) that also has `set`/`build`/`create` bound to that record.
+ */
+function accessorProperty(name: string, definition: AssociationDefinition): PropertyDescriptor {
+  if (definition.kind === "hasMany") {
+    return {
+      configurable: true,
+      value: function hasMany(this: ModelBase) {
         return hasManyRelation(this, name, definition);
-      };
+      },
+    };
   }
+  const make = definition.kind === "belongsTo" ? belongsToAccessor : hasOneAccessor;
+  return {
+    configurable: true,
+    get(this: ModelBase) {
+      const own = accessors.get(this) ?? new Map<string, unknown>();
+      accessors.set(this, own);
+      if (!own.has(name)) own.set(name, make(this, name, definition));
+      return own.get(name);
+    },
+  };
 }
 
 /**
@@ -218,7 +236,7 @@ function builtOf(owner: ModelBase, name: string): AssociationCache {
  * A belongsTo or hasOne read: the cached record (or null) while the key it was loaded for is
  * current, otherwise `load` for the key the owner holds now, then cached.
  */
-async function cachedRead(
+export async function cachedRead(
   owner: ModelBase,
   name: string,
   definition: AssociationDefinition,
@@ -289,7 +307,7 @@ export function inAssociationOrder(
 }
 
 /** The target Model, ready for use. */
-function targetOf(definition: AssociationDefinition): ModelClass {
+export function targetOf(definition: AssociationDefinition): ModelClass {
   const target = definition.target();
   prepareModel(target);
   return target;

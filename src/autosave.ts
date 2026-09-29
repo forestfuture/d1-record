@@ -49,3 +49,39 @@ export function linkRecords(owner: ModelBase, autosaves: readonly Autosave[]): v
     }
   }
 }
+
+/** A new record a belongsTo points at, saved before its owner (Rails' belongs_to autosave). */
+export interface ParentSave {
+  name: string;
+  definition: AssociationDefinition;
+  record: ModelBase;
+}
+
+/** The new records `owner` points at through belongsTo, not yet claimed by the write. */
+export function parentsOf(owner: ModelBase, claimed: ReadonlySet<ModelBase>): ParentSave[] {
+  const model = modelOf(owner);
+  return owner[state]
+    .parents()
+    .filter(([, record]) => record[state].isNew && !claimed.has(record))
+    .map(([name, record]) => ({ name, definition: associationOf(model, name), record }));
+}
+
+/** The attribute of the parent its owner's foreign key holds (its primary key, by default). */
+function parentKeyOf(owner: ModelBase, { definition }: ParentSave): string {
+  return linkOf(definition, modelOf(owner), definition.target()).targetAttribute;
+}
+
+/** Whether every parent's key is known before it's written (generated in code). */
+export function parentKeysKnown(owner: ModelBase, parents: readonly ParentSave[]): boolean {
+  return parents.every((parent) => parent.record[state].read(parentKeyOf(owner, parent)) !== null);
+}
+
+/** Points the owner at its parents, now that their keys exist, and keeps them loaded. */
+export function linkParents(owner: ModelBase, parents: readonly ParentSave[]): void {
+  for (const parent of parents) {
+    const { name, definition, record } = parent;
+    const key = record[state].read(parentKeyOf(owner, parent));
+    owner[state].write(definition.foreignKey, key);
+    owner[state].cacheAssociation(name, { attribute: definition.foreignKey, key, value: record });
+  }
+}

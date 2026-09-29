@@ -302,6 +302,14 @@ describe("types", () => {
       // @ts-expect-error attributes aren't associations
       author.loaded("id");
       expectTypeOf(author.isLoaded("bio")).toEqualTypeOf<boolean>();
+      article.author.set(author);
+      article.author.set(null);
+      // @ts-expect-error set() takes a record of the association's Model
+      article.author.set(article);
+      expectTypeOf(article.author.build({ id: 1 })).toEqualTypeOf<Author>();
+      expectTypeOf(await author.bio.createOrThrow({ id: 2 })).toEqualTypeOf<Bio>();
+      // @ts-expect-error build() takes the target's attributes
+      author.bio.build({ nope: 1 });
       expectTypeOf(await author.reloadAssociation("articles")).toEqualTypeOf<Article[]>();
       expectTypeOf(await article.reloadAssociation("author")).toEqualTypeOf<Author | null>();
       // @ts-expect-error unknown association

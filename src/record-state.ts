@@ -46,6 +46,7 @@ export class RecordState {
   #abortReason: string | undefined;
   readonly #associations = new Map<string, CachedAssociation>();
   readonly #built = new Map<string, ModelBase[]>();
+  readonly #parents = new Map<string, ModelBase>();
 
   constructor(model: ModelClass) {
     this.#model = model;
@@ -188,6 +189,17 @@ export class RecordState {
     return this.#built.get(name) ?? [];
   }
 
+  /** A new record a belongsTo points at, saved first when this record is; undefined clears it. */
+  setParent(name: string, record: ModelBase | undefined): void {
+    if (record === undefined) this.#parents.delete(name);
+    else this.#parents.set(name, record);
+  }
+
+  /** The new records this record's belongsTo associations point at, by association name. */
+  parents(): [name: string, record: ModelBase][] {
+    return [...this.#parents];
+  }
+
   /** Every association's built records, by association name. */
   builtRecords(): [name: string, records: readonly ModelBase[]][] {
     return [...this.#built];
@@ -197,12 +209,14 @@ export class RecordState {
   resetAssociation(name: string): void {
     this.#associations.delete(name);
     this.#built.delete(name);
+    this.#parents.delete(name);
   }
 
   /** Forgets every association, cached and built (`reload()`), as Rails' reload does. */
   clearAssociations(): void {
     this.#associations.clear();
     this.#built.clear();
+    this.#parents.clear();
   }
 
   /** Loads a D1 row; the record becomes persisted and clean. */
