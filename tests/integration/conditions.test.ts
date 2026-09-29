@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
-import { connect, Model, sql } from "../../src/index.ts";
+import { connect, Model, sql, type QueryEvent } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
@@ -138,5 +138,17 @@ describe("conditions", () => {
 
     // @ts-expect-error pluck() needs an attribute
     await expect(users.pluck()).rejects.toThrow(TypeError);
+  });
+
+  test("a list of any length is one bound value, so D1's 100-parameter limit never applies", async () => {
+    const events: QueryEvent[] = [];
+    const users = connect(binding, { onQuery: (event) => events.push(event) }).model(User);
+    const many = Array.from({ length: 250 }, (_, index) => index + 1);
+
+    expect(await ids(users.where({ id: many }))).toEqual([1, 2, 3, 4]);
+    expect(await ids(users.whereNot({ id: many }))).toEqual([]);
+    expect(await ids(users.where({ role: ["member", null], suspended: [true] }))).toEqual([2]);
+    expect(events.map((event) => event.params.length)).toEqual([1, 1, 2]);
+    expect((await users.find(many.slice(0, 4))).map((user) => user.id)).toEqual([1, 2, 3, 4]);
   });
 });

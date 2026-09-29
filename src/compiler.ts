@@ -279,8 +279,9 @@ function compileEquality(
   const present = value.filter((item) => item !== null);
   const parts: string[] = [];
   if (present.length > 0) {
-    params.push(...present.map((item) => writeValue(attribute.type, item)));
-    parts.push(`${column} IN (${present.map(() => "?").join(", ")})`);
+    // The whole list is one JSON value, so any length fits D1's 100 bound parameters.
+    params.push(JSON.stringify(present.map((item) => writeValue(attribute.type, item))));
+    parts.push(`${column} IN (SELECT value FROM json_each(?))`);
   }
   if (present.length < value.length) parts.push(`${column} IS NULL`);
   return parts.length > 0 ? `(${parts.join(" OR ")})` : "1 = 0";

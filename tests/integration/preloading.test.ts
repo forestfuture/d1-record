@@ -7,7 +7,6 @@ import {
   type BelongsTo,
   type HasMany,
   type HasOne,
-  sql,
   type QueryEvent,
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
@@ -126,7 +125,7 @@ describe("preloading with includes", () => {
     expect(queries).toHaveLength(1);
   });
 
-  test("preloading 250 records takes 1 + ceil(250 / 100) queries: keys go in groups of 100", async () => {
+  test("preloading 250 records takes 2 queries: every key goes in one, as one bound value", async () => {
     const ids = Array.from({ length: 250 }, (_, index) => index + 100);
     await binding
       .prepare(
@@ -139,16 +138,11 @@ describe("preloading with includes", () => {
       )
       .run();
 
-    // (A 250-value where({ id: [...] }) would itself exceed D1's 100-parameter limit.)
-    const users = await db()
-      .model(User)
-      .where(sql`id >= ${100}`)
-      .includes("posts")
-      .toArray();
+    const users = await db().model(User).where({ id: ids }).includes("posts").toArray();
 
     expect(users).toHaveLength(250);
-    expect(queries).toHaveLength(4);
-    expect(queries.slice(1).map((query) => query.params.length)).toEqual([100, 100, 50]);
+    expect(queries).toHaveLength(2);
+    expect(queries.map((query) => query.params.length)).toEqual([1, 1]);
   });
 
   test("nested includes preload each level in its own query", async () => {

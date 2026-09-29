@@ -187,7 +187,7 @@ describe.skipIf(!configured)("remote D1 smoke", () => {
     expect((await db.model(User).find(second.id)).email).toBe("b@example.com");
   });
 
-  test("preloading more than 100 owners stays within D1's 100 bound parameters", async () => {
+  test("lists and preloads of more than 100 keys stay within D1's 100 bound parameters", async () => {
     const db = connect(remote.binding);
     const ids = Array.from({ length: 150 }, (_, index) => index + 1);
     // In batches of 25, under D1's per-invocation query limit (50 on the Free plan).
@@ -197,6 +197,8 @@ describe.skipIf(!configured)("remote D1 smoke", () => {
       await db.batch(group.map((id) => db.model(Post).insert({ userId: id, title: `Post ${id}` })));
     }
 
+    // A 150-value list is one bound value (json_each), well within D1's 100-parameter limit.
+    expect(await db.model(User).where({ id: ids }).count()).toBe(150);
     const users = await db.model(User).includes("posts").toArray();
 
     expect(users).toHaveLength(150);
