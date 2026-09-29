@@ -1,11 +1,19 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model } from "../../src/index.ts";
+import { connect, MissingAttribute, Model } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   role: "string",
+}) {
+  static tableName = "users";
+}
+
+class Draft extends Model({
+  id: { type: "integer", null: false },
+  email: { type: "string", null: false },
+  role: { type: "string", default: () => "member" },
 }) {
   static tableName = "users";
 }
@@ -105,6 +113,76 @@ describe("change tracking", () => {
     expect(user.savedChanges()).toEqual({
       id: [null, user.id],
       email: [null, "b@example.com"],
+    });
+  });
+
+  describe("per attribute", () => {
+    test("attributeWas() is the value before the current change, as stored", async () => {
+      const user = await connect(binding).model(User).find(1);
+
+      user.role = "admin";
+
+      expect(user.attributeWas("role")).toBe("member");
+      expect(user.attributeWas("email")).toBe("a@example.com");
+      expect(connect(binding).model(User).build({ role: "x" }).attributeWas("role")).toBeNull();
+    });
+
+    test("isAttributeChanged() and willSaveChangeTo(), optionally from and to given values", async () => {
+      const key = await connect(binding).model(ApiKey).find("k1");
+
+      key.expiresAt = new Date("2027-01-01T00:00:00.000Z");
+
+      expect(key.isAttributeChanged("expiresAt")).toBe(true);
+      expect(key.isAttributeChanged("label")).toBe(false);
+      expect(
+        key.isAttributeChanged("expiresAt", {
+          from: new Date("2026-01-01T00:00:00.000Z"),
+          to: new Date("2027-01-01T00:00:00.000Z"),
+        }),
+      ).toBe(true);
+      expect(key.isAttributeChanged("expiresAt", { from: new Date(0) })).toBe(false);
+      expect(key.willSaveChangeTo("expiresAt")).toBe(true);
+      expect(key.willSaveChangeTo("label")).toBe(false);
+    });
+
+    test("after a save: savedChangeTo(), hasSavedChangeTo() and attributeBeforeLastSave()", async () => {
+      const user = await connect(binding).model(User).find(1);
+      user.role = "admin";
+      await user.saveOrThrow();
+
+      expect(user.savedChangeTo("role")).toEqual(["member", "admin"]);
+      expect(user.savedChangeTo("email")).toBeUndefined();
+      expect(user.hasSavedChangeTo("role", { from: "member" })).toBe(true);
+      expect(user.hasSavedChangeTo("email")).toBe(false);
+      expect(user.attributeBeforeLastSave("role")).toBe("member");
+      expect(user.attributeBeforeLastSave("email")).toBe("a@example.com");
+      expect(user.willSaveChangeTo("role")).toBe(false);
+    });
+
+    test("restoreAttributes() undoes unsaved changes, to some attributes or all", async () => {
+      const key = await connect(binding).model(ApiKey).find("k1");
+      key.label = "release";
+      key.scopes = ["write"];
+
+      key.restoreAttributes(["label"]);
+      expect([key.label, key.changed()]).toEqual(["deploy", ["scopes"]]);
+
+      key.restoreAttributes();
+      expect([key.scopes, key.isChanged()]).toEqual([["read"], false]);
+    });
+
+    test("a new record's restoreAttributes() returns attributes to their defaults, as in Rails", () => {
+      const draft = connect(binding).model(Draft).build({ email: "a@example.com", role: "admin" });
+
+      draft.restoreAttributes();
+
+      expect([draft.email, draft.role]).toEqual([null, "member"]);
+    });
+
+    test("an attribute that wasn't loaded throws MissingAttribute, as reading it does", async () => {
+      const [partial] = await connect(binding).model(User).select("email").toArray();
+
+      expect(() => partial!.attributeWas("role")).toThrow(MissingAttribute);
     });
   });
 });

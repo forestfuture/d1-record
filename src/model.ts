@@ -71,6 +71,15 @@ export type Callback<R> = (record: R) => unknown;
 /** Type-only key carrying a record's declared attribute types; never set at runtime. */
 declare const attributeTypes: unique symbol;
 
+/** An attribute's name on record type `R`. */
+type AttributeKey<R> = keyof AttributesOf<R> & string;
+
+/** `from`/`to` for the change checks: only matching when the value was, or became, this. */
+interface ChangeOptions<V> {
+  from?: V;
+  to?: V;
+}
+
 /** The declared attributes of a record type, excluding methods and getters. */
 export type AttributesOf<M> = M extends { readonly [attributeTypes]?: infer A } ? A : never;
 
@@ -286,6 +295,71 @@ export class ModelBase {
   /** The changes the last successful save wrote; use it in after-save callbacks. */
   savedChanges(): Changes {
     return this[state].savedChanges();
+  }
+
+  /** The attribute's value before its unsaved change, as stored (Rails' `attribute_was`). */
+  attributeWas<R extends ModelBase, K extends AttributeKey<R>>(
+    this: R,
+    name: K,
+  ): AttributesOf<R>[K] {
+    return this[state].valueInDatabase(name) as AttributesOf<R>[K];
+  }
+
+  /**
+   * Whether the attribute has an unsaved change, optionally `from` and/or `to` given values
+   * (Rails' `attribute_changed?(name, from:, to:)`).
+   */
+  isAttributeChanged<R extends ModelBase, K extends AttributeKey<R>>(
+    this: R,
+    name: K,
+    options: ChangeOptions<AttributesOf<R>[K]> = {},
+  ): boolean {
+    return this[state].isAttributeChanged(name, options);
+  }
+
+  /** Whether saving now would write a change to the attribute (for before-callbacks). */
+  willSaveChangeTo<R extends ModelBase, K extends AttributeKey<R>>(
+    this: R,
+    name: K,
+    options: ChangeOptions<AttributesOf<R>[K]> = {},
+  ): boolean {
+    return this[state].isAttributeChanged(name, options);
+  }
+
+  /** The last save's change to the attribute, `[before, after]`, if it changed (for after-callbacks). */
+  savedChangeTo<R extends ModelBase, K extends AttributeKey<R>>(
+    this: R,
+    name: K,
+  ): [before: AttributesOf<R>[K], after: AttributesOf<R>[K]] | undefined {
+    const change = this[state].savedChanges()[name];
+    return change === undefined
+      ? undefined
+      : ([...change] as [AttributesOf<R>[K], AttributesOf<R>[K]]);
+  }
+
+  /** Whether the last save changed the attribute, optionally `from` and/or `to` given values. */
+  hasSavedChangeTo<R extends ModelBase, K extends AttributeKey<R>>(
+    this: R,
+    name: K,
+    options: ChangeOptions<AttributesOf<R>[K]> = {},
+  ): boolean {
+    return this[state].hasSavedChangeTo(name, options);
+  }
+
+  /** The attribute's value before the last save (its current stored value, if that didn't change it). */
+  attributeBeforeLastSave<R extends ModelBase, K extends AttributeKey<R>>(
+    this: R,
+    name: K,
+  ): AttributesOf<R>[K] {
+    const change = this[state].savedChanges()[name];
+    return (
+      change === undefined ? this[state].valueInDatabase(name) : change[0]
+    ) as AttributesOf<R>[K];
+  }
+
+  /** Undoes unsaved changes to these attributes (all of them by default), as Rails' `restore_attributes`. */
+  restoreAttributes<R extends ModelBase>(this: R, names?: readonly AttributeKey<R>[]): void {
+    this[state].restore(names);
   }
 
   /** Inserts a new record or updates a persisted one; `false` if it's invalid or a callback aborted. */
