@@ -1,4 +1,4 @@
-/* A forest accent on VitePress' default theme. */
+/* A forest accent on VitePress' default theme, which already sets Inter, as forestfuture.dev does. */
 :root {
   --vp-c-brand-1: #2f6b3f;
   --vp-c-brand-2: #3b8150;

@@ -1,5 +1,17 @@
-import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 import { connect } from "../../src/index.ts";
+import {
+  Article,
+  Author,
+  autosaveExample,
+  createThroughExample,
+  preloadExample,
+  readExample,
+  statementsExample,
+  writersExample,
+} from "../../site/snippets/guide/associations.ts";
+import * as batches from "../../site/snippets/guide/batches.ts";
+import { Booking, errorsExample } from "../../site/snippets/guide/validations.ts";
 import { publishDraftsAndRemove } from "../../site/snippets/getting-started/batch.ts";
 import { Post, User } from "../../site/snippets/getting-started/models.ts";
 import worker from "../../site/snippets/getting-started/worker.ts";
@@ -62,5 +74,141 @@ describe("Getting started", () => {
     expect(await db.model(User).pluck("email")).toEqual(["grace@example.com"]);
     expect(await db.model(Post).where({ publishedAt: null }).count()).toBe(0);
     expect(await db.model(Post).count()).toBe(1);
+  });
+});
+
+// The guide's larger examples, on the tables they're written for.
+describe("the guide's examples", () => {
+  let binding: TestDatabase;
+  let dispose: () => Promise<void>;
+  const schema = new URL("../../site/snippets/guide/schema.sql", import.meta.url);
+
+  beforeAll(async () => {
+    ({ db: binding, dispose } = await createTestDatabase(schema));
+  });
+  afterAll(() => dispose());
+  beforeEach(async () => {
+    await binding.batch([
+      binding.prepare("DELETE FROM comments"),
+      binding.prepare("DELETE FROM profiles"),
+      binding.prepare("DELETE FROM articles"),
+      binding.prepare("DELETE FROM authors"),
+      binding.prepare("INSERT INTO authors (id, name) VALUES ('mary', 'Mary')"),
+      binding.prepare(
+        "INSERT INTO articles (id, author_id, title, published, created_at) VALUES ('x1', 'mary', 'On Nothing', 1, '2026-01-01T00:00:00.000Z')",
+      ),
+      binding.prepare("INSERT INTO profiles (author_id, bio) VALUES ('mary', 'Poet')"),
+      binding.prepare("INSERT INTO comments (article_id, body) VALUES ('x1', 'Hm.')"),
+    ]);
+  });
+
+  test("Validations: the errors example has the five errors its comments show", async () => {
+    const account = await errorsExample(connect(binding));
+
+    expect(account.errors.fullMessages()).toEqual([
+      "Email can't be blank",
+      "Handle is too short (minimum is 3 characters)",
+      "Handle is invalid",
+      "Plan is not included in the list",
+      "Seats is not a number",
+    ]);
+    expect(account.errors.toArray()[0]).toEqual({
+      attribute: "email",
+      type: "blank",
+      message: "can't be blank",
+    });
+  });
+
+  test("Validations: a custom rule added in afterValidation makes the record invalid", async () => {
+    const at = new Date("2026-05-01T10:00:00Z");
+    const booking = connect(binding).model(Booking).build({ startsAt: at, endsAt: at });
+
+    expect(await booking.isValid()).toBe(false);
+    expect(booking.errors.fullMessages()).toEqual(["Ends at must be after the start"]);
+  });
+
+  test("Associations: reading, creating through, and deleting through an association", async () => {
+    const db = connect(binding);
+    const { author, profile, latest } = await readExample(db, "x1");
+    const comment = await createThroughExample(db, "x1");
+
+    expect([author?.name, profile?.bio, latest?.title]).toEqual(["Mary", "Poet", "On Nothing"]);
+    expect(comment.articleId).toBe("x1");
+
+    await statementsExample(await db.model(Article).find("x1"));
+    expect(
+      await db
+        .model(Article)
+        .find("x1")
+        .then((article) => article.comments().count()),
+    ).toBe(0);
+  });
+
+  test("Associations: autosave writes the graph in one batch; set() links new and saved authors", async () => {
+    const queries: string[] = [];
+    const db = connect(binding, { onQuery: ({ sql }) => queries.push(sql) });
+    const ada = await autosaveExample(db);
+    const batched = queries.length;
+    const { draft, another, grace } = await writersExample(db, ada);
+
+    expect(batched).toBe(4); // the author, two articles and the profile (atomicity: autosave tests)
+    expect(await db.model(Article).where({ authorId: ada.id }).pluck("title")).toEqual(
+      expect.arrayContaining([
+        "Notes on the Analytical Engine",
+        "Sketch of the Engine",
+        "Untitled",
+      ]),
+    );
+    expect((await ada.profile())?.bio).toBe("Mathematician");
+    expect(draft.authorId).toBe(ada.id);
+    expect(grace.isPersisted()).toBe(true);
+    expect(another.authorId).toBe(grace.id);
+  });
+
+  test("Associations: the preload takes 4 queries, and the loop none", async () => {
+    await autosaveExample(connect(binding));
+    const queries: string[] = [];
+
+    const authors = await preloadExample(
+      connect(binding, { onQuery: ({ sql }) => queries.push(sql) }),
+    );
+
+    expect(authors.map((author) => author.name).sort()).toEqual(["Ada", "Mary"]);
+    expect(queries).toHaveLength(4);
+  });
+
+  test("Batches: statements, many rows, an atomic batch, and records in a batch", async () => {
+    const db = connect(binding);
+
+    const meta = await batches.statementsExample(db, "x1");
+    await batches.insertAllExample(db, "x1");
+    const graceId = await batches.batchExample(db);
+
+    expect(meta.changes).toBe(1);
+    expect(
+      await db
+        .model(Article)
+        .find("x1")
+        .then((article) => article.title),
+    ).toBe("ON NOTHING");
+    expect(
+      await db
+        .model(Author)
+        .find("author-1")
+        .then((author) => author.name),
+    ).toBe("Ada");
+    expect(await db.model(Article).where({ authorId: graceId }).pluck("title")).toEqual(["Hello"]);
+
+    const { savedAuthor } = await batches.recordsExample(db, "x1", graceId);
+
+    expect(savedAuthor.isPersisted()).toBe(true);
+    expect(await db.model(Author).exists({ id: graceId })).toBe(false); // and its article, dependent
+    expect(await db.model(Article).where({ authorId: graceId }).count()).toBe(0);
+    expect(
+      await db
+        .model(Article)
+        .find("x1")
+        .then((article) => article.comments().count()),
+    ).toBe(0);
   });
 });

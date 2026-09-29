@@ -1,4 +1,3 @@
-import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
@@ -17,8 +16,9 @@ export default defineConfig({
     publint: true,
   },
   resolve: {
-    // The documentation's examples import the package by name, as an app would.
-    alias: { "@forestfuture/d1-record": fileURLToPath(new URL("src/index.ts", import.meta.url)) },
+    // Resolves the package's own name to src/, from tsconfig.json's `paths` (one mapping for
+    // TypeScript and tests), so the documentation's examples import it as an app would.
+    tsconfigPaths: true,
   },
   test: {
     projects: [

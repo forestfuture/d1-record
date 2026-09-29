@@ -22,7 +22,7 @@ features:
   - title: Lazy, composable queries
     details: where, comparisons, ordering, pagination, named scopes and preloading with includes, one query per association, never N+1. Hand-written SQL only through a tagged template, so values are always bound.
   - title: A predictable lifecycle
-    details: save, create, update and destroy with validations, the full Rails callback order, abort(), dirty tracking and dependent strategies. Methods that raise end in OrThrow.
+    details: save, create, update and destroy with validations, Rails' callback order, abort(), dirty tracking and dependent strategies. Methods that raise end in OrThrow.
   - title: Atomic where D1 allows
     details: D1 can't hold a transaction open across awaits, so db.batch writes a prepared set of statements and records all at once, or not at all. Keys generated in code let whole graphs save atomically.
 ---

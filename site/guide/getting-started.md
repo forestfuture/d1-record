@@ -2,8 +2,8 @@
 
 A [Worker](https://developers.cloudflare.com/workers/) is a function that runs at Cloudflare's edge, and [D1](https://developers.cloudflare.com/d1/) is its SQLite database. d1-record sits between the two: you describe each table once as a **Model**, and your Worker reads and writes **records** instead of rows.
 
-::: warning Pre-release
-d1-record is 0.x. Its behavior is tested against real D1, but the API may still change before 1.0.
+::: warning Not on npm yet
+d1-record hasn't been published yet: the first release is coming. Its behavior is tested against real D1, but the API may still change before 1.0.
 :::
 
 ## Install
@@ -75,4 +75,4 @@ D1 can't keep a transaction open while your code awaits, so there's no `transact
 - [Saving and destroying](./persistence): what each method returns, and when it throws.
 - [D1's limits](./d1): what's different from a database with interactive transactions.
 
-Every example on this site is type-checked against the library, and the ones on this page run against a real D1 in the test suite.
+Every larger example on this site is type-checked against the library and runs against a real D1 in the test suite.

@@ -53,7 +53,7 @@ A record built through an association is saved with its owner, as Rails does. Bu
 
 - The built records are validated with the owner. An invalid article makes the author invalid ("Articles is invalid"), with its own errors on the article.
 - When the owner's key is **generated in code**, as here, everything is written in one atomic batch.
-- When **D1 generates** the key (an `INTEGER PRIMARY KEY`), the owner is written first and its records follow in a second batch, so the two writes aren't atomic together. Generate keys in code wherever a graph must save all at once.
+- When **D1 generates** the key (an `INTEGER PRIMARY KEY`), the key doesn't exist until the owner is written. So the owner is written first, its records follow in the next batch, and their own built records in the one after, a level at a time. The batches aren't atomic together: if a record fails at the second level (only a constraint error can, since everything was validated first), the save throws with the owner already saved and the record still new. Generate keys in code wherever a graph must save all at once.
 
 ### Writing through `belongsTo` and `hasOne`
 
@@ -85,7 +85,7 @@ Annotate `q` with the target's `Relation` type for full typing. A scope that use
 | `"restrictWithException"`  | The destroy throws `DeleteRestriction` while there are records                          |
 | `"restrictWithError"`      | The destroy returns `false`, with an error on the owner's `base`                        |
 
-Everything a destroy does, the owner's DELETE included, is written in one atomic batch: all of it happens, or none of it does. Strategies run after the owner's `beforeDestroy` callbacks, so an `abort()` leaves the records alone. Without a strategy, D1 enforces the foreign keys, so destroying an owner whose records still point at it throws `InvalidForeignKey`.
+Everything a destroy does, the owner's DELETE included, is written in one atomic batch: all of it happens, or none of it does. Strategies run after the owner's `beforeDestroy` callbacks, so an `abort()` leaves the records alone. Without a strategy, it's up to the database. If the table declares the foreign key (`user_id TEXT REFERENCES users (id)`), D1 enforces it, and destroying an owner whose records still point at it throws `InvalidForeignKey`. If it doesn't, the records are left pointing at a row that's gone.
 
 ## Writing to many at once
 

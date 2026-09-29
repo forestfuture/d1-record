@@ -34,7 +34,7 @@ Rules that matter here:
 - A test that passes on first run is a **guard**, not a red. Say so.
 - If a size or complexity limit trips, split the code. Don't raise the limit.
 - Keep `docs/contract.md` in sync with what you build. If you implement something differently from the contract, update it and tell the human.
-- Update the documentation site's guide page for the behavior too (`site/guide/`). Its larger examples live in `site/snippets/`, where `vp check` type-checks them against the library; the Getting started ones also run in `tests/integration/site-examples.test.ts`.
+- Update the documentation site's guide page for the behavior too (`site/guide/`). Its larger examples live in `site/snippets/`, where `vp check` type-checks them against the library; they also run against D1 in `tests/integration/site-examples.test.ts`, on their own schemas (`site/snippets/**/*.sql`).
 - Scope changes (pulling work in from another issue, or pushing it out) get a comment on both issues.
 
 ## 4. Review

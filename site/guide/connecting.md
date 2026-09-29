@@ -22,15 +22,15 @@ With [D1 read replication](https://developers.cloudflare.com/d1/best-practices/r
 
 `session` takes D1's own values:
 
-- `"first-unconstrained"`: the first query goes to any replica.
-- `"first-primary"`: the first query goes to the primary, for the freshest data.
+- `"first-unconstrained"`: the first query goes to whichever instance is nearest, the primary or a replica. It's the fastest, but may read slightly old data.
+- `"first-primary"`: the first query goes to the primary, so it sees every write made so far.
 - A **bookmark**: read at least as new as the moment that bookmark was taken.
 
 `db.bookmark()` is the session's latest bookmark. Hand it to the client, and pass it back on the next request, so a user never sees data older than their own last write:
 
 <<< @/snippets/guide/connecting.ts#session{ts}
 
-Every query goes through the session: reads, writes, uniqueness checks, association loads, preloads and batches. `db.bookmark()` is `null` before the first query, and throws `NoSession` on a Database opened without one. To use the primary for some queries and replicas for others, call `connect()` twice.
+After the first query, D1 keeps the session consistent: each later query reads data at least as new as the one before, including the request's own writes. Every query goes through the session: reads, writes, uniqueness checks, association loads, preloads and batches. `db.bookmark()` is `null` before the first query, and throws `NoSession` on a Database opened without one. To use the primary for some queries and replicas for others, call `connect()` twice.
 
 ## Watching queries
 

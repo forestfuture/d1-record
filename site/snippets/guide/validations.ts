@@ -1,4 +1,4 @@
-import { connect, Model } from "@forestfuture/d1-record";
+import { Model, type Database } from "@forestfuture/d1-record";
 
 // #region validates
 export class Account extends Model({
@@ -46,8 +46,7 @@ export class Booking extends Model({
 }
 // #endregion custom
 
-export async function examples(env: Env): Promise<unknown> {
-  const db = connect(env.DB);
+export async function errorsExample(db: Database) {
   // #region errors
   const account = db.model(Account).build({ email: "", handle: "a!" });
   await account.isValid(); // false
