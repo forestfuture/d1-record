@@ -30,15 +30,15 @@ export async function prepareDependents(
   const dependencies = Object.entries(model.associations)
     .filter(([, definition]) => definition.dependent !== undefined)
     .map(([name]) => resolveAssociation(model, name));
-  for (const dependency of dependencies) {
-    const reason = await checkRestriction(owner, dependency);
+  for (const association of dependencies) {
+    const reason = await checkRestriction(owner, association);
     if (reason !== undefined) return { status: "restricted", reason };
   }
   const stages: (() => PreparedWrite[])[] = [];
-  for (const dependency of dependencies) {
-    stages.push(...(await destroyRecords(owner, dependency, claimed)));
+  for (const association of dependencies) {
+    stages.push(...(await destroyRecords(owner, association, claimed)));
   }
-  const statements = dependencies.flatMap((dependency) => statementFor(owner, dependency));
+  const statements = dependencies.flatMap((association) => statementFor(owner, association));
   return {
     status: "ready",
     writes: () => [...stages.flatMap((stage) => stage()), statementWrite(statements)],
@@ -47,19 +47,19 @@ export async function prepareDependents(
 
 /** The association's records for this owner (a hasOne's first one only), with its scope. */
 function recordsOf(owner: ModelBase, association: ResolvedAssociation): Scoped<ModelBase> {
-  const records = association.records(owner[state].executor, association.keyOf(owner));
+  const records = association.linkedTo(owner[state].executor, association.keyOf(owner));
   return association.definition.kind === "hasOne" ? association.inOrder(records).limit(1) : records;
 }
 
 /** Why a restrict strategy refuses the destroy, if it does (Rails' wording). */
 async function checkRestriction(
   owner: ModelBase,
-  dependency: ResolvedAssociation,
+  association: ResolvedAssociation,
 ): Promise<string | undefined> {
-  const { name, definition } = dependency;
+  const { name, definition } = association;
   const { dependent, kind } = definition;
   if (dependent !== "restrictWithException" && dependent !== "restrictWithError") return undefined;
-  if (!(await recordsOf(owner, dependency).exists())) return undefined;
+  if (!(await recordsOf(owner, association).exists())) return undefined;
   if (dependent === "restrictWithException") {
     throw new DeleteRestriction(`Cannot delete record because of dependent ${name}`);
   }
@@ -77,12 +77,12 @@ async function checkRestriction(
  */
 async function destroyRecords(
   owner: ModelBase,
-  dependency: ResolvedAssociation,
+  association: ResolvedAssociation,
   claimed: Claimed,
 ): Promise<(() => PreparedWrite[])[]> {
-  if (dependency.definition.dependent !== "destroy") return [];
+  if (association.definition.dependent !== "destroy") return [];
   const stages: (() => PreparedWrite[])[] = [];
-  for (const record of await recordsOf(owner, dependency).toArray()) {
+  for (const record of await recordsOf(owner, association).toArray()) {
     const plan = await prepareDestroy(record, claimed);
     if (plan.status !== "ready") throw refusalError(record, plan, "destroy");
     stages.push(...plan.stages);
@@ -91,14 +91,14 @@ async function destroyRecords(
 }
 
 /** The statement for `deleteAll`, `delete` or `nullify`, if that's the strategy. */
-function statementFor(owner: ModelBase, dependency: ResolvedAssociation): CompiledSql[] {
-  const { dependent, foreignKey } = dependency.definition;
+function statementFor(owner: ModelBase, association: ResolvedAssociation): CompiledSql[] {
+  const { dependent, foreignKey } = association.definition;
   let statement: Statement;
   if (dependent === "deleteAll" || dependent === "delete") {
-    statement = recordsOf(owner, dependency).deleteAll();
+    statement = recordsOf(owner, association).deleteAll();
   } else if (dependent === "nullify") {
     // The foreign key was checked as a target attribute when the Model was prepared.
-    statement = recordsOf(owner, dependency).updateAll({ [foreignKey]: null } as never);
+    statement = recordsOf(owner, association).updateAll({ [foreignKey]: null } as never);
   } else {
     return [];
   }

@@ -69,7 +69,7 @@ async function loadByKeys(
 ): Promise<ModelBase[]> {
   const distinct = [...new Set(keys.filter((key) => key !== null && key !== undefined))];
   if (distinct.length === 0) return [];
-  const records = association.records(executor, distinct)[requirePreloadable](association.label);
+  const records = association.linkedTo(executor, distinct)[requirePreloadable](association.label);
   return association.inOrder(records).toArray();
 }
 

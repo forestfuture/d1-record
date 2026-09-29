@@ -1,3 +1,4 @@
+// associations.ts imports this module too; both uses are at call time, never at load.
 import { prepareModel, type AssociationDefinition } from "./associations.ts";
 import type { Executor } from "./executor.ts";
 import { associationOf, type ModelBase, type ModelClass } from "./model.ts";
@@ -61,21 +62,36 @@ export class ResolvedAssociation {
     return `${this.owner.name}.${this.name}`;
   }
 
-  /**
-   * The target's records with the association's scope applied: all of them, or those linked
-   * to `key` (one value, or a list of them).
-   */
-  records(executor: Executor, ...key: [] | [unknown]): Scoped<ModelBase> {
-    let relation = relationFor(executor, this.target) as Scoped<ModelBase>;
+  /** The target's records, with the association's scope applied. */
+  all(executor: Executor): Scoped<ModelBase> {
+    // Checked on every use, so replacing the target's associations after first use still throws.
+    prepareModel(this.target);
+    const relation = relationFor(executor, this.target) as Scoped<ModelBase>;
     const { scope } = this.definition;
-    if (scope !== undefined) {
-      relation = relation[applyScope](
-        this.label,
-        scope as Scope<ModelBase>,
-        [],
-      ) as Scoped<ModelBase>;
-    }
-    return key.length === 0 ? relation : relation.where({ [this.targetAttribute]: key[0] });
+    if (scope === undefined) return relation;
+    return relation[applyScope](this.label, scope as Scope<ModelBase>, []) as Scoped<ModelBase>;
+  }
+
+  /** The target's records linked to `key` (one value, or a list), with the scope applied. */
+  linkedTo(executor: Executor, key: unknown): Scoped<ModelBase> {
+    return this.all(executor).where({ [this.targetAttribute]: key });
+  }
+
+  /** Why records can't be created through the association for `owner`, which has no key. */
+  refusalFor(owner: ModelBase): string {
+    const { name } = this.owner;
+    return owner[state].isNew
+      ? `the ${name} hasn't been saved; save the ${name} first`
+      : `the ${name} has no ${this.ownerAttribute}`;
+  }
+
+  /**
+   * Whether `deleteAll()` on the association itself deletes the records (`dependent:
+   * "destroy"` or `"deleteAll"`) rather than nullifying their foreign key, as in Rails.
+   */
+  get deletesOnDeleteAll(): boolean {
+    const { dependent } = this.definition;
+    return dependent === "destroy" || dependent === "deleteAll";
   }
 
   /**
@@ -101,6 +117,8 @@ const resolved = new WeakMap<ModelClass, Map<string, ResolvedAssociation>>();
 
 /** The association `name` of `owner`, resolved once. */
 export function resolveAssociation(owner: ModelClass, name: string): ResolvedAssociation {
+  // Checked on every use, so replacing the owner's associations after first use still throws.
+  prepareModel(owner);
   const perModel = resolved.get(owner) ?? new Map<string, ResolvedAssociation>();
   resolved.set(owner, perModel);
   let association = perModel.get(name);

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { connect, InvalidModel, Model, type HasMany } from "../../src/index.ts";
+import { connect, InvalidModel, Model, UnknownAssociation, type HasMany } from "../../src/index.ts";
 
 // No D1 needed: these checks happen when a Model is first used.
 const db = connect({} as never);
@@ -74,5 +74,48 @@ describe("association declarations", () => {
       posts: Author.hasMany(() => Post, { foreignKey: "title" }),
     });
     expect(() => db.model(Author)).toThrow(/Author.*associations.*static/);
+  });
+
+  test("replacing an association's target Model's associations after first use throws on the next read", () => {
+    class Comment extends Model({ id: "integer", postId: "integer" }) {
+      static tableName = "comments";
+    }
+    class Article extends Model({ id: "integer" }) {
+      static tableName = "posts";
+      static associations = this.defineAssociations({
+        comments: this.hasMany(() => Comment, { foreignKey: "postId" }),
+      });
+      declare comments: HasMany<typeof Comment>;
+    }
+    class Writer extends Model({ id: "integer" }) {
+      static tableName = "users";
+      static associations = this.defineAssociations({
+        articles: this.hasMany(() => Article, { foreignKey: "id" }),
+      });
+      declare articles: HasMany<typeof Article>;
+    }
+    const writer = db.model(Writer).build();
+    writer.articles();
+
+    Article.associations = {} as typeof Article.associations;
+
+    expect(() => writer.articles()).toThrow(InvalidModel);
+  });
+
+  test("a subclass that replaces its associations without one no longer has it, as the contract says", () => {
+    class Author extends Model({ id: "integer" }) {
+      static tableName = "users";
+      static associations = this.defineAssociations({
+        posts: this.hasMany(() => Post, { foreignKey: "userId" }),
+      });
+      declare posts: HasMany<typeof Post>;
+    }
+    class Reader extends Author {
+      // Replaced by a plain object that leaves `posts` out (spreading the parent's would keep it).
+      static override associations = {} as typeof Author.associations;
+    }
+    db.model(Author);
+
+    expect(() => db.model(Reader).build().posts()).toThrow(UnknownAssociation);
   });
 });

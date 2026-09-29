@@ -189,7 +189,7 @@ function accessorProperty(name: string, definition: AssociationDefinition): Prop
  * what the owner holds (its owned collection) where it can.
  */
 function hasManyRelation(owner: ModelBase, association: ResolvedAssociation) {
-  const relation = association.records(owner[state].executor, association.keyOf(owner));
+  const relation = association.linkedTo(owner[state].executor, association.keyOf(owner));
   return relation[ofOwner](ownedCollection(owner, association));
 }
 

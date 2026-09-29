@@ -212,13 +212,12 @@ export class Relation<M extends ModelBase, S = {}> {
   /** For a hasMany of an owner: what the owner already knows about it. Not query data. */
   readonly #collection: OwnedCollection | undefined;
 
-  /** @internal Relations come from `db.model(Model)` and from other Relations. */
-  constructor(
-    executor: Executor,
-    model: ModelClass<M>,
-    query?: QueryDescription,
-    collection?: OwnedCollection,
-  ) {
+  /**
+   * Relations come from `db.model(Model)` and from other Relations, never `new Relation()`:
+   * what one is made from is the library's own business.
+   */
+  protected constructor(parts: unknown) {
+    const { executor, model, query, collection } = parts as RelationParts<M>;
     this.#executor = executor;
     this.#model = model;
     this.#query = query ?? allOf(model);
@@ -305,13 +304,13 @@ export class Relation<M extends ModelBase, S = {}> {
   }
 
   /**
-   * @internal This Relation as a hasMany of an owner: answered from what the owner holds once loaded, or,
-   * for an owner without a key, finding nothing stored and refusing `create`.
+   * @internal This Relation as a hasMany of an owner: answered from what the owner holds
+   * once loaded, or, for an owner without a key, finding nothing stored and refusing `create`.
    */
   [ofOwner](collection: OwnedCollection): Scoped<M, S> {
     const Class = this.constructor as new (...args: RelationArgs<M>) => Scoped<M, S>;
     const query = collection.refusal === undefined ? this.#query : { ...this.#query, none: true };
-    return new Class(this.#executor, this.#model, query, collection);
+    return new Class({ executor: this.#executor, model: this.#model, query, collection });
   }
 
   /**
@@ -713,7 +712,8 @@ export class Relation<M extends ModelBase, S = {}> {
       );
     }
     // A changed query no longer matches what the owner has loaded: the collection narrows.
-    return new Class(this.#executor, this.#model, query, this.#collection?.narrowed());
+    const collection = this.#collection?.narrowed();
+    return new Class({ executor: this.#executor, model: this.#model, query, collection });
   }
 
   async #load(query: QueryDescription): Promise<M[]> {
@@ -789,10 +789,13 @@ export class Relation<M extends ModelBase, S = {}> {
   }
 }
 
-/** The Relation constructor's arguments. */
-export type RelationArgs<M extends ModelBase> = [
-  executor: Executor,
-  model: ModelClass<M>,
-  query?: QueryDescription,
-  collection?: OwnedCollection,
-];
+/** What a Relation is made from; opaque outside the library. */
+interface RelationParts<M extends ModelBase> {
+  executor: Executor;
+  model: ModelClass<M>;
+  query?: QueryDescription;
+  collection?: OwnedCollection;
+}
+
+/** The Relation constructor's arguments, for the library's own `new`. */
+export type RelationArgs<M extends ModelBase> = [parts: RelationParts<M>];
