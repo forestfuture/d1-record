@@ -118,4 +118,48 @@ describe("association declarations", () => {
 
     expect(() => db.model(Reader).build().posts()).toThrow(UnknownAssociation);
   });
+
+  test("an inferred key that isn't declared is rejected, saying where it came from", () => {
+    class APIKey extends Model({ id: "integer" }) {
+      static tableName = "api_keys";
+      static associations = this.defineAssociations({
+        posts: this.hasMany(() => Post), // APIKey → apiKeyId, which Post doesn't declare
+      });
+    }
+    class Draft extends Model({ id: "integer" }) {
+      static tableName = "posts";
+      static associations = this.defineAssociations({
+        writer: this.belongsTo(() => Post), // writer → writerId, which Draft doesn't declare
+      });
+    }
+
+    expect(() => db.model(APIKey)).toThrow(
+      /APIKey association "posts": Post has no attribute "apiKeyId" \(inferred from the class name APIKey/,
+    );
+    expect(() => db.model(Draft)).toThrow(
+      /Draft association "writer": Draft has no attribute "writerId" \(inferred from the association name writer/,
+    );
+  });
+
+  test("associations declared without defineAssociations need an explicit foreignKey", () => {
+    class Plain extends Model({ id: "integer" }) {
+      static tableName = "users";
+      static associations = { posts: this.hasMany(() => Post) } as never;
+    }
+
+    expect(() => db.model(Plain)).toThrow(
+      /Plain association "posts" has no foreignKey.*defineAssociations/,
+    );
+  });
+
+  test("an explicit foreignKey wins over the inferred one", () => {
+    class Writer extends Model({ id: "integer" }) {
+      static tableName = "users";
+      static associations = this.defineAssociations({
+        posts: this.hasMany(() => Post, { foreignKey: "userId" }),
+      });
+    }
+
+    expect(() => db.model(Writer)).not.toThrow();
+  });
 });
