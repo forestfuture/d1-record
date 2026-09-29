@@ -97,6 +97,23 @@ describe("types", () => {
     expectTypeOf(typeOnly).toBeFunction();
   });
 
+  test("per-attribute change tracking is typed from the Model's attributes", () => {
+    // Checked by the type checker only; never called.
+    const typeOnly = (user: User) => {
+      expectTypeOf(user.attributeWas("email")).toEqualTypeOf<string>();
+      expectTypeOf(user.savedChangeTo("createdAt")).toEqualTypeOf<
+        [before: Date | null, after: Date | null] | undefined
+      >();
+      user.isAttributeChanged("isActive", { from: false, to: true });
+      user.restoreAttributes(["email", "isActive"]);
+      // @ts-expect-error unknown attribute
+      user.attributeWas("nope");
+      // @ts-expect-error from must have the attribute's type
+      user.hasSavedChangeTo("email", { from: 1 });
+    };
+    expectTypeOf(typeOnly).toBeFunction();
+  });
+
   test("find with one id returns a record, with several or an array, records", () => {
     const users = db.model(User);
 

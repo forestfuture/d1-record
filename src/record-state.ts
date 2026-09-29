@@ -41,6 +41,8 @@ export class RecordState {
   readonly #values: Record<string, unknown> = {};
   readonly #assigned = new Set<string>();
   readonly #snapshot = new Map<string, unknown>();
+  /** A new record's declared defaults in stored form, which `restore` returns attributes to. */
+  readonly #defaults = new Map<string, unknown>();
   #savedChanges: Changes = {};
   readonly #errors = new Errors();
   #abortReason: string | undefined;
@@ -154,7 +156,10 @@ export class RecordState {
   /** A new record: every attribute reads as null until assigned, and defaults are evaluated now. */
   build(attributes: Record<string, unknown>): void {
     for (const name of this.#model.attributeDefinitions.keys()) this.#values[name] = null;
-    for (const [name, value] of evaluateDefaults(this.#model)) this.write(name, value);
+    for (const [name, value] of evaluateDefaults(this.#model)) {
+      this.write(name, value);
+      this.#defaults.set(name, this.#storedForm(name));
+    }
     this.assign(attributes);
   }
 
@@ -257,6 +262,60 @@ export class RecordState {
   /** The changes the last successful save wrote (copies). */
   savedChanges(): Changes {
     return { ...this.#savedChanges };
+  }
+
+  /** An attribute's value as last loaded or saved (a copy); null for a new record. */
+  valueInDatabase(name: string): unknown {
+    this.read(name);
+    if (!this.#snapshot.has(name)) return null;
+    return readValue(this.#definition(name).type, this.#snapshot.get(name));
+  }
+
+  /**
+   * Whether the attribute has an unsaved change, optionally `from` and `to` given values
+   * (compared as stored, so dates by time and json by content).
+   */
+  isAttributeChanged(name: string, options: { from?: unknown; to?: unknown } = {}): boolean {
+    this.read(name);
+    if (!this.changedNames().includes(name)) return false;
+    return this.#matches(name, this.valueInDatabase(name), this.#values[name], options);
+  }
+
+  /** Whether the last save changed the attribute, optionally `from` and `to` given values. */
+  hasSavedChangeTo(name: string, options: { from?: unknown; to?: unknown } = {}): boolean {
+    const change = this.#savedChanges[name];
+    return change !== undefined && this.#matches(name, change[0], change[1], options);
+  }
+
+  /** Puts unsaved changes back: to the Snapshot, or to a new record's defaults (or null). */
+  restore(names: readonly string[] = this.changedNames()): void {
+    this.#requireNotDestroyed("be changed");
+    for (const name of names) {
+      const { type } = this.#definition(name);
+      if (this.#lifecycle !== "new") {
+        if (this.#snapshot.has(name))
+          this.#values[name] = readValue(type, this.#snapshot.get(name));
+      } else if (this.#defaults.has(name)) {
+        this.#values[name] = readValue(type, this.#defaults.get(name));
+      } else {
+        this.#values[name] = null;
+        this.#assigned.delete(name);
+      }
+    }
+  }
+
+  #matches(
+    name: string,
+    before: unknown,
+    after: unknown,
+    options: { from?: unknown; to?: unknown },
+  ): boolean {
+    const { type } = this.#definition(name);
+    const same = (a: unknown, b: unknown) => writeValue(type, a) === writeValue(type, b);
+    return (
+      (!("from" in options) || same(options.from, before)) &&
+      (!("to" in options) || same(options.to, after))
+    );
   }
 
   // Writes
