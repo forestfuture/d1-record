@@ -1,6 +1,6 @@
 import {
-  connect,
   Model,
+  type Database,
   type BelongsTo,
   type HasMany,
   type HasOne,
@@ -83,15 +83,17 @@ export class BlogPost extends Model({
   static tableName = "blog_posts";
 }
 
-export async function examples(env: Env, articleId: string): Promise<unknown> {
-  const db = connect(env.DB);
+export async function readExample(db: Database, articleId: string) {
   // #region read
   const article = await db.model(Article).find(articleId);
   const author = await article.author(); // an Author, or null
   const profile = await author?.profile(); // a Profile, or null
   const latest = await author?.articles().published().order({ createdAt: "desc" }).first();
   // #endregion read
+  return { author, profile, latest };
+}
 
+export async function autosaveExample(db: Database) {
   // #region autosave
   const ada = db.model(Author).build({ name: "Ada" });
   ada.articles().build({ title: "Notes on the Analytical Engine" });
@@ -99,11 +101,18 @@ export async function examples(env: Env, articleId: string): Promise<unknown> {
   ada.profile.build({ bio: "Mathematician" });
   await ada.saveOrThrow(); // the author, both articles and the profile, in one batch
   // #endregion autosave
+  return ada;
+}
 
+export async function createThroughExample(db: Database, articleId: string) {
+  const article = await db.model(Article).find(articleId);
   // #region create-through
   const comment = await article.comments().create({ body: "Lovely." }); // articleId filled in
   // #endregion create-through
+  return comment;
+}
 
+export async function writersExample(db: Database, ada: Author) {
   // #region writers
   const draft = db.model(Article).build({ title: "Untitled" });
   draft.author.set(ada); // sets draft.authorId, and ada is its loaded author
@@ -114,7 +123,10 @@ export async function examples(env: Env, articleId: string): Promise<unknown> {
   another.author.set(grace); // a new author: saved first, when the article is
   await another.save();
   // #endregion writers
+  return { draft, another, grace };
+}
 
+export async function preloadExample(db: Database) {
   // #region preload
   const authors = await db
     .model(Author)
@@ -126,9 +138,11 @@ export async function examples(env: Env, articleId: string): Promise<unknown> {
     console.log(each.name, articles.length, each.loaded("profile")?.bio);
   }
   // #endregion preload
+  return authors;
+}
 
+export async function statementsExample(article: Article) {
   // #region statements
   await article.comments().deleteAll().run(); // one DELETE for the article's comments
   // #endregion statements
-  return { profile, latest, comment };
 }

@@ -1,6 +1,6 @@
 # Validations
 
-Validations are declared in a Model's `static {}` block with `this.validates(attribute, rules)`. The attribute name and the rules are typed against the Model.
+Validations are declared in a Model's `static {}` block with `this.validates(attribute, rules)`. The attribute name is typed against the Model, so a misspelled attribute is a compile error, and so is the record the `if` option receives.
 
 <<< @/snippets/guide/validations.ts#validates{ts}
 

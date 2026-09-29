@@ -25,11 +25,21 @@ These mean the code needs to change, rather than that something happened at runt
 | `MissingAttribute`     | reading an attribute that `select` didn't load                                  |
 | `UnknownAssociation`   | an association that isn't declared                                              |
 | `AssociationNotLoaded` | `loaded()` on an association that wasn't loaded                                 |
-| `IncompatibleRelation` | combining Relations that can't be combined, or preloading a limited scope       |
+| `IncompatibleRelation` | two Relations or writes can't be used together (below)                          |
 | `IrreversibleOrder`    | `last()` on a Relation ordered by an `sql` fragment                             |
 | `DeleteRestriction`    | destroying an owner whose `restrictWithException` association still has records |
 | `NoDatabase`           | using a record made with `new` rather than `build`                              |
 | `NoSession`            | `db.bookmark()` on a Database opened without a session                          |
+
+### When Relations are incompatible
+
+`IncompatibleRelation` means you've combined things that can't produce a correct query or write:
+
+- **`or()` or `merge()`** with a Relation of another Model, or from another Database. `or()` also needs both sides to have the same `select`, order, `limit`, `offset`, `distinct` and `includes`, since only their conditions can be combined.
+- **`db.batch([...])`** with a statement or record from another Database. A batch runs on one connection.
+- **`includes`** with `select(...).distinct()`. Preloading needs the keys, and adding them would undo the `distinct`.
+- **Preloading an association scope** that uses `limit`, `offset` or `distinct`. One preload query serves every owner, so the limit would apply to all of their records together.
+- **`updateAll` or `deleteAll`** after `distinct()`.
 
 ## Constraint errors
 

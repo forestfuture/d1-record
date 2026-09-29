@@ -1,20 +1,12 @@
 {
-  // Examples are written as a Worker project would write them: bundler resolution, Workers
-  // types, and the package's own name, mapped here to the library's source.
+  // Examples are written as a Worker project would write them: bundler resolution and Workers
+  // types. The package's own name comes from the root config's `paths`, mapped to src/.
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "target": "es2022",
-    "lib": ["es2023"],
     "module": "esnext",
     "moduleResolution": "bundler",
     "types": ["@cloudflare/workers-types"],
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUncheckedIndexedAccess": true,
-    "noEmit": true,
-    "isolatedModules": true,
-    "verbatimModuleSyntax": true,
-    "skipLibCheck": true,
-    "paths": { "@forestfuture/d1-record": ["../../src/index.ts"] }
+    "declaration": false
   },
   "include": ["."]
 }
