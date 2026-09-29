@@ -17,7 +17,7 @@ import {
   UnknownAssociation,
 } from "./errors.ts";
 import { destroyLifecycle, reloadRecord, saveLifecycle, validateRecord } from "./lifecycle.ts";
-import { inferForeignKey } from "./naming.ts";
+import { withForeignKeys } from "./foreign-keys.ts";
 import { RecordStatement } from "./record-statement.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
 import type {
@@ -104,16 +104,10 @@ export class ModelBase {
     associations: S,
   ): { [K in keyof S]: AssociationDefinition } {
     const model = this as unknown as typeof ModelBase;
-    // A foreign key left out is inferred here, where the name and the declaring class are known.
-    const defined = Object.entries(associations).map(([name, declaration]) => [
-      name,
-      declaration.foreignKey === undefined
-        ? { ...declaration, ...inferForeignKey(declaration.kind, name, model.name) }
-        : declaration,
-    ]);
-    return { ...model.associations, ...Object.fromEntries(defined) } as {
+    const defined = withForeignKeys(associations, model.name) as {
       [K in keyof S]: AssociationDefinition;
     };
+    return { ...model.associations, ...defined };
   }
 
   // The target and keys are checked on first use, not typed: typing them makes Models that
