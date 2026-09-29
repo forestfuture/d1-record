@@ -6,6 +6,7 @@ import {
   ownerKeysKnown,
   parentKeysKnown,
   parentsOf,
+  unsavedParents,
   type Autosave,
 } from "./autosave.ts";
 import { prepareDependents } from "./dependents.ts";
@@ -173,9 +174,11 @@ function aborted(record: ModelBase): { status: "aborted"; reason: string } {
  * association's name.
  */
 async function validateAutosaves(record: ModelBase, claimed: Claimed): Promise<void> {
-  for (const { name, record: parent } of parentsOf(record, claimed)) {
-    if ((await validation(parent, claimed)) !== "valid")
+  for (const { name, record: parent } of parentsOf(record)) {
+    if (!parent[state].isNew || claimed.has(parent)) continue;
+    if ((await validation(parent, claimed)) !== "valid") {
       record[state].errors.add(name, "is invalid");
+    }
   }
   for (const { name, records } of autosavesOf(record, claimed)) {
     let valid = true;
@@ -218,11 +221,8 @@ export async function prepareSave(record: ModelBase, claimed: Claimed): Promise<
 async function prepareWrites(record: ModelBase, claimed: Claimed): Promise<SavePlan> {
   claimed.add(record);
   // New belongsTo records first: the record needs their keys (Rails' belongs_to autosave).
-  const parents = parentsOf(record, claimed);
-  const parentPlans = await prepareEach(
-    parents.map((parent) => parent.record),
-    claimed,
-  );
+  const parents = parentsOf(record);
+  const parentPlans = await prepareEach(unsavedParents(parents, claimed), claimed);
   if (!Array.isArray(parentPlans)) return parentPlans;
   const isInsert = record[state].isNew;
   if (!(await beforeWrite(record, isInsert))) return aborted(record);

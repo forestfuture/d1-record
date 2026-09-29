@@ -331,6 +331,7 @@ export class ModelBase {
     this: R,
     name: K,
   ): [before: AttributesOf<R>[K], after: AttributesOf<R>[K]] | undefined {
+    this[state].read(name);
     const change = this[state].savedChanges()[name];
     return change === undefined
       ? undefined
@@ -351,6 +352,7 @@ export class ModelBase {
     this: R,
     name: K,
   ): AttributesOf<R>[K] {
+    this[state].read(name);
     const change = this[state].savedChanges()[name];
     return (
       change === undefined ? this[state].valueInDatabase(name) : change[0]

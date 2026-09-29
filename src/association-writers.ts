@@ -107,13 +107,19 @@ export function hasOneAccessor(
     async create(attributes: Record<string, unknown> = {}) {
       requireSavedOwner(owner, definition);
       const record = buildOne(owner, name, definition, attributes);
-      await record.save();
+      // Kept if it doesn't save, so saving the owner tries again, as Rails does.
+      if (!(await record.save())) owner[state].addBuilt(name, record);
       return record;
     },
     async createOrThrow(attributes: Record<string, unknown> = {}) {
       requireSavedOwner(owner, definition);
       const record = buildOne(owner, name, definition, attributes);
-      await record.saveOrThrow();
+      try {
+        await record.saveOrThrow();
+      } catch (error) {
+        owner[state].addBuilt(name, record);
+        throw error;
+      }
       return record;
     },
   });
