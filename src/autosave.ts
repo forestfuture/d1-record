@@ -40,12 +40,20 @@ export function ownerKeysKnown(owner: ModelBase, autosaves: readonly Autosave[])
   return autosaves.every((autosave) => ownerValue(owner, autosave) !== null);
 }
 
-/** Points every autosaved record at its owner. */
+/**
+ * Points every autosaved record at its owner. A hasOne's record stays the owner's loaded
+ * association under the owner's new key.
+ */
 export function linkRecords(owner: ModelBase, autosaves: readonly Autosave[]): void {
   for (const autosave of autosaves) {
     const value = ownerValue(owner, autosave);
+    const { definition, name } = autosave;
     for (const record of autosave.records) {
-      record[state].write(autosave.definition.foreignKey, value);
+      record[state].write(definition.foreignKey, value);
+      if (definition.kind === "hasOne") {
+        const attribute = linkOf(definition, modelOf(owner), definition.target()).ownerAttribute;
+        owner[state].cacheAssociation(name, { attribute, key: value, value: record });
+      }
     }
   }
 }
@@ -57,13 +65,26 @@ export interface ParentSave {
   record: ModelBase;
 }
 
-/** The new records `owner` points at through belongsTo, not yet claimed by the write. */
-export function parentsOf(owner: ModelBase, claimed: ReadonlySet<ModelBase>): ParentSave[] {
+/**
+ * The records `owner` was pointed at through belongsTo while they were new. Its foreign keys
+ * are linked to them when it's saved, even if they were saved on their own since (Rails links
+ * whenever the association was set); the ones still new and unclaimed are saved first.
+ */
+export function parentsOf(owner: ModelBase): ParentSave[] {
   const model = modelOf(owner);
   return owner[state]
     .parents()
-    .filter(([, record]) => record[state].isNew && !claimed.has(record))
     .map(([name, record]) => ({ name, definition: associationOf(model, name), record }));
+}
+
+/** The parents to save before `owner`: new, and not already part of the write. */
+export function unsavedParents(
+  parents: readonly ParentSave[],
+  claimed: ReadonlySet<ModelBase>,
+): ModelBase[] {
+  return parents
+    .map(({ record }) => record)
+    .filter((record) => record[state].isNew && !claimed.has(record));
 }
 
 /** The attribute of the parent its owner's foreign key holds (its primary key, by default). */
@@ -83,5 +104,6 @@ export function linkParents(owner: ModelBase, parents: readonly ParentSave[]): v
     const key = record[state].read(parentKeyOf(owner, parent));
     owner[state].write(definition.foreignKey, key);
     owner[state].cacheAssociation(name, { attribute: definition.foreignKey, key, value: record });
+    owner[state].setParent(name, undefined);
   }
 }

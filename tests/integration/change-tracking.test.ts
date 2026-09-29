@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, MissingAttribute, Model } from "../../src/index.ts";
+import { connect, MissingAttribute, Model, RecordDestroyed } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
@@ -183,6 +183,46 @@ describe("change tracking", () => {
       const [partial] = await connect(binding).model(User).select("email").toArray();
 
       expect(() => partial!.attributeWas("role")).toThrow(MissingAttribute);
+      expect(() => partial!.savedChangeTo("role")).toThrow(MissingAttribute);
+      expect(() => partial!.hasSavedChangeTo("role")).toThrow(MissingAttribute);
+      expect(() => partial!.attributeBeforeLastSave("role")).toThrow(MissingAttribute);
+    });
+
+    test("a new record's value before a change is its declared default, as in Rails", () => {
+      const draft = connect(binding).model(Draft).build({ email: "a@example.com" });
+      draft.role = "admin";
+
+      expect(draft.attributeWas("role")).toBe("member");
+      expect(draft.isAttributeChanged("role", { from: "member", to: "admin" })).toBe(true);
+      expect(draft.attributeWas("email")).toBeNull();
+    });
+
+    test("after a create, savedChangeTo() runs from null", async () => {
+      const user = await connect(binding)
+        .model(User)
+        .createOrThrow({ id: 2, email: "b@example.com" });
+
+      expect(user.savedChangeTo("email")).toEqual([null, "b@example.com"]);
+    });
+
+    test("json compares by content, and from: null is a real condition", async () => {
+      const key = await connect(binding).model(ApiKey).find("k1");
+      const user = await connect(binding).model(User).find(1);
+      key.scopes = ["read", "write"];
+      user.role = null;
+
+      expect(key.isAttributeChanged("scopes", { from: ["read"], to: ["read", "write"] })).toBe(
+        true,
+      );
+      expect(user.isAttributeChanged("role", { from: "member", to: null })).toBe(true);
+      expect(user.isAttributeChanged("role", { from: null })).toBe(false);
+    });
+
+    test("a destroyed record can't restore its attributes", async () => {
+      const user = await connect(binding).model(User).find(1);
+      await user.destroyOrThrow();
+
+      expect(() => user.restoreAttributes()).toThrow(RecordDestroyed);
     });
   });
 });

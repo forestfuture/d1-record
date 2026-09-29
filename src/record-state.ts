@@ -264,11 +264,15 @@ export class RecordState {
     return { ...this.#savedChanges };
   }
 
-  /** An attribute's value as last loaded or saved (a copy); null for a new record. */
+  /**
+   * An attribute's value as last loaded or saved (a copy). A new record's is its declared
+   * default, or null, as Rails' `attribute_was` is.
+   */
   valueInDatabase(name: string): unknown {
     this.read(name);
-    if (!this.#snapshot.has(name)) return null;
-    return readValue(this.#definition(name).type, this.#snapshot.get(name));
+    const { type } = this.#definition(name);
+    if (this.#snapshot.has(name)) return readValue(type, this.#snapshot.get(name));
+    return this.#defaults.has(name) ? readValue(type, this.#defaults.get(name)) : null;
   }
 
   /**
@@ -283,6 +287,7 @@ export class RecordState {
 
   /** Whether the last save changed the attribute, optionally `from` and `to` given values. */
   hasSavedChangeTo(name: string, options: { from?: unknown; to?: unknown } = {}): boolean {
+    this.read(name);
     const change = this.#savedChanges[name];
     return change !== undefined && this.#matches(name, change[0], change[1], options);
   }

@@ -3,6 +3,7 @@ import {
   connect,
   Model,
   RecordNotSaved,
+  type HasMany,
   type BelongsTo,
   type HasOne,
   type QueryEvent,
@@ -26,6 +27,8 @@ class User extends Model({
   }
 }
 
+const log: string[] = [];
+
 class Post extends Model({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
@@ -35,9 +38,23 @@ class Post extends Model({
 
   static associations = this.defineAssociations({
     author: this.belongsTo(() => User, { foreignKey: "userId" }),
+    comments: this.hasMany(() => Comment, { foreignKey: "postId" }),
   });
 
   declare author: BelongsTo<typeof User>;
+  declare comments: HasMany<typeof Comment>;
+
+  static {
+    this.beforeSave((post) => void log.push(`post sees user ${String(post.userId)}`));
+  }
+}
+
+class Comment extends Model({
+  id: { type: "integer", null: false },
+  postId: "integer",
+  body: "string",
+}) {
+  static tableName = "comments";
 }
 
 class Profile extends Model({
@@ -46,6 +63,10 @@ class Profile extends Model({
   bio: "string",
 }) {
   static tableName = "profiles";
+
+  static {
+    this.validates("bio", { presence: true });
+  }
 }
 
 let counter = 0;
@@ -68,6 +89,12 @@ class Account extends Model({
   });
 
   declare apiKey: BelongsTo<typeof ApiKey>;
+
+  static {
+    this.beforeSave(
+      (account) => void log.push(`account sees key ${String(account.externalAccountId)}`),
+    );
+  }
 }
 
 describe("building and setting hasOne and belongsTo", () => {
@@ -81,7 +108,9 @@ describe("building and setting hasOne and belongsTo", () => {
   });
   afterAll(() => dispose());
   beforeEach(async () => {
+    log.length = 0;
     await binding.batch([
+      binding.prepare("DELETE FROM comments"),
       binding.prepare("DELETE FROM posts"),
       binding.prepare("DELETE FROM profiles"),
       binding.prepare("DELETE FROM users"),
@@ -168,9 +197,85 @@ describe("building and setting hasOne and belongsTo", () => {
       expect(post.userId).toBe(author.id);
       expect(post.changed()).toEqual(["userId"]);
     });
+
+    test("a new record saved on its own before the owner still gets linked when the owner saves", async () => {
+      const post = db().model(Post).build({ title: "Hello again" });
+      const author = post.author.build({ email: "new@example.com" });
+
+      await author.saveOrThrow();
+      await post.saveOrThrow();
+
+      expect(post.userId).toBe(author.id);
+    });
+
+    test("set() replaces an earlier set() before the save, and reload() forgets a built record", async () => {
+      const database = db();
+      const post = await database.model(Post).find(10);
+      post.author.build({ email: "dropped@example.com" });
+      post.author.set(await database.model(User).find(2));
+      await post.saveOrThrow();
+
+      post.author.build({ email: "also-dropped@example.com" });
+      await post.reload();
+      await post.saveOrThrow();
+
+      expect(post.userId).toBe(2);
+      expect(await database.model(User).count()).toBe(2);
+    });
+
+    test("with a key generated in code, the owner's before-callbacks already see its foreign key", async () => {
+      const account = db().model(Account).build({ id: 1 });
+      const key = account.apiKey.build({ label: "deploy" });
+
+      await account.saveOrThrow();
+
+      expect(log).toEqual([`account sees key ${key.id}`]);
+    });
+
+    test("with a key D1 generates, the owner's before-callbacks run before it exists", async () => {
+      const post = db().model(Post).build({ title: "Hello again" });
+      post.author.build({ email: "new@example.com" });
+
+      await post.saveOrThrow();
+
+      expect(log).toEqual(["post sees user null"]);
+    });
+
+    test("a new author, the post and the post's new comments save together, in order", async () => {
+      const post = db().model(Post).build({ title: "Hello again" });
+      const author = post.author.build({ email: "new@example.com" });
+      const comment = post.comments().build({ body: "First!" });
+
+      await post.saveOrThrow();
+
+      expect([post.userId, comment.postId]).toEqual([author.id, post.id]);
+    });
   });
 
   describe("hasOne", () => {
+    test("an unsaved owner reads its built record without a query, before and after saving", async () => {
+      const user = db().model(User).build({ email: "new@example.com" });
+      const profile = user.profile.build({ bio: "Hi" });
+      events.length = 0;
+
+      expect(await user.profile()).toBe(profile);
+      await user.saveOrThrow();
+      events.length = 0;
+      expect(await user.profile()).toBe(profile);
+      expect(events).toHaveLength(0);
+    });
+
+    test("a create() that fails is kept, so saving the owner tries it again, as in Rails", async () => {
+      const user = await db().model(User).find(1);
+      const profile = await user.profile.create({ bio: "" });
+      expect(profile.isPersisted()).toBe(false);
+
+      profile.bio = "Fixed";
+      await user.saveOrThrow();
+
+      expect(profile.isPersisted()).toBe(true);
+    });
+
     test("build() makes a record pointing at a saved owner, which reads it without a query and saves it", async () => {
       const database = db();
       const user = await database.model(User).find(2);

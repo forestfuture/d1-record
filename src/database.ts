@@ -143,7 +143,7 @@ async function recordEntry(statement: RecordStatement, claimed: Claimed): Promis
   if (plan.stages.length > 1) {
     const { name } = record.constructor;
     throw new RecordNotSaved(
-      `${name} can't autosave its new records in a batch: they need the ${name}'s key, which D1 only generates when it's written. Generate keys in code, or save it on its own`,
+      `${name} can't be saved in a batch with the new records it autosaves: one of them needs a key D1 only generates when a record is written (the ${name}'s, or a new record it points at). Generate keys in code, or save it on its own`,
     );
   }
   return { writes: () => plan.stages.flatMap((stage) => stage()), result: () => record };
