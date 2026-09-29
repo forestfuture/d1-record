@@ -245,7 +245,7 @@ describe("types", () => {
       // @ts-expect-error Relations come from db.model() and other Relations
       void new Relation();
       // @ts-expect-error a record statement keeps its record's type
-      const statement: RecordStatement<Other> = user.saveStatement();
+      const statement: RecordStatement<Other> = user.toSave();
       void statement;
     };
     expectTypeOf(typeOnly).toBeFunction();
@@ -255,7 +255,7 @@ describe("types", () => {
     // Checked by the type checker only; never called.
     const typeOnly = async (user: User) => {
       const [saved, meta] = await db.batch([
-        user.saveStatement(),
+        user.toSave(),
         db.model(User).where({ id: 1 }).deleteAll(),
       ]);
       expectTypeOf(saved).toEqualTypeOf<User>();

@@ -303,7 +303,7 @@ await db.transaction(async (tx) => {
 });
 ```
 
-An interactive transaction callback cannot be faithfully guaranteed by D1's preconstructed batch model. Make this limitation explicit in documentation. A carefully designed unit-of-work API is possible, and d1-record now has one: record statements (`user.saveStatement()`) in `db.batch([...])`, with autosave (see the contract, *Batches* and *Associations*).
+An interactive transaction callback cannot be faithfully guaranteed by D1's preconstructed batch model. Make this limitation explicit in documentation. A carefully designed unit-of-work API is possible, and d1-record now has one: record statements (`user.toSave()`) in `db.batch([...])`, with autosave (see the contract, *Batches* and *Associations*).
 
 For replica-aware configurations, retain a primary route for writes and immediate read-after-write operations. Prefer a D1 session when the binding/configuration supports it.
 

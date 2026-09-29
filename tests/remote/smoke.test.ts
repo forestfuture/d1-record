@@ -180,7 +180,7 @@ describe.skipIf(!configured)("remote D1 smoke", () => {
     const first = db.model(User).build({ email: "a@example.com" });
     const second = db.model(User).build({ email: "b@example.com" });
 
-    await db.batch([first.saveStatement(), second.saveStatement()]);
+    await db.batch([first.toSave(), second.toSave()]);
 
     expect([first.isPersisted(), second.isPersisted()]).toEqual([true, true]);
     expect(first.id).not.toBe(second.id);
