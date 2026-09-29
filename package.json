@@ -38,6 +38,7 @@
     "dev": "vp pack --watch",
     "test": "vp test",
     "test:remote": "vp test --project remote",
+    "check:public-types": "node scripts/check-public-types.mjs",
     "check": "vp check",
     "prepublishOnly": "vp run build",
     "prepare": "vp config",

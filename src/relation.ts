@@ -176,13 +176,13 @@ export type IncludeSpec<M> =
         | readonly IncludeSpec<TargetRecord<M[K]>>[];
     };
 
-/** The library's key for checking a Relation can be preloaded in groups; not exported. */
+/** @internal The library's key for checking a Relation can be preloaded in groups. */
 export const requirePreloadable = Symbol("requirePreloadable");
 
-/** The library's key for making a hasMany Relation of an owner; not exported. */
+/** @internal The library's key for making a hasMany Relation of an owner. */
 export const ofOwner = Symbol("ofOwner");
 
-/** The library's key for running a scope on a Relation; not exported from the package. */
+/** @internal The library's key for running a scope on a Relation. */
 export const applyScope = Symbol("applyScope");
 
 /** A scope: receives the current Relation and its arguments, and returns a changed Relation. */
@@ -212,6 +212,7 @@ export class Relation<M extends ModelBase, S = {}> {
   /** For a hasMany of an owner: what the owner already knows about it. Not query data. */
   readonly #collection: OwnedCollection | undefined;
 
+  /** @internal Relations come from `db.model(Model)` and from other Relations. */
   constructor(
     executor: Executor,
     model: ModelClass<M>,
@@ -304,7 +305,7 @@ export class Relation<M extends ModelBase, S = {}> {
   }
 
   /**
-   * This Relation as a hasMany of an owner: answered from what the owner holds once loaded, or,
+   * @internal This Relation as a hasMany of an owner: answered from what the owner holds once loaded, or,
    * for an owner without a key, finding nothing stored and refusing `create`.
    */
   [ofOwner](collection: OwnedCollection): Scoped<M, S> {
@@ -314,7 +315,7 @@ export class Relation<M extends ModelBase, S = {}> {
   }
 
   /**
-   * This Relation, if an association scope can be preloaded with it: a limit, offset or
+   * @internal This Relation, if an association scope can be preloaded with it: a limit, offset or
    * distinct would apply to every owner's records together, not to each owner's.
    */
   [requirePreloadable](association: string): this {
@@ -671,7 +672,7 @@ export class Relation<M extends ModelBase, S = {}> {
     return this.#query.none ? [] : this.#executor.all(query);
   }
 
-  /** Runs a scope on this Relation, checking that it returned a Relation of the same Model. */
+  /** @internal Runs a scope on this Relation, checking it returned a Relation of the same Model. */
   [applyScope](name: string, scope: Scope<M>, args: unknown[]): Relation<M> {
     const result: unknown = scope(this as Relation<M>, ...args);
     if (!(result instanceof Relation) || result.#model !== this.#model) {

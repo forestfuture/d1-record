@@ -213,7 +213,7 @@ export class ModelBase {
     declare(this, "afterDestroy", callback as Callback<ModelBase>);
   }
 
-  /** This record's values, lifecycle and Snapshot; only `RecordState` changes them. */
+  /** @internal This record's values, lifecycle and Snapshot; only `RecordState` changes them. */
   readonly [state] = new RecordState(this.constructor as ModelClass);
 
   /** The errors from the last validation run. */

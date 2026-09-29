@@ -3,7 +3,9 @@
   // accidental Buffer or node:fs import fails type checking (see ADR-0002).
   "extends": "../tsconfig.json",
   "compilerOptions": {
-    "types": ["@cloudflare/workers-types"]
+    "types": ["@cloudflare/workers-types"],
+    // Declarations marked `/** @internal */` stay out of the published types.
+    "stripInternal": true
   },
   "include": ["."]
 }
