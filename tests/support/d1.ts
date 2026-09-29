@@ -1,15 +1,16 @@
 import { readFileSync } from "node:fs";
 import { Miniflare } from "miniflare";
 
-const schema = readFileSync(new URL("../fixtures/schema.sql", import.meta.url), "utf8");
+const fixtureSchema = new URL("../fixtures/schema.sql", import.meta.url);
 
 export type TestDatabase = Awaited<ReturnType<Miniflare["getD1Database"]>>;
 
 /**
  * Starts an isolated, in-memory D1 database backed by workerd and applies the
- * fixture schema. Call once per test file and dispose of it in `afterAll`.
+ * fixture schema (or another, such as a documentation example's migration).
+ * Call once per test file and dispose of it in `afterAll`.
  */
-export async function createTestDatabase(): Promise<{
+export async function createTestDatabase(schemaFile: URL = fixtureSchema): Promise<{
   db: TestDatabase;
   dispose: () => Promise<void>;
 }> {
@@ -19,7 +20,7 @@ export async function createTestDatabase(): Promise<{
     d1Databases: ["DB"],
   });
   const db = await mf.getD1Database("DB");
-  const statements = schema
+  const statements = readFileSync(schemaFile, "utf8")
     .split(/;\s*$/m)
     .map((statement) => statement.trim())
     .filter(Boolean)

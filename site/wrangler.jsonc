@@ -1,0 +1,13 @@
+// The documentation site: static assets only, at docs.forestfuture.dev/d1-record.
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "d1-record-docs",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    // VitePress builds into dist/d1-record (base "/d1-record/"), so paths match URLs.
+    "directory": ".vitepress/dist",
+    "not_found_handling": "404-page",
+  },
+  "workers_dev": false,
+  "routes": [{ "pattern": "docs.forestfuture.dev/d1-record*", "zone_name": "forestfuture.dev" }],
+}
