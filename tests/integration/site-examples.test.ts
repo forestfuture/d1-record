@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { connect } from "../../src/index.ts";
 import {
   Article,
@@ -87,7 +87,11 @@ describe("the guide's examples", () => {
     ({ db: binding, dispose } = await createTestDatabase(schema));
   });
   afterAll(() => dispose());
+  // The examples log what they show; the tests check it here rather than print it.
+  const log = vi.spyOn(console, "log").mockImplementation(() => {});
+  afterAll(() => log.mockRestore());
   beforeEach(async () => {
+    log.mockClear();
     await binding.batch([
       binding.prepare("DELETE FROM comments"),
       binding.prepare("DELETE FROM profiles"),
@@ -117,6 +121,7 @@ describe("the guide's examples", () => {
       type: "blank",
       message: "can't be blank",
     });
+    expect(log).toHaveBeenCalledWith(5);
   });
 
   test("Validations: a custom rule added in afterValidation makes the record invalid", async () => {
@@ -175,6 +180,8 @@ describe("the guide's examples", () => {
 
     expect(authors.map((author) => author.name).sort()).toEqual(["Ada", "Mary"]);
     expect(queries).toHaveLength(4);
+    expect(log).toHaveBeenCalledWith("Mary", 1, "Poet");
+    expect(log).toHaveBeenCalledWith("Ada", 2, "Mathematician");
   });
 
   test("Batches: statements, many rows, an atomic batch, and records in a batch", async () => {
@@ -185,6 +192,7 @@ describe("the guide's examples", () => {
     const graceId = await batches.batchExample(db);
 
     expect(meta.changes).toBe(1);
+    expect(log).toHaveBeenCalledWith(1, meta.last_row_id);
     expect(
       await db
         .model(Article)
