@@ -75,7 +75,7 @@ export class User extends Model({
   static tableName = "users";
 
   static associations = this.defineAssociations({
-    posts: this.hasMany(() => Post, { foreignKey: "userId", dependent: "destroy" }),
+    posts: this.hasMany(() => Post, { dependent: "destroy" }), // foreign key: Post's userId
   });
   declare posts: HasMany<typeof Post>;
 
@@ -100,7 +100,7 @@ export class Post extends Model({
   static tableName = "posts";
 
   static associations = this.defineAssociations({
-    // Keys name attributes, as everything but SQL does: userId (column: user_id).
+    // Named author, not user, so the key is given: an attribute, as everywhere but SQL.
     author: this.belongsTo(() => User, { foreignKey: "userId" }),
   });
   declare author: BelongsTo<typeof User>;
@@ -179,7 +179,7 @@ d1-record follows Rails wherever D1 allows, and says so where it can't:
 
 ## Coming from Rails
 
-Most of it will feel familiar. The main difference is naming: attributes are camelCase and map to snake_case columns (`createdAt` ↔ `created_at`), and everything names **attributes**, association keys included, so it's `foreignKey: "userId"` where Rails writes `foreign_key: :user_id`. Column names only appear in `sql` fragments. Methods that raise end in `OrThrow` instead of `!` (`saveOrThrow` for `save!`), and predicates start with `is`/`has` instead of ending in `?` (`isNewRecord()` for `new_record?`).
+Most of it will feel familiar. The main difference is naming: attributes are camelCase and map to snake_case columns (`createdAt` ↔ `created_at`), and everything names **attributes**, association keys included. Foreign keys are inferred as in Rails (`has_many :posts` on `User` uses `userId`); when you do give one, it's `foreignKey: "userId"` where Rails writes `foreign_key: :user_id`. Column names only appear in `sql` fragments. Methods that raise end in `OrThrow` instead of `!` (`saveOrThrow` for `save!`), and predicates start with `is`/`has` instead of ending in `?` (`isNewRecord()` for `new_record?`).
 
 ## How it compares
 

@@ -23,8 +23,12 @@ type AssociationScope = (relation: any) => unknown;
 
 /** What an association declaration takes: the keys that link the Models, and a scope. */
 export interface AssociationOptions {
-  /** The attribute holding the link: on the owner for belongsTo, on the target otherwise. */
-  foreignKey: string;
+  /**
+   * The attribute holding the link: on the owner for belongsTo, on the target otherwise.
+   * Inferred when left out, as Rails does: a belongsTo's name + `Id` (`author` → `authorId`),
+   * or for a hasMany/hasOne the owner's class name + `Id` (`User` → `userId`).
+   */
+  foreignKey?: string;
   /** The attribute the foreign key points at; defaults to the pointed-at Model's primary key. */
   primaryKey?: string;
   /** Narrows or orders the target's records for this association: `(q) => q.order(…)`. */
@@ -58,10 +62,17 @@ const DEPENDENTS: Record<AssociationDefinition["kind"], readonly Dependent[]> = 
 };
 
 /** One declared association: its kind, its target Model, and its options. */
-export interface AssociationDefinition extends AssociationOptions {
+export interface AssociationDeclaration extends AssociationOptions {
   kind: "belongsTo" | "hasMany" | "hasOne";
   /** A thunk, so Models can point at each other before both are defined. */
   target: () => ModelClass;
+}
+
+/** One declared association, its foreign key given or inferred by `defineAssociations`. */
+export interface AssociationDefinition extends AssociationDeclaration {
+  foreignKey: string;
+  /** Where an inferred foreign key came from ("the class name User"), for error messages. */
+  inferredFrom?: string;
 }
 
 /**
@@ -129,13 +140,18 @@ function checkAssociation(
   if (name in ModelBase.prototype) {
     throw new InvalidModel(`${label} is the name of a record method or property; rename it`);
   }
+  if (definition.foreignKey === undefined) {
+    throw new InvalidModel(
+      `${label} has no foreignKey; declare associations with this.defineAssociations({...}) so it can be inferred, or pass foreignKey`,
+    );
+  }
   const target: unknown = definition.target();
   if (typeof target !== "function" || !(target.prototype instanceof ModelBase)) {
     throw new InvalidModel(`${label} must point at a Model: this.hasMany(() => Post, …)`);
   }
   const { ownerAttribute, targetAttribute } = linkOf(definition, model, target as ModelClass);
-  requireAttribute(label, model, ownerAttribute);
-  requireAttribute(label, target as ModelClass, targetAttribute);
+  requireAttribute(label, model, ownerAttribute, definition);
+  requireAttribute(label, target as ModelClass, targetAttribute, definition);
   const { dependent, kind } = definition;
   if (dependent !== undefined && !DEPENDENTS[kind].includes(dependent)) {
     const allowed = DEPENDENTS[kind].map((each) => `"${each}"`).join(", ");
@@ -145,12 +161,18 @@ function checkAssociation(
   }
 }
 
-function requireAttribute(label: string, model: ModelClass, name: string): void {
-  if (!model.attributeDefinitions.has(name)) {
-    throw new InvalidModel(
-      `${label}: ${model.name} has no attribute "${name}" (check foreignKey/primaryKey)`,
-    );
-  }
+function requireAttribute(
+  label: string,
+  model: ModelClass,
+  name: string,
+  { foreignKey, inferredFrom }: AssociationDefinition,
+): void {
+  if (model.attributeDefinitions.has(name)) return;
+  const why =
+    name === foreignKey && inferredFrom !== undefined
+      ? `inferred from ${inferredFrom}; declare it, or pass foreignKey${inferredFrom.startsWith("the class name") ? " (and keep class names if your bundler renames them)" : ""}`
+      : "check foreignKey/primaryKey";
+  throw new InvalidModel(`${label}: ${model.name} has no attribute "${name}" (${why})`);
 }
 
 /** Each record's belongsTo and hasOne accessors, made on first use. Not request state. */

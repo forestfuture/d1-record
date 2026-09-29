@@ -100,8 +100,8 @@ class User extends Model({
 class User extends Model({ id: { type: "integer", null: false } }) {
   static tableName = "users";
   static associations = this.defineAssociations({
-    posts: this.hasMany(() => Post, { foreignKey: "userId" }),
-    profile: this.hasOne(() => Profile, { foreignKey: "userId" }),
+    posts: this.hasMany(() => Post), // foreign key inferred: userId
+    profile: this.hasOne(() => Profile),
   });
   declare posts: HasMany<typeof Post>;
   declare profile: HasOne<typeof Profile>;
@@ -110,14 +110,15 @@ class User extends Model({ id: { type: "integer", null: false } }) {
 class Post extends Model({ id: "integer", userId: "integer" }) {
   static tableName = "posts";
   static associations = this.defineAssociations({
-    author: this.belongsTo(() => User, { foreignKey: "userId" }),
+    author: this.belongsTo(() => User, { foreignKey: "userId" }), // "author" would infer authorId
   });
   declare author: BelongsTo<typeof User>;
 }
 ```
 
 - `belongsTo`, `hasMany` and `hasOne`, declared with `static associations = this.defineAssociations({...})`. The target is a thunk (`() => Post`), so Models can point at each other.
-- `foreignKey` is always explicit (inferring it by Rails' convention is #45) and names an attribute, not a column, like everything outside `sql` fragments (so `foreignKey: "userId"` where Rails writes `foreign_key: :user_id`): the owner's for `belongsTo`, the target's for `hasMany`/`hasOne`. `primaryKey` is the attribute the foreign key points at. It defaults to the target's primary key for `belongsTo`, and the owner's for `hasMany`/`hasOne`. Keys aren't type-checked (typing them makes Models that point at each other circular). They're checked when the Model is first used, as are an association named like an attribute or a record method/property, and a target that isn't a Model: all `InvalidModel`.
+- `foreignKey` names an attribute, not a column, like everything outside `sql` fragments (so `foreignKey: "userId"` where Rails writes `foreign_key: :user_id`): the owner's for `belongsTo`, the target's for `hasMany`/`hasOne`. Left out, it's inferred by Rails' convention: a `belongsTo`'s name + `Id` (`author` → `authorId`), or for a `hasMany`/`hasOne` the owner's class name + `Id`, through the same `underscore` rule as columns (`User` → `userId`, `APIKey` → `apiKeyId`, `BlogPost` → `blogPostId`). An explicit `foreignKey` always wins. Inference happens in `defineAssociations`, so a plain `static associations = {…}` needs explicit keys (`InvalidModel` otherwise).
+- Inferring from the class name needs the class to keep its name when bundled. Wrangler keeps names by default, even with `--minify` (its `keep_names` setting); a bundler that renames classes turns `User` into something like `e`, and the inferred `eId` fails loudly at first use. The `InvalidModel` message names the attribute it looked for and where it came from ("inferred from the class name User") and suggests `foreignKey`. A Model's own `modelName` for this is #47. `primaryKey` is the attribute the foreign key points at. It defaults to the target's primary key for `belongsTo`, and the owner's for `hasMany`/`hasOne`. Keys aren't type-checked (typing them makes Models that point at each other circular). They're checked when the Model is first used, as are an association named like an attribute or a record method/property, and a target that isn't a Model: all `InvalidModel`.
 - Each association accessor needs a matching `declare`, naming the target **class** (`HasMany<typeof Post>`) so association Relations keep the target's scopes. Without one, TypeScript reports a missing property. Inferring the accessors instead is deferred (#15).
 - `await post.author()` and `await user.profile()` resolve to a record or `null`. `user.posts()` returns a lazy Relation of the target, with its scopes and every Relation method. All three query through the owner's Database. Without a query: `belongsTo` resolves to `null` when its foreign key is `null`, and `hasOne`/`hasMany` resolve to `null`/an empty Relation when the owner has no key (it's unsaved, or its key attribute is `null`). A `belongsTo` on an unsaved record whose foreign key is set loads the target, as in Rails.
 - Writing through a `belongsTo` or `hasOne`, as Rails' `post.author = user`, `build_author` and `build_profile` do: the accessor also has methods, so `await post.author()` is unchanged and no extra `declare` lines are needed.

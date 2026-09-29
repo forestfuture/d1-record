@@ -17,10 +17,12 @@ import {
   UnknownAssociation,
 } from "./errors.ts";
 import { destroyLifecycle, reloadRecord, saveLifecycle, validateRecord } from "./lifecycle.ts";
+import { inferForeignKey } from "./naming.ts";
 import { RecordStatement } from "./record-statement.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
 import type {
   AssociationDefinition,
+  AssociationDeclaration,
   AssociationOptions,
   HasManyDependent,
   HasOneDependent,
@@ -97,12 +99,21 @@ export class ModelBase {
    * Declares associations: `static associations = this.defineAssociations({ posts: this.hasMany(…) })`.
    * A subclass's associations are added to its parent's (a same-named one replaces the parent's).
    */
-  static defineAssociations<S extends Record<string, AssociationDefinition>>(
+  static defineAssociations<S extends Record<string, AssociationDeclaration>>(
     this: abstract new () => ModelBase,
     associations: S,
-  ): S {
-    const inherited = (this as unknown as typeof ModelBase).associations;
-    return { ...inherited, ...associations };
+  ): { [K in keyof S]: AssociationDefinition } {
+    const model = this as unknown as typeof ModelBase;
+    // A foreign key left out is inferred here, where the name and the declaring class are known.
+    const defined = Object.entries(associations).map(([name, declaration]) => [
+      name,
+      declaration.foreignKey === undefined
+        ? { ...declaration, ...inferForeignKey(declaration.kind, name, model.name) }
+        : declaration,
+    ]);
+    return { ...model.associations, ...Object.fromEntries(defined) } as {
+      [K in keyof S]: AssociationDefinition;
+    };
   }
 
   // The target and keys are checked on first use, not typed: typing them makes Models that
@@ -111,24 +122,24 @@ export class ModelBase {
   /** This Model's records point at one `target` record through `foreignKey` (their own attribute). */
   static belongsTo(
     target: () => unknown,
-    options: Omit<AssociationOptions, "dependent">,
-  ): AssociationDefinition {
+    options: Omit<AssociationOptions, "dependent"> = {},
+  ): AssociationDeclaration {
     return { kind: "belongsTo", target: target as () => ModelClass, ...options };
   }
 
   /** Many `target` records point at this Model's records through `foreignKey` (theirs). */
   static hasMany(
     target: () => unknown,
-    options: AssociationOptions & { dependent?: HasManyDependent },
-  ): AssociationDefinition {
+    options: AssociationOptions & { dependent?: HasManyDependent } = {},
+  ): AssociationDeclaration {
     return { kind: "hasMany", target: target as () => ModelClass, ...options };
   }
 
   /** One `target` record points at this Model's records through `foreignKey` (its own). */
   static hasOne(
     target: () => unknown,
-    options: AssociationOptions & { dependent?: HasOneDependent },
-  ): AssociationDefinition {
+    options: AssociationOptions & { dependent?: HasOneDependent } = {},
+  ): AssociationDeclaration {
     return { kind: "hasOne", target: target as () => ModelClass, ...options };
   }
 
