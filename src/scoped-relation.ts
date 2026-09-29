@@ -18,7 +18,12 @@ function relationClassFor(model: ModelClass): RelationClass {
     }
     return cached.Class;
   }
-  const ScopedRelation = class extends Relation<ModelBase> {};
+  // The library's own Relations: constructible here, though Relation's constructor is protected.
+  const ScopedRelation = class extends Relation<ModelBase> {
+    constructor(parts: unknown) {
+      super(parts);
+    }
+  };
   for (const [name, scope] of Object.entries(model.scopes)) {
     // A scope must not hide a Relation method, and "then" would make Relations awaitable.
     if (name === "then" || name in Relation.prototype) {
@@ -44,5 +49,5 @@ export function relationFor<C extends ModelClass>(
   const Class = relationClassFor(model) as unknown as new (
     ...args: RelationArgs<InstanceType<C>>
   ) => Scoped<InstanceType<C>, ScopesOf<C>>;
-  return new Class(executor, model as unknown as ModelClass<InstanceType<C>>);
+  return new Class({ executor, model: model as unknown as ModelClass<InstanceType<C>> });
 }

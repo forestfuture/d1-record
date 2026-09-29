@@ -1,4 +1,4 @@
-import { modelOf, type ModelBase } from "./model.ts";
+import type { ModelBase } from "./model.ts";
 import { state } from "./record-state.ts";
 import type { ResolvedAssociation } from "./resolved-association.ts";
 
@@ -51,7 +51,6 @@ function withKey(
 ): OwnedCollection {
   const recordState = owner[state];
   const { name, ownerAttribute, definition } = association;
-  const deletes = definition.dependent === "destroy" || definition.dependent === "deleteAll";
   const built = () => recordState.built(name);
   const fill = (records: readonly ModelBase[]) =>
     recordState.cacheAssociation(name, { attribute: ownerAttribute, key, value: records });
@@ -72,7 +71,7 @@ function withKey(
     invalidate: () => recordState.clearAssociation(name),
     unsavedCount: () => built().filter((record) => record[state].isNew).length,
     refusal: undefined,
-    nullifies: deletes ? undefined : definition.foreignKey,
+    nullifies: association.deletesOnDeleteAll ? undefined : definition.foreignKey,
     narrowed: () => narrowedOf(collection),
   };
   return collection;
@@ -80,17 +79,14 @@ function withKey(
 
 /** An owner without a key: no stored records, just what was built through it. */
 function withoutKey(owner: ModelBase, association: ResolvedAssociation): OwnedCollection {
-  const { name, ownerAttribute, definition } = association;
-  const { name: model } = modelOf(owner);
+  const { name, definition } = association;
   const collection: OwnedCollection = {
     loaded: () => [...owner[state].built(name)],
     created: () => {},
     built: (record) => owner[state].addBuilt(name, record),
     invalidate: () => {},
     unsavedCount: () => 0,
-    refusal: owner[state].isNew
-      ? `the ${model} hasn't been saved; save the ${model} first`
-      : `the ${model} has no ${ownerAttribute}`,
+    refusal: association.refusalFor(owner),
     nullifies: definition.foreignKey,
     narrowed: () => narrowedOf(collection),
   };

@@ -1,5 +1,7 @@
 import type { ModelBase } from "./model.ts";
 
+declare const recordType: unique symbol;
+
 /** @internal The library's key for what `db.batch` needs from a RecordStatement. */
 export const recordStatementParts = Symbol("recordStatementParts");
 
@@ -10,6 +12,9 @@ export const recordStatementParts = Symbol("recordStatementParts");
  * being awaited.
  */
 export class RecordStatement<R extends ModelBase = ModelBase> {
+  /** Type-only: the record's type, so a statement of one Model isn't taken for another's. */
+  declare readonly [recordType]?: R;
+
   readonly #record: R;
   readonly #kind: "save" | "destroy";
 

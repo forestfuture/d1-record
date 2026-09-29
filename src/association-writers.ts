@@ -11,7 +11,7 @@ import type { ResolvedAssociation } from "./resolved-association.ts";
 export function belongsToAccessor(owner: ModelBase, association: ResolvedAssociation): unknown {
   const read = () =>
     cachedRead(owner, association, (key) =>
-      association.records(owner[state].executor).findBy({ [association.targetAttribute]: key }),
+      association.all(owner[state].executor).findBy({ [association.targetAttribute]: key }),
     );
   const set = (record: ModelBase | null) => pointOwnerAt(owner, association, record);
   const make = (attributes: Record<string, unknown>) =>
@@ -67,7 +67,7 @@ function pointOwnerAt(
 export function hasOneAccessor(owner: ModelBase, association: ResolvedAssociation): unknown {
   const read = () =>
     cachedRead(owner, association, (key) =>
-      association.inOrder(association.records(owner[state].executor, key)).first(),
+      association.inOrder(association.linkedTo(owner[state].executor, key)).first(),
     );
   return Object.assign(read, {
     build(attributes: Record<string, unknown> = {}) {
@@ -104,9 +104,8 @@ function createOne(
 /** As in Rails, records can't be created through an owner that hasn't been saved. */
 function requireSavedOwner(owner: ModelBase, association: ResolvedAssociation): void {
   if (!owner[state].isNew) return;
-  const { name } = association.owner;
   throw new RecordNotSaved(
-    `You cannot create a ${association.target.name} here: the ${name} hasn't been saved; save the ${name} first`,
+    `You cannot create a ${association.target.name} here: ${association.refusalFor(owner)}`,
   );
 }
 

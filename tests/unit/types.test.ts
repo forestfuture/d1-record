@@ -9,7 +9,8 @@ import {
   type BelongsTo,
   type HasMany,
   type HasOne,
-  type Relation,
+  Relation,
+  type RecordStatement,
 } from "../../src/index.ts";
 
 class User extends Model({
@@ -231,6 +232,21 @@ describe("types", () => {
       posts.since("yesterday");
       // @ts-expect-error unknown scope
       posts.archived();
+    };
+    expectTypeOf(typeOnly).toBeFunction();
+  });
+
+  test("Relations and record statements can't be mixed up or made by hand", () => {
+    class Other extends Model({ id: "integer", title: "string" }) {
+      static tableName = "posts";
+    }
+    // Checked by the type checker only; never called.
+    const typeOnly = (user: User) => {
+      // @ts-expect-error Relations come from db.model() and other Relations
+      void new Relation();
+      // @ts-expect-error a record statement keeps its record's type
+      const statement: RecordStatement<Other> = user.saveStatement();
+      void statement;
     };
     expectTypeOf(typeOnly).toBeFunction();
   });
