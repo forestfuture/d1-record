@@ -75,7 +75,7 @@ declare const attributeTypes: unique symbol;
 type AttributeKey<R> = keyof AttributesOf<R> & string;
 
 /** `from`/`to` for the change checks: only matching when the value was, or became, this. */
-interface ChangeOptions<V> {
+export interface ChangeOptions<V = unknown> {
   from?: V;
   to?: V;
 }
@@ -491,9 +491,14 @@ export function Model<const A extends AttributeSpecs>(
   return DefinedModel as never;
 }
 
+/** A record's Model: its class. */
+export function modelOf(record: ModelBase): ModelClass {
+  return record.constructor as ModelClass;
+}
+
 /** The record's primary key value. */
 export function primaryKeyOf(record: ModelBase): unknown {
-  return record[state].read((record.constructor as ModelClass).primaryKey);
+  return record[state].read(modelOf(record).primaryKey);
 }
 
 /** Builds a persisted record of `model` from a D1 row. */

@@ -7,7 +7,7 @@ import {
 import type { CompiledSql } from "./compiler.ts";
 import { DeleteRestriction } from "./errors.ts";
 import { prepareDestroy, refusalError, type Claimed } from "./lifecycle.ts";
-import type { ModelBase, ModelClass } from "./model.ts";
+import { modelOf, type ModelBase } from "./model.ts";
 import { state } from "./record-state.ts";
 import type { Scoped } from "./relation.ts";
 import { statementParts, type Statement } from "./statement.ts";
@@ -33,7 +33,7 @@ export async function prepareDependents(
   owner: ModelBase,
   claimed: Claimed,
 ): Promise<DependentsPlan> {
-  const model = owner.constructor as ModelClass;
+  const model = modelOf(owner);
   const dependencies = Object.entries(model.associations).filter(
     ([, definition]) => definition.dependent !== undefined,
   );
@@ -54,7 +54,7 @@ export async function prepareDependents(
 
 /** The association's records for this owner (a hasOne's first one only), with its scope. */
 function recordsOf(owner: ModelBase, [name, definition]: Dependency): Scoped<ModelBase> {
-  const model = owner.constructor as ModelClass;
+  const model = modelOf(owner);
   const target = definition.target();
   const { ownerAttribute, targetAttribute } = linkOf(definition, model, target);
   const records = scopedTarget(owner[state].executor, model, name, definition).where({

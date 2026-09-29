@@ -2,6 +2,7 @@ import { InvalidModel } from "./errors.ts";
 import { belongsToAccessor, hasOneAccessor } from "./association-writers.ts";
 import {
   ModelBase,
+  modelOf,
   verifyModel,
   type AttributesOf,
   type ModelClass,
@@ -190,14 +191,14 @@ function accessorProperty(name: string, definition: AssociationDefinition): Prop
       },
     };
   }
-  const make = definition.kind === "belongsTo" ? belongsToAccessor : hasOneAccessor;
+  const accessorFor = definition.kind === "belongsTo" ? belongsToAccessor : hasOneAccessor;
   return {
     configurable: true,
     get(this: ModelBase) {
-      const own = accessors.get(this) ?? new Map<string, unknown>();
-      accessors.set(this, own);
-      if (!own.has(name)) own.set(name, make(this, name, definition));
-      return own.get(name);
+      const perRecord = accessors.get(this) ?? new Map<string, unknown>();
+      accessors.set(this, perRecord);
+      if (!perRecord.has(name)) perRecord.set(name, accessorFor(this, name, definition));
+      return perRecord.get(name);
     },
   };
 }
@@ -211,7 +212,7 @@ function accessorProperty(name: string, definition: AssociationDefinition): Prop
 function hasManyRelation(owner: ModelBase, name: string, definition: AssociationDefinition) {
   const key = ownerKey(owner, definition);
   const target = targetOf(definition);
-  const relation = scopedTarget(owner[state].executor, model(owner), name, definition).where({
+  const relation = scopedTarget(owner[state].executor, modelOf(owner), name, definition).where({
     [definition.foreignKey]: key,
   });
   const { foreignKey } = definition;
@@ -220,7 +221,7 @@ function hasManyRelation(owner: ModelBase, name: string, definition: Association
     const unsavedOwner = missingKeyReason(owner, definition);
     return relation[ofOwner]({ foreignKey, unsavedOwner, cache: builtOf(owner, name), register });
   }
-  const { ownerAttribute } = linkOf(definition, model(owner), target);
+  const { ownerAttribute } = linkOf(definition, modelOf(owner), target);
   const cache = cacheOf(owner, name, ownerAttribute, key);
   // As Rails' collection delete_all: rows are deleted with destroy or deleteAll, else nullified.
   const deletes = definition.dependent === "destroy" || definition.dependent === "deleteAll";
@@ -251,7 +252,7 @@ export async function cachedRead(
   const cached = owner[state].cachedAssociation(name);
   if (cached !== undefined) return cached.value as ModelBase | null;
   const target = targetOf(definition);
-  const { ownerAttribute, targetAttribute } = linkOf(definition, model(owner), target);
+  const { ownerAttribute, targetAttribute } = linkOf(definition, modelOf(owner), target);
   const key =
     definition.kind === "belongsTo"
       ? owner[state].read(ownerAttribute)
@@ -319,14 +320,10 @@ export function targetOf(definition: AssociationDefinition): ModelClass {
   return target;
 }
 
-function model(record: ModelBase): ModelClass {
-  return record.constructor as ModelClass;
-}
-
 /** Why an owner has no key for its targets to point at. */
 function missingKeyReason(owner: ModelBase, definition: AssociationDefinition): string {
-  const { name } = model(owner);
-  const { ownerAttribute } = linkOf(definition, model(owner), definition.target());
+  const { name } = modelOf(owner);
+  const { ownerAttribute } = linkOf(definition, modelOf(owner), definition.target());
   return owner[state].isNew
     ? `the ${name} hasn't been saved; save the ${name} first`
     : `the ${name} has no ${ownerAttribute}`;
@@ -335,6 +332,6 @@ function missingKeyReason(owner: ModelBase, definition: AssociationDefinition): 
 /** The owner's value that targets point at (its primary key, by default); null if unsaved. */
 function ownerKey(owner: ModelBase, definition: AssociationDefinition): unknown {
   if (owner[state].isNew) return null;
-  const { ownerAttribute } = linkOf(definition, model(owner), definition.target());
+  const { ownerAttribute } = linkOf(definition, modelOf(owner), definition.target());
   return owner[state].read(ownerAttribute);
 }

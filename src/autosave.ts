@@ -1,5 +1,5 @@
 import { linkOf, type AssociationDefinition } from "./associations.ts";
-import { associationOf, type ModelBase, type ModelClass } from "./model.ts";
+import { associationOf, modelOf, type ModelBase } from "./model.ts";
 import { state } from "./record-state.ts";
 
 /** One hasMany's new records, built through it, to save with their owner. */
@@ -23,10 +23,6 @@ export function autosavesOf(owner: ModelBase, claimed: ReadonlySet<ModelBase>): 
       records: built.filter((record) => record[state].isNew && !claimed.has(record)),
     }))
     .filter(({ records }) => records.length > 0);
-}
-
-function modelOf(record: ModelBase): ModelClass {
-  return record.constructor as ModelClass;
 }
 
 /** The owner's value its records point at; null until D1 generates it, for a new owner. */
@@ -59,7 +55,7 @@ export function linkRecords(owner: ModelBase, autosaves: readonly Autosave[]): v
 }
 
 /** A new record a belongsTo points at, saved before its owner (Rails' belongs_to autosave). */
-export interface ParentSave {
+export interface BelongsToAutosave {
   name: string;
   definition: AssociationDefinition;
   record: ModelBase;
@@ -70,40 +66,42 @@ export interface ParentSave {
  * are linked to them when it's saved, even if they were saved on their own since (Rails links
  * whenever the association was set); the ones still new and unclaimed are saved first.
  */
-export function parentsOf(owner: ModelBase): ParentSave[] {
+export function belongsToAutosavesOf(owner: ModelBase): BelongsToAutosave[] {
   const model = modelOf(owner);
   return owner[state]
-    .parents()
+    .belongsToAutosaves()
     .map(([name, record]) => ({ name, definition: associationOf(model, name), record }));
 }
 
-/** The parents to save before `owner`: new, and not already part of the write. */
-export function unsavedParents(
-  parents: readonly ParentSave[],
+/** The records `owner` points at to save before it: new, and not already part of the write. */
+export function unsavedBelongsTo(
+  pointedAt: readonly BelongsToAutosave[],
   claimed: ReadonlySet<ModelBase>,
 ): ModelBase[] {
-  return parents
+  return pointedAt
     .map(({ record }) => record)
     .filter((record) => record[state].isNew && !claimed.has(record));
 }
 
-/** The attribute of the parent its owner's foreign key holds (its primary key, by default). */
-function parentKeyOf(owner: ModelBase, { definition }: ParentSave): string {
+/** The attribute of the pointed-at record its owner's foreign key holds (its primary key, by default). */
+function belongsToKeyOf(owner: ModelBase, { definition }: BelongsToAutosave): string {
   return linkOf(definition, modelOf(owner), definition.target()).targetAttribute;
 }
 
-/** Whether every parent's key is known before it's written (generated in code). */
-export function parentKeysKnown(owner: ModelBase, parents: readonly ParentSave[]): boolean {
-  return parents.every((parent) => parent.record[state].read(parentKeyOf(owner, parent)) !== null);
+/** Whether every pointed-at record's key is known before it's written (generated in code). */
+export function belongsToKeysKnown(
+  owner: ModelBase,
+  pointedAt: readonly BelongsToAutosave[],
+): boolean {
+  return pointedAt.every((each) => each.record[state].read(belongsToKeyOf(owner, each)) !== null);
 }
 
-/** Points the owner at its parents, now that their keys exist, and keeps them loaded. */
-export function linkParents(owner: ModelBase, parents: readonly ParentSave[]): void {
-  for (const parent of parents) {
-    const { name, definition, record } = parent;
-    const key = record[state].read(parentKeyOf(owner, parent));
-    owner[state].write(definition.foreignKey, key);
-    owner[state].cacheAssociation(name, { attribute: definition.foreignKey, key, value: record });
-    owner[state].setParent(name, undefined);
+/** Points the owner at the records it points at, now that their keys exist, keeping them loaded. */
+export function linkBelongsTo(owner: ModelBase, pointedAt: readonly BelongsToAutosave[]): void {
+  for (const each of pointedAt) {
+    const { name, definition, record } = each;
+    const key = record[state].read(belongsToKeyOf(owner, each));
+    owner[state].pointAt(name, definition.foreignKey, key, record);
+    owner[state].setBelongsToAutosave(name, undefined);
   }
 }

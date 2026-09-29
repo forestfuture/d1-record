@@ -1,12 +1,12 @@
 import { compileDelete, compileInsert, compileSelect, compileUpdate } from "./compiler.ts";
 import {
   autosavesOf,
-  linkParents,
+  linkBelongsTo,
   linkRecords,
   ownerKeysKnown,
-  parentKeysKnown,
-  parentsOf,
-  unsavedParents,
+  belongsToKeysKnown,
+  belongsToAutosavesOf,
+  unsavedBelongsTo,
   type Autosave,
 } from "./autosave.ts";
 import { prepareDependents } from "./dependents.ts";
@@ -26,17 +26,13 @@ import {
   type BeforeCallbackKind,
   type CallbackKind,
 } from "./declarations.ts";
-import type { ModelBase, ModelClass } from "./model.ts";
+import { modelOf, type ModelBase } from "./model.ts";
 import { Negated, type Condition } from "./query.ts";
 import { state } from "./record-state.ts";
 import { column, sql } from "./sql.ts";
 import { timestampsFor } from "./timestamps.ts";
 import { runAfter, writeAll, type PreparedWrite } from "./unit-of-work.ts";
 import { runValidations, type UniquenessOptions } from "./validations.ts";
-
-function modelOf(record: ModelBase): ModelClass {
-  return record.constructor as ModelClass;
-}
 
 /**
  * What a lifecycle run ended with. Refusals are outcomes (the non-throwing methods return
@@ -174,9 +170,9 @@ function aborted(record: ModelBase): { status: "aborted"; reason: string } {
  * association's name.
  */
 async function validateAutosaves(record: ModelBase, claimed: Claimed): Promise<void> {
-  for (const { name, record: parent } of parentsOf(record)) {
-    if (!parent[state].isNew || claimed.has(parent)) continue;
-    if ((await validation(parent, claimed)) !== "valid") {
+  for (const { name, record: pointedAt } of belongsToAutosavesOf(record)) {
+    if (!pointedAt[state].isNew || claimed.has(pointedAt)) continue;
+    if ((await validation(pointedAt, claimed)) !== "valid") {
       record[state].errors.add(name, "is invalid");
     }
   }
@@ -221,13 +217,13 @@ export async function prepareSave(record: ModelBase, claimed: Claimed): Promise<
 async function prepareWrites(record: ModelBase, claimed: Claimed): Promise<SavePlan> {
   claimed.add(record);
   // New belongsTo records first: the record needs their keys (Rails' belongs_to autosave).
-  const parents = parentsOf(record);
-  const parentPlans = await prepareEach(unsavedParents(parents, claimed), claimed);
-  if (!Array.isArray(parentPlans)) return parentPlans;
+  const pointedAt = belongsToAutosavesOf(record);
+  const firstPlans = await prepareEach(unsavedBelongsTo(pointedAt, claimed), claimed);
+  if (!Array.isArray(firstPlans)) return firstPlans;
   const isInsert = record[state].isNew;
   if (!(await beforeWrite(record, isInsert))) return aborted(record);
   const own: Stage = () => {
-    linkParents(record, parents);
+    linkBelongsTo(record, pointedAt);
     return [saveWrite(record, isInsert)];
   };
   const autosaves = autosavesOf(record, claimed);
@@ -237,11 +233,13 @@ async function prepareWrites(record: ModelBase, claimed: Claimed): Promise<SaveP
   );
   if (!Array.isArray(childPlans)) return childPlans;
   const stages = withChildren(record, own, autosaves, childPlans);
-  if (parentPlans.length === 0) return { status: "ready", stages };
-  const first = combine(parentPlans.map((plan) => plan.stages));
+  if (firstPlans.length === 0) return { status: "ready", stages };
+  const first = combine(firstPlans.map((plan) => plan.stages));
   return {
     status: "ready",
-    stages: parentKeysKnown(record, parents) ? combine([first, stages]) : [...first, ...stages],
+    stages: belongsToKeysKnown(record, pointedAt)
+      ? combine([first, stages])
+      : [...first, ...stages],
   };
 }
 

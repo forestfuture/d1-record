@@ -9,7 +9,7 @@ import {
   requireDefined,
   type AttributeDefinition,
 } from "./metadata.ts";
-import type { ModelBase, ModelClass } from "./model.ts";
+import type { ChangeOptions, ModelBase, ModelClass } from "./model.ts";
 
 /** The hidden slot where a Record keeps its `RecordState`; never exported from the package. */
 export const state = Symbol("state");
@@ -48,7 +48,7 @@ export class RecordState {
   #abortReason: string | undefined;
   readonly #associations = new Map<string, CachedAssociation>();
   readonly #built = new Map<string, ModelBase[]>();
-  readonly #parents = new Map<string, ModelBase>();
+  readonly #belongsTo = new Map<string, ModelBase>();
 
   constructor(model: ModelClass) {
     this.#model = model;
@@ -180,6 +180,12 @@ export class RecordState {
     return entry;
   }
 
+  /** Points this record at `value` through `attribute` (a foreign key), keeping it loaded. */
+  pointAt(name: string, attribute: string, key: unknown, value: unknown): void {
+    this.write(attribute, key);
+    this.cacheAssociation(name, { attribute, key, value });
+  }
+
   clearAssociation(name: string): void {
     this.#associations.delete(name);
   }
@@ -195,14 +201,14 @@ export class RecordState {
   }
 
   /** A new record a belongsTo points at, saved first when this record is; undefined clears it. */
-  setParent(name: string, record: ModelBase | undefined): void {
-    if (record === undefined) this.#parents.delete(name);
-    else this.#parents.set(name, record);
+  setBelongsToAutosave(name: string, record: ModelBase | undefined): void {
+    if (record === undefined) this.#belongsTo.delete(name);
+    else this.#belongsTo.set(name, record);
   }
 
   /** The new records this record's belongsTo associations point at, by association name. */
-  parents(): [name: string, record: ModelBase][] {
-    return [...this.#parents];
+  belongsToAutosaves(): [name: string, record: ModelBase][] {
+    return [...this.#belongsTo];
   }
 
   /** Every association's built records, by association name. */
@@ -214,14 +220,14 @@ export class RecordState {
   resetAssociation(name: string): void {
     this.#associations.delete(name);
     this.#built.delete(name);
-    this.#parents.delete(name);
+    this.#belongsTo.delete(name);
   }
 
   /** Forgets every association, cached and built (`reload()`), as Rails' reload does. */
   clearAssociations(): void {
     this.#associations.clear();
     this.#built.clear();
-    this.#parents.clear();
+    this.#belongsTo.clear();
   }
 
   /** Loads a D1 row; the record becomes persisted and clean. */
@@ -279,14 +285,14 @@ export class RecordState {
    * Whether the attribute has an unsaved change, optionally `from` and `to` given values
    * (compared as stored, so dates by time and json by content).
    */
-  isAttributeChanged(name: string, options: { from?: unknown; to?: unknown } = {}): boolean {
+  isAttributeChanged(name: string, options: ChangeOptions = {}): boolean {
     this.read(name);
     if (!this.changedNames().includes(name)) return false;
     return this.#matches(name, this.valueInDatabase(name), this.#values[name], options);
   }
 
   /** Whether the last save changed the attribute, optionally `from` and `to` given values. */
-  hasSavedChangeTo(name: string, options: { from?: unknown; to?: unknown } = {}): boolean {
+  hasSavedChangeTo(name: string, options: ChangeOptions = {}): boolean {
     this.read(name);
     const change = this.#savedChanges[name];
     return change !== undefined && this.#matches(name, change[0], change[1], options);
@@ -309,12 +315,7 @@ export class RecordState {
     }
   }
 
-  #matches(
-    name: string,
-    before: unknown,
-    after: unknown,
-    options: { from?: unknown; to?: unknown },
-  ): boolean {
+  #matches(name: string, before: unknown, after: unknown, options: ChangeOptions): boolean {
     const { type } = this.#definition(name);
     const same = (a: unknown, b: unknown) => writeValue(type, a) === writeValue(type, b);
     return (
