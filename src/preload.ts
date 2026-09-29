@@ -11,13 +11,10 @@ import { mergeTrees, type IncludeTree } from "./query.ts";
 import { state } from "./record-state.ts";
 import { requirePreloadable, type Scoped } from "./relation.ts";
 
-/** D1 allows at most 100 bound parameters per statement, so keys are sent in groups of 100. */
-const KEYS_PER_QUERY = 100;
-
 /**
  * Loads the associations named in `tree` for `records` (all of one Model) and attaches them,
- * then recurses into nested includes. One `WHERE key IN (…)` query per association per group
- * of 100 distinct keys, never one per record.
+ * then recurses into nested includes. One `WHERE key IN (…)` query per association, never one
+ * per record.
  */
 export async function preload(
   records: readonly ModelBase[],
@@ -75,7 +72,8 @@ function groupBy(records: readonly ModelBase[], attribute: string): Map<unknown,
 
 /**
  * Records of `targets` (the association's scoped Relation) whose `attribute` is one of `keys`,
- * in the scope's order, then target primary-key order.
+ * in the scope's order, then target primary-key order: one query, whatever the number of keys,
+ * since a list is bound as one value.
  */
 async function loadByKeys(
   targets: Scoped<ModelBase>,
@@ -84,13 +82,8 @@ async function loadByKeys(
   keys: readonly unknown[],
 ): Promise<ModelBase[]> {
   const distinct = [...new Set(keys.filter((key) => key !== null && key !== undefined))];
-  const loaded: ModelBase[] = [];
-  for (let start = 0; start < distinct.length; start += KEYS_PER_QUERY) {
-    const group = distinct.slice(start, start + KEYS_PER_QUERY);
-    const relation = inAssociationOrder(targets.where({ [attribute]: group }), target);
-    loaded.push(...(await relation.toArray()));
-  }
-  return loaded;
+  if (distinct.length === 0) return [];
+  return inAssociationOrder(targets.where({ [attribute]: distinct }), target).toArray();
 }
 
 /** Normalizes `includes()` arguments into a tree, checking every name against its Model. */
