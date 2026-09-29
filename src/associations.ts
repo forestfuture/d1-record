@@ -9,7 +9,8 @@ import {
   type ScopesOf,
 } from "./model.ts";
 import { state } from "./record-state.ts";
-import { ofOwner, type AssociationCache, type Scoped } from "./relation.ts";
+import { ownedCollection } from "./owned-collection.ts";
+import { ofOwner, type Scoped } from "./relation.ts";
 import { linkOf, resolveAssociation, type ResolvedAssociation } from "./resolved-association.ts";
 
 /**
@@ -184,36 +185,12 @@ function accessorProperty(name: string, definition: AssociationDefinition): Prop
 }
 
 /**
- * A hasMany's Relation for `owner`. An owner without a key has no stored records: the
- * association holds what was built through it, which saving the owner saves too (autosave).
- * Otherwise it reads through the owner's cache, and a record built through it joins the loaded
- * records at once, as in Rails.
+ * A hasMany's Relation for `owner`: its target's records linked to the owner, answering from
+ * what the owner holds (its owned collection) where it can.
  */
 function hasManyRelation(owner: ModelBase, association: ResolvedAssociation) {
-  const { name, definition } = association;
-  const key = association.keyOf(owner);
-  const relation = association.records(owner[state].executor, key);
-  const { foreignKey } = definition;
-  const register = (record: ModelBase) => owner[state].addBuilt(name, record);
-  if (key === null) {
-    const unsavedOwner = missingKeyReason(owner, association);
-    return relation[ofOwner]({ foreignKey, unsavedOwner, cache: builtOf(owner, name), register });
-  }
-  const cache = cacheOf(owner, name, association.ownerAttribute, key);
-  // As Rails' collection delete_all: rows are deleted with destroy or deleteAll, else nullified.
-  const deletes = definition.dependent === "destroy" || definition.dependent === "deleteAll";
-  const unsaved = () => owner[state].built(name).filter((record) => record[state].isNew);
-  return relation[ofOwner]({
-    foreignKey: deletes ? undefined : foreignKey,
-    cache,
-    register,
-    unsaved,
-  });
-}
-
-/** An unsaved owner's hasMany: just the records built through it; nothing to fill or clear. */
-function builtOf(owner: ModelBase, name: string): AssociationCache {
-  return { get: () => [...owner[state].built(name)], set: () => {}, clear: () => {} };
+  const relation = association.records(owner[state].executor, association.keyOf(owner));
+  return relation[ofOwner](ownedCollection(owner, association));
 }
 
 /**
@@ -233,34 +210,4 @@ export async function cachedRead(
   const value = key === null ? null : await load(key);
   owner[state].cacheAssociation(name, { attribute: ownerAttribute, key, value });
   return value;
-}
-
-/** The owner's cache for one hasMany, for its Relation to read, fill and clear. */
-function cacheOf(
-  owner: ModelBase,
-  name: string,
-  attribute: string,
-  key: unknown,
-): AssociationCache {
-  const recordState = owner[state];
-  return {
-    // The stored records, then those built through the association and not among them, as
-    // Rails merges new records into what it loads.
-    get: () => {
-      const loaded = recordState.cachedAssociation(name)?.value as ModelBase[] | undefined;
-      if (loaded === undefined) return undefined;
-      const built = recordState.built(name).filter((record) => !loaded.includes(record));
-      return [...loaded, ...built];
-    },
-    set: (records) => recordState.cacheAssociation(name, { attribute, key, value: records }),
-    clear: () => recordState.clearAssociation(name),
-  };
-}
-
-/** Why an owner has no key for its targets to point at. */
-function missingKeyReason(owner: ModelBase, { ownerAttribute }: ResolvedAssociation): string {
-  const { name } = modelOf(owner);
-  return owner[state].isNew
-    ? `the ${name} hasn't been saved; save the ${name} first`
-    : `the ${name} has no ${ownerAttribute}`;
 }
