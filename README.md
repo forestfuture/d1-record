@@ -50,6 +50,7 @@ export class Post extends Model({
   static tableName = "posts";
 
   static associations = this.defineAssociations({
+    // Keys name attributes, as everything but SQL does: userId (column: user_id).
     author: this.belongsTo(() => User, { foreignKey: "userId" }),
   });
   declare author: BelongsTo<typeof User>;
@@ -103,6 +104,10 @@ d1-record follows Rails wherever D1 allows, and says so where it can't:
 - **D1's limits are handled for you.** Lists of any length bind as one value (`json_each`), so the 100-bound-parameter limit never bites; preloads take one query per association.
 - **Constraint errors become typed errors** (`RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation`, `CheckViolation`) naming the table, columns and attributes.
 - **No request state on Model classes.** Every query goes through the `Database` you `connect()` per request, so concurrent requests on one isolate never share a connection or session.
+
+## Coming from Rails
+
+Most of it will feel familiar. The main difference is naming: attributes are camelCase and map to snake_case columns (`createdAt` ↔ `created_at`), and everything names **attributes**, association keys included, so it's `foreignKey: "userId"` where Rails writes `foreign_key: :user_id`. Column names only appear in `sql` fragments. Methods that raise end in `OrThrow` instead of `!` (`saveOrThrow` for `save!`), and predicates start with `is`/`has` instead of ending in `?` (`isNewRecord()` for `new_record?`).
 
 ## How it compares
 
