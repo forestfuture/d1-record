@@ -224,7 +224,13 @@ function hasManyRelation(owner: ModelBase, name: string, definition: Association
   const cache = cacheOf(owner, name, ownerAttribute, key);
   // As Rails' collection delete_all: rows are deleted with destroy or deleteAll, else nullified.
   const deletes = definition.dependent === "destroy" || definition.dependent === "deleteAll";
-  return relation[ofOwner]({ foreignKey: deletes ? undefined : foreignKey, cache, register });
+  const unsaved = () => owner[state].built(name).filter((record) => record[state].isNew);
+  return relation[ofOwner]({
+    foreignKey: deletes ? undefined : foreignKey,
+    cache,
+    register,
+    unsaved,
+  });
 }
 
 /** An unsaved owner's hasMany: just the records built through it; nothing to fill or clear. */
