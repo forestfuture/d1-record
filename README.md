@@ -148,12 +148,12 @@ export default {
 
 ### 5. Write several things at once, or not at all
 
-D1 can't keep a transaction open while your code awaits, so there's no `transaction()` block. Instead, `db.batch([...])` sends a prepared set of writes that all succeed or all fail:
+D1 can't keep a transaction open while your code awaits, so there's no `transaction()` block. Instead, `db.batch([...])` sends a prepared set of writes that all succeed or all fail. `record.toSave()` and `record.toDestroy()` turn a record into its save or destroy for the batch; on their own they write nothing:
 
 ```ts
 await db.batch([
   db.model(Post).where({ publishedAt: null }).updateAll({ publishedAt: new Date() }),
-  user.destroyStatement(), // and its posts, since posts are dependent: "destroy"
+  user.toDestroy(), // and its posts, since posts are dependent: "destroy"
 ]);
 ```
 
@@ -163,7 +163,7 @@ await db.batch([
 - **Queries**: `where`/`whereNot`/`or`/`merge`, comparisons (`gte`, `between`, …), ordering (`nulls: "last"`, `reorder`), pagination, `select`, `distinct`, `pluck`, `count`, `size`, `exists`, named scopes, and hand-written conditions only through the `sql` tagged template, so values are always bound.
 - **Persistence**: `save`/`create`/`update`/`destroy` with `…OrThrow` variants, validations (`presence`, `length`, `format`, `inclusion`, `numericality`, `uniqueness`), the full Rails callback lifecycle with `abort()`, dirty tracking (`changes`, `attributeWas`, `savedChangeTo`, …).
 - **Associations**: `belongsTo`, `hasMany`, `hasOne` with scopes, `dependent:` strategies, preloading with `includes` (one query per association, never N+1), caching until reload, autosave, and `build`/`create`/`set` through the association.
-- **Bulk writes**: `insert`, `insertAll`, `upsert`, `updateAll`, `deleteAll`, and `db.batch([...])` mixing those with records' `saveStatement()`/`destroyStatement()`.
+- **Bulk writes**: `insert`, `insertAll`, `upsert`, `updateAll`, `deleteAll`, and `db.batch([...])` mixing those with records' `toSave()`/`toDestroy()`.
 - **Read replicas**: `connect(env.DB, { session })` sends every query through one D1 Session, so a request reads its own writes; `db.bookmark()` carries that to the next request.
 - **Observability**: `connect(env.DB, { onQuery })` sees every statement with its SQL, bound values, timing and D1's `meta`.
 

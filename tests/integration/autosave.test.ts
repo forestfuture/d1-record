@@ -236,10 +236,10 @@ describe("autosave: records built through a hasMany are saved with their owner",
     const user = database.model(User).build({ email: "a@example.com" });
     user.posts().build({ title: "Hello" });
 
-    await database.batch([key.saveStatement()]);
+    await database.batch([key.toSave()]);
     expect(await database.model(Account).count()).toBe(1);
 
-    await expect(database.batch([user.saveStatement()])).rejects.toThrow(RecordNotSaved);
+    await expect(database.batch([user.toSave()])).rejects.toThrow(RecordNotSaved);
     expect(await database.model(User).count()).toBe(0);
   });
 
@@ -279,12 +279,7 @@ describe("autosave: records built through a hasMany are saved with their owner",
     const other = database.model(Account).build({ id: 2 });
     events.length = 0;
 
-    await database.batch([
-      key.saveStatement(),
-      account.saveStatement(),
-      other.saveStatement(),
-      other.saveStatement(),
-    ]);
+    await database.batch([key.toSave(), account.toSave(), other.toSave(), other.toSave()]);
 
     expect(events).toHaveLength(3);
     expect(await database.model(Account).order({ id: "asc" }).pluck("id")).toEqual([1, 2]);

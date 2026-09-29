@@ -6,8 +6,8 @@ declare const recordType: unique symbol;
 export const recordStatementParts = Symbol("recordStatementParts");
 
 /**
- * A record's save or destroy for `db.batch([...])`: `user.saveStatement()`,
- * `post.destroyStatement()`. Unlike a Statement, nothing is compiled yet: the record's
+ * A record's save or destroy for `db.batch([...])`: `user.toSave()`,
+ * `post.toDestroy()`. Unlike a Statement, nothing is compiled yet: the record's
  * validations and callbacks run when the batch runs. It has no `then`, so it's never run by
  * being awaited.
  */
@@ -18,7 +18,7 @@ export class RecordStatement<R extends ModelBase = ModelBase> {
   readonly #record: R;
   readonly #kind: "save" | "destroy";
 
-  /** @internal Use `record.saveStatement()` or `record.destroyStatement()`. */
+  /** @internal Use `record.toSave()` or `record.toDestroy()`. */
   constructor(record: R, kind: "save" | "destroy") {
     this.#record = record;
     this.#kind = kind;

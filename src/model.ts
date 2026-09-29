@@ -407,12 +407,12 @@ export class ModelBase {
    * This record's save, for `db.batch([...])`: its validations and callbacks run when the batch
    * runs, and every record in the batch is written atomically.
    */
-  saveStatement(): RecordStatement<this> {
+  toSave(): RecordStatement<this> {
     return new RecordStatement(this, "save");
   }
 
   /** This record's destroy, dependents included, for `db.batch([...])`. */
-  destroyStatement(): RecordStatement<this> {
+  toDestroy(): RecordStatement<this> {
     return new RecordStatement(this, "destroy");
   }
 

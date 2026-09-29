@@ -105,9 +105,9 @@ describe("saving and destroying records in a batch", () => {
     events.length = 0;
 
     const [saved, updated, destroyed, meta] = await database.batch([
-      user.saveStatement(),
-      post.saveStatement(),
-      other.destroyStatement(),
+      user.toSave(),
+      post.toSave(),
+      other.toDestroy(),
       database.model(User).where({ id: 1 }).updateAll({ role: "admin" }),
     ]);
 
@@ -128,7 +128,7 @@ describe("saving and destroying records in a batch", () => {
     const user = database.model(User).build({ email: "b@example.com" });
     const post = database.model(Post).build({ userId: 1, title: "Hello" });
 
-    await database.batch([user.saveStatement(), post.saveStatement()]);
+    await database.batch([user.toSave(), post.toSave()]);
 
     expect(log).toEqual([
       "before save b@example.com",
@@ -145,7 +145,7 @@ describe("saving and destroying records in a batch", () => {
     const post = database.model(Post).build({ userId: 1, title: "Hello" });
 
     const error: unknown = await database
-      .batch([valid.saveStatement(), invalid.saveStatement(), post.saveStatement()])
+      .batch([valid.toSave(), invalid.toSave(), post.toSave()])
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(RecordInvalid);
@@ -162,8 +162,8 @@ describe("saving and destroying records in a batch", () => {
     const kept = await database.model(User).find(1);
     kept.role = "keep";
 
-    await expect(database.batch([blocked.saveStatement()])).rejects.toThrow(RecordNotSaved);
-    await expect(database.batch([kept.destroyStatement()])).rejects.toThrow(RecordNotDestroyed);
+    await expect(database.batch([blocked.toSave()])).rejects.toThrow(RecordNotSaved);
+    await expect(database.batch([kept.toDestroy()])).rejects.toThrow(RecordNotDestroyed);
     expect(await database.model(User).count()).toBe(1);
   });
 
@@ -175,8 +175,8 @@ describe("saving and destroying records in a batch", () => {
 
     await expect(
       database.batch([
-        user.saveStatement(),
-        post.saveStatement(),
+        user.toSave(),
+        post.toSave(),
         database.model(User).insert({ id: 2, email: "a@example.com" }),
       ]),
     ).rejects.toThrow(RecordNotUnique);
@@ -193,7 +193,7 @@ describe("saving and destroying records in a batch", () => {
     const key = database.model(ApiKey).build({ label: "deploy" });
     const account = database.model(Account).build({ externalAccountId: key.id });
 
-    await database.batch([key.saveStatement(), account.saveStatement()]);
+    await database.batch([key.toSave(), account.toSave()]);
 
     const stored = await database.model(Account).findByOrThrow({ externalAccountId: key.id });
     expect(stored.id).toBe(account.id);
@@ -204,7 +204,7 @@ describe("saving and destroying records in a batch", () => {
     const post = await database.model(Post).find(11);
     events.length = 0;
 
-    await database.batch([post.destroyStatement(), post.destroyStatement()]);
+    await database.batch([post.toDestroy(), post.toDestroy()]);
 
     expect(events).toHaveLength(1);
     expect(log).toEqual(["after destroy Second"]);
@@ -214,7 +214,7 @@ describe("saving and destroying records in a batch", () => {
     const database = db();
     const user = await database.model(User).find(1);
 
-    await database.batch([user.destroyStatement()]);
+    await database.batch([user.toDestroy()]);
 
     expect(user.isDestroyed()).toBe(true);
     expect(await database.model(Post).count()).toBe(0);
@@ -223,7 +223,7 @@ describe("saving and destroying records in a batch", () => {
   test("a record from another Database is refused before any callback runs", async () => {
     const user = db().model(User).build({ email: "b@example.com" });
 
-    await expect(db().batch([user.saveStatement()])).rejects.toThrow(IncompatibleRelation);
+    await expect(db().batch([user.toSave()])).rejects.toThrow(IncompatibleRelation);
     expect(log).toEqual([]);
   });
 
@@ -231,7 +231,7 @@ describe("saving and destroying records in a batch", () => {
     const database = db();
     const user = database.model(User).build({ email: "b@example.com" });
 
-    const statement = await (async () => user.saveStatement())();
+    const statement = await (async () => user.toSave())();
 
     expect("then" in statement).toBe(false);
     expect(user.isNewRecord()).toBe(true);

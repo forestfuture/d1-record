@@ -67,7 +67,7 @@ export class Database {
 
   /**
    * Runs statements and record statements atomically, with D1's `batch()`: all of them are
-   * written, or none. Record statements (`user.saveStatement()`, `post.destroyStatement()`) run
+   * written, or none. Record statements (`user.toSave()`, `post.toDestroy()`) run
    * their validations and before-callbacks first, in order; the first record that's invalid or
    * aborts throws (`RecordInvalid`, `RecordNotSaved`, `RecordNotDestroyed`) and nothing is sent.
    * After the batch, each record takes its saved state and runs its after-callbacks, in order.

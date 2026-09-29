@@ -328,9 +328,9 @@ describe("building and setting hasOne and belongsTo", () => {
     const post = database.model(Post).build({ title: "Hello again" });
     post.author.build({ email: "new@example.com" });
 
-    await database.batch([account.saveStatement()]);
+    await database.batch([account.toSave()]);
     expect(await database.model(ApiKey).count()).toBe(1);
 
-    await expect(database.batch([post.saveStatement()])).rejects.toThrow(RecordNotSaved);
+    await expect(database.batch([post.toSave()])).rejects.toThrow(RecordNotSaved);
   });
 });
