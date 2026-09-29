@@ -4,3 +4,6 @@ dist
 .DS_Store
 .env*
 .vitest/
+site/.vitepress/dist
+site/.vitepress/cache
+.wrangler

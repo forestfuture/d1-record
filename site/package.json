@@ -1,0 +1,17 @@
+{
+  "name": "d1-record-site",
+  "private": true,
+  "description": "The d1-record documentation site, deployed to docs.forestfuture.dev/d1-record.",
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress build && wrangler dev",
+    "deploy": "vitepress build && wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260922.1",
+    "vitepress": "2.0.0-alpha.20",
+    "wrangler": "^4.141.0"
+  }
+}

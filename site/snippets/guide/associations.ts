@@ -1,0 +1,134 @@
+import {
+  connect,
+  Model,
+  type BelongsTo,
+  type HasMany,
+  type HasOne,
+  type Relation,
+} from "@forestfuture/d1-record";
+
+// #region declare
+export class Author extends Model({
+  id: { type: "string", null: false, default: () => crypto.randomUUID() },
+  name: { type: "string", null: false },
+}) {
+  static tableName = "authors";
+
+  static associations = this.defineAssociations({
+    articles: this.hasMany(() => Article, { dependent: "destroy" }), // Article's authorId
+    profile: this.hasOne(() => Profile, { dependent: "delete" }), // Profile's authorId
+  });
+  declare articles: HasMany<typeof Article>;
+  declare profile: HasOne<typeof Profile>;
+}
+
+export class Article extends Model({
+  id: { type: "string", null: false, default: () => crypto.randomUUID() },
+  authorId: { type: "string", null: false },
+  title: { type: "string", null: false },
+  published: { type: "boolean", null: false, default: () => false },
+  createdAt: "datetime",
+}) {
+  static tableName = "articles";
+
+  static associations = this.defineAssociations({
+    author: this.belongsTo(() => Author), // its own authorId
+    comments: this.hasMany(() => Comment, { dependent: "deleteAll" }), // Comment's articleId
+  });
+  declare author: BelongsTo<typeof Author>;
+  declare comments: HasMany<typeof Comment>;
+
+  static scopes = this.defineScopes({
+    published: (q) => q.where({ published: true }),
+  });
+}
+
+export class Profile extends Model({
+  id: { type: "integer", null: false },
+  authorId: { type: "string", null: false },
+  bio: "string",
+}) {
+  static tableName = "profiles";
+}
+
+export class Comment extends Model({
+  id: { type: "integer", null: false },
+  articleId: { type: "string", null: false },
+  body: { type: "string", null: false },
+}) {
+  static tableName = "comments";
+}
+// #endregion declare
+
+// #region scoped
+export class Blog extends Model({ id: { type: "integer", null: false } }) {
+  static tableName = "blogs";
+
+  static associations = this.defineAssociations({
+    // A scope for the association, as Rails' `has_many :posts, -> { … }`.
+    recentPosts: this.hasMany(() => BlogPost, {
+      scope: (q: Relation<BlogPost>) => q.order({ createdAt: "desc" }).where({ draft: false }),
+    }),
+  });
+  declare recentPosts: HasMany<typeof BlogPost>;
+}
+// #endregion scoped
+
+export class BlogPost extends Model({
+  id: { type: "integer", null: false },
+  blogId: { type: "integer", null: false },
+  draft: { type: "boolean", null: false },
+  createdAt: "datetime",
+}) {
+  static tableName = "blog_posts";
+}
+
+export async function examples(env: Env, articleId: string): Promise<unknown> {
+  const db = connect(env.DB);
+  // #region read
+  const article = await db.model(Article).find(articleId);
+  const author = await article.author(); // an Author, or null
+  const profile = await author?.profile(); // a Profile, or null
+  const latest = await author?.articles().published().order({ createdAt: "desc" }).first();
+  // #endregion read
+
+  // #region autosave
+  const ada = db.model(Author).build({ name: "Ada" });
+  ada.articles().build({ title: "Notes on the Analytical Engine" });
+  ada.articles().build({ title: "Sketch of the Engine" });
+  ada.profile.build({ bio: "Mathematician" });
+  await ada.saveOrThrow(); // the author, both articles and the profile, in one batch
+  // #endregion autosave
+
+  // #region create-through
+  const comment = await article.comments().create({ body: "Lovely." }); // articleId filled in
+  // #endregion create-through
+
+  // #region writers
+  const draft = db.model(Article).build({ title: "Untitled" });
+  draft.author.set(ada); // sets draft.authorId, and ada is its loaded author
+  await draft.save();
+
+  const grace = db.model(Author).build({ name: "Grace" });
+  const another = db.model(Article).build({ title: "COBOL" });
+  another.author.set(grace); // a new author: saved first, when the article is
+  await another.save();
+  // #endregion writers
+
+  // #region preload
+  const authors = await db
+    .model(Author)
+    .includes("profile", { articles: "comments" }) // 4 queries, however many authors
+    .toArray();
+
+  for (const each of authors) {
+    const articles = await each.articles().toArray(); // no query: already loaded
+    console.log(each.name, articles.length, each.loaded("profile")?.bio);
+  }
+  // #endregion preload
+
+  // #region statements
+  await article.comments().deleteAll().run(); // one DELETE for the article's comments
+  // #endregion statements
+  return { profile, latest, comment };
+}

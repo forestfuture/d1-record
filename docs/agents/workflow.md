@@ -34,6 +34,7 @@ Rules that matter here:
 - A test that passes on first run is a **guard**, not a red. Say so.
 - If a size or complexity limit trips, split the code. Don't raise the limit.
 - Keep `docs/contract.md` in sync with what you build. If you implement something differently from the contract, update it and tell the human.
+- Update the documentation site's guide page for the behavior too (`site/guide/`). Its larger examples live in `site/snippets/`, where `vp check` type-checks them against the library; the Getting started ones also run in `tests/integration/site-examples.test.ts`.
 - Scope changes (pulling work in from another issue, or pushing it out) get a comment on both issues.
 
 ## 4. Review
@@ -42,7 +43,7 @@ Run the `code-review` skill, with the commit before the issue's work as the fixe
 
 ## 5. Finish — ✋ human checkpoint
 
-- Full validation: `vp check`, `vp test`, `vp pack` (with attw and publint), `vp run check:public-types` (after `vp pack`: the published types expose no internals; mark internals `/** @internal */`), `vp run knip`.
+- Full validation: `vp check`, `vp test`, `vp pack` (with attw and publint), `vp run check:public-types` (after `vp pack`: the published types expose no internals; mark internals `/** @internal */`), `vp run knip`, `vp run docs:build` (the site builds with no dead links).
 - **Never push without the human's approval.** Pushing over SSH may need the human to unlock their key. If a push fails with `agent refused operation`, ask them to run `git push` themselves.
 - After the push, wait for CI to pass (`gh run watch`), then close the issue with a summary comment: what was delivered, the decisions made (link any `deferred` issues), and what the review found and fixed.
 

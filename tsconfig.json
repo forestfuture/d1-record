@@ -16,7 +16,9 @@
     "esModuleInterop": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    // The documentation's examples import the package by name, as an app would.
+    "paths": { "@forestfuture/d1-record": ["./src/index.ts"] }
   },
   "include": ["vite.config.ts", "tests"]
 }

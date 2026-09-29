@@ -25,3 +25,5 @@ jobs:
       - run: vp run check:public-types
       # Unused files, exports and dependencies.
       - run: vp run knip
+      # The documentation site builds, with no dead links.
+      - run: vp run docs:build

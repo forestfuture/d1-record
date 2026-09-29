@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
@@ -14,6 +15,10 @@ export default defineConfig({
     // ESM-only package for Workers: skip node10/CommonJS resolution checks.
     attw: { profile: "esm-only" },
     publint: true,
+  },
+  resolve: {
+    // The documentation's examples import the package by name, as an app would.
+    alias: { "@forestfuture/d1-record": fileURLToPath(new URL("src/index.ts", import.meta.url)) },
   },
   test: {
     projects: [

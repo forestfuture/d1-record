@@ -187,8 +187,9 @@ Query builders such as [Drizzle](https://orm.drizzle.team) and [Kysely](https://
 
 ## Documentation
 
-A documentation site is on its way. Until then:
+The guide is being built in [`site/`](site/) for [docs.forestfuture.dev/d1-record](https://docs.forestfuture.dev/d1-record). Until it's live:
 
+- [`site/guide/`](site/guide/): the guide pages, from getting started to D1's limits.
 - [`docs/contract.md`](docs/contract.md): the full public behavior, which the tests prove.
 - [`CONTEXT.md`](CONTEXT.md): the domain glossary (Model, Record, Relation, Association, Batch, …).
 - [`docs/adr/`](docs/adr/): the architecture decisions and why they were made.
@@ -204,6 +205,7 @@ vp test                   # unit and integration tests against a real local D1
 vp pack                   # build the library into dist/
 vp run check:public-types # after vp pack: the published types expose no internals
 vp run test:remote        # the smoke suite against a real remote D1 (see docs/agents/remote-smoke.md)
+vp run docs:dev           # the documentation site, at localhost:5173/d1-record/
 ```
 
 How issues are worked, from agreeing the design to review, is in [`docs/agents/workflow.md`](docs/agents/workflow.md).
