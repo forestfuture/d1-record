@@ -32,6 +32,34 @@ class Post extends Model({
   declare user: BelongsTo<typeof User>;
 }
 
+// Named so their inferred keys (writerId, authorId) don't exist: the explicit ones must be used.
+class Writer extends Model({
+  id: { type: "integer", null: false },
+  email: { type: "string", null: false },
+}) {
+  static tableName = "users";
+
+  static associations = this.defineAssociations({
+    posts: this.hasMany(() => Article, { foreignKey: "userId" }),
+  });
+
+  declare posts: HasMany<typeof Article>;
+}
+
+class Article extends Model({
+  id: { type: "integer", null: false },
+  userId: { type: "integer", null: false },
+  title: { type: "string", null: false },
+}) {
+  static tableName = "posts";
+
+  static associations = this.defineAssociations({
+    author: this.belongsTo(() => Writer, { foreignKey: "userId" }),
+  });
+
+  declare author: BelongsTo<typeof Writer>;
+}
+
 class Profile extends Model({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
@@ -72,6 +100,15 @@ describe("inferred foreign keys", () => {
     const post = await connect(binding).model(Post).find(11);
 
     expect((await post.user())?.email).toBe("b@example.com");
+  });
+
+  test("an explicit foreignKey wins over the inferred one", async () => {
+    const db = connect(binding);
+    const writer = await db.model(Writer).find(1);
+    const article = await db.model(Article).find(11);
+
+    expect(await writer.posts().pluck("id")).toEqual([10]);
+    expect((await article.author())?.email).toBe("b@example.com");
   });
 
   test("an inferred key is used for building, preloading and autosave alike", async () => {

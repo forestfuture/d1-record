@@ -152,14 +152,41 @@ describe("association declarations", () => {
     );
   });
 
-  test("an explicit foreignKey wins over the inferred one", () => {
-    class Writer extends Model({ id: "integer" }) {
+  test("hasMany and hasOne infer the class name through underscore, as Rails does", () => {
+    class Target extends Model({ id: "integer", userId: "integer", apiKeyId: "integer" }) {
+      static tableName = "posts";
+    }
+    class User extends Model({ id: "integer" }) {
+      static tableName = "users";
+      static associations = this.defineAssociations({ posts: this.hasMany(() => Target) });
+    }
+    class APIKey extends Model({ id: "integer" }) {
+      static tableName = "users";
+      static associations = this.defineAssociations({ post: this.hasOne(() => Target) });
+    }
+    class BlogPost extends Model({ id: "integer" }) {
       static tableName = "users";
       static associations = this.defineAssociations({
-        posts: this.hasMany(() => Post, { foreignKey: "userId" }),
+        comments: this.hasMany(() => Target, { foreignKey: "userId" }),
+        tags: this.hasMany(() => Target),
       });
     }
 
-    expect(() => db.model(Writer)).not.toThrow();
+    expect(User.associations.posts.foreignKey).toBe("userId");
+    expect(APIKey.associations.post.foreignKey).toBe("apiKeyId");
+    expect(BlogPost.associations.tags.foreignKey).toBe("blogPostId");
+    expect(BlogPost.associations.comments.foreignKey).toBe("userId"); // explicit wins
+  });
+
+  test("a class renamed by a bundler fails loudly, suggesting foreignKey", () => {
+    // What a minifier without keep_names does: the class is now called e.
+    const e = class extends Model({ id: "integer" }) {
+      static tableName = "users";
+      static associations = this.defineAssociations({ posts: this.hasMany(() => Post) });
+    };
+
+    expect(() => db.model(e)).toThrow(
+      /e association "posts": Post has no attribute "eId" \(inferred from the class name e; declare it, or pass foreignKey \(and keep class names/,
+    );
   });
 });

@@ -100,7 +100,7 @@ export class Post extends Model({
   static tableName = "posts";
 
   static associations = this.defineAssociations({
-    // Named author, not user, so the key is given: an attribute, as everywhere but SQL.
+    // Named author, not user, so the foreign key is given.
     author: this.belongsTo(() => User, { foreignKey: "userId" }),
   });
   declare author: BelongsTo<typeof User>;

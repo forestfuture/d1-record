@@ -1,5 +1,6 @@
 import { InvalidModel } from "./errors.ts";
 import { belongsToAccessor, hasOneAccessor } from "./association-writers.ts";
+import { inferenceHint, type Inference } from "./foreign-keys.ts";
 import {
   ModelBase,
   modelOf,
@@ -55,15 +56,17 @@ export type HasOneDependent =
 
 type Dependent = HasManyDependent | HasOneDependent;
 
-const DEPENDENTS: Record<AssociationDefinition["kind"], readonly Dependent[]> = {
+const DEPENDENTS: Record<AssociationKind, readonly Dependent[]> = {
   belongsTo: [],
   hasMany: ["destroy", "deleteAll", "nullify", "restrictWithException", "restrictWithError"],
   hasOne: ["destroy", "delete", "nullify", "restrictWithException", "restrictWithError"],
 };
 
+export type AssociationKind = "belongsTo" | "hasMany" | "hasOne";
+
 /** One declared association: its kind, its target Model, and its options. */
 export interface AssociationDeclaration extends AssociationOptions {
-  kind: "belongsTo" | "hasMany" | "hasOne";
+  kind: AssociationKind;
   /** A thunk, so Models can point at each other before both are defined. */
   target: () => ModelClass;
 }
@@ -71,8 +74,8 @@ export interface AssociationDeclaration extends AssociationOptions {
 /** One declared association, its foreign key given or inferred by `defineAssociations`. */
 export interface AssociationDefinition extends AssociationDeclaration {
   foreignKey: string;
-  /** Where an inferred foreign key came from ("the class name User"), for error messages. */
-  inferredFrom?: string;
+  /** Where an inferred foreign key came from, for error messages. */
+  inferredFrom?: Inference;
 }
 
 /**
@@ -150,8 +153,13 @@ function checkAssociation(
     throw new InvalidModel(`${label} must point at a Model: this.hasMany(() => Post, …)`);
   }
   const { ownerAttribute, targetAttribute } = linkOf(definition, model, target as ModelClass);
-  requireAttribute(label, model, ownerAttribute, definition);
-  requireAttribute(label, target as ModelClass, targetAttribute, definition);
+  // The foreign key is the owner's attribute for a belongsTo, the target's otherwise.
+  const [ownerHint, targetHint] =
+    definition.kind === "belongsTo"
+      ? [keyHint(definition), "check primaryKey"]
+      : ["check primaryKey", keyHint(definition)];
+  requireAttribute(label, model, ownerAttribute, ownerHint);
+  requireAttribute(label, target as ModelClass, targetAttribute, targetHint);
   const { dependent, kind } = definition;
   if (dependent !== undefined && !DEPENDENTS[kind].includes(dependent)) {
     const allowed = DEPENDENTS[kind].map((each) => `"${each}"`).join(", ");
@@ -161,18 +169,14 @@ function checkAssociation(
   }
 }
 
-function requireAttribute(
-  label: string,
-  model: ModelClass,
-  name: string,
-  { foreignKey, inferredFrom }: AssociationDefinition,
-): void {
+/** What to check when the foreign key isn't an attribute: where it was inferred from, if it was. */
+function keyHint({ inferredFrom }: AssociationDefinition): string {
+  return inferredFrom === undefined ? "check foreignKey" : inferenceHint(inferredFrom);
+}
+
+function requireAttribute(label: string, model: ModelClass, name: string, hint: string): void {
   if (model.attributeDefinitions.has(name)) return;
-  const why =
-    name === foreignKey && inferredFrom !== undefined
-      ? `inferred from ${inferredFrom}; declare it, or pass foreignKey${inferredFrom.startsWith("the class name") ? " (and keep class names if your bundler renames them)" : ""}`
-      : "check foreignKey/primaryKey";
-  throw new InvalidModel(`${label}: ${model.name} has no attribute "${name}" (${why})`);
+  throw new InvalidModel(`${label}: ${model.name} has no attribute "${name}" (${hint})`);
 }
 
 /** Each record's belongsTo and hasOne accessors, made on first use. Not request state. */
