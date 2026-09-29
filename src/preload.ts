@@ -1,15 +1,10 @@
-import {
-  inAssociationOrder,
-  linkOf,
-  prepareModel,
-  scopedTarget,
-  type AssociationDefinition,
-} from "./associations.ts";
+import { prepareModel } from "./associations.ts";
 import type { Executor } from "./executor.ts";
 import { associationOf, type ModelBase, type ModelClass } from "./model.ts";
 import { mergeTrees, type IncludeTree } from "./query.ts";
 import { state } from "./record-state.ts";
-import { requirePreloadable, type Scoped } from "./relation.ts";
+import { requirePreloadable } from "./relation.ts";
+import { resolveAssociation, type ResolvedAssociation } from "./resolved-association.ts";
 
 /**
  * Loads the associations named in `tree` for `records` (all of one Model) and attaches them,
@@ -25,8 +20,7 @@ export async function preload(
   if (first === undefined) return;
   const model = first.constructor as ModelClass;
   for (const [name, nested] of Object.entries(tree)) {
-    const definition = model.associations[name] as AssociationDefinition;
-    const loaded = await preloadOne(records, name, definition, executor);
+    const loaded = await preloadOne(records, resolveAssociation(model, name), executor);
     await preload(loaded, nested, executor);
   }
 }
@@ -37,18 +31,12 @@ export async function preload(
  */
 async function preloadOne(
   records: readonly ModelBase[],
-  name: string,
-  definition: AssociationDefinition,
+  association: ResolvedAssociation,
   executor: Executor,
 ): Promise<ModelBase[]> {
-  const owner = (records[0] as ModelBase).constructor as ModelClass;
-  const target = definition.target();
-  const { ownerAttribute, targetAttribute } = linkOf(definition, owner, target);
+  const { name, definition, ownerAttribute, targetAttribute } = association;
   const keys = records.map((record) => record[state].read(ownerAttribute));
-  const scoped = scopedTarget(executor, owner, name, definition)[requirePreloadable](
-    `${owner.name}.${name}`,
-  );
-  const targets = await loadByKeys(scoped, target, targetAttribute, keys);
+  const targets = await loadByKeys(association, executor, keys);
   const byKey = groupBy(targets, targetAttribute);
   for (const [index, record] of records.entries()) {
     const group = byKey.get(keys[index]) ?? [];
@@ -71,19 +59,18 @@ function groupBy(records: readonly ModelBase[], attribute: string): Map<unknown,
 }
 
 /**
- * Records of `targets` (the association's scoped Relation) whose `attribute` is one of `keys`,
- * in the scope's order, then target primary-key order: one query, whatever the number of keys,
- * since a list is bound as one value.
+ * The association's records linked to any of `keys`, in its order: one query, whatever the
+ * number of keys, since a list is bound as one value.
  */
 async function loadByKeys(
-  targets: Scoped<ModelBase>,
-  target: ModelClass,
-  attribute: string,
+  association: ResolvedAssociation,
+  executor: Executor,
   keys: readonly unknown[],
 ): Promise<ModelBase[]> {
   const distinct = [...new Set(keys.filter((key) => key !== null && key !== undefined))];
   if (distinct.length === 0) return [];
-  return inAssociationOrder(targets.where({ [attribute]: distinct }), target).toArray();
+  const records = association.records(executor, distinct)[requirePreloadable](association.label);
+  return association.inOrder(records).toArray();
 }
 
 /** Normalizes `includes()` arguments into a tree, checking every name against its Model. */
@@ -110,8 +97,5 @@ export function includeTree(model: ModelClass, specs: readonly unknown[]): Inclu
 
 /** The attributes a record must have loaded for its includes to be preloaded. */
 export function keysForIncludes(model: ModelClass, includes: IncludeTree | undefined): string[] {
-  return Object.keys(includes ?? {}).map((name) => {
-    const definition = associationOf(model, name);
-    return linkOf(definition, model, definition.target()).ownerAttribute;
-  });
+  return Object.keys(includes ?? {}).map((name) => resolveAssociation(model, name).ownerAttribute);
 }

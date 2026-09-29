@@ -170,13 +170,15 @@ function aborted(record: ModelBase): { status: "aborted"; reason: string } {
  * association's name.
  */
 async function validateAutosaves(record: ModelBase, claimed: Claimed): Promise<void> {
-  for (const { name, record: pointedAt } of belongsToAutosavesOf(record)) {
+  for (const { association, record: pointedAt } of belongsToAutosavesOf(record)) {
+    const { name } = association;
     if (!pointedAt[state].isNew || claimed.has(pointedAt)) continue;
     if ((await validation(pointedAt, claimed)) !== "valid") {
       record[state].errors.add(name, "is invalid");
     }
   }
-  for (const { name, records } of autosavesOf(record, claimed)) {
+  for (const { association, records } of autosavesOf(record, claimed)) {
+    const { name } = association;
     let valid = true;
     for (const each of records) {
       if ((await validation(each, claimed)) !== "valid") valid = false;
@@ -237,9 +239,7 @@ async function prepareWrites(record: ModelBase, claimed: Claimed): Promise<SaveP
   const first = combine(firstPlans.map((plan) => plan.stages));
   return {
     status: "ready",
-    stages: belongsToKeysKnown(record, pointedAt)
-      ? combine([first, stages])
-      : [...first, ...stages],
+    stages: belongsToKeysKnown(pointedAt) ? combine([first, stages]) : [...first, ...stages],
   };
 }
 

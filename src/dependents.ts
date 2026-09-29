@@ -1,9 +1,3 @@
-import {
-  inAssociationOrder,
-  linkOf,
-  scopedTarget,
-  type AssociationDefinition,
-} from "./associations.ts";
 import type { CompiledSql } from "./compiler.ts";
 import { DeleteRestriction } from "./errors.ts";
 import { prepareDestroy, refusalError, type Claimed } from "./lifecycle.ts";
@@ -11,6 +5,7 @@ import { modelOf, type ModelBase } from "./model.ts";
 import { state } from "./record-state.ts";
 import type { Scoped } from "./relation.ts";
 import { statementParts, type Statement } from "./statement.ts";
+import { resolveAssociation, type ResolvedAssociation } from "./resolved-association.ts";
 import { statementWrite, type PreparedWrite } from "./unit-of-work.ts";
 
 /**
@@ -20,8 +15,6 @@ import { statementWrite, type PreparedWrite } from "./unit-of-work.ts";
 export type DependentsPlan =
   | { status: "ready"; writes: () => PreparedWrite[] }
   | { status: "restricted"; reason: string };
-
-type Dependency = [name: string, definition: AssociationDefinition];
 
 /**
  * Prepares the owner's `dependent:` strategies, in the contract's order: restrictions first, so
@@ -34,9 +27,9 @@ export async function prepareDependents(
   claimed: Claimed,
 ): Promise<DependentsPlan> {
   const model = modelOf(owner);
-  const dependencies = Object.entries(model.associations).filter(
-    ([, definition]) => definition.dependent !== undefined,
-  );
+  const dependencies = Object.entries(model.associations)
+    .filter(([, definition]) => definition.dependent !== undefined)
+    .map(([name]) => resolveAssociation(model, name));
   for (const dependency of dependencies) {
     const reason = await checkRestriction(owner, dependency);
     if (reason !== undefined) return { status: "restricted", reason };
@@ -53,22 +46,18 @@ export async function prepareDependents(
 }
 
 /** The association's records for this owner (a hasOne's first one only), with its scope. */
-function recordsOf(owner: ModelBase, [name, definition]: Dependency): Scoped<ModelBase> {
-  const model = modelOf(owner);
-  const target = definition.target();
-  const { ownerAttribute, targetAttribute } = linkOf(definition, model, target);
-  const records = scopedTarget(owner[state].executor, model, name, definition).where({
-    [targetAttribute]: owner[state].read(ownerAttribute),
-  });
-  return definition.kind === "hasOne" ? inAssociationOrder(records, target).limit(1) : records;
+function recordsOf(owner: ModelBase, association: ResolvedAssociation): Scoped<ModelBase> {
+  const records = association.records(owner[state].executor, association.keyOf(owner));
+  return association.definition.kind === "hasOne" ? association.inOrder(records).limit(1) : records;
 }
 
 /** Why a restrict strategy refuses the destroy, if it does (Rails' wording). */
 async function checkRestriction(
   owner: ModelBase,
-  dependency: Dependency,
+  dependency: ResolvedAssociation,
 ): Promise<string | undefined> {
-  const [name, { dependent, kind }] = dependency;
+  const { name, definition } = dependency;
+  const { dependent, kind } = definition;
   if (dependent !== "restrictWithException" && dependent !== "restrictWithError") return undefined;
   if (!(await recordsOf(owner, dependency).exists())) return undefined;
   if (dependent === "restrictWithException") {
@@ -88,10 +77,10 @@ async function checkRestriction(
  */
 async function destroyRecords(
   owner: ModelBase,
-  dependency: Dependency,
+  dependency: ResolvedAssociation,
   claimed: Claimed,
 ): Promise<(() => PreparedWrite[])[]> {
-  if (dependency[1].dependent !== "destroy") return [];
+  if (dependency.definition.dependent !== "destroy") return [];
   const stages: (() => PreparedWrite[])[] = [];
   for (const record of await recordsOf(owner, dependency).toArray()) {
     const plan = await prepareDestroy(record, claimed);
@@ -102,8 +91,8 @@ async function destroyRecords(
 }
 
 /** The statement for `deleteAll`, `delete` or `nullify`, if that's the strategy. */
-function statementFor(owner: ModelBase, dependency: Dependency): CompiledSql[] {
-  const { dependent, foreignKey } = dependency[1];
+function statementFor(owner: ModelBase, dependency: ResolvedAssociation): CompiledSql[] {
+  const { dependent, foreignKey } = dependency.definition;
   let statement: Statement;
   if (dependent === "deleteAll" || dependent === "delete") {
     statement = recordsOf(owner, dependency).deleteAll();
