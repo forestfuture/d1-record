@@ -85,7 +85,7 @@ An atomic group of **Statements** and **Record statements** run together with D1
 _Avoid_: Transaction
 
 **Autosave**:
-Saving a **Record** also saves the new records built through its has-many **Associations** (and theirs, at every level), with its key. The records are validated with it.
+Saving a **Record** also saves the new records of its **Associations**, validated with it: those built through a has-many or has-one, after it and with its key (and theirs, at every level), and a new record it points at through a belongs-to, before it, so it can take that record's key.
 _Avoid_: Nested save, cascade save
 
 **Record statement**:
