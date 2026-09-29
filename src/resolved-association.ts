@@ -1,0 +1,112 @@
+import { prepareModel, type AssociationDefinition } from "./associations.ts";
+import type { Executor } from "./executor.ts";
+import { associationOf, type ModelBase, type ModelClass } from "./model.ts";
+import { state } from "./record-state.ts";
+import { applyScope, type Scope, type Scoped } from "./relation.ts";
+import { relationFor } from "./scoped-relation.ts";
+
+/**
+ * How an association links records: the owner's `ownerAttribute` equals the target's
+ * `targetAttribute`. For belongsTo that's owner.foreignKey = target.primaryKey; for
+ * hasMany/hasOne it's owner.primaryKey = target.foreignKey. The one place this is decided.
+ */
+export function linkOf(
+  definition: AssociationDefinition,
+  owner: ModelClass,
+  target: ModelClass,
+): { ownerAttribute: string; targetAttribute: string } {
+  return definition.kind === "belongsTo"
+    ? {
+        ownerAttribute: definition.foreignKey,
+        targetAttribute: definition.primaryKey ?? target.primaryKey,
+      }
+    : {
+        ownerAttribute: definition.primaryKey ?? owner.primaryKey,
+        targetAttribute: definition.foreignKey,
+      };
+}
+
+/**
+ * One declared association of one Model, worked out once: its target Model (made ready for
+ * use), the attributes that link the two, and the queries for its records, with its scope and
+ * order. Everything that reads, preloads, writes or destroys through an association asks this,
+ * so they agree on how records are linked and ordered.
+ */
+export class ResolvedAssociation {
+  readonly owner: ModelClass;
+  readonly name: string;
+  readonly definition: AssociationDefinition;
+  readonly target: ModelClass;
+  /** The owner's attribute holding the link (a foreign key for belongsTo, a key otherwise). */
+  readonly ownerAttribute: string;
+  /** The target's attribute the owner's links to. */
+  readonly targetAttribute: string;
+
+  constructor(owner: ModelClass, name: string) {
+    this.owner = owner;
+    this.name = name;
+    this.definition = associationOf(owner, name);
+    this.target = this.definition.target();
+    // A Model reached only through an association is still verified and gets its accessors.
+    prepareModel(this.target);
+    ({ ownerAttribute: this.ownerAttribute, targetAttribute: this.targetAttribute } = linkOf(
+      this.definition,
+      owner,
+      this.target,
+    ));
+  }
+
+  /** `User.posts`: how the association is named in messages. */
+  get label(): string {
+    return `${this.owner.name}.${this.name}`;
+  }
+
+  /**
+   * The target's records with the association's scope applied: all of them, or those linked
+   * to `key` (one value, or a list of them).
+   */
+  records(executor: Executor, ...key: [] | [unknown]): Scoped<ModelBase> {
+    let relation = relationFor(executor, this.target) as Scoped<ModelBase>;
+    const { scope } = this.definition;
+    if (scope !== undefined) {
+      relation = relation[applyScope](
+        this.label,
+        scope as Scope<ModelBase>,
+        [],
+      ) as Scoped<ModelBase>;
+    }
+    return key.length === 0 ? relation : relation.where({ [this.targetAttribute]: key[0] });
+  }
+
+  /**
+   * `relation` in the association's order: its scope's, then the target's primary key, so
+   * lazy reads, preloads and dependents agree, and a hasOne on its one record.
+   */
+  inOrder(relation: Scoped<ModelBase>): Scoped<ModelBase> {
+    return relation.order({ [this.target.primaryKey]: "asc" });
+  }
+
+  /**
+   * The owner's value its targets are linked by: a belongsTo's foreign key, or for a
+   * hasMany/hasOne the owner's key, null while the owner is new (it has no stored records).
+   */
+  keyOf(owner: ModelBase): unknown {
+    if (this.definition.kind !== "belongsTo" && owner[state].isNew) return null;
+    return owner[state].read(this.ownerAttribute);
+  }
+}
+
+/** Each Model's resolved associations, worked out on first use. Derived from the class only. */
+const resolved = new WeakMap<ModelClass, Map<string, ResolvedAssociation>>();
+
+/** The association `name` of `owner`, resolved once. */
+export function resolveAssociation(owner: ModelClass, name: string): ResolvedAssociation {
+  const perModel = resolved.get(owner) ?? new Map<string, ResolvedAssociation>();
+  resolved.set(owner, perModel);
+  let association = perModel.get(name);
+  if (association === undefined) {
+    association = new ResolvedAssociation(owner, name);
+    perModel.set(name, association);
+  }
+  return association;
+}

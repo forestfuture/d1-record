@@ -9,9 +9,8 @@ import {
   type ScopesOf,
 } from "./model.ts";
 import { state } from "./record-state.ts";
-import type { Executor } from "./executor.ts";
-import { applyScope, ofOwner, type AssociationCache, type Scope, type Scoped } from "./relation.ts";
-import { relationFor } from "./scoped-relation.ts";
+import { ofOwner, type AssociationCache, type Scoped } from "./relation.ts";
+import { linkOf, resolveAssociation, type ResolvedAssociation } from "./resolved-association.ts";
 
 /**
  * An association's scope, as Rails' `has_many :posts, -> { order(:created_at) }`. It receives
@@ -62,27 +61,6 @@ export interface AssociationDefinition extends AssociationOptions {
   kind: "belongsTo" | "hasMany" | "hasOne";
   /** A thunk, so Models can point at each other before both are defined. */
   target: () => ModelClass;
-}
-
-/**
- * How an association links records: the owner's `ownerAttribute` equals the target's
- * `targetAttribute`. For belongsTo that's owner.foreignKey = target.primaryKey; for
- * hasMany/hasOne it's owner.primaryKey = target.foreignKey. The one place this is decided.
- */
-export function linkOf(
-  definition: AssociationDefinition,
-  owner: ModelClass,
-  target: ModelClass,
-): { ownerAttribute: string; targetAttribute: string } {
-  return definition.kind === "belongsTo"
-    ? {
-        ownerAttribute: definition.foreignKey,
-        targetAttribute: definition.primaryKey ?? target.primaryKey,
-      }
-    : {
-        ownerAttribute: definition.primaryKey ?? owner.primaryKey,
-        targetAttribute: definition.foreignKey,
-      };
 }
 
 /**
@@ -187,7 +165,7 @@ function accessorProperty(name: string, definition: AssociationDefinition): Prop
     return {
       configurable: true,
       value: function hasMany(this: ModelBase) {
-        return hasManyRelation(this, name, definition);
+        return hasManyRelation(this, resolveAssociation(modelOf(this), name));
       },
     };
   }
@@ -197,7 +175,9 @@ function accessorProperty(name: string, definition: AssociationDefinition): Prop
     get(this: ModelBase) {
       const perRecord = accessors.get(this) ?? new Map<string, unknown>();
       accessors.set(this, perRecord);
-      if (!perRecord.has(name)) perRecord.set(name, accessorFor(this, name, definition));
+      if (!perRecord.has(name)) {
+        perRecord.set(name, accessorFor(this, resolveAssociation(modelOf(this), name)));
+      }
       return perRecord.get(name);
     },
   };
@@ -209,20 +189,17 @@ function accessorProperty(name: string, definition: AssociationDefinition): Prop
  * Otherwise it reads through the owner's cache, and a record built through it joins the loaded
  * records at once, as in Rails.
  */
-function hasManyRelation(owner: ModelBase, name: string, definition: AssociationDefinition) {
-  const key = ownerKey(owner, definition);
-  const target = targetOf(definition);
-  const relation = scopedTarget(owner[state].executor, modelOf(owner), name, definition).where({
-    [definition.foreignKey]: key,
-  });
+function hasManyRelation(owner: ModelBase, association: ResolvedAssociation) {
+  const { name, definition } = association;
+  const key = association.keyOf(owner);
+  const relation = association.records(owner[state].executor, key);
   const { foreignKey } = definition;
   const register = (record: ModelBase) => owner[state].addBuilt(name, record);
   if (key === null) {
-    const unsavedOwner = missingKeyReason(owner, definition);
+    const unsavedOwner = missingKeyReason(owner, association);
     return relation[ofOwner]({ foreignKey, unsavedOwner, cache: builtOf(owner, name), register });
   }
-  const { ownerAttribute } = linkOf(definition, modelOf(owner), target);
-  const cache = cacheOf(owner, name, ownerAttribute, key);
+  const cache = cacheOf(owner, name, association.ownerAttribute, key);
   // As Rails' collection delete_all: rows are deleted with destroy or deleteAll, else nullified.
   const deletes = definition.dependent === "destroy" || definition.dependent === "deleteAll";
   const unsaved = () => owner[state].built(name).filter((record) => record[state].isNew);
@@ -245,20 +222,15 @@ function builtOf(owner: ModelBase, name: string): AssociationCache {
  */
 export async function cachedRead(
   owner: ModelBase,
-  name: string,
-  definition: AssociationDefinition,
-  load: (key: unknown, targetAttribute: string) => Promise<ModelBase | null>,
+  association: ResolvedAssociation,
+  load: (key: unknown) => Promise<ModelBase | null>,
 ): Promise<ModelBase | null> {
+  const { name, ownerAttribute } = association;
   const cached = owner[state].cachedAssociation(name);
   if (cached !== undefined) return cached.value as ModelBase | null;
-  const target = targetOf(definition);
-  const { ownerAttribute, targetAttribute } = linkOf(definition, modelOf(owner), target);
-  const key =
-    definition.kind === "belongsTo"
-      ? owner[state].read(ownerAttribute)
-      : ownerKey(owner, definition);
+  const key = association.keyOf(owner);
   // No key: nothing to find, and nothing to query; that null is cached like any result.
-  const value = key === null ? null : await load(key, targetAttribute);
+  const value = key === null ? null : await load(key);
   owner[state].cacheAssociation(name, { attribute: ownerAttribute, key, value });
   return value;
 }
@@ -285,53 +257,10 @@ function cacheOf(
   };
 }
 
-/** A Relation over the association's target records, with its scope applied. */
-export function scopedTarget(
-  executor: Executor,
-  owner: ModelClass,
-  name: string,
-  definition: AssociationDefinition,
-): Scoped<ModelBase> {
-  const relation = relationFor(executor, targetOf(definition)) as Scoped<ModelBase>;
-  const { scope } = definition;
-  if (scope === undefined) return relation;
-  return relation[applyScope](
-    `${owner.name}.${name}`,
-    scope as Scope<ModelBase>,
-    [],
-  ) as Scoped<ModelBase>;
-}
-
-/**
- * An association's records in its scope's order, then the target's primary key, so lazy
- * reads, preloads and dependents agree on order, and a hasOne on its one record.
- */
-export function inAssociationOrder(
-  relation: Scoped<ModelBase>,
-  target: ModelClass,
-): Scoped<ModelBase> {
-  return relation.order({ [target.primaryKey]: "asc" });
-}
-
-/** The target Model, ready for use. */
-export function targetOf(definition: AssociationDefinition): ModelClass {
-  const target = definition.target();
-  prepareModel(target);
-  return target;
-}
-
 /** Why an owner has no key for its targets to point at. */
-function missingKeyReason(owner: ModelBase, definition: AssociationDefinition): string {
+function missingKeyReason(owner: ModelBase, { ownerAttribute }: ResolvedAssociation): string {
   const { name } = modelOf(owner);
-  const { ownerAttribute } = linkOf(definition, modelOf(owner), definition.target());
   return owner[state].isNew
     ? `the ${name} hasn't been saved; save the ${name} first`
     : `the ${name} has no ${ownerAttribute}`;
-}
-
-/** The owner's value that targets point at (its primary key, by default); null if unsaved. */
-function ownerKey(owner: ModelBase, definition: AssociationDefinition): unknown {
-  if (owner[state].isNew) return null;
-  const { ownerAttribute } = linkOf(definition, modelOf(owner), definition.target());
-  return owner[state].read(ownerAttribute);
 }
