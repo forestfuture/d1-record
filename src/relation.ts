@@ -199,6 +199,8 @@ export interface OwnerLink {
   appendTo?: AssociationCache;
   /** Receives each record built through the association, for autosave. Kept when chained. */
   register?: (record: ModelBase) => void;
+  /** The association's built records not yet saved, which `size()` counts. Dropped when chained. */
+  unsaved?: () => readonly ModelBase[];
 }
 
 /** Where a hasMany's loaded records are kept: on the owner record, per association. */
@@ -573,6 +575,29 @@ export class Relation<M extends ModelBase, S = {}> {
   async count(attribute?: keyof AttributesOf<M> & string): Promise<number> {
     const [row] = await this.#all(compileCount(this.#query, attribute));
     return Number(row?.["count"] ?? 0);
+  }
+
+  /**
+   * The number of records, as Rails' `size`: a loaded association's (built records included)
+   * without a query; otherwise a `COUNT(*)`, plus an association's unsaved built records.
+   */
+  async size(): Promise<number> {
+    const cached = this.#cached();
+    if (cached !== undefined) return cached.length;
+    return (await this.count()) + (this.#owner.unsaved?.().length ?? 0);
+  }
+
+  /** Whether there are no records: a loaded association answers itself, else `!exists()`. */
+  async isEmpty(): Promise<boolean> {
+    const cached = this.#cached();
+    if (cached !== undefined) return cached.length === 0;
+    if ((this.#owner.unsaved?.().length ?? 0) > 0) return false;
+    return !(await this.exists());
+  }
+
+  /** Whether there are any records: the opposite of `isEmpty()` (Rails' `any?`). */
+  async hasAny(): Promise<boolean> {
+    return !(await this.isEmpty());
   }
 
   /** Whether any record matches, optionally with extra conditions. */
