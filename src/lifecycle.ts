@@ -1,5 +1,13 @@
 import { compileDelete, compileInsert, compileSelect, compileUpdate } from "./compiler.ts";
-import { autosavesOf, linkRecords, ownerKeysKnown } from "./autosave.ts";
+import {
+  autosavesOf,
+  linkParents,
+  linkRecords,
+  ownerKeysKnown,
+  parentKeysKnown,
+  parentsOf,
+  type Autosave,
+} from "./autosave.ts";
 import { prepareDependents } from "./dependents.ts";
 import {
   AbortAfterPersistence,
@@ -165,6 +173,10 @@ function aborted(record: ModelBase): { status: "aborted"; reason: string } {
  * association's name.
  */
 async function validateAutosaves(record: ModelBase, claimed: Claimed): Promise<void> {
+  for (const { name, record: parent } of parentsOf(record, claimed)) {
+    if ((await validation(parent, claimed)) !== "valid")
+      record[state].errors.add(name, "is invalid");
+  }
   for (const { name, records } of autosavesOf(record, claimed)) {
     let valid = true;
     for (const each of records) {
@@ -205,25 +217,63 @@ export async function prepareSave(record: ModelBase, claimed: Claimed): Promise<
  */
 async function prepareWrites(record: ModelBase, claimed: Claimed): Promise<SavePlan> {
   claimed.add(record);
+  // New belongsTo records first: the record needs their keys (Rails' belongs_to autosave).
+  const parents = parentsOf(record, claimed);
+  const parentPlans = await prepareEach(
+    parents.map((parent) => parent.record),
+    claimed,
+  );
+  if (!Array.isArray(parentPlans)) return parentPlans;
   const isInsert = record[state].isNew;
   if (!(await beforeWrite(record, isInsert))) return aborted(record);
-  const own: Stage = () => [saveWrite(record, isInsert)];
+  const own: Stage = () => {
+    linkParents(record, parents);
+    return [saveWrite(record, isInsert)];
+  };
   const autosaves = autosavesOf(record, claimed);
+  const childPlans = await prepareEach(
+    autosaves.flatMap(({ records }) => records),
+    claimed,
+  );
+  if (!Array.isArray(childPlans)) return childPlans;
+  const stages = withChildren(record, own, autosaves, childPlans);
+  if (parentPlans.length === 0) return { status: "ready", stages };
+  const first = combine(parentPlans.map((plan) => plan.stages));
+  return {
+    status: "ready",
+    stages: parentKeysKnown(record, parents) ? combine([first, stages]) : [...first, ...stages],
+  };
+}
+
+/** Each record's prepared writes, in order; the first refusal stops them. */
+async function prepareEach(
+  records: readonly ModelBase[],
+  claimed: Claimed,
+): Promise<Ready[] | Exclude<SavePlan, Ready>> {
   const plans: Ready[] = [];
-  for (const child of autosaves.flatMap(({ records }) => records)) {
-    const plan = await prepareWrites(child, claimed);
+  for (const each of records) {
+    const plan = await prepareWrites(each, claimed);
     if (plan.status !== "ready") return plan;
     plans.push(plan);
   }
-  if (plans.length === 0) return { status: "ready", stages: [own] };
-  const children = combine(plans.map(({ stages }) => stages));
-  // Link the records to their owner just before their first stage builds its statements.
-  const [first, ...rest] = children;
-  const linked: Stage[] = [() => (linkRecords(record, autosaves), first!()), ...rest];
-  return {
-    status: "ready",
-    stages: ownerKeysKnown(record, autosaves) ? combine([[own], linked]) : [own, ...linked],
-  };
+  return plans;
+}
+
+/**
+ * The owner's stage with its autosaved records': in the same batch when the owner's key is
+ * known, else in the next one. The records are linked to the owner just before their first
+ * stage builds its statements.
+ */
+function withChildren(
+  owner: ModelBase,
+  own: Stage,
+  autosaves: readonly Autosave[],
+  plans: readonly Ready[],
+): Stage[] {
+  if (plans.length === 0) return [own];
+  const [first, ...rest] = combine(plans.map(({ stages }) => stages));
+  const linked: Stage[] = [() => (linkRecords(owner, autosaves), first!()), ...rest];
+  return ownerKeysKnown(owner, autosaves) ? combine([[own], linked]) : [own, ...linked];
 }
 
 /** Stage lists merged position by position: every plan's first stage in one batch, and so on. */
