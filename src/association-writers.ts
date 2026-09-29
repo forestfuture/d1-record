@@ -7,12 +7,8 @@ import {
   type AssociationDefinition,
 } from "./associations.ts";
 import { RecordNotSaved } from "./errors.ts";
-import { buildRecord, type ModelBase, type ModelClass } from "./model.ts";
+import { buildRecord, modelOf, type ModelBase } from "./model.ts";
 import { state } from "./record-state.ts";
-
-function modelOf(record: ModelBase): ModelClass {
-  return record.constructor as ModelClass;
-}
 
 /**
  * A belongsTo's accessor for `owner`: `await post.author()`, plus `set`, `build`, `create` and
@@ -29,9 +25,18 @@ export function belongsToAccessor(
         [targetAttribute]: key,
       }),
     );
-  const set = (record: ModelBase | null) => setParent(owner, name, definition, record);
+  const set = (record: ModelBase | null) => pointOwnerAt(owner, name, definition, record);
   const make = (attributes: Record<string, unknown>) =>
     buildRecord(targetOf(definition), attributes, owner[state].executor);
+  // Saved first, so the owner points at its new key (the owner itself isn't saved).
+  const create =
+    (save: (record: ModelBase) => Promise<unknown>) =>
+    async (attributes: Record<string, unknown> = {}) => {
+      const record = make(attributes);
+      await save(record);
+      set(record);
+      return record;
+    };
   return Object.assign(read, {
     set,
     build(attributes: Record<string, unknown> = {}) {
@@ -39,19 +44,8 @@ export function belongsToAccessor(
       set(record);
       return record;
     },
-    // Saved first, so the owner points at its new key (the owner itself isn't saved).
-    async create(attributes: Record<string, unknown> = {}) {
-      const record = make(attributes);
-      await record.save();
-      set(record);
-      return record;
-    },
-    async createOrThrow(attributes: Record<string, unknown> = {}) {
-      const record = make(attributes);
-      await record.saveOrThrow();
-      set(record);
-      return record;
-    },
+    create: create((record) => record.save()),
+    createOrThrow: create((record) => record.saveOrThrow()),
   });
 }
 
@@ -60,7 +54,7 @@ export function belongsToAccessor(
  * record becomes the loaded association. A new record is saved first when the owner is
  * (autosave), and the key filled in then if D1 generates it.
  */
-function setParent(
+function pointOwnerAt(
   owner: ModelBase,
   name: string,
   definition: AssociationDefinition,
@@ -74,9 +68,11 @@ function setParent(
   }
   const { ownerAttribute, targetAttribute } = linkOf(definition, modelOf(owner), target);
   const key = record === null ? null : record[state].read(targetAttribute);
-  owner[state].write(ownerAttribute, key);
-  owner[state].cacheAssociation(name, { attribute: ownerAttribute, key, value: record });
-  owner[state].setParent(name, record !== null && record[state].isNew ? record : undefined);
+  owner[state].pointAt(name, ownerAttribute, key, record);
+  owner[state].setBelongsToAutosave(
+    name,
+    record !== null && record[state].isNew ? record : undefined,
+  );
 }
 
 /**
@@ -104,25 +100,31 @@ export function hasOneAccessor(
       owner[state].addBuilt(name, record);
       return record;
     },
-    async create(attributes: Record<string, unknown> = {}) {
-      requireSavedOwner(owner, definition);
-      const record = buildOne(owner, name, definition, attributes);
-      // Kept if it doesn't save, so saving the owner tries again, as Rails does.
-      if (!(await record.save())) owner[state].addBuilt(name, record);
-      return record;
-    },
-    async createOrThrow(attributes: Record<string, unknown> = {}) {
-      requireSavedOwner(owner, definition);
-      const record = buildOne(owner, name, definition, attributes);
-      try {
-        await record.saveOrThrow();
-      } catch (error) {
-        owner[state].addBuilt(name, record);
-        throw error;
-      }
-      return record;
-    },
+    create: createOne(owner, name, definition, (record) => record.save()),
+    createOrThrow: createOne(owner, name, definition, (record) => record.saveOrThrow()),
   });
+}
+
+/**
+ * A hasOne's `create` or `createOrThrow` (by `save`): needs a saved owner, as in Rails. A
+ * record that doesn't save is kept as built, so saving the owner tries again, as Rails does.
+ */
+function createOne(
+  owner: ModelBase,
+  name: string,
+  definition: AssociationDefinition,
+  save: (record: ModelBase) => Promise<unknown>,
+) {
+  return async (attributes: Record<string, unknown> = {}) => {
+    requireSavedOwner(owner, definition);
+    const record = buildOne(owner, name, definition, attributes);
+    try {
+      await save(record);
+    } finally {
+      if (record[state].isNew) owner[state].addBuilt(name, record);
+    }
+    return record;
+  };
 }
 
 /** As in Rails, records can't be created through an owner that hasn't been saved. */

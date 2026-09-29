@@ -584,15 +584,20 @@ export class Relation<M extends ModelBase, S = {}> {
   async size(): Promise<number> {
     const cached = this.#cached();
     if (cached !== undefined) return cached.length;
-    return (await this.count()) + (this.#owner.unsaved?.().length ?? 0);
+    return (await this.count()) + this.#unsavedCount();
   }
 
   /** Whether there are no records: a loaded association answers itself, else `!exists()`. */
   async isEmpty(): Promise<boolean> {
     const cached = this.#cached();
     if (cached !== undefined) return cached.length === 0;
-    if ((this.#owner.unsaved?.().length ?? 0) > 0) return false;
+    if (this.#unsavedCount() > 0) return false;
     return !(await this.exists());
+  }
+
+  /** How many records were built through this association and not yet saved. */
+  #unsavedCount(): number {
+    return this.#owner.unsaved?.().length ?? 0;
   }
 
   /** Whether there are any records: the opposite of `isEmpty()` (Rails' `any?`). */
