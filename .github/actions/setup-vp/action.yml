@@ -1,0 +1,9 @@
+name: Set up Vite+
+description: Installs Vite+ (the version pinned in pnpm-workspace.yaml), Node (.node-version) and pnpm, then runs `vp install`. Check out the repository first.
+runs:
+  using: composite
+  steps:
+    - uses: voidzero-dev/setup-vp@v1.21.1
+      with:
+        node-version-file: .node-version
+        cache: true

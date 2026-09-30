@@ -39,7 +39,7 @@
     "test:remote": "vp test --project remote",
     "check:public-types": "node scripts/check-public-types.mjs",
     "check": "vp check",
-    "prepublishOnly": "vp run build",
+    "prepack": "vp run build",
     "release:version": "changeset version && vp fmt",
     "prepare": "vp config",
     "knip": "knip",

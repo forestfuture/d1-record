@@ -2,11 +2,12 @@
   "$schema": "https://unpkg.com/@changesets/config@4.0.1/schema.json",
   "baseBranch": "main",
   "access": "public",
-  "changelog": ["@changesets/changelog-github", { "repo": "forestfuture/d1-record" }],
+  "changelog": [
+    "@changesets/changelog-github",
+    {
+      "repo": "forestfuture/d1-record"
+    }
+  ],
   "commit": false,
-  "format": false,
-  "fixed": [],
-  "linked": [],
-  "ignore": [],
-  "updateInternalDependencies": "patch"
+  "format": false
 }

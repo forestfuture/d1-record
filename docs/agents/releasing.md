@@ -26,12 +26,15 @@ The line is for the library's users: say what changed for them, not how. Interna
 
 ## What CI does
 
-The release jobs in `.github/workflows/ci.yml` run on `main`, after `check` passes:
+The release jobs in `.github/workflows/ci.yml` run on `main`, after `check` passes, one run at a time:
 
-1. **`release-mode`** works out what to do. With changesets waiting, it's `version`. With a version in `package.json` that npm doesn't have yet, it's `publish`.
-2. **`release-version`** opens or updates the **Version Packages** pull request. That pull request bumps `package.json`, writes `CHANGELOG.md` and deletes the used changesets. Pull requests opened by Actions don't run CI, but merging one runs CI on `main` before anything is published.
-3. **`release-pack`** builds (`vp pack`) and packs the tarball.
-4. **`release-publish`** publishes it to npm with provenance, tags the commit with the version and creates a GitHub Release with its changelog. It's the only job that can get an OIDC token (`id-token: write`).
+1. **`release-mode`** works out what to do:
+   - `version` while changesets are waiting;
+   - `publish` once `package.json` has a version npm doesn't have yet;
+   - `none` otherwise, which is what most pushes hit.
+2. **`release-version`** opens or updates the **Version Packages** pull request. That pull request bumps `package.json`, writes `CHANGELOG.md` (formatted with `vp fmt`) and deletes the used changesets. CI rewrites its branch on every push to `main`, so don't edit it by hand. Pull requests opened by Actions don't run CI, but merging one runs CI on `main` before anything is published.
+3. **`release-pack`** packs the tarball. Packing runs the package's `prepack` script, which builds `dist/` with `vp pack` (attw and publint included).
+4. **`release-publish`** publishes the tarball to npm with provenance, tags the commit with the version, and creates a GitHub Release with its changelog. It's the only job that can get an OIDC token (`id-token: write`). Changesets publishes with pnpm, so provenance is turned on with `PNPM_CONFIG_PROVENANCE`: pnpm ignores `NPM_CONFIG_*`.
 
 To release, merge the Version Packages pull request.
 
@@ -39,13 +42,16 @@ To release, merge the Version Packages pull request.
 
 These are done once, in this order.
 
-1. **Allow Actions to open pull requests:** Settings → Actions → General → Workflow permissions → **Allow GitHub Actions to create and approve pull requests** (the organization may need to allow it first).
+1. **Allow Actions to open pull requests.** In the `forestfuture` organization's settings, then in the repository's: Settings → Actions → General → Workflow permissions → **Allow GitHub Actions to create and approve pull requests**. Both have to allow it.
 2. **Make the repository public.** npm only attaches provenance to packages published from a public repository.
-3. **The first release uses a temporary token**, because npm only lets a trusted publisher be set on a package that already exists:
+3. **Edit anything that says the package isn't published yet**, on `main`: the "Not on npm yet" warning in `site/guide/getting-started.md`.
+4. **The first release uses a temporary token**, because npm only lets a trusted publisher be set on a package that already exists:
    1. On npmjs.com: avatar → Access Tokens → Generate New Token → **Granular Access Token**. Name it `d1-record first release`, with the shortest expiry. Give it Read and write for the `@forestfuture` scope, and no organization access. Tick "Bypass two-factor authentication" if offered: CI can't answer a 2FA prompt.
    2. `gh secret set NPM_TOKEN`, and paste the token when it asks.
-   3. Update the "Not on npm yet" warning in `site/guide/getting-started.md` in the Version Packages pull request, then merge it. CI publishes `0.1.0`.
-4. **Then switch to trusted publishing:**
+   3. Merge the Version Packages pull request. CI publishes `0.1.0`. Only the step that writes `~/.npmrc` sees the token.
+   4. Check the package page on npmjs.com shows the version, and a provenance badge linking to the commit.
+   5. If the publish fails because pnpm tried trusted publishing first (an OIDC or token-exchange error), nothing was published. Delete the tag and release if they were created, then re-run the failed `release-publish` job.
+5. **Then switch to trusted publishing:**
    1. On npmjs.com, the package's Settings → **Trusted Publisher** → GitHub Actions: organization `forestfuture`, repository `d1-record`, workflow `ci.yml`, no environment.
    2. Delete the secret (`gh secret delete NPM_TOKEN`) and the token on npmjs.com.
    3. In the package's Settings → Publishing access, choose **Require two-factor authentication and disallow tokens**.
