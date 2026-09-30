@@ -4,7 +4,7 @@ description: "Point coding agents at d1-record's docs, install its agent skill, 
 
 # Using d1-record with AI agents
 
-Coding agents write better d1-record code when they have its documentation, and follow it most reliably when its key rules are in their context. There are three ways to give them both, from least to most effort.
+Coding agents follow d1-record's conventions best when its guide is at hand and its key rules are in their context. Use any of the three below, or all of them.
 
 ## Give your agent the docs
 
@@ -23,7 +23,7 @@ d1-record has an [agent skill](https://github.com/forestfuture/d1-record/blob/ma
 npx skills add forestfuture/d1-record
 ```
 
-The package ships the skill too, matching its version. To install it from `node_modules`:
+The package ships the skill too, so you can install the copy that matches your installed version. The skills CLI's command for this, `experimental_sync`, finds skills inside `node_modules` and installs them for your agents. It's marked experimental, so its name may change:
 
 ```sh
 npx skills experimental_sync
@@ -35,4 +35,4 @@ Agents read `AGENTS.md` (or `CLAUDE.md` for Claude Code) at the start of every t
 
 <<< @/../SKILL.md#rules{md}
 
-The rules and the skill share one source, so this block is always the skill's current rules.
+Copy it again after upgrading d1-record, since the rules can change between versions.
