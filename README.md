@@ -187,7 +187,7 @@ Query builders such as [Drizzle](https://orm.drizzle.team) and [Kysely](https://
 
 ## Versioning
 
-d1-record follows [semantic versioning](https://semver.org). While it's on 0.x, a breaking change bumps the minor version (0.1 → 0.2), and features and fixes bump the patch, so a `^0.1.0` range never brings in a breaking change. Every release is listed in [`CHANGELOG.md`](CHANGELOG.md) and on the [releases page](https://github.com/forestfuture/d1-record/releases).
+d1-record follows [semantic versioning](https://semver.org). While it's on 0.x, a breaking change bumps the minor version (0.1 → 0.2), and features and fixes bump the patch, so a `^0.1.0` range never brings in a breaking change. Every release is listed on the [releases page](https://github.com/forestfuture/d1-record/releases), and in `CHANGELOG.md`.
 
 ## Documentation
 
