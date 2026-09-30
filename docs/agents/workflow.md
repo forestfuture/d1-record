@@ -43,7 +43,7 @@ Run the `code-review` skill, with the commit before the issue's work as the fixe
 
 ## 5. Finish — ✋ human checkpoint
 
-- Full validation: `vp check`, `vp test`, `vp pack` (with attw and publint), `vp run check:public-types` (after `vp pack`: the published types expose no internals; mark internals `/** @internal */`), `vp run knip`, `vp run docs:build` (the site builds with no dead links).
+- Full validation: `vp check`, `vp test`, `vp pack` (with attw and publint), `vp run check:public-types` (after `vp pack`: the published types expose no internals; mark internals `/** @internal */`), `vp run knip`, `vp run docs:build` (the site builds with no dead links). After a push to `main`, CI deploys the site once the checks pass (the Cloudflare tokens it uses are in [cloudflare-tokens.md](cloudflare-tokens.md)).
 - **Never push without the human's approval.** Pushing over SSH may need the human to unlock their key. If a push fails with `agent refused operation`, ask them to run `git push` themselves.
 - After the push, wait for CI to pass (`gh run watch`), then close the issue with a summary comment: what was delivered, the decisions made (link any `deferred` issues), and what the review found and fixed.
 
