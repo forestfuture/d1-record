@@ -114,7 +114,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-vp
-      # Packing runs the package's `prepack` script, which builds dist/ (attw and publint included).
+      # Packing runs the package's `prepack` script: it builds dist/ (attw and publint included) and
+      # the docs site, whose llms-full.txt ships in the package. A broken docs build blocks a release.
       - id: pack
         uses: changesets/action/pack@v2
         with:

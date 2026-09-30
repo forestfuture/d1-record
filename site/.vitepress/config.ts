@@ -1,11 +1,13 @@
 import { defineConfig } from "vitepress";
 import { copyOrDownloadAsMarkdownButtons } from "vitepress-plugin-llms";
-import { llms, site } from "./llms.ts";
+import { llms, tidyLlmsTxt } from "./llms.ts";
 
 const repository = "https://github.com/forestfuture/d1-record";
+const base = "/d1-record/";
 
 export default defineConfig({
   vite: { plugins: [llms()] },
+  buildEnd: ({ outDir }) => tidyLlmsTxt(outDir),
   markdown: {
     config(md) {
       md.use(copyOrDownloadAsMarkdownButtons); // "Copy page" on every page
@@ -15,7 +17,7 @@ export default defineConfig({
   description: "A Rails-inspired Active Record for Cloudflare Workers and D1.",
   // Served at docs.forestfuture.dev/d1-record: built into dist/d1-record so the Worker's
   // static assets find each page at its own path (wrangler.jsonc).
-  base: "/d1-record/",
+  base,
   outDir: ".vitepress/dist/d1-record",
   cleanUrls: true,
   lastUpdated: true,
@@ -28,8 +30,9 @@ export default defineConfig({
       {
         text: "LLMs",
         items: [
-          { text: "llms.txt", link: `${site}/llms.txt` },
-          { text: "llms-full.txt", link: `${site}/llms-full.txt` },
+          // Files, not pages: opened in a new tab, which VitePress links without its base.
+          { text: "llms.txt", link: `${base}llms.txt`, target: "_blank" },
+          { text: "llms-full.txt", link: `${base}llms-full.txt`, target: "_blank" },
           { text: "Using d1-record with AI agents", link: "/guide/ai-agents" },
         ],
       },
