@@ -85,6 +85,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          # The changelog links each change to the commit that added its changeset, so it needs
+          # the history (a shallow clone would try to fetch more, without credentials).
+          fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/setup-vp
       - uses: changesets/action/version@v2
