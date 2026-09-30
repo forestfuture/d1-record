@@ -52,3 +52,92 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           # Workers Scripts: Edit on the account, and Workers Routes: Edit on the forestfuture.dev zone.
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DOCS_API_TOKEN }}
+
+  # Releasing (docs/agents/releasing.md): once the checks pass on main, Changesets either opens or
+  # updates the "Version Packages" pull request, or, after that pull request is merged, publishes
+  # to npm. Only the publish job can get an OIDC token (npm trusted publishing and provenance).
+  release-mode:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      mode: ${{ steps.select-mode.outputs.mode }}
+      publish-plan-artifact-id: ${{ steps.select-mode.outputs.publish-plan-artifact-id }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: voidzero-dev/setup-vp@v1.21.1
+        with:
+          node-version-file: .node-version
+          cache: true
+      - id: select-mode
+        uses: changesets/action/select-mode@v2
+
+  release-version:
+    needs: release-mode
+    if: needs.release-mode.outputs.mode == 'version'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: voidzero-dev/setup-vp@v1.21.1
+        with:
+          node-version-file: .node-version
+          cache: true
+      - uses: changesets/action/version@v2
+        with:
+          # Bumps the version and writes CHANGELOG.md, formatted so the merge passes `vp check`.
+          script: vp run release:version
+
+  release-pack:
+    needs: release-mode
+    if: needs.release-mode.outputs.mode == 'publish'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      pack-dir-artifact-id: ${{ steps.pack.outputs.pack-dir-artifact-id }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: voidzero-dev/setup-vp@v1.21.1
+        with:
+          node-version-file: .node-version
+          cache: true
+      - run: vp pack
+      - id: pack
+        uses: changesets/action/pack@v2
+        with:
+          publish-plan-artifact-id: ${{ needs.release-mode.outputs.publish-plan-artifact-id }}
+
+  release-publish:
+    needs: release-pack
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # git tags and GitHub Releases
+      id-token: write # npm trusted publishing, and provenance
+    env:
+      NPM_CONFIG_PROVENANCE: true
+      # Only for the first release, before npm allows a trusted publisher; then delete the secret.
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: voidzero-dev/setup-vp@v1.21.1
+        with:
+          node-version-file: .node-version
+          cache: true
+      - if: env.NPM_TOKEN != ''
+        run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
+      - uses: changesets/action/publish@v2
+        with:
+          pack-dir-artifact-id: ${{ needs.release-pack.outputs.pack-dir-artifact-id }}

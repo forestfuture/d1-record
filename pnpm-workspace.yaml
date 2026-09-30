@@ -1,4 +1,5 @@
 packages:
+  - .
   - site
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@1.0.0

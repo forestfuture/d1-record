@@ -1,7 +1,6 @@
 {
   "name": "@forestfuture/d1-record",
   "version": "0.0.0",
-  "private": true,
   "description": "A Rails-inspired Active Record for Cloudflare Workers and D1.",
   "keywords": [
     "active-record",
@@ -11,7 +10,7 @@
     "sqlite",
     "workers"
   ],
-  "homepage": "https://github.com/forestfuture/d1-record#readme",
+  "homepage": "https://docs.forestfuture.dev/d1-record/",
   "bugs": {
     "url": "https://github.com/forestfuture/d1-record/issues"
   },
@@ -41,6 +40,7 @@
     "check:public-types": "node scripts/check-public-types.mjs",
     "check": "vp check",
     "prepublishOnly": "vp run build",
+    "release:version": "changeset version && vp fmt",
     "prepare": "vp config",
     "knip": "knip",
     "docs:dev": "vp run d1-record-site#dev",
@@ -48,6 +48,8 @@
   },
   "devDependencies": {
     "@arethetypeswrong/core": "^0.18.5",
+    "@changesets/changelog-github": "^1.0.1",
+    "@changesets/cli": "^3.0.3",
     "@cloudflare/workers-types": "^5.20260922.1",
     "@types/node": "^24.13.6",
     "knip": "^6.38.0",

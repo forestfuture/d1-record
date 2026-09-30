@@ -185,6 +185,10 @@ Most of it will feel familiar. The main difference is naming: attributes are cam
 
 Query builders such as [Drizzle](https://orm.drizzle.team) and [Kysely](https://kysely.dev) are SQL-first: you write queries against a typed schema, and rows come back as plain objects. d1-record is an Active Record: rows come back as records that know how to validate, save, destroy and load their associations, with the conventions of Ruby on Rails. Its value is a coherent, rigorously tested lifecycle rather than advanced type inference. If you know Rails, you already know most of it.
 
+## Versioning
+
+d1-record follows [semantic versioning](https://semver.org). While it's on 0.x, a breaking change bumps the minor version (0.1 → 0.2), and features and fixes bump the patch, so a `^0.1.0` range never brings in a breaking change. Every release is listed in [`CHANGELOG.md`](CHANGELOG.md) and on the [releases page](https://github.com/forestfuture/d1-record/releases).
+
 ## Documentation
 
 The guide is being built in [`site/`](site/) for [docs.forestfuture.dev/d1-record](https://docs.forestfuture.dev/d1-record). Until it's live:
