@@ -1,3 +1,7 @@
+---
+description: "belongsTo, hasMany and hasOne: inferred foreign keys, reading, preloading with includes, autosave, writing through associations, scopes and dependent strategies."
+---
+
 # Associations
 
 Associations connect Models: `belongsTo`, `hasMany` and `hasOne`, as in Rails. They're declared with `this.defineAssociations({...})`, and each needs a matching `declare` line so TypeScript knows the accessor.

@@ -1,3 +1,7 @@
+---
+description: "The callback order, abort() to stop a save or destroy, and the Rails callbacks d1-record doesn't have and why."
+---
+
 # Callbacks
 
 Callbacks run your code at points in a record's lifecycle. They're declared in a Model's `static {}` block, receive the record (typed as the Model's record), and may be async.

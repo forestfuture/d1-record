@@ -1,3 +1,7 @@
+---
+description: "validates with presence, length, format, inclusion, numericality and uniqueness, their options, the errors collection, and custom validations."
+---
+
 # Validations
 
 Validations are declared in a Model's `static {}` block with `this.validates(attribute, rules)`. The attribute name is typed against the Model, so a misspelled attribute is a compile error, and so is the record the `if` option receives.

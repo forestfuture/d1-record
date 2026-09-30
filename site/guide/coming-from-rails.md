@@ -1,3 +1,7 @@
+---
+description: "What's different from Rails' Active Record: queries start from the request, camelCase attributes, OrThrow methods, batches instead of transactions."
+---
+
 # Coming from Rails
 
 Most of d1-record will feel familiar: Models, validations, callbacks, associations, scopes and dirty tracking all follow Active Record, down to the default error messages. This page covers what's different, and why.

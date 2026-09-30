@@ -1,3 +1,7 @@
+---
+description: "Statements (insert, insertAll, upsert, updateAll, deleteAll) and atomic db.batch of statements and records' toSave()/toDestroy()."
+---
+
 # Batches and bulk writes
 
 ## Statements

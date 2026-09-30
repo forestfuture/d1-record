@@ -1,8 +1,16 @@
 import { defineConfig } from "vitepress";
+import { copyOrDownloadAsMarkdownButtons } from "vitepress-plugin-llms";
+import { llms, site } from "./llms.ts";
 
 const repository = "https://github.com/forestfuture/d1-record";
 
 export default defineConfig({
+  vite: { plugins: [llms()] },
+  markdown: {
+    config(md) {
+      md.use(copyOrDownloadAsMarkdownButtons); // "Copy page" on every page
+    },
+  },
   title: "d1-record",
   description: "A Rails-inspired Active Record for Cloudflare Workers and D1.",
   // Served at docs.forestfuture.dev/d1-record: built into dist/d1-record so the Worker's
@@ -17,6 +25,14 @@ export default defineConfig({
     nav: [
       { text: "Guide", link: "/guide/getting-started" },
       { text: "Contract", link: `${repository}/blob/main/docs/contract.md` },
+      {
+        text: "LLMs",
+        items: [
+          { text: "llms.txt", link: `${site}/llms.txt` },
+          { text: "llms-full.txt", link: `${site}/llms-full.txt` },
+          { text: "Using d1-record with AI agents", link: "/guide/ai-agents" },
+        ],
+      },
     ],
     sidebar: [
       {
@@ -24,6 +40,7 @@ export default defineConfig({
         items: [
           { text: "Getting started", link: "/guide/getting-started" },
           { text: "Coming from Rails", link: "/guide/coming-from-rails" },
+          { text: "Using with AI agents", link: "/guide/ai-agents" },
         ],
       },
       {

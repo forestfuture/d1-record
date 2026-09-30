@@ -58,3 +58,9 @@ These are done once, in this order.
    4. In the `forestfuture` organization's settings, require 2FA for members.
 
 From then on, only CI in `forestfuture/d1-record`, from `ci.yml`, can publish.
+
+## After the first release: help agents find it
+
+1. **Install the skill once** to check it works for others: `npx skills add forestfuture/d1-record`. skills.sh has no submission: a skill appears there from install counts, which the skills CLI reports for public GitHub repositories.
+2. **Ask to be listed under Databases** (https://www.skills.sh/topic/databases) once it has some installs. Topics look curated by hand, so ask the skills.sh team, for example in an issue on `vercel-labs/skills`.
+3. **Add the docs to Context7** (https://context7.com), which indexes `llms.txt` for coding agents: submit `https://docs.forestfuture.dev/d1-record/llms.txt`.

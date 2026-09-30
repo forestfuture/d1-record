@@ -1,3 +1,7 @@
+---
+description: "Declaring a Model: attributes and types, camelCase to snake_case columns, defaults, timestamps, change tracking, scopes, serialization and inheritance."
+---
+
 # Models
 
 A Model describes one table. You declare its attributes once, in the object passed to `Model({...})`, and TypeScript infers the record's properties from it.
