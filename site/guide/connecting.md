@@ -1,3 +1,7 @@
+---
+description: "connect(env.DB) per request, db.model(User), read-replica sessions and bookmarks, and watching queries with onQuery."
+---
+
 # Connecting
 
 Every query goes through a **Database**: a wrapper around your D1 binding that you create once per request with `connect(env.DB)`.

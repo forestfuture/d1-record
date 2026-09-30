@@ -1,3 +1,7 @@
+---
+description: "Relations: where, comparisons, sql fragments, ordering and paging, find/findBy/first/count, select for partial records, none(), merge."
+---
+
 # Querying
 
 A query is a **Relation**: a description of which records you want. Every method that narrows, orders or pages a query returns a new Relation, and nothing is sent to D1 until you ask for results.

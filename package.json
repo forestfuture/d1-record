@@ -21,7 +21,9 @@
     "url": "git+https://github.com/forestfuture/d1-record.git"
   },
   "files": [
-    "dist"
+    "dist",
+    "llms-full.txt",
+    "SKILL.md"
   ],
   "type": "module",
   "sideEffects": false,
@@ -38,8 +40,9 @@
     "test": "vp test",
     "test:remote": "vp test --project remote",
     "check:public-types": "node scripts/check-public-types.mjs",
+    "check:package": "node scripts/check-package.mjs",
     "check": "vp check",
-    "prepack": "vp run build",
+    "prepack": "vp run build && vp run docs:build && node scripts/pack-docs.mjs",
     "release:version": "changeset version && vp fmt",
     "prepare": "vp config",
     "knip": "knip",

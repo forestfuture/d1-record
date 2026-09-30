@@ -1,3 +1,7 @@
+---
+description: "Install d1-record, create D1 tables, declare Models and use them in a Worker, step by step."
+---
+
 # Getting started
 
 A [Worker](https://developers.cloudflare.com/workers/) is a function that runs at Cloudflare's edge, and [D1](https://developers.cloudflare.com/d1/) is its SQLite database. d1-record sits between the two: you describe each table once as a **Model**, and your Worker reads and writes **records** instead of rows.

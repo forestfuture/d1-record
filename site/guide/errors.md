@@ -1,3 +1,7 @@
+---
+description: "Every error d1-record throws: lifecycle, usage and constraint errors, and when each is raised."
+---
+
 # Errors
 
 Every error d1-record throws extends `D1RecordError`, so one `instanceof` check separates them from anything else.
