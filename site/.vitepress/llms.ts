@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import llmstxt from "vitepress-plugin-llms";
 
-export const site = "https://docs.forestfuture.dev/d1-record";
+const site = "https://docs.forestfuture.dev/d1-record";
 
 /** The rules for agents, kept once in the agent skill (SKILL.md's "rules" region). */
 function agentRules(): string {
