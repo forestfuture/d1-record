@@ -17,7 +17,7 @@ import {
   UnknownAssociation,
 } from "./errors.ts";
 import { destroyLifecycle, reloadRecord, saveLifecycle, validateRecord } from "./lifecycle.ts";
-import { associationsOf, newRecord } from "./association-fields.ts";
+import { associationsOf, declarationIn, newRecord, probeOf } from "./association-fields.ts";
 import { RecordStatement } from "./record-statement.ts";
 import { inferTableNames, requireTableName } from "./table-names.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
@@ -503,9 +503,10 @@ function rejectReservedAttributeNames(model: ModelClass): void {
 }
 
 function rejectShadowingFields(model: ModelClass): void {
-  const probe = new model();
+  const probe = probeOf(model) as unknown as Record<string, unknown>;
   for (const name of model.attributeDefinitions.keys()) {
-    if (Object.hasOwn(probe, name)) {
+    // An association field with an attribute's name is reported when associations are checked.
+    if (Object.hasOwn(probe, name) && declarationIn(probe[name]) === undefined) {
       throw new InvalidModel(
         `${model.name} declares a class field "${name}" that hides the attribute's accessor; ` +
           "remove it (attributes are declared in Model({...}))",

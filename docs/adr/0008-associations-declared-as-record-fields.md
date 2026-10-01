@@ -20,6 +20,8 @@ Instance fields compile because their initializers are typed like any member, no
 
 - **Inheritance:** a subclass inherits its parent's associations, as class fields, and redeclaring a field replaces one. Removing one isn't possible, as in Rails.
 - **Inferred foreign key:** a field initializer can't tell which class body it's in. So a `hasMany`/`hasOne`'s inferred foreign key comes from the class that extends `Model({...})`, the same class the table name comes from, rather than from the declaring class. Rails uses the declaring class; the two differ only for a subclass that declares one without `foreignKey`.
-- **Typed scopes:** association scopes are typed from the target (`scope: (q) => q.order(...)`), which the old untyped declarations couldn't do.
+- **Typed scopes:** association scopes are typed from the target (`scope: (q) => q.order(...)`), which the old untyped declarations couldn't do. One case stays circular: a Model's association to itself whose scope calls the Model's own named scopes (`children = hasMany(Category, { scope: (q) => q.top() })` inside `Category`). Its field's type has to be written out, `children: HasMany<typeof Category> = hasMany(…)`, and the rest is inferred.
+- **Compiled as assignments:** an app compiled without `useDefineForClassFields`, or below ES2022, assigns its fields instead of defining them. The accessors on the prototype accept that assignment and keep the declaration on the record, so it's removed as usual.
+- **One probe per Model:** the probe record is also the one used to check that class fields don't hide attributes, so a Model's constructor runs once more, on its first use, than the records it makes.
 - **`new User()`:** on a record constructed directly, the association fields hold their declarations, and calling one throws `NoDatabase`, as other database operations on such a record do.
 - **Supersedes** ADR-0007's last consequence: associations no longer need a `declare`.

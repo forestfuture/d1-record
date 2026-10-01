@@ -8,6 +8,7 @@ import {
   hasOne,
   lt,
   Model,
+  type HasMany,
   type RecordStatement,
   Relation,
   sql,
@@ -296,7 +297,39 @@ describe("types", () => {
     expectTypeOf(typeOnly).toBeFunction();
   });
 
-  test("associations are typed from their declare lines, including includes() names", () => {
+  test("an association scope's q is typed from the target, its scopes included", () => {
+    class Article extends Model({ id: "integer", authorId: "integer", live: "boolean" }) {
+      static scopes = this.defineScopes({ live: (q) => q.where({ live: true }) });
+    }
+    // Checked by the type checker only; never used.
+    class Author extends Model({ id: "integer" }) {
+      liveArticles = hasMany(Article, { scope: (q) => q.live().order({ id: "desc" }) });
+      // @ts-expect-error Article has no "draft" scope
+      drafts = hasMany(Article, { scope: (q) => q.draft() });
+      // @ts-expect-error nor a "title" attribute
+      titled = hasMany(Article, { scope: (q) => q.where({ title: "x" }) });
+    }
+    expectTypeOf<Author["liveArticles"]>().toEqualTypeOf<HasMany<typeof Article>>();
+  });
+
+  test("a self-referencing association whose scope uses the Model's own scopes annotates its field", () => {
+    // TypeScript can't infer this one field's type from itself, so it's written out (ADR-0008).
+    class Category extends Model({ id: "integer", parentId: "integer" }) {
+      static scopes = this.defineScopes({ top: (q) => q.where({ parentId: null }) });
+      children: HasMany<typeof Category> = hasMany(Category, {
+        foreignKey: "parentId",
+        scope: (q) => q.top(),
+      });
+      parent = belongsTo(Category, { foreignKey: "parentId" });
+    }
+    const typeOnly = async (category: Category) => {
+      expectTypeOf(await category.children().top().toArray()).toEqualTypeOf<Category[]>();
+      expectTypeOf(await category.parent()).toEqualTypeOf<Category | null>();
+    };
+    expectTypeOf(typeOnly).toBeFunction();
+  });
+
+  test("associations are typed from their fields, including includes() names", () => {
     class Author extends Model({ id: "integer" }) {
       static tableName = "users";
       articles = hasMany(Article, { foreignKey: "authorId" });
