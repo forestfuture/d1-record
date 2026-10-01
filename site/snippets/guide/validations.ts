@@ -11,8 +11,6 @@ export class Account extends Model({
   isCompany: "boolean",
   companyName: "string",
 }) {
-  static tableName = "accounts";
-
   static {
     this.validates("email", { presence: true, uniqueness: { caseSensitive: false } });
     this.validates("handle", { length: { minimum: 3, maximum: 30 }, format: /^[a-z0-9_]+$/ });
@@ -34,8 +32,6 @@ export class Booking extends Model({
   startsAt: { type: "datetime", null: false },
   endsAt: { type: "datetime", null: false },
 }) {
-  static tableName = "bookings";
-
   static {
     this.afterValidation((booking) => {
       if (booking.endsAt <= booking.startsAt) {

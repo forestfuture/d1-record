@@ -38,8 +38,7 @@ export class User extends Model({
   createdAt: "datetime", // createdAt and updatedAt are set on save
   updatedAt: "datetime",
 }) {
-  static tableName = "users"; // required
-
+  // Its table, users, is inferred from the class name; static tableName overrides it.
   static associations = this.defineAssociations({
     posts: this.hasMany(() => Post, { dependent: "destroy" }), // foreign key inferred: Post's userId
   });
@@ -55,8 +54,6 @@ export class Post extends Model({
   userId: { type: "string", null: false },
   title: { type: "string", null: false },
 }) {
-  static tableName = "posts";
-
   static associations = this.defineAssociations({
     user: this.belongsTo(() => User), // foreign key inferred: userId
   });

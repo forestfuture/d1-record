@@ -31,7 +31,7 @@ A Worker serves many requests at once from one isolate, so a Model class can't h
 | `throw :abort`                       | `throw abort("reason")`                         |
 | `to_json`                            | `toJSON()`                                      |
 
-Attributes, conditions and association keys all name **attributes**, in camelCase. Column names only appear inside `sql` fragments. Foreign keys are inferred by Rails' convention (`userId` for `User`'s `has_many`), and `tableName` is always declared.
+Attributes, conditions and association keys all name **attributes**, in camelCase. Column names only appear inside `sql` fragments. Table names and foreign keys are inferred by Rails' conventions (`BlogPost` → `blog_posts`, and `userId` for `User`'s `has_many`), with `static tableName` and `foreignKey` to override them.
 
 ## Declaring a Model
 
@@ -39,8 +39,6 @@ Attributes are declared in TypeScript, not read from the schema, so TypeScript k
 
 ```ts
 class User extends Model({ id: "integer", email: { type: "string", null: false } }) {
-  static tableName = "users";
-
   static {
     this.validates("email", { presence: true, uniqueness: true });
   }

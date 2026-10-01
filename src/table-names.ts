@@ -31,7 +31,7 @@ export function inferTableNames(base: object): void {
 }
 
 /** The class name a Model's table name was inferred from, or undefined when it's declared. */
-export function tableNameSource(model: object): string | undefined {
+function tableNameSource(model: object): string | undefined {
   let current: object | null = model;
   while (current !== null && !Object.hasOwn(current, "tableName")) {
     current = Object.getPrototypeOf(current) as object | null;

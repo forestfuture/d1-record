@@ -8,8 +8,6 @@ export class User extends Model({
   createdAt: "datetime", // set for you on create
   updatedAt: "datetime", // set for you on every change
 }) {
-  static tableName = "users";
-
   static associations = this.defineAssociations({
     posts: this.hasMany(() => Post, { dependent: "destroy" }), // foreign key: Post's userId
   });
@@ -33,8 +31,6 @@ export class Post extends Model({
   title: { type: "string", null: false },
   publishedAt: "datetime",
 }) {
-  static tableName = "posts";
-
   static associations = this.defineAssociations({
     // Named author, not user, so the foreign key is given.
     author: this.belongsTo(() => User, { foreignKey: "userId" }),
