@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 import {
   AssociationNotLoaded,
+  belongsTo,
   connect,
+  hasMany,
+  hasOne,
   IncompatibleRelation,
   Model,
-  type BelongsTo,
-  type HasMany,
-  type HasOne,
   type QueryEvent,
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
@@ -17,13 +17,8 @@ class User extends Model({
 }) {
   static tableName = "users";
 
-  static associations = this.defineAssociations({
-    posts: this.hasMany(() => Post, { foreignKey: "userId" }),
-    profile: this.hasOne(() => Profile, { foreignKey: "userId" }),
-  });
-
-  declare posts: HasMany<typeof Post>;
-  declare profile: HasOne<typeof Profile>;
+  posts = hasMany(Post, { foreignKey: "userId" });
+  profile = hasOne(Profile, { foreignKey: "userId" });
 }
 
 class Post extends Model({
@@ -33,18 +28,12 @@ class Post extends Model({
 }) {
   static tableName = "posts";
 
-  static associations = this.defineAssociations({
-    author: this.belongsTo(() => User, { foreignKey: "userId" }),
-    comments: this.hasMany(() => Comment, { foreignKey: "postId" }),
-  });
-
-  declare comments: HasMany<typeof Comment>;
+  author = belongsTo(User, { foreignKey: "userId" });
+  comments = hasMany(Comment, { foreignKey: "postId" });
 
   static scopes = this.defineScopes({
     titled: (q, title: string) => q.where({ title }),
   });
-
-  declare author: BelongsTo<typeof User>;
 }
 
 class Comment extends Model({

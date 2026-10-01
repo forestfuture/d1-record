@@ -85,3 +85,12 @@ export function explainMissingTable(error: unknown, models: readonly ModelClass[
     { cause: error },
   );
 }
+
+/** The class name a Model's names are inferred from: its table's and its foreign keys'. */
+export function modelClassName(model: object): string {
+  let current: object | null = model;
+  while (current !== null && !bases.has(current)) {
+    current = Object.getPrototypeOf(current) as object | null;
+  }
+  return current === null ? (model as { name: string }).name : className(current, model);
+}

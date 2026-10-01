@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model, NoSession, type BelongsTo, type HasMany } from "../../src/index.ts";
+import { belongsTo, connect, hasMany, Model, NoSession } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
@@ -9,11 +9,7 @@ class User extends Model({
 }) {
   static tableName = "users";
 
-  static associations = this.defineAssociations({
-    posts: this.hasMany(() => Post, { foreignKey: "userId" }),
-  });
-
-  declare posts: HasMany<typeof Post>;
+  posts = hasMany(Post, { foreignKey: "userId" });
 
   static {
     this.validates("email", { uniqueness: true });
@@ -27,11 +23,7 @@ class Post extends Model({
 }) {
   static tableName = "posts";
 
-  static associations = this.defineAssociations({
-    author: this.belongsTo(() => User, { foreignKey: "userId" }),
-  });
-
-  declare author: BelongsTo<typeof User>;
+  author = belongsTo(User, { foreignKey: "userId" });
 }
 
 // Miniflare's D1 has no replicas, so read-your-writes itself can't be observed here: these tests

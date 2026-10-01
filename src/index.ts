@@ -1,3 +1,4 @@
+export { belongsTo, hasMany, hasOne } from "./association-fields.ts";
 export type { BelongsTo, HasMany, HasOne } from "./associations.ts";
 export {
   connect,

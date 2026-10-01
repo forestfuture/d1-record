@@ -1,4 +1,4 @@
-import { Model, type BelongsTo, type HasMany } from "@forestfuture/d1-record";
+import { belongsTo, hasMany, Model } from "@forestfuture/d1-record";
 
 export class User extends Model({
   id: { type: "string", null: false, default: () => crypto.randomUUID() },
@@ -7,10 +7,7 @@ export class User extends Model({
   updatedAt: "datetime",
 }) {
   // Its table, users, is inferred from the class name; static tableName overrides it.
-  static associations = this.defineAssociations({
-    posts: this.hasMany(() => Post, { dependent: "destroy" }), // foreign key inferred: Post's userId
-  });
-  declare posts: HasMany<typeof Post>;
+  posts = hasMany(Post, { dependent: "destroy" }); // foreign key inferred: Post's userId
 
   static {
     this.validates("email", { presence: true, uniqueness: true });
@@ -22,8 +19,5 @@ export class Post extends Model({
   userId: { type: "string", null: false },
   title: { type: "string", null: false },
 }) {
-  static associations = this.defineAssociations({
-    user: this.belongsTo(() => User), // foreign key inferred: userId
-  });
-  declare user: BelongsTo<typeof User>;
+  user = belongsTo(User); // foreign key inferred: userId
 }

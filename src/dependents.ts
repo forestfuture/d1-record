@@ -1,3 +1,4 @@
+import { associationsOf } from "./association-fields.ts";
 import type { CompiledSql } from "./compiler.ts";
 import { DeleteRestriction } from "./errors.ts";
 import { prepareDestroy, refusalError, type Claimed } from "./lifecycle.ts";
@@ -27,7 +28,7 @@ export async function prepareDependents(
   claimed: Claimed,
 ): Promise<DependentsPlan> {
   const model = modelOf(owner);
-  const dependencies = Object.entries(model.associations)
+  const dependencies = Object.entries(associationsOf(model))
     .filter(([, definition]) => definition.dependent !== undefined)
     .map(([name]) => resolveAssociation(model, name));
   for (const association of dependencies) {

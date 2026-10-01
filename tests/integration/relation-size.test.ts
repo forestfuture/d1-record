@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model, type HasMany, type QueryEvent } from "../../src/index.ts";
+import { connect, hasMany, Model, type QueryEvent } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
@@ -8,11 +8,7 @@ class User extends Model({
 }) {
   static tableName = "users";
 
-  static associations = this.defineAssociations({
-    posts: this.hasMany(() => Post, { foreignKey: "userId" }),
-  });
-
-  declare posts: HasMany<typeof Post>;
+  posts = hasMany(Post, { foreignKey: "userId" });
 }
 
 class Post extends Model({

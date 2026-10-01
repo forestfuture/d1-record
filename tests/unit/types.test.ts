@@ -1,16 +1,16 @@
 import { describe, expectTypeOf, test } from "vite-plus/test";
 import {
+  belongsTo,
   between,
   connect,
   gte,
+  hasMany,
+  hasOne,
   lt,
   Model,
-  sql,
-  type BelongsTo,
-  type HasMany,
-  type HasOne,
-  Relation,
   type RecordStatement,
+  Relation,
+  sql,
 } from "../../src/index.ts";
 
 class User extends Model({
@@ -284,14 +284,12 @@ describe("types", () => {
     const typeOnly = () => {
       class Owner extends Model({ id: "integer" }) {
         static tableName = "users";
-        static associations = this.defineAssociations({
-          posts: this.hasMany(() => Owner, { foreignKey: "id", dependent: "deleteAll" }),
-          profile: this.hasOne(() => Owner, { foreignKey: "id", dependent: "delete" }),
-          // @ts-expect-error a hasOne deletes its one record with "delete", not "deleteAll"
-          other: this.hasOne(() => Owner, { foreignKey: "id", dependent: "deleteAll" }),
-          // @ts-expect-error belongsTo has no dependent strategies
-          parent: this.belongsTo(() => Owner, { foreignKey: "id", dependent: "destroy" }),
-        });
+        posts = hasMany(Owner, { foreignKey: "id", dependent: "deleteAll" });
+        profile = hasOne(Owner, { foreignKey: "id", dependent: "delete" });
+        // @ts-expect-error a hasOne deletes its one record with "delete", not "deleteAll"
+        other = hasOne(Owner, { foreignKey: "id", dependent: "deleteAll" });
+        // @ts-expect-error belongsTo has no dependent strategies
+        parent = belongsTo(Owner, { foreignKey: "id", dependent: "destroy" });
       }
       return Owner;
     };
@@ -301,20 +299,13 @@ describe("types", () => {
   test("associations are typed from their declare lines, including includes() names", () => {
     class Author extends Model({ id: "integer" }) {
       static tableName = "users";
-      static associations = this.defineAssociations({
-        articles: this.hasMany(() => Article, { foreignKey: "authorId" }),
-        bio: this.hasOne(() => Bio, { foreignKey: "authorId" }),
-      });
-      declare articles: HasMany<typeof Article>;
-      declare bio: HasOne<typeof Bio>;
+      articles = hasMany(Article, { foreignKey: "authorId" });
+      bio = hasOne(Bio, { foreignKey: "authorId" });
     }
     class Article extends Model({ id: "integer", authorId: "integer", live: "boolean" }) {
       static tableName = "posts";
-      static associations = this.defineAssociations({
-        author: this.belongsTo(() => Author, { foreignKey: "authorId" }),
-      });
+      author = belongsTo(Author, { foreignKey: "authorId" });
       static scopes = this.defineScopes({ live: (q) => q.where({ live: true }) });
-      declare author: BelongsTo<typeof Author>;
     }
     class Bio extends Model({ id: "integer", authorId: "integer" }) {
       static tableName = "profiles";

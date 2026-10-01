@@ -1,14 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
-import { connect, InvalidModel, Model, type BelongsTo, type HasMany } from "../../src/index.ts";
+import { belongsTo, connect, hasMany, InvalidModel, Model } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 // Fresh Models used by no other test: Entry and Remark are only ever reached through includes.
 class Owner extends Model({ id: { type: "integer", null: false }, email: "string" }) {
   static tableName = "users";
-  static associations = this.defineAssociations({
-    entries: this.hasMany(() => Entry, { foreignKey: "userId" }),
-  });
-  declare entries: HasMany<typeof Entry>;
+  entries = hasMany(Entry, { foreignKey: "userId" });
 }
 
 class Entry extends Model({
@@ -17,12 +14,8 @@ class Entry extends Model({
   title: "string",
 }) {
   static tableName = "posts";
-  static associations = this.defineAssociations({
-    owner: this.belongsTo(() => Owner, { foreignKey: "userId" }),
-    remarks: this.hasMany(() => Remark, { foreignKey: "postId" }),
-  });
-  declare owner: BelongsTo<typeof Owner>;
-  declare remarks: HasMany<typeof Remark>;
+  owner = belongsTo(Owner, { foreignKey: "userId" });
+  remarks = hasMany(Remark, { foreignKey: "postId" });
 }
 
 class Remark extends Model({
@@ -58,16 +51,11 @@ describe("Models reached only through includes", () => {
   test("have their declarations checked", () => {
     class Broken extends Model({ id: "integer", userId: "integer" }) {
       static tableName = "posts";
-      static associations = this.defineAssociations({
-        owner: this.belongsTo(() => Owner, { foreignKey: "ownerId" }),
-      });
+      owner = belongsTo(Owner, { foreignKey: "ownerId" });
     }
     class Root extends Model({ id: "integer" }) {
       static tableName = "users";
-      static associations = this.defineAssociations({
-        broken: this.hasMany(() => Broken, { foreignKey: "userId" }),
-      });
-      declare broken: HasMany<typeof Broken>;
+      broken = hasMany(Broken, { foreignKey: "userId" });
     }
 
     expect(() => connect(binding).model(Root).includes("broken")).toThrow(InvalidModel);

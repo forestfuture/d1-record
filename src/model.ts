@@ -17,20 +17,11 @@ import {
   UnknownAssociation,
 } from "./errors.ts";
 import { destroyLifecycle, reloadRecord, saveLifecycle, validateRecord } from "./lifecycle.ts";
-import { withForeignKeys } from "./foreign-keys.ts";
+import { associationsOf, newRecord } from "./association-fields.ts";
 import { RecordStatement } from "./record-statement.ts";
 import { inferTableNames, requireTableName } from "./table-names.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
-import type {
-  AssociationDefinition,
-  AssociationDeclaration,
-  AssociationOptions,
-  HasManyDependent,
-  HasOneDependent,
-  BelongsTo,
-  HasMany,
-  HasOne,
-} from "./associations.ts";
+import type { AssociationDefinition, BelongsTo, HasMany, HasOne } from "./associations.ts";
 import type { Relation, Scope } from "./relation.ts";
 import type { Validation, ValidationOptions } from "./validations.ts";
 
@@ -46,7 +37,7 @@ export type ScopesOf<C> = C extends { scopes: infer S }
 
 /** A Model's association by name; `UnknownAssociation` for any other name. */
 export function associationOf(model: ModelClass, name: string): AssociationDefinition {
-  const definition = model.associations[name];
+  const definition = associationsOf(model)[name];
   if (definition === undefined) {
     throw new UnknownAssociation(`${model.name} has no association "${name}"`);
   }
@@ -60,7 +51,7 @@ export type LoadedValue<F> = F extends () => Promise<infer R>
     ? T
     : never;
 
-/** The names of a record's association accessors (from their `declare` lines). */
+/** The names of a record's association accessors (from their fields' types). */
 export type AssociationName<R> = {
   [K in keyof R]: R[K] extends BelongsTo<ModelClass> | HasOne<ModelClass> | HasMany<ModelClass>
     ? K
@@ -93,51 +84,6 @@ export class ModelBase {
   static attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map();
   /** This Model's scopes, from `static scopes = this.defineScopes({...})`. */
   static scopes: Readonly<Record<string, AnyScope>> = {};
-
-  /** This Model's associations, from `static associations = this.defineAssociations({...})`. */
-  static associations: Readonly<Record<string, AssociationDefinition>> = {};
-
-  /**
-   * Declares associations: `static associations = this.defineAssociations({ posts: this.hasMany(…) })`.
-   * A subclass's associations are added to its parent's (a same-named one replaces the parent's).
-   */
-  static defineAssociations<S extends Record<string, AssociationDeclaration>>(
-    this: abstract new () => ModelBase,
-    associations: S,
-  ): { [K in keyof S]: AssociationDefinition } {
-    const model = this as unknown as typeof ModelBase;
-    const defined = withForeignKeys(associations, model.name) as {
-      [K in keyof S]: AssociationDefinition;
-    };
-    return { ...model.associations, ...defined };
-  }
-
-  // The target and keys are checked on first use, not typed: typing them makes Models that
-  // point at each other (User ↔ Post) circular for TypeScript. Accessor types come from `declare`.
-
-  /** This Model's records point at one `target` record through `foreignKey` (their own attribute). */
-  static belongsTo(
-    target: () => unknown,
-    options: Omit<AssociationOptions, "dependent"> = {},
-  ): AssociationDeclaration {
-    return { kind: "belongsTo", target: target as () => ModelClass, ...options };
-  }
-
-  /** Many `target` records point at this Model's records through `foreignKey` (theirs). */
-  static hasMany(
-    target: () => unknown,
-    options: AssociationOptions & { dependent?: HasManyDependent } = {},
-  ): AssociationDeclaration {
-    return { kind: "hasMany", target: target as () => ModelClass, ...options };
-  }
-
-  /** One `target` record points at this Model's records through `foreignKey` (its own). */
-  static hasOne(
-    target: () => unknown,
-    options: AssociationOptions & { dependent?: HasOneDependent } = {},
-  ): AssociationDeclaration {
-    return { kind: "hasOne", target: target as () => ModelClass, ...options };
-  }
 
   /**
    * Declares scopes: `static scopes = this.defineScopes({ active: (q) => q.where(...) })`.
@@ -515,7 +461,7 @@ export function hydrate<M extends ModelBase>(
   row: Record<string, unknown>,
   executor: Executor,
 ): M {
-  const record = new model();
+  const record = newRecord(model);
   record[state].belongTo(executor);
   record[state].loadRow(row);
   return record;
@@ -577,7 +523,7 @@ export function buildRecord<M extends ModelBase>(
   attributes: Record<string, unknown>,
   executor: Executor,
 ): M {
-  const record = new model();
+  const record = newRecord(model);
   record[state].belongTo(executor);
   record[state].build(attributes);
   return record;

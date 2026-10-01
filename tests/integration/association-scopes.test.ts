@@ -1,14 +1,14 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 import {
+  belongsTo,
   connect,
+  hasMany,
+  hasOne,
   IncompatibleRelation,
   Model,
-  UnknownAttribute,
-  type BelongsTo,
-  type HasMany,
-  type HasOne,
   type QueryEvent,
   type Relation,
+  UnknownAttribute,
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
@@ -19,32 +19,24 @@ class User extends Model({
 }) {
   static tableName = "users";
 
-  static associations = this.defineAssociations({
-    // Newest first, as Rails' `has_many :posts, -> { order(created_at: :desc) }`.
-    posts: this.hasMany(() => Post, {
-      foreignKey: "userId",
-      scope: (q) => q.order({ createdAt: "desc" }),
-    }),
-    publishedPosts: this.hasMany(() => Post, {
-      foreignKey: "userId",
-      scope: (q: Relation<Post>) => q.where({ published: true }),
-    }),
-    drafts: this.hasMany(() => Post, { foreignKey: "userId", scope: (q) => q.drafts() }),
-    latestPost: this.hasOne(() => Post, {
-      foreignKey: "userId",
-      scope: (q) => q.order({ createdAt: "desc" }),
-    }),
-    firstTwoPosts: this.hasMany(() => Post, {
-      foreignKey: "userId",
-      scope: (q) => q.order({ createdAt: "asc" }).limit(2),
-    }),
+  // Newest first, as Rails' `has_many :posts, -> { order(created_at: :desc) }`.
+  posts = hasMany(Post, {
+    foreignKey: "userId",
+    scope: (q) => q.order({ createdAt: "desc" }),
   });
-
-  declare posts: HasMany<typeof Post>;
-  declare publishedPosts: HasMany<typeof Post>;
-  declare drafts: HasMany<typeof Post>;
-  declare latestPost: HasOne<typeof Post>;
-  declare firstTwoPosts: HasMany<typeof Post>;
+  publishedPosts = hasMany(Post, {
+    foreignKey: "userId",
+    scope: (q: Relation<Post>) => q.where({ published: true }),
+  });
+  drafts = hasMany(Post, { foreignKey: "userId", scope: (q) => q.drafts() });
+  latestPost = hasOne(Post, {
+    foreignKey: "userId",
+    scope: (q) => q.order({ createdAt: "desc" }),
+  });
+  firstTwoPosts = hasMany(Post, {
+    foreignKey: "userId",
+    scope: (q) => q.order({ createdAt: "asc" }).limit(2),
+  });
 }
 
 class Post extends Model({
@@ -60,14 +52,10 @@ class Post extends Model({
     drafts: (q) => q.where({ published: false }),
   });
 
-  static associations = this.defineAssociations({
-    admin: this.belongsTo(() => User, {
-      foreignKey: "userId",
-      scope: (q) => q.where({ role: "admin" }),
-    }),
+  admin = belongsTo(User, {
+    foreignKey: "userId",
+    scope: (q) => q.where({ role: "admin" }),
   });
-
-  declare admin: BelongsTo<typeof User>;
 }
 
 class Broken extends Model({
@@ -75,13 +63,10 @@ class Broken extends Model({
 }) {
   static tableName = "users";
 
-  static associations = this.defineAssociations({
-    typo: this.hasMany(() => Post, { foreignKey: "userId", scope: (q) => q.where({ nope: 1 }) }),
-    notARelation: this.hasMany(() => Post, { foreignKey: "userId", scope: () => "posts" }),
-  });
-
-  declare typo: HasMany<typeof Post>;
-  declare notARelation: HasMany<typeof Post>;
+  // Scopes are typed from the target, so this is a type error too; the runtime check is tested.
+  // @ts-expect-error nope isn't a Post attribute
+  typo = hasMany(Post, { foreignKey: "userId", scope: (q) => q.where({ nope: 1 }) });
+  notARelation = hasMany(Post, { foreignKey: "userId", scope: () => "posts" });
 }
 
 const ids = (records: readonly { id: number }[]) => records.map((record) => record.id);
