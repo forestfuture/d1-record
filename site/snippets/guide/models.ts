@@ -12,7 +12,6 @@ export class User extends Model({
   createdAt: "datetime",
   updatedAt: "datetime",
 }) {
-  static tableName = "users"; // required: it's never inferred
   static primaryKey = "id"; // the default
 
   static scopes = this.defineScopes({
@@ -35,7 +34,7 @@ export class Account extends Model({
   name: { type: "string", null: false },
   updatedBy: "string",
 }) {
-  static tableName = "accounts";
+  static tableName = "billing_accounts"; // instead of the inferred "accounts"
 
   static {
     audited(this);

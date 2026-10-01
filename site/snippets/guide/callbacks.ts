@@ -9,8 +9,6 @@ export class Order extends Model({
   suspended: "boolean",
   placedAt: "datetime",
 }) {
-  static tableName = "orders";
-
   static {
     this.beforeValidation((order) => {
       order.email = order.email.trim().toLowerCase();

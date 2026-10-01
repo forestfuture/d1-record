@@ -12,8 +12,6 @@ export class Author extends Model({
   id: { type: "string", null: false, default: () => crypto.randomUUID() },
   name: { type: "string", null: false },
 }) {
-  static tableName = "authors";
-
   static associations = this.defineAssociations({
     articles: this.hasMany(() => Article, { dependent: "destroy" }), // Article's authorId
     profile: this.hasOne(() => Profile, { dependent: "delete" }), // Profile's authorId
@@ -29,8 +27,6 @@ export class Article extends Model({
   published: { type: "boolean", null: false, default: () => false },
   createdAt: "datetime",
 }) {
-  static tableName = "articles";
-
   static associations = this.defineAssociations({
     author: this.belongsTo(() => Author), // its own authorId
     comments: this.hasMany(() => Comment, { dependent: "deleteAll" }), // Comment's articleId
@@ -47,23 +43,17 @@ export class Profile extends Model({
   id: { type: "integer", null: false },
   authorId: { type: "string", null: false },
   bio: "string",
-}) {
-  static tableName = "profiles";
-}
+}) {}
 
 export class Comment extends Model({
   id: { type: "integer", null: false },
   articleId: { type: "string", null: false },
   body: { type: "string", null: false },
-}) {
-  static tableName = "comments";
-}
+}) {}
 // #endregion declare
 
 // #region scoped
 export class Blog extends Model({ id: { type: "integer", null: false } }) {
-  static tableName = "blogs";
-
   static associations = this.defineAssociations({
     // A scope for the association, as Rails' `has_many :posts, -> { … }`.
     recentPosts: this.hasMany(() => BlogPost, {
@@ -79,9 +69,7 @@ export class BlogPost extends Model({
   blogId: { type: "integer", null: false },
   draft: { type: "boolean", null: false },
   createdAt: "datetime",
-}) {
-  static tableName = "blog_posts";
-}
+}) {}
 
 export async function readExample(db: Database, articleId: string) {
   // #region read
