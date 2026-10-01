@@ -5,4 +5,4 @@ A Model extends `Model({ email: { type: "string", null: false }, isActive: "bool
 ## Consequences
 
 - `Model({...})` always creates a subclass of the library's base class. An app-wide base class can't add attributes to its subclasses, so shared behavior uses plain functions called from `static {}` (e.g. `audited(this)`). If a shared base turns out to be needed, a `.with({...})` helper can be added later.
-- Associations still use a `declare` for their instance accessor until the same technique is applied to them.
+- Associations needed a `declare` for their instance accessor until ADR-0008 made them record fields.

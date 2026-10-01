@@ -57,7 +57,7 @@ A few things to notice:
 - The tables are named after the classes, as in Rails: `User` uses `users` and `Post` uses `posts`. A table named differently is set with `static tableName`.
 - The `id` is generated in code, so a new user has its key before it's saved. That's what lets a user and their posts be written together, atomically.
 - `User.posts` finds its foreign key by Rails' convention: `userId` on `Post`, from the class name `User`. `Post.author` is named `author`, not `user`, so it says which key it uses.
-- Each association needs a `declare` line, so TypeScript knows `user.posts()` and `post.author()`.
+- Associations are fields: `posts = hasMany(Post, …)`. The field's name is the association's, and TypeScript knows `user.posts()` and `post.author()` from it.
 
 ## 4. Use them in your Worker
 

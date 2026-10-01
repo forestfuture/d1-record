@@ -16,6 +16,7 @@ d1-record (`@forestfuture/d1-record`) is a Rails-style Active Record for Cloudfl
 - Write custom SQL as an `sql` tagged template, which binds every value: ``where(sql`lower(${column("email")}) = ${email}`)``.
 - Make several writes atomic with one `db.batch([...])` of statements (`insert`, `updateAll`, `deleteAll`) and records (`record.toSave()`, `record.toDestroy()`). D1 has no interactive transactions, so a read-then-write can't be atomic.
 - Generate keys in code (`id: { type: "string", null: false, default: () => crypto.randomUUID() }`) for records saved together. An owner whose key is known before its INSERT (generated in code, or already saved) is written in one atomic batch with the records built through it. A key D1 generates exists only after its own write, so each level is then written in a separate batch.
+- Declare associations as fields, passing the target class: `posts = hasMany(Post, { dependent: "destroy" })`, `author = belongsTo(User)`. The field's name is the association's name.
 - Check what writes return. `save()` and `update()` resolve to `false` when validation fails (reasons in `record.errors`) or a callback aborts (`record.abortReason`). `destroy()` resolves to `false` when a callback aborts, or a `restrictWithError` association refuses (reason in `record.errors`). The `…OrThrow` methods throw instead. Constraint errors, such as `RecordNotUnique`, always throw.
 
 <!-- #endregion rules -->

@@ -17,19 +17,20 @@ A Worker serves many requests at once from one isolate, so a Model class can't h
 
 ## Naming
 
-| Rails                                | d1-record                                       |
-| ------------------------------------ | ----------------------------------------------- |
-| `created_at` (attribute)             | `createdAt`, mapped to `created_at`             |
-| `foreign_key: :user_id`              | `foreignKey: "userId"`                          |
-| `save!`, `create!`, `find_by!`       | `saveOrThrow`, `createOrThrow`, `findByOrThrow` |
-| `new_record?`, `persisted?`          | `isNewRecord()`, `isPersisted()`                |
-| `empty?`, `any?`                     | `isEmpty()`, `hasAny()`                         |
-| `changed?`, `saved_change_to_email?` | `isChanged()`, `hasSavedChangeTo("email")`      |
-| `post.author = user`                 | `post.author.set(user)`                         |
-| `build_profile`                      | `user.profile.build()`                          |
-| `reload_author`                      | `post.reloadAssociation("author")`              |
-| `throw :abort`                       | `throw abort("reason")`                         |
-| `to_json`                            | `toJSON()`                                      |
+| Rails                                  | d1-record                                         |
+| -------------------------------------- | ------------------------------------------------- |
+| `created_at` (attribute)               | `createdAt`, mapped to `created_at`               |
+| `foreign_key: :user_id`                | `foreignKey: "userId"`                            |
+| `save!`, `create!`, `find_by!`         | `saveOrThrow`, `createOrThrow`, `findByOrThrow`   |
+| `new_record?`, `persisted?`            | `isNewRecord()`, `isPersisted()`                  |
+| `empty?`, `any?`                       | `isEmpty()`, `hasAny()`                           |
+| `changed?`, `saved_change_to_email?`   | `isChanged()`, `hasSavedChangeTo("email")`        |
+| `has_many :posts, dependent: :destroy` | `posts = hasMany(Post, { dependent: "destroy" })` |
+| `post.author = user`                   | `post.author.set(user)`                           |
+| `build_profile`                        | `user.profile.build()`                            |
+| `reload_author`                        | `post.reloadAssociation("author")`                |
+| `throw :abort`                         | `throw abort("reason")`                           |
+| `to_json`                              | `toJSON()`                                        |
 
 Attributes, conditions and association keys all name **attributes**, in camelCase. Column names only appear inside `sql` fragments. Table names and foreign keys are inferred by Rails' conventions (`BlogPost` → `blog_posts`, and `userId` for `User`'s `has_many`), with `static tableName` and `foreignKey` to override them.
 

@@ -1,11 +1,4 @@
-import {
-  belongsTo,
-  type Database,
-  hasMany,
-  hasOne,
-  Model,
-  type Relation,
-} from "@forestfuture/d1-record";
+import { belongsTo, type Database, hasMany, hasOne, Model } from "@forestfuture/d1-record";
 
 // #region declare
 export class Author extends Model({
@@ -48,7 +41,7 @@ export class Comment extends Model({
 export class Blog extends Model({ id: { type: "integer", null: false } }) {
   // A scope for the association, as Rails' `has_many :posts, -> { … }`.
   recentPosts = hasMany(BlogPost, {
-    scope: (q: Relation<BlogPost>) => q.order({ createdAt: "desc" }).where({ draft: false }),
+    scope: (q) => q.order({ createdAt: "desc" }).where({ draft: false }),
   });
 }
 // #endregion scoped
