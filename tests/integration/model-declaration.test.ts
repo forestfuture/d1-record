@@ -19,14 +19,57 @@ describe("model declaration", () => {
   });
   afterAll(() => dispose());
 
-  test("a model without a tableName is rejected when first used", () => {
-    class Nameless extends Model({ id: "integer" }) {}
+  test("a model without a tableName uses the one inferred from its class name", async () => {
+    class User extends Model({ id: "integer", email: "string" }) {}
+    const users = connect(binding).model(User);
+
+    await users.insert({ id: 7, email: "inferred@example.com" }).run();
+
+    expect(await users.find(7).then((user) => user.email)).toBe("inferred@example.com");
+    await users.where({ id: 7 }).deleteAll().run();
+  });
+
+  test("an empty tableName is rejected when first used", () => {
+    class Nameless extends Model({ id: "integer" }) {
+      static tableName = "";
+    }
 
     const use = () => connect(binding).model(Nameless);
 
     expect(use).toThrow(InvalidModel);
     expect(use).toThrow(/Nameless.*tableName/);
     expect(use).toThrow(D1RecordError);
+  });
+
+  test("a missing table whose name was inferred says where the name came from", async () => {
+    // What a minifier without keep_names does: the class is now called e, so its table "es".
+    const e = class extends Model({ id: "integer" }) {};
+    const db = connect(binding);
+
+    const read = db.model(e).toArray();
+    const written = db.batch([db.model(e).insert({ id: 1 })]);
+
+    for (const attempt of [read, written]) {
+      await expect(attempt).rejects.toThrow(InvalidModel);
+      await expect(attempt).rejects.toHaveProperty(
+        "cause.message",
+        expect.stringMatching(/no such table: es/),
+      );
+      await expect(attempt).rejects.toThrow(
+        /e's table "es" doesn't exist in D1 \(inferred from the class name e; create it, set static tableName, or keep class names if your bundler renames them\)/,
+      );
+    }
+  });
+
+  test("a missing table that was declared is D1's own error, as before", async () => {
+    class Missing extends Model({ id: "integer" }) {
+      static tableName = "nowhere";
+    }
+
+    const read = connect(binding).model(Missing).toArray();
+
+    await expect(read).rejects.toThrow(/no such table: nowhere/);
+    await expect(read).rejects.not.toThrow(InvalidModel);
   });
 
   test("a class field that would hide an attribute's accessor is rejected when first used", () => {

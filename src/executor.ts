@@ -1,5 +1,6 @@
 import type { CompiledSql } from "./compiler.ts";
 import { translateConstraintError } from "./constraints.ts";
+import { explainMissingTable } from "./table-names.ts";
 
 /** Reported to `onQuery` once for every statement sent to D1. */
 export interface QueryEvent {
@@ -51,10 +52,8 @@ export class Executor {
     } catch (error) {
       const durationMs = performance.now() - started;
       for (const { sql, params } of statements) this.#onQuery?.({ sql, params, durationMs, error });
-      throw translateConstraintError(
-        error,
-        statements.map(({ model }) => model),
-      );
+      const models = statements.map(({ model }) => model);
+      throw explainMissingTable(translateConstraintError(error, models), models);
     }
     // D1 times each statement of a batch itself.
     statements.forEach(({ sql, params }, index) => {
@@ -79,7 +78,7 @@ export class Executor {
       result = await this.#prepare(query).all<Record<string, unknown>>();
     } catch (error) {
       this.#onQuery?.({ sql, params, durationMs: performance.now() - started, error });
-      throw translateConstraintError(error, [model]);
+      throw explainMissingTable(translateConstraintError(error, [model]), [model]);
     }
     // Reported outside the try, so a listener that throws isn't mistaken for a D1 failure.
     this.#onQuery?.({ sql, params, durationMs: performance.now() - started, meta: result.meta });
