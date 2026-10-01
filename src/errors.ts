@@ -5,7 +5,7 @@ export class D1RecordError extends Error {
   override name = "D1RecordError";
 }
 
-/** A Model's declaration is invalid, e.g. it has no `tableName`. */
+/** A Model's declaration is invalid, e.g. an association's foreign key isn't an attribute. */
 export class InvalidModel extends D1RecordError {
   override name = "InvalidModel";
 }

@@ -19,6 +19,7 @@ import {
 import { destroyLifecycle, reloadRecord, saveLifecycle, validateRecord } from "./lifecycle.ts";
 import { withForeignKeys } from "./foreign-keys.ts";
 import { RecordStatement } from "./record-statement.ts";
+import { inferTableNames } from "./table-names.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
 import type {
   AssociationDefinition,
@@ -86,6 +87,7 @@ export interface ChangeOptions<V = unknown> {
 export type AttributesOf<M> = M extends { readonly [attributeTypes]?: infer A } ? A : never;
 
 export class ModelBase {
+  /** The table's name: inferred from the class name (`BlogPost` → `blog_posts`) unless set. */
   static tableName: string;
   static primaryKey = "id";
   static attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map();
@@ -483,6 +485,7 @@ export function Model<const A extends AttributeSpecs>(
       Object.entries(specs).map(([name, spec]) => [name, define(name, spec)]),
     );
   }
+  inferTableNames(DefinedModel);
   for (const name of Object.keys(specs)) {
     Object.defineProperty(DefinedModel.prototype, name, {
       get(this: ModelBase) {
@@ -535,7 +538,9 @@ export function verifyModel(model: ModelClass): void {
 
 function requireTableName(model: ModelClass): void {
   if (typeof model.tableName !== "string" || model.tableName === "") {
-    throw new InvalidModel(`${model.name} has no tableName; add \`static tableName = "…"\``);
+    throw new InvalidModel(
+      `${model.name}'s tableName must be a table's name; remove it to use the one inferred from the class name`,
+    );
   }
 }
 
