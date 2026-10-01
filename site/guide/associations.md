@@ -77,7 +77,21 @@ An association can narrow or order its records, as Rails' `has_many :posts, -> {
 
 <<< @/snippets/guide/associations.ts#scoped{ts}
 
-`q` is the target's Relation, typed with its attributes and scopes. A scope that uses `limit`, `offset` or `distinct` works when read lazily, but can't be preloaded: it would apply to every owner's records together, so `includes` throws `IncompatibleRelation`.
+`q` is the target's Relation, typed with its attributes and scopes.
+
+::: details A Model's association to itself, scoped with its own scopes
+TypeScript can't infer this one case on its own: `children = hasMany(Category, { scope: (q) => q.top() })` inside `Category`, where `top` is one of `Category`'s scopes. Write the field's type out, and the rest is still inferred:
+
+```ts
+children: HasMany<typeof Category> = hasMany(Category, {
+  foreignKey: "parentId",
+  scope: (q) => q.top(),
+});
+```
+
+:::
+
+A scope that uses `limit`, `offset` or `distinct` works when read lazily, but can't be preloaded: it would apply to every owner's records together, so `includes` throws `IncompatibleRelation`.
 
 ## Dependent records
 

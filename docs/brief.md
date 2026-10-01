@@ -52,10 +52,10 @@ The library should support class-based models with light configuration and norma
 
 A **Model** is a class created with `Model({...attributes})`. A **Record** is one instance of a Model: one row, saved or not yet saved. The base class is not called `Record`, because importing a value named `Record` would hide TypeScript's global `Record<K, V>` type (ADR-0001).
 
-Attributes are camelCase in JavaScript and map automatically to snake_case columns in D1 (ADR-0004). Attributes are declared once, in the object passed to `Model({...})`, and TypeScript infers the record's properties from it (ADR-0007). Scopes and associations are declared as typed static fields so that chained calls such as `db.model(User).active()` are type-checked. Validations and callbacks are declared in a `static {}` block.
+Attributes are camelCase in JavaScript and map automatically to snake_case columns in D1 (ADR-0004). Attributes are declared once, in the object passed to `Model({...})`, and TypeScript infers the record's properties from it (ADR-0007). Scopes are declared as a typed static field so that chained calls such as `db.model(User).active()` are type-checked. Associations are declared as record fields, `posts = hasMany(Post)`, so TypeScript infers their accessors (ADR-0008). Validations and callbacks are declared in a `static {}` block.
 
 ```ts
-import { Model, sql, type BelongsTo, type HasMany } from "@forestfuture/d1-record";
+import { Model, belongsTo, hasMany, sql } from "@forestfuture/d1-record";
 
 export class User extends Model({
   id: { type: "integer", null: false },
@@ -66,9 +66,7 @@ export class User extends Model({
 }) {
   static tableName = "users";
 
-  static associations = this.defineAssociations({
-    posts: this.hasMany(() => Post, { foreignKey: "userId" }),
-  });
+  posts = hasMany(Post, { foreignKey: "userId" });
 
   static scopes = this.defineScopes({
     active: (q) => q.where({ isActive: true }),
@@ -77,7 +75,6 @@ export class User extends Model({
       q.where(sql`created_at > ${since}`),
   });
 
-  declare posts: HasMany<Post>;
 
   static {
     this.validates("email", { presence: true, format: /@/ });
@@ -93,15 +90,12 @@ export class Post extends Model({
 }) {
   static tableName = "posts";
 
-  static associations = this.defineAssociations({
-    author: this.belongsTo(() => User, { foreignKey: "userId" }),
-  });
+  author = belongsTo(User, { foreignKey: "userId" });
 
   static scopes = this.defineScopes({
     published: (q) => q.where({ published: true }),
   });
 
-  declare author: BelongsTo<User>;
 
   static {
     this.validates("title", { presence: true });

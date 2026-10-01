@@ -68,7 +68,7 @@ export type AssociationKind = "belongsTo" | "hasMany" | "hasOne";
 /** One declared association: its kind, its target Model, and its options. */
 export interface AssociationDeclaration extends AssociationOptions {
   kind: AssociationKind;
-  /** A thunk, so Models can point at each other before both are defined. */
+  /** The target Model, read when the association is first used (the field holds the class). */
   target: () => ModelClass;
 }
 
@@ -129,26 +129,55 @@ function checkAssociation(
   name: string,
   definition: AssociationDefinition,
 ): void {
-  const label = `${model.name} association "${name}"`;
+  const label = `${model.name || "A Model class's"} association "${name}"`;
+  checkName(label, model, name);
+  const target = checkTarget(label, definition);
+  checkKeys(label, model, target, definition);
+  checkDependent(label, definition);
+}
+
+/** Its name can't be an attribute's, or a record method's or property's. */
+function checkName(label: string, model: ModelClass, name: string): void {
   if (model.attributeDefinitions.has(name)) {
     throw new InvalidModel(`${label} has the same name as an attribute; rename one of them`);
   }
   if (name in ModelBase.prototype) {
     throw new InvalidModel(`${label} is the name of a record method or property; rename it`);
   }
+}
+
+/** Its target must be a Model class. */
+function checkTarget(label: string, definition: AssociationDefinition): ModelClass {
   const target: unknown = definition.target();
   if (typeof target !== "function" || !(target.prototype instanceof ModelBase)) {
     throw new InvalidModel(`${label} must point at a Model class: hasMany(Post, …)`);
   }
-  const { ownerAttribute, targetAttribute } = linkOf(definition, model, target as ModelClass);
-  // The foreign key is the owner's attribute for a belongsTo, the target's otherwise.
+  return target as ModelClass;
+}
+
+/** Its keys must be declared attributes: the foreign key the owner's for a belongsTo, else the target's. */
+function checkKeys(
+  label: string,
+  model: ModelClass,
+  target: ModelClass,
+  definition: AssociationDefinition,
+): void {
+  if (definition.inferredFrom?.source === "className" && definition.inferredFrom.name === "") {
+    throw new InvalidModel(
+      `${label} has no class name to infer its foreign key from; pass foreignKey`,
+    );
+  }
+  const { ownerAttribute, targetAttribute } = linkOf(definition, model, target);
   const [ownerHint, targetHint] =
     definition.kind === "belongsTo"
       ? [keyHint(definition), "check primaryKey"]
       : ["check primaryKey", keyHint(definition)];
   requireAttribute(label, model, ownerAttribute, ownerHint);
-  requireAttribute(label, target as ModelClass, targetAttribute, targetHint);
-  const { dependent, kind } = definition;
+  requireAttribute(label, target, targetAttribute, targetHint);
+}
+
+/** Its `dependent:` strategy must be one its kind has. */
+function checkDependent(label: string, { dependent, kind }: AssociationDefinition): void {
   if (dependent !== undefined && !DEPENDENTS[kind].includes(dependent)) {
     const allowed = DEPENDENTS[kind].map((each) => `"${each}"`).join(", ");
     throw new InvalidModel(
@@ -177,16 +206,15 @@ const accessors = new WeakMap<ModelBase, Map<string, unknown>>();
  */
 function accessorProperty(name: string, definition: AssociationDefinition): PropertyDescriptor {
   if (definition.kind === "hasMany") {
-    return {
-      configurable: true,
-      value: function hasMany(this: ModelBase) {
-        return hasManyRelation(this, resolveAssociation(modelOf(this), name));
-      },
+    const method = function hasMany(this: ModelBase) {
+      return hasManyRelation(this, resolveAssociation(modelOf(this), name));
     };
+    return { configurable: true, get: () => method, set: keepAssignedField(name) };
   }
   const accessorFor = definition.kind === "belongsTo" ? belongsToAccessor : hasOneAccessor;
   return {
     configurable: true,
+    set: keepAssignedField(name),
     get(this: ModelBase) {
       const perRecord = accessors.get(this) ?? new Map<string, unknown>();
       accessors.set(this, perRecord);
@@ -195,6 +223,22 @@ function accessorProperty(name: string, definition: AssociationDefinition): Prop
       }
       return perRecord.get(name);
     },
+  };
+}
+
+/**
+ * The setter for an association's field when it's assigned rather than defined (a class field
+ * compiled without useDefineForClassFields, or below ES2022): it keeps the declaration on the
+ * record, as a defined field would be, for `newRecord` to remove.
+ */
+function keepAssignedField(name: string): (this: ModelBase, value: unknown) => void {
+  return function (value) {
+    Object.defineProperty(this, name, {
+      value,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
   };
 }
 

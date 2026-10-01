@@ -1,5 +1,14 @@
 import { describe, expect, test } from "vite-plus/test";
-import { belongsTo, connect, hasMany, InvalidModel, Model, NoDatabase } from "../../src/index.ts";
+import {
+  belongsTo,
+  connect,
+  hasMany,
+  hasOne,
+  InvalidModel,
+  Model,
+  NoDatabase,
+  type HasMany,
+} from "../../src/index.ts";
 
 // No D1 needed: these checks happen when a Model is first used.
 const db = connect({} as never);
@@ -20,7 +29,9 @@ describe("association declarations", () => {
       save = hasMany(Post, { foreignKey: "userId" }) as never;
     }
 
-    expect(() => db.model(Shadow)).toThrow(/Shadow.*"posts".*attribute/);
+    expect(() => db.model(Shadow)).toThrow(
+      /Shadow association "posts" has the same name as an attribute; rename one of them/,
+    );
     expect(() => db.model(Clash)).toThrow(InvalidModel);
   });
 
@@ -87,6 +98,68 @@ describe("association declarations", () => {
 
     expect(() => db.model(e)).toThrow(
       /e association "posts": Post has no attribute "eId" \(inferred from the class name e; declare it, or pass foreignKey \(and keep class names/,
+    );
+  });
+
+  test("a record constructed directly throws NoDatabase from every association method", () => {
+    class Profile extends Model({ id: "integer", userId: "integer" }) {}
+    class User extends Model({ id: "integer" }) {
+      profile = hasOne(Profile);
+    }
+    class Note extends Model({ id: "integer", userId: "integer" }) {
+      user = belongsTo(User);
+    }
+    const note = new Note();
+    const user = new User();
+
+    for (const call of [
+      () => note.user.set(null),
+      () => note.user.build(),
+      () => note.user.create(),
+      () => user.profile.createOrThrow(),
+    ]) {
+      expect(call).toThrow(NoDatabase);
+    }
+  });
+
+  test("plain class fields stay on records, beside associations", () => {
+    class User extends Model({ id: "integer" }) {
+      greeting = "hello";
+      posts = hasMany(Post);
+    }
+
+    const user = db.model(User).build({ id: 1 });
+
+    expect(user.greeting).toBe("hello");
+    expect(typeof user.posts().where).toBe("function");
+  });
+
+  test("an association assigned rather than defined (useDefineForClassFields: false) works", () => {
+    // How a class field compiles without useDefineForClassFields, or below ES2022.
+    class Writer extends Model({ id: "integer" }) {
+      declare posts: HasMany<typeof Post>;
+      constructor() {
+        super();
+        this.posts = hasMany(Post, { foreignKey: "userId" });
+      }
+    }
+
+    db.model(Writer).build();
+    const writer = db.model(Writer).build({ id: 1 });
+
+    expect(typeof writer.posts().where).toBe("function");
+  });
+
+  test("a class with no name must give a hasMany its foreignKey", () => {
+    const anonymous = [
+      class extends Model({ id: "integer" }) {
+        static tableName = "users";
+        posts = hasMany(Post);
+      },
+    ][0]!;
+
+    expect(() => db.model(anonymous)).toThrow(
+      /has no class name to infer its foreign key from; pass foreignKey/,
     );
   });
 });
