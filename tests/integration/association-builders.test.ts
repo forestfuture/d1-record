@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 import {
+  belongsTo,
   connect,
+  hasMany,
+  hasOne,
   Model,
-  RecordNotSaved,
-  type HasMany,
-  type BelongsTo,
-  type HasOne,
   type QueryEvent,
+  RecordNotSaved,
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
@@ -16,11 +16,7 @@ class User extends Model({
 }) {
   static tableName = "users";
 
-  static associations = this.defineAssociations({
-    profile: this.hasOne(() => Profile, { foreignKey: "userId" }),
-  });
-
-  declare profile: HasOne<typeof Profile>;
+  profile = hasOne(Profile, { foreignKey: "userId" });
 
   static {
     this.validates("email", { presence: true });
@@ -36,13 +32,8 @@ class Post extends Model({
 }) {
   static tableName = "posts";
 
-  static associations = this.defineAssociations({
-    author: this.belongsTo(() => User, { foreignKey: "userId" }),
-    comments: this.hasMany(() => Comment, { foreignKey: "postId" }),
-  });
-
-  declare author: BelongsTo<typeof User>;
-  declare comments: HasMany<typeof Comment>;
+  author = belongsTo(User, { foreignKey: "userId" });
+  comments = hasMany(Comment, { foreignKey: "postId" });
 
   static {
     this.beforeSave((post) => void log.push(`post sees user ${String(post.userId)}`));
@@ -84,11 +75,7 @@ class Account extends Model({
 }) {
   static tableName = "accounts";
 
-  static associations = this.defineAssociations({
-    apiKey: this.belongsTo(() => ApiKey, { foreignKey: "externalAccountId" }),
-  });
-
-  declare apiKey: BelongsTo<typeof ApiKey>;
+  apiKey = belongsTo(ApiKey, { foreignKey: "externalAccountId" });
 
   static {
     this.beforeSave(

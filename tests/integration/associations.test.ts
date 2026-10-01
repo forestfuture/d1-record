@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 import {
+  belongsTo,
   connect,
+  hasMany,
+  hasOne,
   Model,
-  type BelongsTo,
-  type HasMany,
-  type HasOne,
-  RecordNotSaved,
   type QueryEvent,
+  RecordNotSaved,
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
@@ -16,13 +16,8 @@ class User extends Model({
 }) {
   static tableName = "users";
 
-  static associations = this.defineAssociations({
-    posts: this.hasMany(() => Post, { foreignKey: "userId" }),
-    profile: this.hasOne(() => Profile, { foreignKey: "userId" }),
-  });
-
-  declare posts: HasMany<typeof Post>;
-  declare profile: HasOne<typeof Profile>;
+  posts = hasMany(Post, { foreignKey: "userId" });
+  profile = hasOne(Profile, { foreignKey: "userId" });
 }
 
 class Profile extends Model({
@@ -40,11 +35,7 @@ class Comment extends Model({
 }) {
   static tableName = "comments";
 
-  static associations = this.defineAssociations({
-    post: this.belongsTo(() => Post, { foreignKey: "postId" }),
-  });
-
-  declare post: BelongsTo<typeof Post>;
+  post = belongsTo(Post, { foreignKey: "postId" });
 }
 
 class Post extends Model({
@@ -55,15 +46,11 @@ class Post extends Model({
 }) {
   static tableName = "posts";
 
-  static associations = this.defineAssociations({
-    author: this.belongsTo(() => User, { foreignKey: "userId" }),
-  });
+  author = belongsTo(User, { foreignKey: "userId" });
 
   static scopes = this.defineScopes({
     published: (q) => q.where({ published: true }),
   });
-
-  declare author: BelongsTo<typeof User>;
 }
 
 describe("associations", () => {
@@ -164,10 +151,7 @@ describe("associations", () => {
   test("a saved owner whose key is null reads nothing, and create says why", async () => {
     class Member extends Model({ id: { type: "integer", null: false }, age: "integer" }) {
       static tableName = "users";
-      static associations = this.defineAssociations({
-        posts: this.hasMany(() => Post, { foreignKey: "userId", primaryKey: "age" }),
-      });
-      declare posts: HasMany<typeof Post>;
+      posts = hasMany(Post, { foreignKey: "userId", primaryKey: "age" });
     }
     const member = await connect(binding).model(Member).find(1); // age is NULL
 

@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 import {
   connect,
+  hasMany,
   Model,
+  type QueryEvent,
   RecordInvalid,
   RecordNotSaved,
   RecordNotUnique,
-  type HasMany,
-  type QueryEvent,
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
@@ -18,11 +18,7 @@ class User extends Model({
 }) {
   static tableName = "users";
 
-  static associations = this.defineAssociations({
-    posts: this.hasMany(() => Post, { foreignKey: "userId" }),
-  });
-
-  declare posts: HasMany<typeof Post>;
+  posts = hasMany(Post, { foreignKey: "userId" });
 
   static {
     this.beforeSave((user) => void log.push(`before save ${user.email}`));
@@ -37,11 +33,7 @@ class Post extends Model({
 }) {
   static tableName = "posts";
 
-  static associations = this.defineAssociations({
-    comments: this.hasMany(() => Comment, { foreignKey: "postId" }),
-  });
-
-  declare comments: HasMany<typeof Comment>;
+  comments = hasMany(Comment, { foreignKey: "postId" });
 
   static {
     this.validates("title", { presence: true });
@@ -71,11 +63,7 @@ class ApiKey extends Model({
 }) {
   static tableName = "api_keys";
 
-  static associations = this.defineAssociations({
-    accounts: this.hasMany(() => Account, { foreignKey: "externalAccountId" }),
-  });
-
-  declare accounts: HasMany<typeof Account>;
+  accounts = hasMany(Account, { foreignKey: "externalAccountId" });
 }
 
 class Account extends Model({

@@ -2,14 +2,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-pl
 import {
   abort,
   connect,
+  hasMany,
   IncompatibleRelation,
   Model,
+  type QueryEvent,
   RecordInvalid,
   RecordNotDestroyed,
   RecordNotSaved,
   RecordNotUnique,
-  type HasMany,
-  type QueryEvent,
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
@@ -22,11 +22,7 @@ class User extends Model({
 }) {
   static tableName = "users";
 
-  static associations = this.defineAssociations({
-    posts: this.hasMany(() => Post, { foreignKey: "userId", dependent: "deleteAll" }),
-  });
-
-  declare posts: HasMany<typeof Post>;
+  posts = hasMany(Post, { foreignKey: "userId", dependent: "deleteAll" });
 
   static {
     this.validates("email", { presence: true });

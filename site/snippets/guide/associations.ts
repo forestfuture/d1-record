@@ -1,9 +1,9 @@
 import {
-  Model,
+  belongsTo,
   type Database,
-  type BelongsTo,
-  type HasMany,
-  type HasOne,
+  hasMany,
+  hasOne,
+  Model,
   type Relation,
 } from "@forestfuture/d1-record";
 
@@ -12,12 +12,8 @@ export class Author extends Model({
   id: { type: "string", null: false, default: () => crypto.randomUUID() },
   name: { type: "string", null: false },
 }) {
-  static associations = this.defineAssociations({
-    articles: this.hasMany(() => Article, { dependent: "destroy" }), // Article's authorId
-    profile: this.hasOne(() => Profile, { dependent: "delete" }), // Profile's authorId
-  });
-  declare articles: HasMany<typeof Article>;
-  declare profile: HasOne<typeof Profile>;
+  articles = hasMany(Article, { dependent: "destroy" }); // Article's authorId
+  profile = hasOne(Profile, { dependent: "delete" }); // Profile's authorId
 }
 
 export class Article extends Model({
@@ -27,12 +23,8 @@ export class Article extends Model({
   published: { type: "boolean", null: false, default: () => false },
   createdAt: "datetime",
 }) {
-  static associations = this.defineAssociations({
-    author: this.belongsTo(() => Author), // its own authorId
-    comments: this.hasMany(() => Comment, { dependent: "deleteAll" }), // Comment's articleId
-  });
-  declare author: BelongsTo<typeof Author>;
-  declare comments: HasMany<typeof Comment>;
+  author = belongsTo(Author); // its own authorId
+  comments = hasMany(Comment, { dependent: "deleteAll" }); // Comment's articleId
 
   static scopes = this.defineScopes({
     published: (q) => q.where({ published: true }),
@@ -54,13 +46,10 @@ export class Comment extends Model({
 
 // #region scoped
 export class Blog extends Model({ id: { type: "integer", null: false } }) {
-  static associations = this.defineAssociations({
-    // A scope for the association, as Rails' `has_many :posts, -> { … }`.
-    recentPosts: this.hasMany(() => BlogPost, {
-      scope: (q: Relation<BlogPost>) => q.order({ createdAt: "desc" }).where({ draft: false }),
-    }),
+  // A scope for the association, as Rails' `has_many :posts, -> { … }`.
+  recentPosts = hasMany(BlogPost, {
+    scope: (q: Relation<BlogPost>) => q.order({ createdAt: "desc" }).where({ draft: false }),
   });
-  declare recentPosts: HasMany<typeof BlogPost>;
 }
 // #endregion scoped
 

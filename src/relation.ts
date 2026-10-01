@@ -166,7 +166,7 @@ type TargetRecord<F> =
 
 /**
  * What `includes()` accepts for records `M`: an association name, or `{ name: nested }` where
- * `nested` names associations of that association's records. Checked against `declare` lines.
+ * `nested` names associations of that association's records. Checked against their fields' types.
  */
 export type IncludeSpec<M> =
   | AssociationName<M>

@@ -2,12 +2,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-pl
 import {
   CheckViolation,
   connect,
+  hasMany,
   InvalidForeignKey,
   Model,
   NotNullViolation,
-  RecordNotUnique,
-  type HasMany,
   type QueryEvent,
+  RecordNotUnique,
 } from "../../src/index.ts";
 import { configured, remoteDatabase, type RemoteDatabase } from "./support.ts";
 
@@ -23,11 +23,7 @@ function modelsFor(prefix: string) {
   }) {
     static tableName = `${prefix}users`;
 
-    static associations = this.defineAssociations({
-      posts: this.hasMany(() => Post, { foreignKey: "userId" }),
-    });
-
-    declare posts: HasMany<typeof Post>;
+    posts = hasMany(Post, { foreignKey: "userId" });
   }
 
   class Post extends Model({

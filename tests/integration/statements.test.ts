@@ -2,16 +2,16 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-pl
 import {
   column,
   connect,
+  hasMany,
   IncompatibleRelation,
   InvalidForeignKey,
   Model,
   NotNullViolation,
+  type QueryEvent,
   RecordNotSaved,
   RecordNotUnique,
-  UnknownAttribute,
-  type HasMany,
-  type QueryEvent,
   sql,
+  UnknownAttribute,
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
@@ -25,11 +25,7 @@ class User extends Model({
 }) {
   static tableName = "users";
 
-  static associations = this.defineAssociations({
-    posts: this.hasMany(() => Post, { foreignKey: "userId" }),
-  });
-
-  declare posts: HasMany<typeof Post>;
+  posts = hasMany(Post, { foreignKey: "userId" });
 
   static {
     this.validates("role", { presence: true });
@@ -48,11 +44,7 @@ class Post extends Model({
 }) {
   static tableName = "posts";
 
-  static associations = this.defineAssociations({
-    comments: this.hasMany(() => Comment, { foreignKey: "postId" }),
-  });
-
-  declare comments: HasMany<typeof Comment>;
+  comments = hasMany(Comment, { foreignKey: "postId" });
 }
 
 class Comment extends Model({

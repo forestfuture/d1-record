@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model, type BelongsTo, type HasMany, type HasOne } from "../../src/index.ts";
+import { belongsTo, connect, hasMany, hasOne, Model } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 // Foreign keys inferred by Rails' convention: no foreignKey anywhere below.
@@ -9,13 +9,8 @@ class User extends Model({
 }) {
   static tableName = "users";
 
-  static associations = this.defineAssociations({
-    posts: this.hasMany(() => Post), // User → userId
-    profile: this.hasOne(() => Profile), // User → userId
-  });
-
-  declare posts: HasMany<typeof Post>;
-  declare profile: HasOne<typeof Profile>;
+  posts = hasMany(Post); // User → userId
+  profile = hasOne(Profile); // User → userId
 }
 
 class Post extends Model({
@@ -25,11 +20,7 @@ class Post extends Model({
 }) {
   static tableName = "posts";
 
-  static associations = this.defineAssociations({
-    user: this.belongsTo(() => User), // user → userId
-  });
-
-  declare user: BelongsTo<typeof User>;
+  user = belongsTo(User); // user → userId
 }
 
 // Named so their inferred keys (writerId, authorId) don't exist: the explicit ones must be used.
@@ -39,11 +30,7 @@ class Writer extends Model({
 }) {
   static tableName = "users";
 
-  static associations = this.defineAssociations({
-    posts: this.hasMany(() => Article, { foreignKey: "userId" }),
-  });
-
-  declare posts: HasMany<typeof Article>;
+  posts = hasMany(Article, { foreignKey: "userId" });
 }
 
 class Article extends Model({
@@ -53,11 +40,7 @@ class Article extends Model({
 }) {
   static tableName = "posts";
 
-  static associations = this.defineAssociations({
-    author: this.belongsTo(() => Writer, { foreignKey: "userId" }),
-  });
-
-  declare author: BelongsTo<typeof Writer>;
+  author = belongsTo(Writer, { foreignKey: "userId" });
 }
 
 class Profile extends Model({
@@ -109,6 +92,37 @@ describe("inferred foreign keys", () => {
 
     expect(await writer.posts().pluck("id")).toEqual([10]);
     expect((await article.author())?.email).toBe("b@example.com");
+  });
+
+  test("a subclass has its parent's associations, and redeclaring one replaces it", async () => {
+    class Guest extends User {}
+    class Editor extends User {
+      posts = hasMany(Post, { scope: (q) => q.where({ title: "C" }) });
+    }
+    const db = connect(binding);
+    await db.model(Post).insert({ id: 12, userId: 1, title: "C" }).run();
+
+    const inherited = await db
+      .model(Guest)
+      .find(1)
+      .then((user) => user.posts().pluck("title"));
+    const replaced = await db
+      .model(Editor)
+      .find(1)
+      .then((user) => user.posts().pluck("title"));
+
+    expect(inherited).toEqual(["A", "C"]);
+    expect(replaced).toEqual(["C"]);
+  });
+
+  test("a subclass's hasMany infers its key from the Model's class, as its table name does", async () => {
+    class Admin extends User {
+      notes = hasMany(Post); // userId, from User; Post has no adminId
+    }
+
+    const admin = await connect(binding).model(Admin).find(2);
+
+    expect(await admin.notes().pluck("title")).toEqual(["B"]);
   });
 
   test("an inferred key is used for building, preloading and autosave alike", async () => {

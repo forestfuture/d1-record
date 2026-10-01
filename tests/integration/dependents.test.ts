@@ -3,13 +3,13 @@ import {
   abort,
   connect,
   DeleteRestriction,
+  hasMany,
+  hasOne,
   InvalidForeignKey,
   InvalidModel,
   Model,
-  RecordNotDestroyed,
-  type HasMany,
-  type HasOne,
   type QueryEvent,
+  RecordNotDestroyed,
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
@@ -22,11 +22,7 @@ class Post extends Model({
 }) {
   static tableName = "posts";
 
-  static associations = this.defineAssociations({
-    comments: this.hasMany(() => Comment, { foreignKey: "postId", dependent: "nullify" }),
-  });
-
-  declare comments: HasMany<typeof Comment>;
+  comments = hasMany(Comment, { foreignKey: "postId", dependent: "nullify" });
 
   static {
     this.beforeDestroy((post) => {
@@ -62,10 +58,7 @@ class User extends Model(userAttributes) {
 
 class Destroying extends Model(userAttributes) {
   static tableName = "users";
-  static associations = this.defineAssociations({
-    posts: this.hasMany(() => Post, { foreignKey: "userId", dependent: "destroy" }),
-  });
-  declare posts: HasMany<typeof Post>;
+  posts = hasMany(Post, { foreignKey: "userId", dependent: "destroy" });
   static {
     this.afterDestroy((user) => void log.push(`destroyed user ${user.id}`));
   }
@@ -73,44 +66,28 @@ class Destroying extends Model(userAttributes) {
 
 class DeletingAll extends Model(userAttributes) {
   static tableName = "users";
-  static associations = this.defineAssociations({
-    posts: this.hasMany(() => Post, { foreignKey: "userId", dependent: "deleteAll" }),
-  });
-  declare posts: HasMany<typeof Post>;
+  posts = hasMany(Post, { foreignKey: "userId", dependent: "deleteAll" });
 }
 
 class DeletingProfile extends Model(userAttributes) {
   static tableName = "users";
-  static associations = this.defineAssociations({
-    profile: this.hasOne(() => Profile, { foreignKey: "userId", dependent: "delete" }),
-  });
-  declare profile: HasOne<typeof Profile>;
+  profile = hasOne(Profile, { foreignKey: "userId", dependent: "delete" });
 }
 
 class Restricting extends Model(userAttributes) {
   static tableName = "users";
-  static associations = this.defineAssociations({
-    posts: this.hasMany(() => Post, { foreignKey: "userId", dependent: "restrictWithException" }),
-  });
-  declare posts: HasMany<typeof Post>;
+  posts = hasMany(Post, { foreignKey: "userId", dependent: "restrictWithException" });
 }
 
 class RestrictingWithError extends Model(userAttributes) {
   static tableName = "users";
-  static associations = this.defineAssociations({
-    posts: this.hasMany(() => Post, { foreignKey: "userId", dependent: "restrictWithError" }),
-    profile: this.hasOne(() => Profile, { foreignKey: "userId", dependent: "restrictWithError" }),
-  });
-  declare posts: HasMany<typeof Post>;
-  declare profile: HasOne<typeof Profile>;
+  posts = hasMany(Post, { foreignKey: "userId", dependent: "restrictWithError" });
+  profile = hasOne(Profile, { foreignKey: "userId", dependent: "restrictWithError" });
 }
 
 class Aborting extends Model(userAttributes) {
   static tableName = "users";
-  static associations = this.defineAssociations({
-    posts: this.hasMany(() => Post, { foreignKey: "userId", dependent: "deleteAll" }),
-  });
-  declare posts: HasMany<typeof Post>;
+  posts = hasMany(Post, { foreignKey: "userId", dependent: "deleteAll" });
 
   static {
     this.beforeDestroy(() => {
@@ -125,15 +102,13 @@ class PostWithReplies extends Model({
   title: { type: "string", null: false },
 }) {
   static tableName = "posts";
-  static associations = this.defineAssociations({
-    // Only the comments this scope picks are nullified.
-    loud: this.hasMany(() => Comment, {
-      foreignKey: "postId",
-      dependent: "nullify",
-      scope: (q) => q.where({ body: "x" }),
-    }),
-    quiet: this.hasMany(() => Comment, { foreignKey: "postId", dependent: "deleteAll" }),
+  // Only the comments this scope picks are nullified.
+  loud = hasMany(Comment, {
+    foreignKey: "postId",
+    dependent: "nullify",
+    scope: (q) => q.where({ body: "x" }),
   });
+  quiet = hasMany(Comment, { foreignKey: "postId", dependent: "deleteAll" });
 }
 
 class Account extends Model({
@@ -148,41 +123,31 @@ class Account extends Model({
 
 class DeletingAccount extends Model(userAttributes) {
   static tableName = "users";
-  static associations = this.defineAssociations({
-    account: this.hasOne(() => Account, { foreignKey: "userId", dependent: "delete" }),
-  });
+  account = hasOne(Account, { foreignKey: "userId", dependent: "delete" });
 }
 
 class NullifyingAccount extends Model(userAttributes) {
   static tableName = "users";
-  static associations = this.defineAssociations({
-    account: this.hasOne(() => Account, { foreignKey: "userId", dependent: "nullify" }),
-  });
+  account = hasOne(Account, { foreignKey: "userId", dependent: "nullify" });
 }
 
 class DestroyingAccount extends Model(userAttributes) {
   static tableName = "users";
-  static associations = this.defineAssociations({
-    account: this.hasOne(() => Account, { foreignKey: "userId", dependent: "destroy" }),
-  });
+  account = hasOne(Account, { foreignKey: "userId", dependent: "destroy" });
 }
 
 class RestrictingFirst extends Model(userAttributes) {
   static tableName = "users";
-  static associations = this.defineAssociations({
-    posts: this.hasMany(() => Post, { foreignKey: "userId", dependent: "destroy" }),
-    profile: this.hasOne(() => Profile, {
-      foreignKey: "userId",
-      dependent: "restrictWithException",
-    }),
+  posts = hasMany(Post, { foreignKey: "userId", dependent: "destroy" });
+  profile = hasOne(Profile, {
+    foreignKey: "userId",
+    dependent: "restrictWithException",
   });
 }
 
 class Misdeclared extends Model(userAttributes) {
   static tableName = "users";
-  static associations = this.defineAssociations({
-    profile: this.hasOne(() => Profile, { foreignKey: "userId", dependent: "deleteAll" as never }),
-  });
+  profile = hasOne(Profile, { foreignKey: "userId", dependent: "deleteAll" as never });
 }
 
 describe("dependent: strategies", () => {

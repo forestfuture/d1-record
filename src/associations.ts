@@ -1,4 +1,5 @@
 import { InvalidModel } from "./errors.ts";
+import { associationsOf } from "./association-fields.ts";
 import { belongsToAccessor, hasOneAccessor } from "./association-writers.ts";
 import { inferenceHint, type Inference } from "./foreign-keys.ts";
 import {
@@ -15,15 +16,15 @@ import { ofOwner, type Scoped } from "./relation.ts";
 import { linkOf, resolveAssociation, type ResolvedAssociation } from "./resolved-association.ts";
 
 /**
- * An association's scope, as Rails' `has_many :posts, -> { order(:created_at) }`. It receives
- * the target's Relation, untyped (as the keys are, so Models can point at each other), and is
- * checked when it first runs; annotate it (`(q: Relation<Post>) => …`) for full typing.
+ * An association's scope, as Rails' `has_many :posts, -> { order(:created_at) }`: it receives
+ * the target's Relation, with its scopes, and returns a narrowed one.
  */
-// oxlint-disable-next-line typescript/no-explicit-any -- typed like the keys: checked on first use
-type AssociationScope = (relation: any) => unknown;
+type AssociationScope<C extends ModelClass> = (
+  relation: Scoped<InstanceType<C>, ScopesOf<C>>,
+) => unknown;
 
 /** What an association declaration takes: the keys that link the Models, and a scope. */
-export interface AssociationOptions {
+export interface AssociationOptions<C extends ModelClass = ModelClass> {
   /**
    * The attribute holding the link: on the owner for belongsTo, on the target otherwise.
    * Inferred when left out, as Rails does: a belongsTo's name + `Id` (`author` → `authorId`),
@@ -33,7 +34,7 @@ export interface AssociationOptions {
   /** The attribute the foreign key points at; defaults to the pointed-at Model's primary key. */
   primaryKey?: string;
   /** Narrows or orders the target's records for this association: `(q) => q.order(…)`. */
-  scope?: AssociationScope;
+  scope?: AssociationScope<C>;
   /** What destroying the owner does to this association's records (hasMany and hasOne). */
   dependent?: Dependent;
 }
@@ -71,7 +72,7 @@ export interface AssociationDeclaration extends AssociationOptions {
   target: () => ModelClass;
 }
 
-/** One declared association, its foreign key given or inferred by `defineAssociations`. */
+/** One declared association, its foreign key given or inferred from the names (`associationsOf`). */
 export interface AssociationDefinition extends AssociationDeclaration {
   foreignKey: string;
   /** Where an inferred foreign key came from, for error messages. */
@@ -104,8 +105,8 @@ export interface HasOne<C extends ModelClass> {
 /** `user.posts()`: a Relation of the associated records, with the target's scopes. */
 export type HasMany<C extends ModelClass> = () => Scoped<InstanceType<C>, ScopesOf<C>>;
 
-/** Each prepared Model, with the associations it was prepared with. */
-const prepared = new WeakMap<object, object>();
+/** Each prepared Model. */
+const prepared = new WeakSet<object>();
 
 /**
  * Makes a Model ready for use, once: verifies its declaration, checks its associations and
@@ -114,20 +115,12 @@ const prepared = new WeakMap<object, object>();
  */
 export function prepareModel(model: ModelClass): void {
   verifyModel(model);
-  const seen = prepared.get(model);
-  if (seen !== undefined) {
-    if (seen !== model.associations) {
-      throw new InvalidModel(
-        `${model.name}'s associations changed after its first use; declare them once, in the class body (static associations = …)`,
-      );
-    }
-    return;
-  }
-  for (const [name, definition] of Object.entries(model.associations)) {
+  if (prepared.has(model)) return;
+  for (const [name, definition] of Object.entries(associationsOf(model))) {
     checkAssociation(model, name, definition);
     Object.defineProperty(model.prototype, name, accessorProperty(name, definition));
   }
-  prepared.set(model, model.associations);
+  prepared.add(model);
 }
 
 /** An association's name must be free, its target a Model, and its keys declared attributes. */
@@ -143,14 +136,9 @@ function checkAssociation(
   if (name in ModelBase.prototype) {
     throw new InvalidModel(`${label} is the name of a record method or property; rename it`);
   }
-  if (definition.foreignKey === undefined) {
-    throw new InvalidModel(
-      `${label} has no foreignKey; declare associations with this.defineAssociations({...}) so it can be inferred, or pass foreignKey`,
-    );
-  }
   const target: unknown = definition.target();
   if (typeof target !== "function" || !(target.prototype instanceof ModelBase)) {
-    throw new InvalidModel(`${label} must point at a Model: this.hasMany(() => Post, …)`);
+    throw new InvalidModel(`${label} must point at a Model class: hasMany(Post, …)`);
   }
   const { ownerAttribute, targetAttribute } = linkOf(definition, model, target as ModelClass);
   // The foreign key is the owner's attribute for a belongsTo, the target's otherwise.

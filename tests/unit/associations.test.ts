@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { connect, InvalidModel, Model, UnknownAssociation, type HasMany } from "../../src/index.ts";
+import { belongsTo, connect, hasMany, InvalidModel, Model, NoDatabase } from "../../src/index.ts";
 
 // No D1 needed: these checks happen when a Model is first used.
 const db = connect({} as never);
@@ -12,15 +12,12 @@ describe("association declarations", () => {
   test("an association named like an attribute or a record method is rejected", () => {
     class Shadow extends Model({ id: "integer", posts: "json" }) {
       static tableName = "users";
-      static associations = this.defineAssociations({
-        posts: this.hasMany(() => Post, { foreignKey: "userId" }),
-      });
+      posts = hasMany(Post, { foreignKey: "userId" });
     }
     class Clash extends Model({ id: "integer" }) {
       static tableName = "users";
-      static associations = this.defineAssociations({
-        save: this.hasMany(() => Post, { foreignKey: "userId" }),
-      });
+      // A type error too (save is a record method); cast to reach the runtime check.
+      save = hasMany(Post, { foreignKey: "userId" }) as never;
     }
 
     expect(() => db.model(Shadow)).toThrow(/Shadow.*"posts".*attribute/);
@@ -30,15 +27,11 @@ describe("association declarations", () => {
   test("a foreignKey that isn't a declared attribute is rejected", () => {
     class Typo extends Model({ id: "integer" }) {
       static tableName = "users";
-      static associations = this.defineAssociations({
-        posts: this.hasMany(() => Post, { foreignKey: "user_id" }),
-      });
+      posts = hasMany(Post, { foreignKey: "user_id" });
     }
     class Owner extends Model({ id: "integer" }) {
       static tableName = "posts";
-      static associations = this.defineAssociations({
-        author: this.belongsTo(() => Post, { foreignKey: "authorId" }),
-      });
+      author = belongsTo(Post, { foreignKey: "authorId" });
     }
 
     expect(() => db.model(Typo)).toThrow(/Typo.*"posts".*Post.*"user_id"/);
@@ -48,89 +41,32 @@ describe("association declarations", () => {
   test("a target that isn't a Model is rejected", () => {
     class Lost extends Model({ id: "integer" }) {
       static tableName = "users";
-      static associations = this.defineAssociations({
-        posts: this.hasMany(() => "Post", { foreignKey: "userId" }),
-      });
+      posts = hasMany("Post" as never, { foreignKey: "userId" }); // a type error too
     }
 
     expect(() => db.model(Lost)).toThrow(/Lost.*"posts".*Model/);
   });
 
-  test("a subclass has its parent's associations; replacing them after first use throws", () => {
-    class Author extends Model({ id: "integer" }) {
-      static tableName = "users";
-      static associations = this.defineAssociations({
-        posts: this.hasMany(() => Post, { foreignKey: "userId" }),
-      });
-      declare posts: HasMany<typeof Post>;
+  test("a record constructed directly has no Database, so its associations throw NoDatabase", () => {
+    class User extends Model({ id: "integer" }) {
+      posts = hasMany(Post);
     }
-    class Guest extends Author {}
 
-    const guest = db.model(Guest).build();
-    expect(typeof guest.posts).toBe("function");
-
-    db.model(Author);
-    Author.associations = Author.defineAssociations({
-      posts: Author.hasMany(() => Post, { foreignKey: "title" }),
-    });
-    expect(() => db.model(Author)).toThrow(/Author.*associations.*static/);
-  });
-
-  test("replacing an association's target Model's associations after first use throws on the next read", () => {
-    class Comment extends Model({ id: "integer", postId: "integer" }) {
-      static tableName = "comments";
-    }
-    class Article extends Model({ id: "integer" }) {
-      static tableName = "posts";
-      static associations = this.defineAssociations({
-        comments: this.hasMany(() => Comment, { foreignKey: "postId" }),
-      });
-      declare comments: HasMany<typeof Comment>;
-    }
-    class Writer extends Model({ id: "integer" }) {
-      static tableName = "users";
-      static associations = this.defineAssociations({
-        articles: this.hasMany(() => Article, { foreignKey: "id" }),
-      });
-      declare articles: HasMany<typeof Article>;
-    }
-    const writer = db.model(Writer).build();
-    writer.articles();
-
-    Article.associations = {} as typeof Article.associations;
-
-    expect(() => writer.articles()).toThrow(InvalidModel);
-  });
-
-  test("a subclass that replaces its associations without one no longer has it, as the contract says", () => {
-    class Author extends Model({ id: "integer" }) {
-      static tableName = "users";
-      static associations = this.defineAssociations({
-        posts: this.hasMany(() => Post, { foreignKey: "userId" }),
-      });
-      declare posts: HasMany<typeof Post>;
-    }
-    class Reader extends Author {
-      // Replaced by a plain object that leaves `posts` out (spreading the parent's would keep it).
-      static override associations = {} as typeof Author.associations;
-    }
-    db.model(Author);
-
-    expect(() => db.model(Reader).build().posts()).toThrow(UnknownAssociation);
+    expect(() => new User().posts()).toThrow(NoDatabase);
   });
 
   test("an inferred key that isn't declared is rejected, saying where it came from", () => {
     class APIKey extends Model({ id: "integer" }) {
       static tableName = "api_keys";
-      static associations = this.defineAssociations({
-        posts: this.hasMany(() => Post), // APIKey → apiKeyId, which Post doesn't declare
-      });
+      posts = hasMany(Post); // APIKey → apiKeyId, which Post doesn't declare
     }
     class Draft extends Model({ id: "integer" }) {
       static tableName = "posts";
-      static associations = this.defineAssociations({
-        writer: this.belongsTo(() => Post), // writer → writerId, which Draft doesn't declare
-      });
+      writer = belongsTo(Post); // writer → writerId, which Draft doesn't declare
+    }
+    class BlogPost extends Model({ id: "integer" }) {
+      static tableName = "users";
+      comments = hasMany(Post); // BlogPost → blogPostId, through underscore
     }
 
     expect(() => db.model(APIKey)).toThrow(
@@ -139,50 +75,14 @@ describe("association declarations", () => {
     expect(() => db.model(Draft)).toThrow(
       /Draft association "writer": Draft has no attribute "writerId" \(inferred from the association name writer/,
     );
-  });
-
-  test("associations declared without defineAssociations need an explicit foreignKey", () => {
-    class Plain extends Model({ id: "integer" }) {
-      static tableName = "users";
-      static associations = { posts: this.hasMany(() => Post) } as never;
-    }
-
-    expect(() => db.model(Plain)).toThrow(
-      /Plain association "posts" has no foreignKey.*defineAssociations/,
-    );
-  });
-
-  test("hasMany and hasOne infer the class name through underscore, as Rails does", () => {
-    class Target extends Model({ id: "integer", userId: "integer", apiKeyId: "integer" }) {
-      static tableName = "posts";
-    }
-    class User extends Model({ id: "integer" }) {
-      static tableName = "users";
-      static associations = this.defineAssociations({ posts: this.hasMany(() => Target) });
-    }
-    class APIKey extends Model({ id: "integer" }) {
-      static tableName = "users";
-      static associations = this.defineAssociations({ post: this.hasOne(() => Target) });
-    }
-    class BlogPost extends Model({ id: "integer" }) {
-      static tableName = "users";
-      static associations = this.defineAssociations({
-        comments: this.hasMany(() => Target, { foreignKey: "userId" }),
-        tags: this.hasMany(() => Target),
-      });
-    }
-
-    expect(User.associations.posts.foreignKey).toBe("userId");
-    expect(APIKey.associations.post.foreignKey).toBe("apiKeyId");
-    expect(BlogPost.associations.tags.foreignKey).toBe("blogPostId");
-    expect(BlogPost.associations.comments.foreignKey).toBe("userId"); // explicit wins
+    expect(() => db.model(BlogPost)).toThrow(/Post has no attribute "blogPostId"/);
   });
 
   test("a class renamed by a bundler fails loudly, suggesting foreignKey", () => {
     // What a minifier without keep_names does: the class is now called e.
     const e = class extends Model({ id: "integer" }) {
       static tableName = "users";
-      static associations = this.defineAssociations({ posts: this.hasMany(() => Post) });
+      posts = hasMany(Post);
     };
 
     expect(() => db.model(e)).toThrow(

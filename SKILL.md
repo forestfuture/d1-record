@@ -17,7 +17,6 @@ d1-record (`@forestfuture/d1-record`) is a Rails-style Active Record for Cloudfl
 - Make several writes atomic with one `db.batch([...])` of statements (`insert`, `updateAll`, `deleteAll`) and records (`record.toSave()`, `record.toDestroy()`). D1 has no interactive transactions, so a read-then-write can't be atomic.
 - Generate keys in code (`id: { type: "string", null: false, default: () => crypto.randomUUID() }`) for records saved together. An owner whose key is known before its INSERT (generated in code, or already saved) is written in one atomic batch with the records built through it. A key D1 generates exists only after its own write, so each level is then written in a separate batch.
 - Check what writes return. `save()` and `update()` resolve to `false` when validation fails (reasons in `record.errors`) or a callback aborts (`record.abortReason`). `destroy()` resolves to `false` when a callback aborts, or a `restrictWithError` association refuses (reason in `record.errors`). The `…OrThrow` methods throw instead. Constraint errors, such as `RecordNotUnique`, always throw.
-- Give every association a matching `declare` line, typed with the target class: `declare posts: HasMany<typeof Post>`.
 
 <!-- #endregion rules -->
 
@@ -30,7 +29,7 @@ The installed package's `llms-full.txt` is one Markdown file, a `#` heading per 
 Models declare their attributes once, and TypeScript infers the record's properties from them. Validations and callbacks go in the `static {}` block:
 
 ```ts
-import { Model, type BelongsTo, type HasMany } from "@forestfuture/d1-record";
+import { belongsTo, hasMany, Model } from "@forestfuture/d1-record";
 
 export class User extends Model({
   id: { type: "string", null: false, default: () => crypto.randomUUID() },
@@ -39,10 +38,7 @@ export class User extends Model({
   updatedAt: "datetime",
 }) {
   // Its table, users, is inferred from the class name; static tableName overrides it.
-  static associations = this.defineAssociations({
-    posts: this.hasMany(() => Post, { dependent: "destroy" }), // foreign key inferred: Post's userId
-  });
-  declare posts: HasMany<typeof Post>;
+  posts = hasMany(Post, { dependent: "destroy" }); // foreign key inferred: Post's userId
 
   static {
     this.validates("email", { presence: true, uniqueness: true });
@@ -54,10 +50,7 @@ export class Post extends Model({
   userId: { type: "string", null: false },
   title: { type: "string", null: false },
 }) {
-  static associations = this.defineAssociations({
-    user: this.belongsTo(() => User), // foreign key inferred: userId
-  });
-  declare user: BelongsTo<typeof User>;
+  user = belongsTo(User); // foreign key inferred: userId
 }
 ```
 
