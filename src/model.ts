@@ -19,7 +19,7 @@ import {
 import { destroyLifecycle, reloadRecord, saveLifecycle, validateRecord } from "./lifecycle.ts";
 import { withForeignKeys } from "./foreign-keys.ts";
 import { RecordStatement } from "./record-statement.ts";
-import { inferTableNames } from "./table-names.ts";
+import { inferTableNames, requireTableName } from "./table-names.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
 import type {
   AssociationDefinition,
@@ -534,14 +534,6 @@ export function verifyModel(model: ModelClass): void {
   rejectShadowingFields(model);
   seal(model);
   verified.add(model);
-}
-
-function requireTableName(model: ModelClass): void {
-  if (typeof model.tableName !== "string" || model.tableName === "") {
-    throw new InvalidModel(
-      `${model.name}'s tableName must be a table's name; remove it to use the one inferred from the class name`,
-    );
-  }
 }
 
 function requirePrimaryKeyAttribute(model: ModelClass): void {

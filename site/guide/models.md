@@ -12,7 +12,9 @@ A Model describes one table. You declare its attributes once, in the object pass
 
 A Model's table is named after its class, as Rails names it: the class name in snake_case, pluralized. `User` → `users`, `BlogPost` → `blog_posts`, `Category` → `categories`, `Person` → `people`, `Sheep` → `sheep`. A subclass shares its parent's table.
 
-When a table is named differently, say so with `static tableName = "billing_accounts"`. There's no way to add your own pluralization rules: name the table instead.
+The rules are Rails' own English ones, quirks included: `Human` becomes `humen`, as `man` becomes `men`, and `Leaf` becomes `leafs`. When a table is named differently, say so with `static tableName = "billing_accounts"`. There's no way to add your own pluralization rules: name the table instead.
+
+A class with no name to infer from, such as an anonymous class or `export default class extends Model(...)`, must set `static tableName`.
 
 ::: details Bundlers and class names
 The table name comes from the class's name, so the class has to keep its name when your Worker is bundled. Wrangler keeps names by default, even when minifying. If a bundler renames `User` to something like `e`, the first query to its table throws `InvalidModel`, saying the table `es` doesn't exist and that its name was inferred from the class name. Set `static tableName`, or keep class names in your bundler's settings.
@@ -106,4 +108,4 @@ To share behavior between Models, write a plain function and call it from each M
 
 ## Checked when first used
 
-The first time a Model is used, `db.model(X)` checks its declaration and throws `InvalidModel` if something's wrong: an empty `tableName`, a `primaryKey` that isn't an attribute, an attribute named like a record method (`save`, `attributes`, …), or a class field that hides an attribute (such as `email!: string` in the class body). After that, a Model's declarations are fixed, so request code can never change them.
+The first time a Model is used, `db.model(X)` checks its declaration and throws `InvalidModel` if something's wrong: no table name (an empty `tableName`, or a class with no name to infer one from), a `primaryKey` that isn't an attribute, an attribute named like a record method (`save`, `attributes`, …), or a class field that hides an attribute (such as `email!: string` in the class body). After that, a Model's declarations are fixed, so request code can never change them.

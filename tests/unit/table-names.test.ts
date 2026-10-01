@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
-import { Model } from "../../src/index.ts";
+import { connect, InvalidModel, Model } from "../../src/index.ts";
+
+const db = connect({} as never);
 
 /** A Model class with this exact class name, as `class <name> extends Model(…)` makes. */
 function modelNamed(name: string) {
@@ -82,7 +84,7 @@ describe("inferred table names", () => {
     class User extends Model({ id: "integer" }) {}
     class Admin extends User {}
     class Archived extends User {
-      static override tableName = "archived_users";
+      static tableName = "archived_users";
     }
     class Account extends Model({ id: "integer" }) {
       static tableName = "billing_accounts";
@@ -101,5 +103,38 @@ describe("inferred table names", () => {
     const e = class extends Model({ id: "integer" }) {};
 
     expect(e.tableName).toBe("es");
+  });
+
+  test("assigning tableName sets it for that class, as compiled class fields and static blocks do", () => {
+    class User extends Model({ id: "integer" }) {}
+    class Admin extends User {}
+    class Member extends Model({ id: "integer" }) {
+      static {
+        this.tableName = "people";
+      }
+    }
+
+    // What `static tableName = "…"` compiles to without useDefineForClassFields.
+    User.tableName = "members";
+    Admin.tableName = "admins";
+
+    expect([User.tableName, Admin.tableName, Member.tableName]).toEqual([
+      "members",
+      "admins",
+      "people",
+    ]);
+  });
+
+  test("a class with no name to infer from must declare its tableName", () => {
+    const anonymous = [class extends Model({ id: "integer" }) {}][0]!;
+    const defaultExport = { default: class extends Model({ id: "integer" }) {} }.default;
+    const direct = Model({ id: "integer" });
+
+    for (const model of [anonymous, defaultExport, direct]) {
+      expect(() => db.model(model)).toThrow(InvalidModel);
+      expect(() => db.model(model)).toThrow(
+        /has no class name to infer its table from; set static tableName/,
+      );
+    }
   });
 });
