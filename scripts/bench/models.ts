@@ -8,7 +8,7 @@ CREATE TABLE articles (id TEXT PRIMARY KEY, author_id TEXT NOT NULL, title TEXT 
 CREATE TABLE profiles (id TEXT PRIMARY KEY, author_id TEXT NOT NULL, bio TEXT);
 `;
 
-export class Publisher extends Model({ id: { type: "string", null: false }, name: "string" }) {}
+class Publisher extends Model({ id: { type: "string", null: false }, name: "string" }) {}
 
 export class Author extends Model({
   id: { type: "string", null: false },
@@ -21,13 +21,13 @@ export class Author extends Model({
   publisher = belongsTo(Publisher);
 }
 
-export class Article extends Model({
+class Article extends Model({
   id: { type: "string", null: false },
   authorId: { type: "string", null: false },
   title: { type: "string", null: false },
 }) {}
 
-export class Profile extends Model({
+class Profile extends Model({
   id: { type: "string", null: false },
   authorId: { type: "string", null: false },
   bio: "string",

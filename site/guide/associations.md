@@ -4,20 +4,22 @@ description: "belongsTo, hasMany and hasOne: inferred foreign keys, reading, pre
 
 # Associations
 
-Associations connect Models: `belongsTo`, `hasMany` and `hasOne`, as in Rails. They're declared with `this.defineAssociations({...})`, and each needs a matching `declare` line so TypeScript knows the accessor.
+Associations connect Models: `belongsTo`, `hasMany` and `hasOne`, as in Rails. Each is a field of the Model, `articles = hasMany(Article)`, much like Rails' `has_many :articles`: the field's name is the association's name, and TypeScript knows `author.articles()` from it.
 
 <<< @/snippets/guide/associations.ts#declare{ts}
 
-The target is a function (`() => Article`), so Models can refer to each other in any order.
+Pass the target Model's class. Models can refer to each other in any order, because a field is only evaluated when a record is made, by which time every class exists.
+
+A subclass inherits its parent's associations, and can redeclare one to change it.
 
 ## Foreign keys
 
 A foreign key names an **attribute**, not a column: `authorId`, where Rails writes `author_id`. When you leave it out, it's inferred by Rails' convention:
 
-- `belongsTo`: the association's name + `Id`. `author: this.belongsTo(() => Author)` uses the record's own `authorId`.
-- `hasMany` and `hasOne`: the declaring class's name + `Id`, on the target. `Author`'s associations use `authorId`, `BlogPost`'s use `blogPostId`, and `APIKey`'s use `apiKeyId`.
+- `belongsTo`: the association's name + `Id`. `author = belongsTo(Author)` uses the record's own `authorId`.
+- `hasMany` and `hasOne`: the Model's class name + `Id`, on the target. `Author`'s associations use `authorId`, `BlogPost`'s use `blogPostId`, and `APIKey`'s use `apiKeyId`.
 
-Pass `foreignKey` when the name doesn't follow the convention, for example `author: this.belongsTo(() => User, { foreignKey: "userId" })`. `primaryKey` names the attribute it points at, which defaults to the primary key.
+Pass `foreignKey` when the name doesn't follow the convention, for example `author = belongsTo(User, { foreignKey: "userId" })`. `primaryKey` names the attribute it points at, which defaults to the primary key.
 
 ::: details Bundlers and class names
 Inferring from a class name needs the class to keep its name when your Worker is bundled. Wrangler keeps names by default, even when minifying. If a bundler renames `Author` to something like `e`, the inferred `eId` doesn't exist, and the first use of the Model throws `InvalidModel`, saying where the key came from. Pass `foreignKey`, or keep class names in your bundler's settings.
@@ -41,7 +43,7 @@ Loading an association inside a loop sends one query per record. `includes` load
 
 <<< @/snippets/guide/associations.ts#preload{ts}
 
-Nest with an object: `includes({ articles: "comments" })` or `includes({ articles: ["comments", "tags"] })`. Names are typed from the `declare` lines. `record.loaded("profile")` reads a loaded association synchronously, and throws `AssociationNotLoaded` if it wasn't, so a template can never quietly send a query. `record.isLoaded("profile")` asks first.
+Nest with an object: `includes({ articles: "comments" })` or `includes({ articles: ["comments", "tags"] })`. Names are typed from the association fields. `record.loaded("profile")` reads a loaded association synchronously, and throws `AssociationNotLoaded` if it wasn't, so a template can never quietly send a query. `record.isLoaded("profile")` asks first.
 
 ## Creating through an association
 
@@ -75,7 +77,7 @@ An association can narrow or order its records, as Rails' `has_many :posts, -> {
 
 <<< @/snippets/guide/associations.ts#scoped{ts}
 
-Annotate `q` with the target's `Relation` type for full typing. A scope that uses `limit`, `offset` or `distinct` works when read lazily, but can't be preloaded: it would apply to every owner's records together, so `includes` throws `IncompatibleRelation`.
+`q` is the target's Relation, typed with its attributes and scopes. A scope that uses `limit`, `offset` or `distinct` works when read lazily, but can't be preloaded: it would apply to every owner's records together, so `includes` throws `IncompatibleRelation`.
 
 ## Dependent records
 
