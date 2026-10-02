@@ -58,16 +58,6 @@ When D1 refuses a write because of a constraint, the error is translated into a 
 
 Each carries D1's original error as `cause`, the `table`, and the `columns` and `attributes` involved where D1's message names them:
 
-```ts
-try {
-  await user.save();
-} catch (error) {
-  if (error instanceof RecordNotUnique && error.attributes.includes("email")) {
-    user.errors.add("email", "has already been taken", { type: "taken" });
-  } else {
-    throw error;
-  }
-}
-```
+<<< @/snippets/guide/errors.ts#not-unique{ts}
 
 Constraint errors are thrown by every method, `save()` as well as `saveOrThrow()`, since the database refused the write. Your changes to the record are kept, so you can fix them and try again.

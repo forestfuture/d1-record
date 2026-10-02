@@ -82,12 +82,7 @@ An association can narrow or order its records, as Rails' `has_many :posts, -> {
 ::: details A Model's association to itself, scoped with its own scopes
 TypeScript can't infer this one case on its own: `children = hasMany(Category, { scope: (q) => q.top() })` inside `Category`, where `top` is one of `Category`'s scopes. Write the field's type out, and the rest is still inferred:
 
-```ts
-children: HasMany<typeof Category> = hasMany(Category, {
-  foreignKey: "parentId",
-  scope: (q) => q.top(),
-});
-```
+<<< @/snippets/guide/associations.ts#self-referencing{ts}
 
 :::
 

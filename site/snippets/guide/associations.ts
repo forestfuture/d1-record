@@ -1,4 +1,11 @@
-import { belongsTo, type Database, hasMany, hasOne, Model } from "@forestfuture/d1-record";
+import {
+  belongsTo,
+  type Database,
+  hasMany,
+  hasOne,
+  Model,
+  type HasMany,
+} from "@forestfuture/d1-record";
 
 // #region declare
 export class Author extends Model({
@@ -116,3 +123,19 @@ export async function statementsExample(article: Article) {
   await article.comments().deleteAll(); // one DELETE for the article's comments
   // #endregion statements
 }
+
+// #region self-referencing
+export class Category extends Model({
+  id: { type: "integer", null: false },
+  parentId: "integer",
+}) {
+  static scopes = this.defineScopes({ top: (q) => q.where({ parentId: null }) });
+
+  // Written out: TypeScript can't infer a field whose scope uses its own Model's scopes.
+  children: HasMany<typeof Category> = hasMany(Category, {
+    foreignKey: "parentId",
+    scope: (q) => q.top(),
+  });
+  parent = belongsTo(Category, { foreignKey: "parentId" });
+}
+// #endregion self-referencing

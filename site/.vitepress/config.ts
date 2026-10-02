@@ -1,12 +1,14 @@
 import { defineConfig } from "vitepress";
 import { copyOrDownloadAsMarkdownButtons } from "vitepress-plugin-llms";
+import { examples, site } from "./examples.ts";
 import { llms, tidyLlmsTxt } from "./llms.ts";
 
 const repository = "https://github.com/forestfuture/d1-record";
 const base = "/d1-record/";
 
 export default defineConfig({
-  vite: { plugins: [llms()] },
+  // Examples are expanded with their imports first, so the llms plugin reads them expanded too.
+  vite: { plugins: [examples(site), llms()] },
   buildEnd: ({ outDir }) => tidyLlmsTxt(outDir),
   markdown: {
     config(md) {
