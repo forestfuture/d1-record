@@ -104,7 +104,7 @@ describe("saving and destroying records in a batch", () => {
       user.toSave(),
       post.toSave(),
       other.toDestroy(),
-      database.model(User).where({ id: 1 }).updateAll({ role: "admin" }),
+      database.model(User).where({ id: 1 }).toUpdateAll({ role: "admin" }),
     ]);
 
     expect(saved).toBe(user);
@@ -173,7 +173,7 @@ describe("saving and destroying records in a batch", () => {
       database.batch([
         user.toSave(),
         post.toSave(),
-        database.model(User).insert({ id: 2, email: "a@example.com" }),
+        database.model(User).toInsert({ id: 2, email: "a@example.com" }),
       ]),
     ).rejects.toThrow(RecordNotUnique);
 

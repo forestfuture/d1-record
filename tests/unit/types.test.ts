@@ -257,7 +257,7 @@ describe("types", () => {
     const typeOnly = async (user: User) => {
       const [saved, meta] = await db.batch([
         user.toSave(),
-        db.model(User).where({ id: 1 }).deleteAll(),
+        db.model(User).where({ id: 1 }).toDeleteAll(),
       ]);
       expectTypeOf(saved).toEqualTypeOf<User>();
       expectTypeOf(meta.changes).toEqualTypeOf<number>();
@@ -270,12 +270,12 @@ describe("types", () => {
 
     // Checked by the type checker only; never called.
     const typeOnly = () => {
-      users.upsertAll([{ email: "a@example.com" }], { uniqueBy: "email" });
-      users.upsert({ id: 1 }, { uniqueBy: ["id", "email"] });
+      users.toUpsertAll([{ email: "a@example.com" }], { uniqueBy: "email" });
+      users.toUpsert({ id: 1 }, { uniqueBy: ["id", "email"] });
       // @ts-expect-error unknown attribute
-      users.upsert({ id: 1 }, { uniqueBy: "nope" });
+      users.toUpsert({ id: 1 }, { uniqueBy: "nope" });
       // @ts-expect-error onDuplicate only skips; updating is upsert
-      users.insert({ id: 1 }, { onDuplicate: "update" });
+      users.toInsert({ id: 1 }, { onDuplicate: "update" });
     };
     expectTypeOf(typeOnly).toBeFunction();
   });

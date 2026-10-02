@@ -312,8 +312,8 @@ describe("dependent: strategies", () => {
     const post = await db().model(Post).find(12);
     await binding.prepare("INSERT INTO comments (id, post_id, body) VALUES (3, 12, 'z')").run();
 
-    await destroying.posts().deleteAll().run();
-    await post.comments().deleteAll().run();
+    await destroying.posts().deleteAll();
+    await post.comments().deleteAll();
 
     expect(await db().model(Post).pluck("id")).toEqual([12]);
     expect(await db().model(Comment).pluck("postId")).toEqual([null]);

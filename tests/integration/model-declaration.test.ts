@@ -23,10 +23,10 @@ describe("model declaration", () => {
     class User extends Model({ id: "integer", email: "string" }) {}
     const users = connect(binding).model(User);
 
-    await users.insert({ id: 7, email: "inferred@example.com" }).run();
+    await users.insert({ id: 7, email: "inferred@example.com" });
 
     expect(await users.find(7).then((user) => user.email)).toBe("inferred@example.com");
-    await users.where({ id: 7 }).deleteAll().run();
+    await users.where({ id: 7 }).deleteAll();
   });
 
   test("an empty tableName is rejected when first used", () => {
@@ -47,7 +47,7 @@ describe("model declaration", () => {
     const db = connect(binding);
 
     const read = db.model(e).toArray();
-    const written = db.batch([db.model(e).insert({ id: 1 })]);
+    const written = db.batch([db.model(e).toInsert({ id: 1 })]);
 
     for (const attempt of [read, written]) {
       await expect(attempt).rejects.toThrow(InvalidModel);

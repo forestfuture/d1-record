@@ -97,7 +97,7 @@ describe("statements", () => {
     test("run() writes the row and resolves to D1's meta, skipping validations and callbacks", async () => {
       const db = connect(binding);
 
-      const meta = await db.model(User).insert({ id: 1, email: "a@example.com" }).run();
+      const meta = await db.model(User).insert({ id: 1, email: "a@example.com" });
 
       expect(meta.changes).toBe(1);
       expect(log).toEqual([]);
@@ -106,13 +106,22 @@ describe("statements", () => {
       expect(user.role).toBeNull(); // presence validation skipped
     });
 
+    test("an unknown attribute rejects the immediate forms, and throws from the to… forms", async () => {
+      const users = connect(binding).model(User);
+
+      await expect(users.insert({ nope: 1 } as never)).rejects.toThrow(UnknownAttribute);
+      await expect(users.updateAll({ nope: 1 } as never)).rejects.toThrow(UnknownAttribute);
+      expect(() => users.toInsert({ nope: 1 } as never)).toThrow(UnknownAttribute);
+      expect(() => users.toUpdateAll({ nope: 1 } as never)).toThrow(UnknownAttribute);
+    });
+
     test("building a statement doesn't query; attribute values are converted when it's built", async () => {
       const events: QueryEvent[] = [];
       const db = connect(binding, { onQuery: (event) => events.push(event) });
 
-      const statement = db.model(ApiKey).insert({ label: "deploy", scopes: ["read"] });
+      const statement = db.model(ApiKey).toInsert({ label: "deploy", scopes: ["read"] });
       expect(events).toEqual([]);
-      await statement.run();
+      await db.batch([statement]);
 
       expect(events).toHaveLength(1);
       const key = await db.model(ApiKey).findByOrThrow({ label: "deploy" });
@@ -122,8 +131,8 @@ describe("statements", () => {
     test("declared defaults fill attributes that weren't given, like app-generated keys", async () => {
       const db = connect(binding);
 
-      await db.model(ApiKey).insert({ label: "deploy" }).run();
-      await db.model(ApiKey).insert({ id: "mine", label: "release" }).run();
+      await db.model(ApiKey).insert({ label: "deploy" });
+      await db.model(ApiKey).insert({ id: "mine", label: "release" });
 
       expect(await db.model(ApiKey).order({ label: "asc" }).pluck("id")).toEqual([
         `key-${counter}`,
@@ -133,14 +142,13 @@ describe("statements", () => {
 
     test("createdAt and updatedAt are set to now, unless given", async () => {
       const db = connect(binding);
-      await db.model(User).insert({ id: 1, email: "a@example.com" }).run();
+      await db.model(User).insert({ id: 1, email: "a@example.com" });
       const before = Date.now();
 
-      await db.model(Post).insert({ id: 1, userId: 1, title: "Now", published: false }).run();
+      await db.model(Post).insert({ id: 1, userId: 1, title: "Now", published: false });
       await db
         .model(Post)
-        .insert({ id: 2, userId: 1, title: "Then", published: false, createdAt: past })
-        .run();
+        .insert({ id: 2, userId: 1, title: "Then", published: false, createdAt: past });
 
       const now = await db.model(Post).find(1);
       const then = await db.model(Post).find(2);
@@ -152,11 +160,11 @@ describe("statements", () => {
 
     test("a Relation's equality conditions are inserted too, as build() uses them", async () => {
       const db = connect(binding);
-      await db.model(User).insert({ id: 1, email: "a@example.com" }).run();
+      await db.model(User).insert({ id: 1, email: "a@example.com" });
       const user = await db.model(User).find(1);
 
-      await user.posts().insert({ title: "Hello", published: true }).run();
-      await db.model(Post).where({ userId: 1, published: false }).insert({ title: "Draft" }).run();
+      await user.posts().insert({ title: "Hello", published: true });
+      await db.model(Post).where({ userId: 1, published: false }).insert({ title: "Draft" });
 
       expect(await user.posts().order({ id: "asc" }).pluck("title", "published")).toEqual([
         ["Hello", true],
@@ -167,21 +175,21 @@ describe("statements", () => {
     test("inserting through the posts of an unsaved user throws RecordNotSaved", () => {
       const user = connect(binding).model(User).build({ email: "a@example.com" });
 
-      expect(() => user.posts().insert({ title: "Hello" })).toThrow(RecordNotSaved);
+      expect(() => user.posts().toInsert({ title: "Hello" })).toThrow(RecordNotSaved);
     });
 
     test("unknown attributes and undefined values throw when the statement is built", () => {
       const users = connect(binding).model(User);
 
-      expect(() => users.insert({ nope: 1 } as never)).toThrow(UnknownAttribute);
-      expect(() => users.insert({ email: undefined } as never)).toThrow(TypeError);
+      expect(() => users.toInsert({ nope: 1 } as never)).toThrow(UnknownAttribute);
+      expect(() => users.toInsert({ email: undefined } as never)).toThrow(TypeError);
     });
 
     test("a constraint failure throws the matching ConstraintViolation", async () => {
       const users = connect(binding).model(User);
-      await users.insert({ id: 1, email: "a@example.com" }).run();
+      await users.insert({ id: 1, email: "a@example.com" });
 
-      await expect(users.insert({ id: 2, email: "a@example.com" }).run()).rejects.toThrow(
+      await expect(users.insert({ id: 2, email: "a@example.com" })).rejects.toThrow(
         RecordNotUnique,
       );
     });
@@ -190,7 +198,7 @@ describe("statements", () => {
       const events: QueryEvent[] = [];
       const db = connect(binding, { onQuery: (event) => events.push(event) });
 
-      const statement = await (async () => db.model(User).insert({ email: "a@example.com" }))();
+      const statement = await (async () => db.model(User).toInsert({ email: "a@example.com" }))();
 
       expect("then" in statement).toBe(false);
       expect(events).toEqual([]);
@@ -206,10 +214,7 @@ describe("statements", () => {
         [3, "member"],
         [4, "member"],
       ] as const) {
-        await db
-          .model(User)
-          .insert({ id, email: `u${id}@example.com`, role, age: 20 })
-          .run();
+        await db.model(User).insert({ id, email: `u${id}@example.com`, role, age: 20 });
       }
     }
 
@@ -217,17 +222,13 @@ describe("statements", () => {
       return db.model(User).order({ id: "asc" }).pluck("id", "role");
     }
 
-    test("updateAll sets attributes on the matching rows and resolves to D1's meta", async () => {
+    test("updateAll sets attributes on the matching rows and resolves to how many", async () => {
       const db = connect(binding);
       await seedUsers(db);
 
-      const meta = await db
-        .model(User)
-        .where({ role: "member" })
-        .updateAll({ role: "guest" })
-        .run();
+      const updated = await db.model(User).where({ role: "member" }).updateAll({ role: "guest" });
 
-      expect(meta.changes).toBe(3);
+      expect(updated).toBe(3);
       expect(await roles(db)).toEqual([
         [1, "admin"],
         [2, "guest"],
@@ -239,13 +240,12 @@ describe("statements", () => {
 
     test("updateAll leaves updatedAt alone, as in Rails", async () => {
       const db = connect(binding);
-      await db.model(User).insert({ id: 1, email: "a@example.com" }).run();
+      await db.model(User).insert({ id: 1, email: "a@example.com" });
       await db
         .model(Post)
-        .insert({ id: 1, userId: 1, title: "Old", published: false, updatedAt: past })
-        .run();
+        .insert({ id: 1, userId: 1, title: "Old", published: false, updatedAt: past });
 
-      await db.model(Post).updateAll({ title: "New", published: true }).run();
+      await db.model(Post).updateAll({ title: "New", published: true });
 
       const post = await db.model(Post).find(1);
       expect([post.title, post.published, post.updatedAt]).toEqual(["New", true, past]);
@@ -258,8 +258,7 @@ describe("statements", () => {
       await db
         .model(User)
         .where({ id: [1, 2] })
-        .updateAll(sql`${column("age")} = ${column("age")} + ${1}`)
-        .run();
+        .updateAll(sql`${column("age")} = ${column("age")} + ${1}`);
 
       expect(await db.model(User).order({ id: "asc" }).pluck("age")).toEqual([21, 21, 20, 20]);
     });
@@ -267,19 +266,19 @@ describe("statements", () => {
     test("updateAll refuses no changes, unknown attributes, undefined and plain strings", () => {
       const users = connect(binding).model(User);
 
-      expect(() => users.updateAll({})).toThrow(TypeError);
-      expect(() => users.updateAll({ nope: 1 } as never)).toThrow(UnknownAttribute);
-      expect(() => users.updateAll({ role: undefined })).toThrow(TypeError);
-      expect(() => users.updateAll("role = 'x'" as never)).toThrow(TypeError);
+      expect(() => users.toUpdateAll({})).toThrow(TypeError);
+      expect(() => users.toUpdateAll({ nope: 1 } as never)).toThrow(UnknownAttribute);
+      expect(() => users.toUpdateAll({ role: undefined })).toThrow(TypeError);
+      expect(() => users.toUpdateAll("role = 'x'" as never)).toThrow(TypeError);
     });
 
-    test("deleteAll deletes the matching rows", async () => {
+    test("deleteAll deletes the matching rows and resolves to how many", async () => {
       const db = connect(binding);
       await seedUsers(db);
 
-      const meta = await db.model(User).where({ role: "member" }).deleteAll().run();
+      const deleted = await db.model(User).where({ role: "member" }).deleteAll();
 
-      expect(meta.changes).toBe(3);
+      expect(deleted).toBe(3);
       expect(await roles(db)).toEqual([[1, "admin"]]);
     });
 
@@ -287,8 +286,8 @@ describe("statements", () => {
       const db = connect(binding);
       await seedUsers(db);
 
-      await db.model(User).order({ id: "desc" }).limit(2).deleteAll().run();
-      await db.model(User).order({ id: "asc" }).offset(1).limit(1).updateAll({ role: "x" }).run();
+      await db.model(User).order({ id: "desc" }).limit(2).deleteAll();
+      await db.model(User).order({ id: "asc" }).offset(1).limit(1).updateAll({ role: "x" });
 
       expect(await roles(db)).toEqual([
         [1, "admin"],
@@ -306,7 +305,7 @@ describe("statements", () => {
         .order({ id: "desc" })
         .limit(2);
 
-      await page.updateAll({ role: "x" }).run();
+      await page.updateAll({ role: "x" });
       expect(await roles(db)).toEqual([
         [1, "x"],
         [2, "member"],
@@ -319,8 +318,7 @@ describe("statements", () => {
         .where({ age: 20 })
         .order(sql`${column("id")} = ${3} DESC`)
         .limit(1)
-        .deleteAll()
-        .run();
+        .deleteAll();
       expect(await db.model(User).order({ id: "asc" }).pluck("id")).toEqual([1, 2, 4]);
     });
 
@@ -333,9 +331,8 @@ describe("statements", () => {
         .where({ role: "member" })
         .select("email")
         .order({ id: "desc" })
-        .deleteAll()
-        .run();
-      await db.model(User).includes("posts").updateAll({ role: "owner" }).run();
+        .deleteAll();
+      await db.model(User).includes("posts").updateAll({ role: "owner" });
 
       expect(await roles(db)).toEqual([[1, "owner"]]);
     });
@@ -343,32 +340,45 @@ describe("statements", () => {
     test("distinct can't be written through", () => {
       const users = connect(binding).model(User).select("role").distinct();
 
-      expect(() => users.deleteAll()).toThrow(IncompatibleRelation);
-      expect(() => users.updateAll({ role: "x" })).toThrow(IncompatibleRelation);
+      expect(() => users.toDeleteAll()).toThrow(IncompatibleRelation);
+      expect(() => users.toUpdateAll({ role: "x" })).toThrow(IncompatibleRelation);
     });
 
-    test("a none() statement is still sent, matches nothing, and reports no changes", async () => {
+    test("on none(), deleteAll and updateAll send nothing and resolve to 0, as in Rails", async () => {
       const events: QueryEvent[] = [];
       const db = connect(binding, { onQuery: (event) => events.push(event) });
       await seedUsers(db);
       events.length = 0;
 
-      const deleted = await db.model(User).none().deleteAll().run();
-      const updated = await db.model(User).none().updateAll({ role: "x" }).run();
+      const deleted = await db.model(User).none().deleteAll();
+      const updated = await db.model(User).none().updateAll({ role: "x" });
 
-      expect([deleted.changes, updated.changes]).toEqual([0, 0]);
-      expect(events).toHaveLength(2);
+      expect([deleted, updated]).toEqual([0, 0]);
+      expect(events).toHaveLength(0);
+      expect(await db.model(User).count()).toBe(4);
+    });
+
+    test("a none() statement in a batch is still sent, as WHERE 1 = 0, and changes nothing", async () => {
+      const events: QueryEvent[] = [];
+      const db = connect(binding, { onQuery: (event) => events.push(event) });
+      await seedUsers(db);
+      events.length = 0;
+
+      const [meta] = await db.batch([db.model(User).none().toDeleteAll()]);
+
+      expect(meta.changes).toBe(0);
+      expect(events.map((event) => event.sql)).toEqual([expect.stringContaining("1 = 0")]);
       expect(await db.model(User).count()).toBe(4);
     });
 
     describe("through a hasMany", () => {
       async function seedComments(db: ReturnType<typeof connect>): Promise<void> {
-        await db.model(User).insert({ id: 1, email: "a@example.com" }).run();
-        await db.model(Post).insert({ id: 1, userId: 1, title: "A", published: true }).run();
-        await db.model(Post).insert({ id: 2, userId: 1, title: "B", published: false }).run();
-        await db.model(Comment).insert({ id: 1, postId: 1, body: "one" }).run();
-        await db.model(Comment).insert({ id: 2, postId: 1, body: "two" }).run();
-        await db.model(Comment).insert({ id: 3, postId: 2, body: "three" }).run();
+        await db.model(User).insert({ id: 1, email: "a@example.com" });
+        await db.model(Post).insert({ id: 1, userId: 1, title: "A", published: true });
+        await db.model(Post).insert({ id: 2, userId: 1, title: "B", published: false });
+        await db.model(Comment).insert({ id: 1, postId: 1, body: "one" });
+        await db.model(Comment).insert({ id: 2, postId: 1, body: "two" });
+        await db.model(Comment).insert({ id: 3, postId: 2, body: "three" });
       }
 
       async function comments(db: ReturnType<typeof connect>): Promise<unknown[]> {
@@ -380,7 +390,7 @@ describe("statements", () => {
         await seedComments(db);
         const post = await db.model(Post).find(1);
 
-        await post.comments().deleteAll().run();
+        await post.comments().deleteAll();
 
         expect(await comments(db)).toEqual([
           [1, null],
@@ -394,7 +404,7 @@ describe("statements", () => {
         await seedComments(db);
         const user = await db.model(User).find(1);
 
-        await expect(user.posts().deleteAll().run()).rejects.toThrow(NotNullViolation);
+        await expect(user.posts().deleteAll()).rejects.toThrow(NotNullViolation);
         expect(await db.model(Post).count()).toBe(2);
       });
 
@@ -403,7 +413,7 @@ describe("statements", () => {
         await seedComments(db);
         const post = await db.model(Post).find(1);
 
-        await post.comments().where({ body: "one" }).deleteAll().run();
+        await post.comments().where({ body: "one" }).deleteAll();
 
         expect(await comments(db)).toEqual([
           [2, 1],
@@ -416,7 +426,7 @@ describe("statements", () => {
         await seedComments(db);
         const post = await db.model(Post).find(1);
 
-        await post.comments().updateAll({ body: "edited" }).run();
+        await post.comments().updateAll({ body: "edited" });
 
         expect(await db.model(Comment).order({ id: "asc" }).pluck("body")).toEqual([
           "edited",
@@ -430,8 +440,8 @@ describe("statements", () => {
         await seedComments(db);
         const post = db.model(Post).build({ title: "New" });
 
-        expect((await post.comments().deleteAll().run()).changes).toBe(0);
-        expect((await post.comments().updateAll({ body: "x" }).run()).changes).toBe(0);
+        expect(await post.comments().deleteAll()).toBe(0);
+        expect(await post.comments().updateAll({ body: "x" })).toBe(0);
         expect(await comments(db)).toEqual([
           [1, 1],
           [2, 1],
@@ -445,20 +455,17 @@ describe("statements", () => {
     const post = (id: number, title: string) => ({ id, userId: 1, title, published: false });
 
     beforeEach(async () => {
-      await connect(binding).model(User).insert({ id: 1, email: "a@example.com" }).run();
+      await connect(binding).model(User).insert({ id: 1, email: "a@example.com" });
     });
 
     test("insertAll writes every row in one statement, converting values and applying defaults per row", async () => {
       const events: QueryEvent[] = [];
       const db = connect(binding, { onQuery: (event) => events.push(event) });
 
-      const meta = await db
-        .model(ApiKey)
-        .insertAll([
-          { label: "deploy", scopes: ["read"] },
-          { label: "release", scopes: null },
-        ])
-        .run();
+      const meta = await db.model(ApiKey).insertAll([
+        { label: "deploy", scopes: ["read"] },
+        { label: "release", scopes: null },
+      ]);
 
       expect(meta.changes).toBe(2);
       expect(events).toHaveLength(1);
@@ -473,8 +480,7 @@ describe("statements", () => {
     test("datetime values are converted like any write", async () => {
       await connect(binding)
         .model(Post)
-        .insertAll([{ ...post(1, "A"), createdAt: past }])
-        .run();
+        .insertAll([{ ...post(1, "A"), createdAt: past }]);
 
       expect((await connect(binding).model(Post).find(1)).createdAt).toEqual(past);
     });
@@ -484,8 +490,7 @@ describe("statements", () => {
 
       await connect(binding)
         .model(Post)
-        .insertAll([post(1, "A"), post(2, "B")])
-        .run();
+        .insertAll([post(1, "A"), post(2, "B")]);
 
       const stamps = await connect(binding).model(Post).pluck("createdAt", "updatedAt");
       expect(stamps.flat().every((stamp) => stamp!.getTime() >= before)).toBe(true);
@@ -494,16 +499,16 @@ describe("statements", () => {
     test("any number of rows fits in one statement, beyond D1's 100 bound parameters", async () => {
       const rows = Array.from({ length: 150 }, (_, index) => post(index + 1, `Post ${index + 1}`));
 
-      await connect(binding).model(Post).insertAll(rows).run();
+      await connect(binding).model(Post).insertAll(rows);
 
       expect(await connect(binding).model(Post).count()).toBe(150);
     });
 
     test("a duplicate throws, and the statement writes nothing", async () => {
       const posts = connect(binding).model(Post);
-      await posts.insert(post(1, "A")).run();
+      await posts.insert(post(1, "A"));
 
-      await expect(posts.insertAll([post(2, "B"), post(1, "Again")]).run()).rejects.toThrow(
+      await expect(posts.insertAll([post(2, "B"), post(1, "Again")])).rejects.toThrow(
         RecordNotUnique,
       );
       expect(await posts.pluck("title")).toEqual(["A"]);
@@ -511,12 +516,10 @@ describe("statements", () => {
 
     test("onDuplicate: skip leaves existing rows alone and writes the rest", async () => {
       const posts = connect(binding).model(Post);
-      await posts.insert(post(1, "A")).run();
+      await posts.insert(post(1, "A"));
 
-      const meta = await posts
-        .insertAll([post(1, "Again"), post(2, "B")], { onDuplicate: "skip" })
-        .run();
-      await posts.insert(post(2, "Again"), { onDuplicate: "skip" }).run();
+      const meta = await posts.insertAll([post(1, "Again"), post(2, "B")], { onDuplicate: "skip" });
+      await posts.insert(post(2, "Again"), { onDuplicate: "skip" });
 
       expect(meta.changes).toBe(1);
       expect(await posts.order({ id: "asc" }).pluck("title")).toEqual(["A", "B"]);
@@ -524,11 +527,11 @@ describe("statements", () => {
 
     test("upsert inserts new rows and updates existing ones by primary key, keeping createdAt", async () => {
       const posts = connect(binding).model(Post);
-      await posts.insert({ ...post(1, "A"), createdAt: past, updatedAt: past }).run();
+      await posts.insert({ ...post(1, "A"), createdAt: past, updatedAt: past });
       const before = Date.now();
 
-      await posts.upsert({ ...post(1, "A2"), published: true }).run();
-      await posts.upsertAll([post(2, "B")]).run();
+      await posts.upsert({ ...post(1, "A2"), published: true });
+      await posts.upsertAll([post(2, "B")]);
 
       const updated = await posts.find(1);
       expect([updated.title, updated.published, updated.createdAt]).toEqual(["A2", true, past]);
@@ -539,17 +542,15 @@ describe("statements", () => {
     test("uniqueBy names another unique index to match on", async () => {
       const users = connect(binding).model(User);
 
-      await users
-        .upsertAll(
-          [
-            { email: "a@example.com", role: "admin" },
-            { email: "b@example.com", role: "member" },
-          ],
-          {
-            uniqueBy: "email",
-          },
-        )
-        .run();
+      await users.upsertAll(
+        [
+          { email: "a@example.com", role: "admin" },
+          { email: "b@example.com", role: "member" },
+        ],
+        {
+          uniqueBy: "email",
+        },
+      );
 
       expect(await users.order({ email: "asc" }).pluck("id", "role")).toEqual([
         [1, "admin"],
@@ -566,9 +567,9 @@ describe("statements", () => {
         static tableName = "users";
       }
       const members = connect(binding).model(Member);
-      await members.insert({ id: 2, email: "b@example.com", role: "admin" }).run();
+      await members.insert({ id: 2, email: "b@example.com", role: "admin" });
 
-      await members.upsert({ email: "b@example.com" }, { uniqueBy: "email" }).run();
+      await members.upsert({ email: "b@example.com" }, { uniqueBy: "email" });
 
       expect(await members.where({ email: "b@example.com" }).pluck("id", "role")).toEqual([
         [2, "admin"],
@@ -577,9 +578,9 @@ describe("statements", () => {
 
     test("upsert matches on the primary key by default, even when it isn't given", async () => {
       const posts = connect(binding).model(Post);
-      await posts.insert(post(1, "A")).run();
+      await posts.insert(post(1, "A"));
 
-      await posts.upsert({ userId: 1, title: "B", published: false }).run();
+      await posts.upsert({ userId: 1, title: "B", published: false });
 
       expect(await posts.order({ id: "asc" }).pluck("title")).toEqual(["A", "B"]);
     });
@@ -588,13 +589,13 @@ describe("statements", () => {
       const posts = connect(binding).model(Post);
 
       expect(() =>
-        posts.insertAll([
+        posts.toInsertAll([
           { id: 1, userId: 1, title: "A", published: false },
           { published: true, title: "B", userId: 1, id: 2 },
         ]),
       ).not.toThrow();
       expect(() =>
-        posts.insertAll([{ ...post(1, "A"), createdAt: past }, { ...post(2, "B") }]),
+        posts.toInsertAll([{ ...post(1, "A"), createdAt: past }, { ...post(2, "B") }]),
       ).toThrow(TypeError);
     });
 
@@ -604,20 +605,20 @@ describe("statements", () => {
       }
       const bare = connect(binding).model(Bare);
 
-      expect(() => bare.insert({}, { onDuplicate: "skip" })).toThrow(TypeError);
-      expect(() => bare.upsert({})).toThrow(TypeError);
-      expect(() => bare.insertAll([{}, {}])).toThrow(TypeError);
-      expect((await bare.insert({}).run()).changes).toBe(1);
+      expect(() => bare.toInsert({}, { onDuplicate: "skip" })).toThrow(TypeError);
+      expect(() => bare.toUpsert({})).toThrow(TypeError);
+      expect(() => bare.toInsertAll([{}, {}])).toThrow(TypeError);
+      expect((await bare.insert({})).changes).toBe(1);
     });
 
     test("rows must share their attributes; an empty list and unknown attributes throw", () => {
       const posts = connect(binding).model(Post);
 
-      expect(() => posts.insertAll([post(1, "A"), { id: 2, userId: 1, title: "B" }])).toThrow(
+      expect(() => posts.toInsertAll([post(1, "A"), { id: 2, userId: 1, title: "B" }])).toThrow(
         TypeError,
       );
-      expect(() => posts.insertAll([])).toThrow(TypeError);
-      expect(() => posts.upsertAll([post(1, "A")], { uniqueBy: "nope" as never })).toThrow(
+      expect(() => posts.toInsertAll([])).toThrow(TypeError);
+      expect(() => posts.toUpsertAll([post(1, "A")], { uniqueBy: "nope" as never })).toThrow(
         UnknownAttribute,
       );
     });
@@ -627,7 +628,7 @@ describe("statements", () => {
       const user = await db.model(User).find(1);
 
       await db.batch([
-        user.posts().insertAll([
+        user.posts().toInsertAll([
           { id: 1, title: "A", published: true },
           { id: 2, title: "B", published: false },
         ]),
@@ -643,9 +644,9 @@ describe("statements", () => {
       const userId = 7;
 
       const metas = await db.batch([
-        db.model(User).insert({ id: userId, email: "a@example.com", role: "member" }),
-        db.model(Post).insert({ userId, title: "Hello", published: true }),
-        db.model(User).where({ id: userId }).updateAll({ role: "author" }),
+        db.model(User).toInsert({ id: userId, email: "a@example.com", role: "member" }),
+        db.model(Post).toInsert({ userId, title: "Hello", published: true }),
+        db.model(User).where({ id: userId }).toUpdateAll({ role: "author" }),
       ]);
 
       expect(metas.map((meta) => meta.changes)).toEqual([1, 1, 1]);
@@ -659,8 +660,8 @@ describe("statements", () => {
       const keyId = crypto.randomUUID();
 
       await db.batch([
-        db.model(ApiKey).insert({ id: keyId, label: "deploy" }),
-        db.model(Account).insert({ externalAccountId: keyId }),
+        db.model(ApiKey).toInsert({ id: keyId, label: "deploy" }),
+        db.model(Account).toInsert({ externalAccountId: keyId }),
       ]);
 
       const account = await db.model(Account).findByOrThrow({ externalAccountId: keyId });
@@ -669,13 +670,13 @@ describe("statements", () => {
 
     test("a failing statement rolls the whole batch back and throws its ConstraintViolation", async () => {
       const db = connect(binding);
-      await db.model(User).insert({ id: 1, email: "a@example.com" }).run();
+      await db.model(User).insert({ id: 1, email: "a@example.com" });
 
       const error: unknown = await db
         .batch([
-          db.model(User).insert({ id: 2, email: "b@example.com" }),
-          db.model(Post).insert({ userId: 2, title: "Hello", published: true }),
-          db.model(User).insert({ id: 3, email: "a@example.com" }),
+          db.model(User).toInsert({ id: 2, email: "b@example.com" }),
+          db.model(Post).toInsert({ userId: 2, title: "Hello", published: true }),
+          db.model(User).toInsert({ id: 3, email: "a@example.com" }),
         ])
         .catch((caught: unknown) => caught);
 
@@ -689,7 +690,7 @@ describe("statements", () => {
       const db = connect(binding);
 
       const error: unknown = await db
-        .batch([db.model(Post).insert({ userId: 99, title: "Orphan", published: true })])
+        .batch([db.model(Post).toInsert({ userId: 99, title: "Orphan", published: true })])
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(InvalidForeignKey);
@@ -701,8 +702,8 @@ describe("statements", () => {
 
       const error: unknown = await db
         .batch([
-          db.model(User).insert({ id: 1, email: "a@example.com" }),
-          db.model(Post).insert({ userId: 99, title: "Orphan", published: true }),
+          db.model(User).toInsert({ id: 1, email: "a@example.com" }),
+          db.model(Post).toInsert({ userId: 99, title: "Orphan", published: true }),
         ])
         .catch((caught: unknown) => caught);
 
@@ -713,7 +714,7 @@ describe("statements", () => {
 
     test("a constraint on a table the batch doesn't write to isn't pinned on the batch's Model", async () => {
       const db = connect(binding);
-      await db.model(User).insert({ id: 1, email: "taken@example.com" }).run();
+      await db.model(User).insert({ id: 1, email: "taken@example.com" });
       // A trigger makes inserting a post also insert a user with a taken email.
       await binding
         .prepare(
@@ -723,7 +724,7 @@ describe("statements", () => {
 
       try {
         const error: unknown = await db
-          .batch([db.model(Post).insert({ userId: 1, title: "Hello", published: true })])
+          .batch([db.model(Post).toInsert({ userId: 1, title: "Hello", published: true })])
           .catch((caught: unknown) => caught);
 
         expect(error).toBeInstanceOf(RecordNotUnique);
@@ -738,8 +739,8 @@ describe("statements", () => {
       const db = connect(binding, { onQuery: (event) => events.push(event) });
 
       await db.batch([
-        db.model(User).insert({ id: 1, email: "a@example.com" }),
-        db.model(User).where({ id: 1 }).deleteAll(),
+        db.model(User).toInsert({ id: 1, email: "a@example.com" }),
+        db.model(User).where({ id: 1 }).toDeleteAll(),
       ]);
 
       expect(events.map((event) => event.meta?.changes)).toEqual([1, 1]);
@@ -754,8 +755,8 @@ describe("statements", () => {
 
       await db
         .batch([
-          db.model(User).insert({ id: 1, email: "a@example.com" }),
-          db.model(User).insert({ id: 2, email: "a@example.com" }),
+          db.model(User).toInsert({ id: 1, email: "a@example.com" }),
+          db.model(User).toInsert({ id: 2, email: "a@example.com" }),
         ])
         .catch(() => undefined);
 
@@ -778,7 +779,7 @@ describe("statements", () => {
       const other = connect(binding);
 
       await expect(
-        db.batch([other.model(User).insert({ email: "a@example.com" })]),
+        db.batch([other.model(User).toInsert({ email: "a@example.com" })]),
       ).rejects.toThrow(IncompatibleRelation);
       expect(await db.model(User).count()).toBe(0);
     });

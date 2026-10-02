@@ -100,7 +100,7 @@ describe("inferred foreign keys", () => {
       posts = hasMany(Post, { scope: (q) => q.where({ title: "C" }) });
     }
     const db = connect(binding);
-    await db.model(Post).insert({ id: 12, userId: 1, title: "C" }).run();
+    await db.model(Post).insert({ id: 12, userId: 1, title: "C" });
 
     const inherited = await db
       .model(Guest)

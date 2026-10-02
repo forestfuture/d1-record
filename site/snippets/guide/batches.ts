@@ -3,14 +3,13 @@ import { Article, Author, Comment } from "./associations";
 
 export async function statementsExample(db: Database, articleId: string) {
   // #region statements
-  await db.model(Article).where({ published: false }).deleteAll().run();
-  await db.model(Article).where({ id: articleId }).updateAll({ published: true }).run();
+  await db.model(Article).where({ published: false }).deleteAll();
+  await db.model(Article).where({ id: articleId }).updateAll({ published: true });
   await db
     .model(Article)
     .where({ id: articleId })
-    .updateAll(sql`${column("title")} = upper(${column("title")})`)
-    .run();
-  const meta = await db.model(Comment).insert({ articleId, body: "First!" }).run();
+    .updateAll(sql`${column("title")} = upper(${column("title")})`);
+  const meta = await db.model(Comment).insert({ articleId, body: "First!" });
   console.log(meta.changes, meta.last_row_id);
   // #endregion statements
   return meta;
@@ -18,15 +17,12 @@ export async function statementsExample(db: Database, articleId: string) {
 
 export async function insertAllExample(db: Database, articleId: string) {
   // #region insert-all
-  await db
-    .model(Comment)
-    .insertAll([
-      { articleId, body: "One" },
-      { articleId, body: "Two" },
-    ])
-    .run();
-  await db.model(Author).upsert({ id: "author-1", name: "Ada" }).run(); // insert, or update the name
-  await db.model(Author).insert({ id: "author-1", name: "Ada" }, { onDuplicate: "skip" }).run();
+  await db.model(Comment).insertAll([
+    { articleId, body: "One" },
+    { articleId, body: "Two" },
+  ]);
+  await db.model(Author).upsert({ id: "author-1", name: "Ada" }); // insert, or update the name
+  await db.model(Author).insert({ id: "author-1", name: "Ada" }, { onDuplicate: "skip" });
   // #endregion insert-all
 }
 
@@ -34,9 +30,9 @@ export async function batchExample(db: Database) {
   // #region batch
   const authorId = crypto.randomUUID(); // generated in code, so rows can point at it
   await db.batch([
-    db.model(Author).insert({ id: authorId, name: "Grace" }),
-    db.model(Article).insert({ authorId, title: "Hello" }),
-    db.model(Article).where({ published: false, authorId: "author-1" }).deleteAll(),
+    db.model(Author).toInsert({ id: authorId, name: "Grace" }),
+    db.model(Article).toInsert({ authorId, title: "Hello" }),
+    db.model(Article).where({ published: false, authorId: "author-1" }).toDeleteAll(),
   ]);
   // #endregion batch
   return authorId;
@@ -53,7 +49,7 @@ export async function recordsExample(db: Database, articleId: string, oldAuthorI
     article.toSave(),
     author.toSave(),
     old.toDestroy(), // with its dependents
-    db.model(Comment).where({ articleId }).deleteAll(),
+    db.model(Comment).where({ articleId }).toDeleteAll(),
   ]);
   // #endregion records
   return { savedArticle, savedAuthor };
