@@ -2,5 +2,10 @@
   // The site's own config and theme (Node); the examples have their own (snippets/tsconfig.json).
   "extends": "../tsconfig.json",
   "compilerOptions": { "types": ["node", "vitepress/client"] },
-  "include": [".vitepress/config.ts", ".vitepress/llms.ts", ".vitepress/theme"]
+  "include": [
+    ".vitepress/config.ts",
+    ".vitepress/llms.ts",
+    ".vitepress/examples.ts",
+    ".vitepress/theme"
+  ]
 }

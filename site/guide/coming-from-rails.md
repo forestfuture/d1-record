@@ -38,13 +38,7 @@ Attributes, conditions and association keys all name **attributes**, in camelCas
 
 Attributes are declared in TypeScript, not read from the schema, so TypeScript knows every attribute's type. Validations and callbacks go in a `static {}` block, where Rails puts them in the class body:
 
-```ts
-class User extends Model({ id: "integer", email: { type: "string", null: false } }) {
-  static {
-    this.validates("email", { presence: true, uniqueness: true });
-  }
-}
-```
+<<< @/snippets/guide/coming-from-rails.ts#declare{ts}
 
 ## Atomic writes without transactions
 
