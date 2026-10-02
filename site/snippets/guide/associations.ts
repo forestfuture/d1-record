@@ -20,15 +20,10 @@ export class Article extends Model({
   id: { type: "string", null: false, default: () => crypto.randomUUID() },
   authorId: { type: "string", null: false },
   title: { type: "string", null: false },
-  published: { type: "boolean", null: false, default: () => false },
-  createdAt: "datetime",
+  published: "boolean",
 }) {
   author = belongsTo(Author); // its own authorId
   comments = hasMany(Comment, { dependent: "deleteAll" }); // Comment's articleId
-
-  static scopes = this.defineScopes({
-    published: (q) => q.where({ published: true }),
-  });
 }
 
 export class Profile extends Model({
@@ -65,7 +60,7 @@ export async function readExample(db: Database, articleId: string) {
   const article = await db.model(Article).find(articleId);
   const author = await article.author(); // an Author, or null
   const profile = await author?.profile(); // a Profile, or null
-  const latest = await author?.articles().published().order({ createdAt: "desc" }).first();
+  const latest = await author?.articles().where({ published: true }).first();
   // #endregion read
   return { author, profile, latest };
 }
@@ -154,7 +149,7 @@ export async function belongsToExample(db: Database, articleId: string, editor: 
 export async function hasManyExample(db: Database, authorId: string) {
   // #region has-many
   const author = await db.model(Author).find(authorId);
-  const published = await author.articles().published().toArray(); // a Relation, with Article's scopes
+  const published = await author.articles().where({ published: true }).toArray(); // a Relation
 
   author.articles().build({ title: "Untitled" }); // saved with the author, with its key
   await author.save();
