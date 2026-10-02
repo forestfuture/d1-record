@@ -282,8 +282,8 @@ Expose D1's actual atomic primitive explicitly:
 
 ```ts
 await db.batch([
-  db.model(User).insert({ email: "a@example.com" }),
-  db.model(AuditLog).insert({ action: "user_created" }),
+  db.model(User).toInsert({ email: "a@example.com" }),
+  db.model(AuditLog).toInsert({ action: "user_created" }),
 ]);
 ```
 

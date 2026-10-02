@@ -73,7 +73,7 @@ describe.skipIf(!configured)("remote D1 smoke", () => {
     expect(await db.model(User).count()).toBe(0);
   });
 
-  test("onQuery and run() get D1's meta, with the fields the contract relies on", async () => {
+  test("onQuery and insert get D1's meta, with the fields the contract relies on", async () => {
     const events: QueryEvent[] = [];
     const db = connect(remote.binding, { onQuery: (event) => events.push(event) });
 
@@ -106,13 +106,16 @@ describe.skipIf(!configured)("remote D1 smoke", () => {
       const db = connect(remote.binding);
       const user = await db.model(User).createOrThrow({ email: "a@example.com" });
 
-      const notNull = db.model(Post).insert({ userId: user.id, title: null as never });
-      const foreignKey = db.model(Post).insert({ userId: 999_999, title: "Orphan" });
-      const check = db.model(Post).insert({ userId: user.id, title: "Hello", views: -1 });
-
-      await expect(notNull).rejects.toThrow(NotNullViolation);
-      await expect(foreignKey).rejects.toThrow(InvalidForeignKey);
-      await expect(check).rejects.toThrow(CheckViolation);
+      // One at a time: each insert runs when called.
+      await expect(
+        db.model(Post).insert({ userId: user.id, title: null as never }),
+      ).rejects.toThrow(NotNullViolation);
+      await expect(db.model(Post).insert({ userId: 999_999, title: "Orphan" })).rejects.toThrow(
+        InvalidForeignKey,
+      );
+      await expect(
+        db.model(Post).insert({ userId: user.id, title: "Hello", views: -1 }),
+      ).rejects.toThrow(CheckViolation);
     });
   });
 

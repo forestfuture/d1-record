@@ -43,7 +43,7 @@ These mean the code needs to change, rather than that something happened at runt
 - **`db.batch([...])`** with a statement or record from another Database. A batch runs on one connection.
 - **`includes`** with `select(...).distinct()`. Preloading needs the keys, and adding them would undo the `distinct`.
 - **Preloading an association scope** that uses `limit`, `offset` or `distinct`. One preload query serves every owner, so the limit would apply to all of their records together.
-- **`updateAll` or `deleteAll`** after `distinct()`.
+- **`updateAll` or `deleteAll`** after `distinct()`: they reject with it, and `toUpdateAll`/`toDeleteAll` throw it.
 
 ## Constraint errors
 
