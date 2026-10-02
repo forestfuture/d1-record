@@ -109,7 +109,7 @@ Everything a destroy does, the owner's DELETE included, is written in one atomic
 
 ## Writing to many at once
 
-`insert`, `updateAll` and `deleteAll` work through a `hasMany` too, scoped to the owner's records:
+`insert`, `updateAll` and `deleteAll` work through a `hasMany` too, scoped to the owner's records, and so do their `to…` forms for a batch:
 
 <<< @/snippets/guide/associations.ts#statements{ts}
 

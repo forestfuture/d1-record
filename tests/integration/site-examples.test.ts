@@ -192,7 +192,7 @@ describe("the guide's examples", () => {
     const graceId = await batches.batchExample(db);
 
     expect(meta.changes).toBe(1);
-    expect(log).toHaveBeenCalledWith(1, meta.last_row_id);
+    expect(log).toHaveBeenCalledWith(0, meta.last_row_id); // no unpublished articles to delete
     expect(
       await db
         .model(Article)
