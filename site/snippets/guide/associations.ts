@@ -139,3 +139,37 @@ export class Category extends Model({
   parent = belongsTo(Category, { foreignKey: "parentId" });
 }
 // #endregion self-referencing
+
+export async function belongsToExample(db: Database, articleId: string, editor: Author) {
+  // #region belongs-to
+  const article = await db.model(Article).find(articleId);
+  const author = await article.author(); // an Author, or null
+
+  article.author.set(editor); // points it at another author: written when the article is saved
+  await article.save();
+  // #endregion belongs-to
+  return author;
+}
+
+export async function hasManyExample(db: Database, authorId: string) {
+  // #region has-many
+  const author = await db.model(Author).find(authorId);
+  const published = await author.articles().published().toArray(); // a Relation, with Article's scopes
+
+  author.articles().build({ title: "Untitled" }); // saved with the author, with its key
+  await author.save();
+
+  await author.articles().where({ published: false }).deleteAll(); // bulk writes, scoped to the author
+  // #endregion has-many
+  return published;
+}
+
+export async function hasOneExample(db: Database, authorId: string) {
+  // #region has-one
+  const author = await db.model(Author).find(authorId);
+  const profile = await author.profile(); // a Profile, or null
+
+  if (profile === null) await author.profile.create({ bio: "Writer" }); // saved at once
+  // #endregion has-one
+  return profile;
+}
