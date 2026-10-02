@@ -357,7 +357,7 @@ export class Relation<M extends ModelBase, S = {}> {
    * unless `onDuplicate: "skip"` (Rails' `insert`). `toInsert` is the same write, for a batch.
    */
   async insert(attributes: Partial<AttributesOf<M>>, options: InsertOptions = {}): Promise<D1Meta> {
-    return runAlone(this.toInsert(attributes, options));
+    return this.#runNow(this.toInsert(attributes, options));
   }
 
   /** `insert`, as a Statement for `db.batch([...])`. */
@@ -370,7 +370,7 @@ export class Relation<M extends ModelBase, S = {}> {
     rows: readonly Partial<AttributesOf<M>>[],
     options: InsertOptions = {},
   ): Promise<D1Meta> {
-    return runAlone(this.toInsertAll(rows, options));
+    return this.#runNow(this.toInsertAll(rows, options));
   }
 
   /** `insertAll`, as a Statement for `db.batch([...])`. */
@@ -387,7 +387,7 @@ export class Relation<M extends ModelBase, S = {}> {
     attributes: Partial<AttributesOf<M>>,
     options: UpsertOptions<M> = {},
   ): Promise<D1Meta> {
-    return runAlone(this.toUpsert(attributes, options));
+    return this.#runNow(this.toUpsert(attributes, options));
   }
 
   /** `upsert`, as a Statement for `db.batch([...])`. */
@@ -400,7 +400,7 @@ export class Relation<M extends ModelBase, S = {}> {
     rows: readonly Partial<AttributesOf<M>>[],
     options: UpsertOptions<M> = {},
   ): Promise<D1Meta> {
-    return runAlone(this.toUpsertAll(rows, options));
+    return this.#runNow(this.toUpsertAll(rows, options));
   }
 
   /** `upsertAll`, as a Statement for `db.batch([...])`. */
@@ -473,7 +473,20 @@ export class Relation<M extends ModelBase, S = {}> {
   /** Runs a statement built from this Relation: the rows it changed, or 0 without a query on `none()`. */
   async #countOf(statement: Statement): Promise<number> {
     if (this.#query.none) return 0;
-    return (await runAlone(statement)).changes;
+    return (await this.#runNow(statement)).changes;
+  }
+
+  /**
+   * Runs a statement built from this Relation now. A loaded collection it writes to was cleared
+   * when the statement was built, and is cleared again once the write lands, in case a read
+   * loaded it while the write was in flight.
+   */
+  async #runNow(statement: Statement): Promise<D1Meta> {
+    try {
+      return await runAlone(statement);
+    } finally {
+      this.#collection?.invalidate();
+    }
   }
 
   /** Builds and saves a record; resolves to it whether or not it was saved (check `isPersisted()`). */

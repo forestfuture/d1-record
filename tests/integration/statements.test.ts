@@ -94,7 +94,7 @@ describe("statements", () => {
   });
 
   describe("insert", () => {
-    test("run() writes the row and resolves to D1's meta, skipping validations and callbacks", async () => {
+    test("insert writes the row and resolves to D1's meta, skipping validations and callbacks", async () => {
       const db = connect(binding);
 
       const meta = await db.model(User).insert({ id: 1, email: "a@example.com" });
@@ -176,6 +176,17 @@ describe("statements", () => {
       const user = connect(binding).model(User).build({ email: "a@example.com" });
 
       expect(() => user.posts().toInsert({ title: "Hello" })).toThrow(RecordNotSaved);
+    });
+
+    test("the immediate forms reject for an unsaved owner, distinct() and no changes", async () => {
+      const db = connect(binding);
+      const unsaved = db.model(User).build({ email: "new@example.com" });
+
+      await expect(unsaved.posts().insert({ title: "A", published: true })).rejects.toThrow(
+        RecordNotSaved,
+      );
+      await expect(db.model(User).distinct().deleteAll()).rejects.toThrow(IncompatibleRelation);
+      await expect(db.model(User).updateAll({})).rejects.toThrow(TypeError);
     });
 
     test("unknown attributes and undefined values throw when the statement is built", () => {
@@ -390,8 +401,9 @@ describe("statements", () => {
         await seedComments(db);
         const post = await db.model(Post).find(1);
 
-        await post.comments().deleteAll();
+        const nullified = await post.comments().deleteAll();
 
+        expect(nullified).toBe(2);
         expect(await comments(db)).toEqual([
           [1, null],
           [2, null],
@@ -432,6 +444,63 @@ describe("statements", () => {
           "edited",
           "edited",
           "three",
+        ]);
+      });
+
+      test("the to… forms go in a batch, scoped to the owner's records", async () => {
+        const db = connect(binding);
+        await seedComments(db);
+        const post = await db.model(Post).find(1);
+
+        await db.batch([
+          post.comments().toUpdateAll({ body: "edited" }),
+          post.comments().where({ id: 2 }).toDeleteAll(),
+        ]);
+
+        expect(await db.model(Comment).order({ id: "asc" }).pluck("id", "body")).toEqual([
+          [1, "edited"],
+          [3, "three"],
+        ]);
+      });
+
+      test("a collection read while a write is in flight is loaded again once it's done", async () => {
+        // D1 that holds every UPDATE back, so a read can load the collection before it lands.
+        type Prepared = ReturnType<TestDatabase["prepare"]>;
+        const slow = new Proxy(binding, {
+          get(target, property) {
+            if (property !== "prepare") return Reflect.get(target, property, target);
+            return (query: string) => {
+              const delayed = (statement: Prepared): Prepared =>
+                new Proxy(statement, {
+                  get(inner, name) {
+                    if (name === "bind")
+                      return (...values: unknown[]) => delayed(inner.bind(...values));
+                    if (name !== "all") return Reflect.get(inner, name, inner);
+                    return async () => {
+                      await new Promise((resolve) => setTimeout(resolve, 50));
+                      return inner.all();
+                    };
+                  },
+                });
+              const statement = target.prepare(query);
+              return query.startsWith("UPDATE") ? delayed(statement) : statement;
+            };
+          },
+        });
+        const db = connect(slow as never);
+        await seedComments(db);
+        const post = await db.model(Post).find(1);
+
+        const writing = post.comments().updateAll({ body: "new" });
+        expect((await post.comments().toArray()).map((comment) => comment.body)).toEqual([
+          "one",
+          "two",
+        ]);
+        await writing;
+
+        expect((await post.comments().toArray()).map((comment) => comment.body)).toEqual([
+          "new",
+          "new",
         ]);
       });
 
@@ -530,8 +599,10 @@ describe("statements", () => {
       await posts.insert({ ...post(1, "A"), createdAt: past, updatedAt: past });
       const before = Date.now();
 
-      await posts.upsert({ ...post(1, "A2"), published: true });
-      await posts.upsertAll([post(2, "B")]);
+      const one = await posts.upsert({ ...post(1, "A2"), published: true });
+      const all = await posts.upsertAll([post(2, "B")]);
+
+      expect([one.changes, all.changes]).toEqual([1, 1]);
 
       const updated = await posts.find(1);
       expect([updated.title, updated.published, updated.createdAt]).toEqual(["A2", true, past]);

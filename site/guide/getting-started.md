@@ -69,7 +69,7 @@ Each request connects to the database with `connect(env.DB)`, then works through
 
 ## 5. Write several things at once, or not at all
 
-D1 can't keep a transaction open while your code awaits, so there's no `transaction()` block. Instead, `db.batch([...])` sends a prepared set of writes that all succeed or all fail. `record.toSave()` and `record.toDestroy()` turn a record into its save or destroy for the batch; on their own they write nothing:
+D1 can't keep a transaction open while your code awaits, so there's no `transaction()` block. Instead, `db.batch([...])` sends a prepared set of writes that all succeed or all fail. `toSave()`, `toDestroy()` and the bulk writes' `to…` forms (`toUpdateAll`, `toDeleteAll`, …) prepare a write for the batch instead of running it:
 
 <<< @/snippets/getting-started/batch.ts#batch{ts}
 
