@@ -6,6 +6,25 @@ description: "The callback order, abort() to stop a save or destroy, and the Rai
 
 Callbacks run your code at points in a record's lifecycle. They're declared in a Model's `static {}` block, receive the record (typed as the Model's record), and may be async.
 
+| Order          | Callback           | Runs                                                     | `abort()`                         |
+| -------------- | ------------------ | -------------------------------------------------------- | --------------------------------- |
+| **Saving**     |                    |                                                          |                                   |
+| 1              | `beforeValidation` | Before the validators, on every save, and on `isValid()` | Stops the save                    |
+| 2              | `afterValidation`  | After the validators                                     | Stops the save                    |
+| 3              | `beforeSave`       | Before every write, new or persisted                     | Stops the save                    |
+| 4              | `beforeCreate`     | Before inserting a new record                            | Stops the save                    |
+| 4              | `beforeUpdate`     | Before updating a persisted record                       | Stops the save                    |
+|                | _The write to D1_  | Skipped when a persisted record has no changes           |                                   |
+| 5              | `afterCreate`      | After inserting a new record                             | Too late: `AbortAfterPersistence` |
+| 5              | `afterUpdate`      | After updating a persisted record                        | Too late: `AbortAfterPersistence` |
+| 6              | `afterSave`        | After every successful save                              | Too late: `AbortAfterPersistence` |
+| **Destroying** |                    |                                                          |                                   |
+| 1              | `beforeDestroy`    | Before the `dependent:` strategies and the DELETE        | Stops the destroy                 |
+|                | _The delete in D1_ | With the dependents, in one batch                        |                                   |
+| 2              | `afterDestroy`     | After the record is destroyed                            | Too late: `AbortAfterPersistence` |
+
+A save runs either the create pair or the update pair, never both. Callbacks of the same kind run in the order they're declared.
+
 <<< @/snippets/guide/callbacks.ts#callbacks{ts}
 
 ## The order
