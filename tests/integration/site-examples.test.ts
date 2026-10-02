@@ -156,11 +156,11 @@ describe("the guide's examples", () => {
     const db = connect(binding);
     const editor = await db.model(Author).createOrThrow({ name: "Ed" });
 
-    const published = await hasManyExample(db, "mary"); // builds a draft, then deletes drafts
+    const articles = await hasManyExample(db, "mary"); // builds an Untitled one, then deletes it
     const author = await belongsToExample(db, "x1", editor);
     const profile = await hasOneExample(db, "mary");
 
-    expect(published.map((article) => article.title)).toEqual(["On Nothing"]);
+    expect(articles.map((article) => article.title)).toEqual(["On Nothing"]);
     expect(author?.name).toBe("Mary");
     expect(await db.model(Article).pluck("authorId", "title")).toEqual([[editor.id, "On Nothing"]]);
     expect(profile?.bio).toBe("Poet");
@@ -209,13 +209,13 @@ describe("the guide's examples", () => {
     const graceId = await batches.batchExample(db);
 
     expect(meta.changes).toBe(1);
-    expect(log).toHaveBeenCalledWith(0, meta.last_row_id); // no unpublished articles to delete
+    expect(log).toHaveBeenCalledWith(1, meta.last_row_id); // the article's one comment deleted
     expect(
       await db
         .model(Article)
         .find("x1")
         .then((article) => article.title),
-    ).toBe("ON NOTHING");
+    ).toBe("EDITED");
     expect(
       await db
         .model(Author)
@@ -227,6 +227,12 @@ describe("the guide's examples", () => {
     const { savedAuthor } = await batches.recordsExample(db, "x1", graceId);
 
     expect(savedAuthor.isPersisted()).toBe(true);
+    expect(
+      await db
+        .model(Article)
+        .find("x1")
+        .then((article) => article.title),
+    ).toBe("Final");
     expect(await db.model(Author).exists({ id: graceId })).toBe(false); // and its article, dependent
     expect(await db.model(Article).where({ authorId: graceId }).count()).toBe(0);
     expect(

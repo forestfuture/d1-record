@@ -20,7 +20,6 @@ export class Article extends Model({
   id: { type: "string", null: false, default: () => crypto.randomUUID() },
   authorId: { type: "string", null: false },
   title: { type: "string", null: false },
-  published: "boolean",
 }) {
   author = belongsTo(Author); // its own authorId
   comments = hasMany(Comment, { dependent: "deleteAll" }); // Comment's articleId
@@ -60,7 +59,7 @@ export async function readExample(db: Database, articleId: string) {
   const article = await db.model(Article).find(articleId);
   const author = await article.author(); // an Author, or null
   const profile = await author?.profile(); // a Profile, or null
-  const latest = await author?.articles().where({ published: true }).first();
+  const latest = await author?.articles().first();
   // #endregion read
   return { author, profile, latest };
 }
@@ -149,14 +148,14 @@ export async function belongsToExample(db: Database, articleId: string, editor: 
 export async function hasManyExample(db: Database, authorId: string) {
   // #region has-many
   const author = await db.model(Author).find(authorId);
-  const published = await author.articles().where({ published: true }).toArray(); // a Relation
+  const articles = await author.articles().toArray(); // a Relation of the author's articles
 
   author.articles().build({ title: "Untitled" }); // saved with the author, with its key
   await author.save();
 
-  await author.articles().where({ published: false }).deleteAll(); // bulk writes, scoped to the author
+  await author.articles().where({ title: "Untitled" }).deleteAll(); // bulk writes, scoped to the author
   // #endregion has-many
-  return published;
+  return articles;
 }
 
 export async function hasOneExample(db: Database, authorId: string) {

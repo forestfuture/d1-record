@@ -3,8 +3,8 @@ import { Article, Author, Comment } from "./associations";
 
 export async function statementsExample(db: Database, articleId: string) {
   // #region statements
-  const deleted = await db.model(Article).where({ published: false }).deleteAll(); // how many
-  await db.model(Article).where({ id: articleId }).updateAll({ published: true });
+  const deleted = await db.model(Comment).where({ articleId }).deleteAll(); // how many
+  await db.model(Article).where({ id: articleId }).updateAll({ title: "Edited" });
   await db
     .model(Article)
     .where({ id: articleId })
@@ -32,7 +32,7 @@ export async function batchExample(db: Database) {
   await db.batch([
     db.model(Author).toInsert({ id: authorId, name: "Grace" }),
     db.model(Article).toInsert({ authorId, title: "Hello" }),
-    db.model(Article).where({ published: false, authorId: "author-1" }).toDeleteAll(),
+    db.model(Article).where({ authorId: "author-1" }).toDeleteAll(),
   ]);
   // #endregion batch
   return authorId;
@@ -41,7 +41,7 @@ export async function batchExample(db: Database) {
 export async function recordsExample(db: Database, articleId: string, oldAuthorId: string) {
   // #region records
   const article = await db.model(Article).find(articleId);
-  article.published = true;
+  article.title = "Final";
   const author = db.model(Author).build({ name: "Hedy" });
   const old = await db.model(Author).find(oldAuthorId);
 
