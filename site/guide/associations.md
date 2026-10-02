@@ -6,6 +6,21 @@ description: "belongsTo, hasMany and hasOne: inferred foreign keys, reading, pre
 
 Associations connect Models: `belongsTo`, `hasMany` and `hasOne`, as in Rails. Each is a field of the Model, `articles = hasMany(Article)`, much like Rails' `has_many :articles`: the field's name is the association's name, and TypeScript knows `author.articles()` from it.
 
+| Association                 | Rails                | Foreign key                                                     | Reading it                                    | Writing through it                                                                             | `dependent:`                                                                              |
+| --------------------------- | -------------------- | --------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `author = belongsTo(User)`  | `belongs_to :author` | On this record. Inferred from the name: `authorId`              | `await post.author()`: the record, or `null`  | `set(record)`, `build()`, `create()`, `createOrThrow()`                                        | None                                                                                      |
+| `posts = hasMany(Post)`     | `has_many :posts`    | On the target's records. Inferred from the class name: `userId` | `user.posts()`: a Relation of the records     | `build()`, `create()`, `createOrThrow()`, and bulk writes (`insert`, `updateAll`, `deleteAll`) | `"destroy"`, `"deleteAll"`, `"nullify"`, `"restrictWithException"`, `"restrictWithError"` |
+| `profile = hasOne(Profile)` | `has_one :profile`   | On the target's record. Inferred from the class name: `userId`  | `await user.profile()`: the record, or `null` | `build()`, `create()`, `createOrThrow()`                                                       | `"destroy"`, `"delete"`, `"nullify"`, `"restrictWithException"`, `"restrictWithError"`    |
+
+Every association takes the same options:
+
+| Option       | What it sets                                                           | Default                        |
+| ------------ | ---------------------------------------------------------------------- | ------------------------------ |
+| `foreignKey` | The attribute holding the link (an attribute, not a column)            | Inferred, as above             |
+| `primaryKey` | The attribute the foreign key points at                                | The primary key                |
+| `scope`      | Narrows or orders the association's records: `(q) => q.where(…)`       | None                           |
+| `dependent`  | What destroying the owner does to the records (`hasMany` and `hasOne`) | None: D1's foreign keys decide |
+
 <<< @/snippets/guide/associations.ts#declare{ts}
 
 Pass the target Model's class. Models can refer to each other in any order, because a field is only evaluated when a record is made, by which time every class exists.
