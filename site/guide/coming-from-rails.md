@@ -48,7 +48,7 @@ class User extends Model({ id: "integer", email: { type: "string", null: false }
 
 ## Atomic writes without transactions
 
-There's no `transaction do … end`: D1 can't keep a transaction open across awaits. [`db.batch([...])`](./batches) writes a prepared set of statements and records atomically. Generating keys in code makes whole graphs of new records atomic too. See [D1's limits](./d1).
+Bulk writes run when called, as in Rails: `await db.model(Post).where(…).deleteAll()` resolves to how many rows it deleted. There's no `transaction do … end`: D1 can't keep a transaction open across awaits. [`db.batch([...])`](./batches), with records' `toSave()`/`toDestroy()` and bulk writes' `toUpdateAll()`/`toDeleteAll()`/…, writes a prepared set of statements and records atomically. Generating keys in code makes whole graphs of new records atomic too. See [D1's limits](./d1).
 
 ## Smaller differences
 

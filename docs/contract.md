@@ -132,7 +132,7 @@ class Post extends Model({ id: "integer", userId: "integer" }) {
 - `record.loaded("posts")` returns a loaded association synchronously (records for a `hasMany`, a record or `null` otherwise), typed from its field. A list is returned as a copy. It throws `AssociationNotLoaded` unless the association was preloaded or already read, for the key the record holds now. `record.isLoaded("posts")` is the predicate (Rails' `association(:posts).loaded?`).
 - `or()` needs the same `includes`, and `merge()` combines both sides' includes.
 - A subclass has its parent's associations, inherited as fields, plus its own. Redeclaring a field replaces the parent's association; removing one isn't possible, as in Rails.
-- `user.posts().insert(attrs)`, `updateAll(...)` and `deleteAll()` build statements (see _Batches_). As in Rails' `has_many`, `deleteAll()` on the association itself deletes the records when its `dependent:` is `"destroy"` or `"deleteAll"`, and otherwise sets their foreign key to `NULL` (a NOT NULL foreign key raises `NotNullViolation`). Once narrowed (`user.posts().where(...)`, `.limit(…)`, a scope), `deleteAll()` deletes, as a Rails association relation does. For an owner without a key, `insert` throws `RecordNotSaved`, and `updateAll`/`deleteAll` match nothing.
+- `user.posts().insert(attrs)`, `updateAll(...)` and `deleteAll()` write through the association, and their `to…` forms build statements (see _Batches_). As in Rails' `has_many`, `deleteAll()` on the association itself deletes the records when its `dependent:` is `"destroy"` or `"deleteAll"`, and otherwise sets their foreign key to `NULL` (a NOT NULL foreign key raises `NotNullViolation`). Once narrowed (`user.posts().where(...)`, `.limit(…)`, a scope), `deleteAll()` deletes, as a Rails association relation does. For an owner without a key, `insert` throws `RecordNotSaved`, and `updateAll`/`deleteAll` match nothing.
 - An association can declare a scope, as Rails' `has_many :posts, -> { order(created_at: :desc) }`: `hasMany(Post, { scope: (q) => q.order({ createdAt: "desc" }) })`, on `hasMany`, `hasOne` and `belongsTo`. `q` is the target's Relation with its named scopes, typed from the target. One case is circular for TypeScript: a Model's association to itself whose scope calls the Model's own scopes, which needs its field's type written out (`children: HasMany<typeof Category> = hasMany(Category, { scope: (q) => q.top() })`). It's also checked when the scope first runs (`UnknownAttribute`, and `TypeError` if the scope doesn't return a Relation of the target).
 - The scope applies to lazy reads and to preloads alike. A `hasMany`'s records come in the scope's order, then by primary key, and a `hasOne` takes the first by the scope's order. Records built or created through the association take the scope's equality values, so `scope: (q) => q.where({ published: true })` creates published posts. `deleteAll()` and `updateAll()` through it only touch the scope's records. A scope using `limit`, `offset` or `distinct` works for lazy reads, but preloading it throws `IncompatibleRelation`, because a grouped preload would apply them to every owner's records together (Rails gives silently wrong results here).
 - `dependent:` sets what destroying the owner does to an association's records, as in Rails: `"destroy"`, `"deleteAll"`, `"nullify"`, `"restrictWithException"` or `"restrictWithError"` on a `hasMany`, and the same with `"delete"` in place of `"deleteAll"` on a `hasOne` (its first record, by the scope's order or the primary key). `belongsTo` has none; a strategy the kind doesn't have is a type error and an `InvalidModel`. `"destroyAsync"` waits for a job library (#35).
@@ -279,21 +279,18 @@ this.beforeSave((account) => {
 ```ts
 const userId = crypto.randomUUID(); // ids generated in code link rows inside one batch
 await db.batch([
-  db.model(User).insert({ id: userId, email: "a@example.com" }),
-  db.model(Post).insert({ userId, title: "Hello" }),
-  db.model(Post).where({ published: false }).deleteAll(),
+  db.model(User).toInsert({ id: userId, email: "a@example.com" }),
+  db.model(Post).toInsert({ userId, title: "Hello" }),
+  db.model(Post).where({ published: false }).toDeleteAll(),
 ]);
-await db.model(Post).where({ id: postId }).updateAll({ published: true }).run();
-await db
-  .model(Post)
-  .updateAll(sql`${column("views")} = ${column("views")} + ${1}`)
-  .run();
+const published = await db.model(Post).where({ id: postId }).updateAll({ published: true }); // 1
+await db.model(Post).updateAll(sql`${column("views")} = ${column("views")} + ${1}`);
 ```
 
-- A **Statement** is a write compiled when it's built: `relation.insert(attrs)`, `relation.updateAll(changes)` or `relation.deleteAll()`. It skips validations, callbacks and hydration, and runs on the Database it was built from. Unknown attributes, `undefined` values and plain strings throw when it's built.
-- `await stmt.run()` runs one statement and resolves to D1's `meta` (`changes`, `last_row_id`, `duration`, …).
+- Bulk writes run when called, skipping validations, callbacks and hydration, as Rails' `insert_all`/`update_all`/`delete_all` do: `insert(attrs)`, `insertAll(rows)`, `upsert(attrs)` and `upsertAll(rows)` resolve to D1's `meta` (`changes`, `last_row_id`, `duration`, …); `updateAll(changes)` and `deleteAll()` resolve to the number of rows, as in Rails. Unknown attributes, `undefined` values and plain strings reject the call.
+- A **Statement** is the same write prepared for a batch, from the `to…` forms: `toInsert`, `toInsertAll`, `toUpsert`, `toUpsertAll`, `toUpdateAll`, `toDeleteAll`, as records have `toSave()`/`toDestroy()`. It's compiled when built (so unknown attributes and the like throw then), runs on the Database it was built from, and only runs with its batch.
 - `db.batch([...])` runs statements atomically with D1's `batch()`: all of them are written, or none. It resolves to each entry's result, in order: a statement's `meta`, or a record statement's record. `[]` resolves to `[]` without a query. A statement or record from another Database rejects with `IncompatibleRelation`, before any callback runs.
-- Records join a batch through **record statements**: `db.batch([user.toSave(), post.toDestroy(), db.model(Log).insert({…})])`. Unlike statements, their validations and callbacks run, when the batch runs:
+- Records join a batch through **record statements**: `db.batch([user.toSave(), post.toDestroy(), db.model(Log).toInsert({…})])`. Unlike statements, their validations and callbacks run, when the batch runs:
   1. Each record, in order, runs its validation and before-callbacks, exactly as `save()` or `destroy()` would (a destroy brings in its `dependent:` strategies). The first that's invalid or aborts throws `RecordInvalid` (with `.record`), `RecordNotSaved` or `RecordNotDestroyed`, as saving with `save!` inside a Rails transaction does, and nothing is sent.
   2. Every write goes out as one atomic batch. If D1 refuses it (a constraint error, thrown as usual), nothing is written and every record keeps its unsaved state.
   3. Each record takes its saved state (loading what `RETURNING` gave back, or becoming destroyed), then its after-callbacks run, in order.
@@ -306,8 +303,8 @@ await db
 - `upsert(attrs)` and `upsertAll(rows)` update a row that clashes with the unique index on `uniqueBy`, which is the primary key by default or names another unique index's attributes. As in Rails, only the attributes given are updated, never ones filled in by defaults (such as a generated key), and not the `uniqueBy` ones or `createdAt`; `updatedAt` is set. Rails' `returning` and `update_only` options are deferred (#36).
 - `updateAll(changes)` takes an object of declared attributes (converted like any write) or an `sql` fragment, and leaves `updatedAt` alone, as in Rails. `{}` throws `TypeError`.
 - Which rows `updateAll`/`deleteAll` write follows Rails. With a `limit` or `offset`, it's `WHERE <primary key> IN (SELECT <primary key> … ORDER BY … LIMIT … OFFSET …)`, so the Relation's order picks the rows. Otherwise it's the Relation's conditions, and `order`, `select` and `includes` don't matter. `distinct()` throws `IncompatibleRelation`.
-- A `none()` Relation's statement is still sent, as `WHERE 1 = 0`, and reports `changes: 0`. Rails sends nothing, but a statement's result is D1's `meta`, which only D1 can give.
-- Neither Relations nor statements are awaitable directly (they have no `then`), so an `async` function that returns one never runs it by accident.
+- On a `none()` Relation, `updateAll`/`deleteAll` send nothing and resolve to `0`, as in Rails. Its `to…` statements are still sent with their batch, as `WHERE 1 = 0`, and report `changes: 0`.
+- Neither Relations nor statements are awaitable directly (they have no `then`), so an `async` function that returns one never runs it by accident. A write runs only when its method is called, or when its statement's batch runs.
 
 ## Instrumentation
 

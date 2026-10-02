@@ -138,11 +138,11 @@ export default {
 
 ### 5. Write several things at once, or not at all
 
-D1 can't keep a transaction open while your code awaits, so there's no `transaction()` block. Instead, `db.batch([...])` sends a prepared set of writes that all succeed or all fail. `record.toSave()` and `record.toDestroy()` turn a record into its save or destroy for the batch; on their own they write nothing:
+D1 can't keep a transaction open while your code awaits, so there's no `transaction()` block. Instead, `db.batch([...])` sends a prepared set of writes that all succeed or all fail. `toSave()`, `toDestroy()` and the bulk writes' `to…` forms (`toUpdateAll`, `toDeleteAll`, …) prepare a write for the batch instead of running it:
 
 ```ts
 await db.batch([
-  db.model(Post).where({ publishedAt: null }).updateAll({ publishedAt: new Date() }),
+  db.model(Post).where({ publishedAt: null }).toUpdateAll({ publishedAt: new Date() }),
   user.toDestroy(), // and its posts, since posts are dependent: "destroy"
 ]);
 ```

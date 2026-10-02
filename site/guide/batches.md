@@ -1,20 +1,18 @@
 ---
-description: "Statements (insert, insertAll, upsert, updateAll, deleteAll) and atomic db.batch of statements and records' toSave()/toDestroy()."
+description: "Bulk writes (insert, insertAll, upsert, updateAll, deleteAll) and atomic db.batch of their to… forms and records' toSave()/toDestroy()."
 ---
 
 # Batches and bulk writes
 
-## Statements
+## Bulk writes
 
-A **statement** is a write built from a Relation: `insert`, `insertAll`, `upsert`, `updateAll` or `deleteAll`. Statements skip validations and callbacks, as Rails' `update_all` and `insert_all` do, and write in a single SQL statement. Nothing is sent until you `run()` one, or put it in a batch.
+A Relation can write many rows at once, in a single SQL statement: `insert`, `insertAll`, `upsert`, `upsertAll`, `updateAll` and `deleteAll`. They skip validations and callbacks, as Rails' `update_all` and `insert_all` do, and they run when you call them:
 
 <<< @/snippets/guide/batches.ts#statements{ts}
 
-`run()` resolves to D1's `meta`: `changes`, `last_row_id`, `duration` and the rest.
-
-- **`updateAll(changes)`** takes attributes or an `sql` fragment, and leaves `updatedAt` alone, as in Rails. With a `limit` or `offset`, the Relation's order picks which rows are written.
-- **`deleteAll()`** deletes the Relation's rows.
-- **`insert(attrs)`** writes one row. Declared defaults fill what isn't given (unlike Rails' `insert_all`, since on D1 defaults are where keys are generated), and so do timestamps and a Relation's equality conditions.
+- **`updateAll(changes)`** takes attributes or an `sql` fragment, and leaves `updatedAt` alone, as in Rails. It resolves to the number of rows updated. With a `limit` or `offset`, the Relation's order picks which rows are written.
+- **`deleteAll()`** deletes the Relation's rows, and resolves to how many. On `none()`, both send nothing and resolve to `0`.
+- **`insert(attrs)`** writes one row, and resolves to D1's `meta` (`last_row_id`, `changes`, …). Declared defaults fill what isn't given (unlike Rails' `insert_all`, since on D1 defaults are where keys are generated), and so do timestamps and a Relation's equality conditions.
 
 ### Many rows at once
 
@@ -26,7 +24,9 @@ A **statement** is a write built from a Relation: `insert`, `insertAll`, `upsert
 
 ## Atomic batches
 
-D1 can't keep a transaction open across `await`s, so there's no `transaction(async (tx) => …)` block. Instead, `db.batch([...])` sends a prepared list of writes that are all written, or none of them:
+D1 can't keep a transaction open across `await`s, so there's no `transaction(async (tx) => …)` block. Instead, `db.batch([...])` sends a prepared list of writes that are all written, or none of them.
+
+Each bulk write has a `to…` form that prepares it for a batch instead of running it: `toInsert`, `toInsertAll`, `toUpsert`, `toUpsertAll`, `toUpdateAll` and `toDeleteAll`. Each one returns a **statement**, sent only with its batch. This is the same pattern as records: `save()` runs, and `toSave()` hands the save to a batch.
 
 <<< @/snippets/guide/batches.ts#batch{ts}
 

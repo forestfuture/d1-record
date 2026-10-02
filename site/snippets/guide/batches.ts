@@ -3,14 +3,14 @@ import { Article, Author, Comment } from "./associations";
 
 export async function statementsExample(db: Database, articleId: string) {
   // #region statements
-  await db.model(Article).where({ published: false }).deleteAll();
+  const deleted = await db.model(Article).where({ published: false }).deleteAll(); // how many
   await db.model(Article).where({ id: articleId }).updateAll({ published: true });
   await db
     .model(Article)
     .where({ id: articleId })
     .updateAll(sql`${column("title")} = upper(${column("title")})`);
   const meta = await db.model(Comment).insert({ articleId, body: "First!" });
-  console.log(meta.changes, meta.last_row_id);
+  console.log(deleted, meta.last_row_id);
   // #endregion statements
   return meta;
 }
