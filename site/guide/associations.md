@@ -6,26 +6,75 @@ description: "belongsTo, hasMany and hasOne: inferred foreign keys, reading, pre
 
 Associations connect Models: `belongsTo`, `hasMany` and `hasOne`, as in Rails. Each is a field of the Model, `articles = hasMany(Article)`, much like Rails' `has_many :articles`: the field's name is the association's name, and TypeScript knows `author.articles()` from it.
 
-| Association | Foreign key                                                                       | Reading it                                      | Writing through it                                                                             | `dependent:`                                                                              |
-| ----------- | --------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `belongsTo` | On this record. Inferred from the association's name: `author` → `authorId`       | `await record.author()`: the record, or `null`  | `set(record)`, `build()`, `create()`, `createOrThrow()`                                        | None                                                                                      |
-| `hasMany`   | On the target's records. Inferred from this Model's class name: `User` → `userId` | `record.posts()`: a Relation of the records     | `build()`, `create()`, `createOrThrow()`, and bulk writes (`insert`, `updateAll`, `deleteAll`) | `"destroy"`, `"deleteAll"`, `"nullify"`, `"restrictWithException"`, `"restrictWithError"` |
-| `hasOne`    | On the target's record. Inferred from this Model's class name: `User` → `userId`  | `await record.profile()`: the record, or `null` | `build()`, `create()`, `createOrThrow()`                                                       | `"destroy"`, `"delete"`, `"nullify"`, `"restrictWithException"`, `"restrictWithError"`    |
-
-Every association takes the same options:
-
-| Option       | What it sets                                                           | Default                        |
-| ------------ | ---------------------------------------------------------------------- | ------------------------------ |
-| `foreignKey` | The attribute holding the link (an attribute, not a column)            | Inferred, as above             |
-| `primaryKey` | The attribute the foreign key points at                                | The primary key                |
-| `scope`      | Narrows or orders the association's records: `(q) => q.where(…)`       | None                           |
-| `dependent`  | What destroying the owner does to the records (`hasMany` and `hasOne`) | None: D1's foreign keys decide |
-
 <<< @/snippets/guide/associations.ts#declare{ts}
 
 Pass the target Model's class. Models can refer to each other in any order, because a field is only evaluated when a record is made, by which time every class exists.
 
 A subclass inherits its parent's associations, and can redeclare one to change it.
+
+## belongsTo
+
+`author = belongsTo(User, options)`
+
+Declares that each record points at one record of another Model. Use it on the Model whose table holds the foreign key: a post `belongsTo` its author.
+
+Each record gets:
+
+- **`await record.author()`**: the associated record, or `null`. It's read once, then cached.
+- **`record.author.set(user)`**: points the record at another record, setting its foreign key; `set(null)` clears it. Written when the record is saved.
+- **`record.author.build(attrs)`**: a new record for it to point at. It's validated with the record and saved **before** it, so the foreign key can be filled in.
+- **`record.author.create(attrs)`** and **`createOrThrow(attrs)`**: save a new record at once and point at it. The record itself isn't saved.
+
+<<< @/snippets/guide/associations.ts#belongs-to{ts}
+
+Options:
+
+- **`foreignKey`**: the attribute on this record that holds the link. Defaults to the association's name + `Id`: `author` → `authorId`.
+- **`primaryKey`**: the attribute on the target it points at. Defaults to the target's primary key.
+- **`scope`**: narrows the target, `(q) => q.where(…)`. See [Association scopes](#association-scopes).
+
+## hasMany
+
+`posts = hasMany(Post, options)`
+
+Declares that many records of another Model point at each record. Use it on the Model the other table's foreign key refers to: a user `hasMany` posts.
+
+Each record gets:
+
+- **`record.posts()`**: a Relation of the associated records, with every Relation method and the target's scopes. Its records are cached once loaded.
+- **`record.posts().build(attrs)`**: a new record with the owner's key, saved with the owner. See [Autosave](#autosave).
+- **`record.posts().create(attrs)`** and **`createOrThrow(attrs)`**: save a new record at once. The owner must already be saved.
+- **`record.posts().insert(…)`, `updateAll(…)` and `deleteAll()`**: bulk writes scoped to the owner's records, and their `to…` forms for a batch. See [Writing to many at once](#writing-to-many-at-once).
+
+<<< @/snippets/guide/associations.ts#has-many{ts}
+
+Options:
+
+- **`foreignKey`**: the attribute on the target's records that holds the link. Defaults to this Model's class name + `Id`: `User` → `userId`.
+- **`primaryKey`**: the attribute on this record the foreign key points at. Defaults to the primary key.
+- **`scope`**: narrows or orders the records, `(q) => q.order(…)`. See [Association scopes](#association-scopes).
+- **`dependent`**: what destroying the owner does to the records: `"destroy"`, `"deleteAll"`, `"nullify"`, `"restrictWithException"` or `"restrictWithError"`. See [Dependent records](#dependent-records).
+
+## hasOne
+
+`profile = hasOne(Profile, options)`
+
+Declares that one record of another Model points at each record. Use it on the Model the other table's foreign key refers to, when there's at most one: a user `hasOne` profile.
+
+Each record gets:
+
+- **`await record.profile()`**: the associated record, or `null`. It's read once, then cached. If several records point at it, it's the first by the scope's order, then the primary key.
+- **`record.profile.build(attrs)`**: a new record with the owner's key, saved with the owner.
+- **`record.profile.create(attrs)`** and **`createOrThrow(attrs)`**: save a new record at once. The owner must already be saved.
+
+<<< @/snippets/guide/associations.ts#has-one{ts}
+
+Options:
+
+- **`foreignKey`**: the attribute on the target's record that holds the link. Defaults to this Model's class name + `Id`: `User` → `userId`.
+- **`primaryKey`**: the attribute on this record the foreign key points at. Defaults to the primary key.
+- **`scope`**: narrows or orders the target, `(q) => q.where(…)`. See [Association scopes](#association-scopes).
+- **`dependent`**: what destroying the owner does to the record: `"destroy"`, `"delete"`, `"nullify"`, `"restrictWithException"` or `"restrictWithError"`. See [Dependent records](#dependent-records).
 
 ## Foreign keys
 
@@ -42,13 +91,9 @@ Inferring from a class name needs the class to keep its name when your Worker is
 
 Keys aren't checked by TypeScript, since that would make Models that point at each other circular. They're checked the first time a Model is used, with an `InvalidModel` that names the missing attribute.
 
-## Reading
+## Loading and caching
 
-<<< @/snippets/guide/associations.ts#read{ts}
-
-- `await article.author()` and `await author.profile()` resolve to a record or `null`.
-- `author.articles()` is a Relation of the author's articles, with every Relation method and the target's scopes.
-- Nothing is queried when there's nothing to find: a `belongsTo` whose foreign key is `null`, or a `hasMany`/`hasOne` on an owner that isn't saved yet.
+Nothing is queried when there's nothing to find: a `belongsTo` whose foreign key is `null`, or a `hasMany`/`hasOne` on an owner that isn't saved yet.
 
 A loaded association is cached on the record, as in Rails. Reading `author()` again doesn't query, and neither does `articles().toArray()` once the collection is loaded. Changing a foreign key makes the next read query again. `reload()` clears the cache, and `await record.reloadAssociation("articles")` reloads one association.
 
@@ -75,16 +120,6 @@ A record built through an association is saved with its owner, as Rails does. Bu
 - The built records are validated with the owner. An invalid article makes the author invalid ("Articles is invalid"), with its own errors on the article.
 - When the owner's key is **generated in code**, as here, everything is written in one atomic batch.
 - When **D1 generates** the key (an `INTEGER PRIMARY KEY`), the key doesn't exist until the owner is written. So the owner is written first, its records follow in the next batch, and their own built records in the one after, a level at a time. The batches aren't atomic together: if a record fails at the second level (only a constraint error can, since everything was validated first), the save throws with the owner already saved and the record still new. Generate keys in code wherever a graph must save all at once.
-
-### Writing through `belongsTo` and `hasOne`
-
-The accessor of a `belongsTo` or `hasOne` also has methods, for what Rails does with `article.author = …`, `build_author` and `build_profile`:
-
-<<< @/snippets/guide/associations.ts#writers{ts}
-
-- `set(record)` points the record at another one, and `set(null)` clears it. It's written when the record is saved.
-- `build(attrs)` makes a new associated record. `create(attrs)` and `createOrThrow(attrs)` save it at once.
-- A new record set or built through a `belongsTo` is validated with its owner and saved **before** it, so the owner's foreign key can be filled in.
 
 ## Association scopes
 

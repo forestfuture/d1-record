@@ -4,7 +4,10 @@ import {
   Article,
   Author,
   autosaveExample,
+  belongsToExample,
   createThroughExample,
+  hasManyExample,
+  hasOneExample,
   preloadExample,
   readExample,
   statementsExample,
@@ -147,6 +150,20 @@ describe("the guide's examples", () => {
         .find("x1")
         .then((article) => article.comments().count()),
     ).toBe(0);
+  });
+
+  test("Associations: each kind's reference example, as the guide shows it", async () => {
+    const db = connect(binding);
+    const editor = await db.model(Author).createOrThrow({ name: "Ed" });
+
+    const published = await hasManyExample(db, "mary"); // builds a draft, then deletes drafts
+    const author = await belongsToExample(db, "x1", editor);
+    const profile = await hasOneExample(db, "mary");
+
+    expect(published.map((article) => article.title)).toEqual(["On Nothing"]);
+    expect(author?.name).toBe("Mary");
+    expect(await db.model(Article).pluck("authorId", "title")).toEqual([[editor.id, "On Nothing"]]);
+    expect(profile?.bio).toBe("Poet");
   });
 
   test("Associations: autosave writes the graph in one batch; set() links new and saved authors", async () => {
