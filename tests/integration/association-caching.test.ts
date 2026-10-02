@@ -227,7 +227,7 @@ describe("caching lazily loaded associations", () => {
     const user = await db().model(User).find(1);
     await user.posts().toArray();
 
-    await user.posts().updateAll({ title: "Changed" }).run();
+    await user.posts().updateAll({ title: "Changed" });
     queries.length = 0;
 
     expect(await user.posts().pluck("title")).toEqual(["Changed", "Changed"]);

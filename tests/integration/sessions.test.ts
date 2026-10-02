@@ -83,8 +83,8 @@ describe("sessions", () => {
 
   test("record reads go through the session: uniqueness checks, association reads and preloads", async () => {
     const seed = connect(binding);
-    await seed.model(User).insert({ id: 1, email: "a@example.com" }).run();
-    await seed.model(Post).insert({ userId: 1, title: "Hello" }).run();
+    await seed.model(User).insert({ id: 1, email: "a@example.com" });
+    await seed.model(Post).insert({ userId: 1, title: "Hello" });
 
     // Each check starts a fresh session, so its bookmark shows whether that read used it.
     const validating = connect(binding, { session: "first-primary" });
@@ -105,11 +105,11 @@ describe("sessions", () => {
 
   test("statements and batches go through the session too", async () => {
     const running = connect(binding, { session: "first-primary" });
-    await running.model(User).insert({ id: 1, email: "a@example.com" }).run();
+    await running.model(User).insert({ id: 1, email: "a@example.com" });
     expect(running.bookmark()).not.toBeNull();
 
     const batching = connect(binding, { session: "first-primary" });
-    await batching.batch([batching.model(User).where({ id: 1 }).updateAll({ role: "admin" })]);
+    await batching.batch([batching.model(User).where({ id: 1 }).toUpdateAll({ role: "admin" })]);
     expect(batching.bookmark()).not.toBeNull();
   });
 

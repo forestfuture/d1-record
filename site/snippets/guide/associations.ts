@@ -113,6 +113,6 @@ export async function preloadExample(db: Database) {
 
 export async function statementsExample(article: Article) {
   // #region statements
-  await article.comments().deleteAll().run(); // one DELETE for the article's comments
+  await article.comments().deleteAll(); // one DELETE for the article's comments
   // #endregion statements
 }

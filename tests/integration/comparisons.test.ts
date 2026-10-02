@@ -35,7 +35,7 @@ describe("comparison conditions", () => {
       [3, 30, 3],
       [4, null, 4],
     ] as const) {
-      await users.insert({ id, email: `u${id}@example.com`, age, createdAt: day(created) }).run();
+      await users.insert({ id, email: `u${id}@example.com`, age, createdAt: day(created) });
     }
   });
   afterAll(() => dispose());
@@ -98,7 +98,7 @@ describe("comparison conditions", () => {
 
   test("a json attribute's object value is still compared for equality", async () => {
     const samples = connect(binding).model(Sample);
-    await samples.insert({ id: 1, settings: { gt: 1 } }).run();
+    await samples.insert({ id: 1, settings: { gt: 1 } });
 
     expect(await samples.where({ settings: { gt: 1 } }).pluck("id")).toEqual([1]);
   });

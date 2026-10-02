@@ -14,29 +14,30 @@ import { timestampsFor } from "./timestamps.ts";
 export const statementParts = Symbol("statementParts");
 
 /**
- * A write compiled in advance (`insert`, `updateAll`, `deleteAll`). It runs only through
- * `run()` or `db.batch([...])`, on the Database it was built from, and skips validations,
- * callbacks and hydration. It has no `then`, so it's never run by being awaited.
+ * A write prepared for `db.batch([...])`, from a Relation's `to…` methods (`toInsert`,
+ * `toUpdateAll`, `toDeleteAll`, …). It runs on the Database it was built from, and skips
+ * validations, callbacks and hydration. It has no `then`, so it's never run by being awaited.
  */
 export class Statement {
   readonly #executor: Executor;
   readonly #query: CompiledSql;
 
-  /** @internal Statements are built by Relations: `insert`, `updateAll`, `deleteAll`. */
+  /** @internal Statements are built by Relations' `to…` methods. */
   constructor(executor: Executor, query: CompiledSql) {
     this.#executor = executor;
     this.#query = query;
-  }
-
-  /** Runs this statement on its own and resolves to D1's `meta` for it. */
-  async run(): Promise<D1Meta> {
-    return this.#executor.run(this.#query);
   }
 
   /** @internal The Database's Executor it runs on, and its compiled SQL. */
   get [statementParts](): { executor: Executor; query: CompiledSql } {
     return { executor: this.#executor, query: this.#query };
   }
+}
+
+/** Runs a statement on its own, resolving to D1's `meta`: what a Relation's write methods do. */
+export function runAlone(statement: Statement): Promise<D1Meta> {
+  const { executor, query } = statement[statementParts];
+  return executor.run(query);
 }
 
 /**

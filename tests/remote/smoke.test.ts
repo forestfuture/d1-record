@@ -53,7 +53,7 @@ describe.skipIf(!configured)("remote D1 smoke", () => {
   afterAll(() => remote?.dispose());
   beforeEach(async () => {
     const db = connect(remote.binding);
-    await db.batch([db.model(Post).deleteAll(), db.model(User).deleteAll()]);
+    await db.batch([db.model(Post).toDeleteAll(), db.model(User).toDeleteAll()]);
   });
 
   test("create, find, update and destroy a record, with values converted both ways", async () => {
@@ -77,7 +77,7 @@ describe.skipIf(!configured)("remote D1 smoke", () => {
     const events: QueryEvent[] = [];
     const db = connect(remote.binding, { onQuery: (event) => events.push(event) });
 
-    const meta = await db.model(User).insert({ id: 1, email: "a@example.com" }).run();
+    const meta = await db.model(User).insert({ id: 1, email: "a@example.com" });
 
     expect(meta).toMatchObject({ changes: 1, last_row_id: 1 });
     expect(typeof meta.duration).toBe("number");
@@ -110,9 +110,9 @@ describe.skipIf(!configured)("remote D1 smoke", () => {
       const foreignKey = db.model(Post).insert({ userId: 999_999, title: "Orphan" });
       const check = db.model(Post).insert({ userId: user.id, title: "Hello", views: -1 });
 
-      await expect(notNull.run()).rejects.toThrow(NotNullViolation);
-      await expect(foreignKey.run()).rejects.toThrow(InvalidForeignKey);
-      await expect(check.run()).rejects.toThrow(CheckViolation);
+      await expect(notNull).rejects.toThrow(NotNullViolation);
+      await expect(foreignKey).rejects.toThrow(InvalidForeignKey);
+      await expect(check).rejects.toThrow(CheckViolation);
     });
   });
 
@@ -121,9 +121,9 @@ describe.skipIf(!configured)("remote D1 smoke", () => {
 
     const error: unknown = await db
       .batch([
-        db.model(User).insert({ id: 1, email: "a@example.com" }),
-        db.model(Post).insert({ userId: 1, title: "Hello" }),
-        db.model(User).insert({ id: 2, email: "a@example.com" }),
+        db.model(User).toInsert({ id: 1, email: "a@example.com" }),
+        db.model(Post).toInsert({ userId: 1, title: "Hello" }),
+        db.model(User).toInsert({ id: 2, email: "a@example.com" }),
       ])
       .catch((caught: unknown) => caught);
 
@@ -153,16 +153,12 @@ describe.skipIf(!configured)("remote D1 smoke", () => {
     const db = connect(remote.binding);
     const users = db.model(User);
 
-    await users
-      .insertAll([
-        { id: 1, email: "a@example.com", settings: { theme: "dark" } },
-        { id: 2, email: "b@example.com", settings: null },
-      ])
-      .run();
-    await users.upsertAll([{ id: 1, email: "a@example.com", role: "admin" }]).run();
-    const skipped = await users
-      .insert({ id: 2, email: "b@example.com" }, { onDuplicate: "skip" })
-      .run();
+    await users.insertAll([
+      { id: 1, email: "a@example.com", settings: { theme: "dark" } },
+      { id: 2, email: "b@example.com", settings: null },
+    ]);
+    await users.upsertAll([{ id: 1, email: "a@example.com", role: "admin" }]);
+    const skipped = await users.insert({ id: 2, email: "b@example.com" }, { onDuplicate: "skip" });
 
     expect(skipped.changes).toBe(0);
     expect(await users.order({ id: "asc" }).pluck("role", "settings")).toEqual([
@@ -189,8 +185,12 @@ describe.skipIf(!configured)("remote D1 smoke", () => {
     // In batches of 25, under D1's per-invocation query limit (50 on the Free plan).
     for (let start = 0; start < ids.length; start += 25) {
       const group = ids.slice(start, start + 25);
-      await db.batch(group.map((id) => db.model(User).insert({ id, email: `u${id}@example.com` })));
-      await db.batch(group.map((id) => db.model(Post).insert({ userId: id, title: `Post ${id}` })));
+      await db.batch(
+        group.map((id) => db.model(User).toInsert({ id, email: `u${id}@example.com` })),
+      );
+      await db.batch(
+        group.map((id) => db.model(Post).toInsert({ userId: id, title: `Post ${id}` })),
+      );
     }
 
     // A 150-value list is one bound value (json_each), well within D1's 100-parameter limit.

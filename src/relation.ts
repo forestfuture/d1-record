@@ -44,7 +44,7 @@ import { readValue, writeValue } from "./conversion.ts";
 import { Comparison } from "./comparisons.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
 import type { OwnedCollection } from "./owned-collection.ts";
-import { insertStatement, Statement } from "./statement.ts";
+import { insertStatement, runAlone, Statement } from "./statement.ts";
 
 /**
  * Attribute conditions for `where`/`findBy`: a value, an array meaning "any of these", or a
@@ -351,31 +351,63 @@ export class Relation<M extends ModelBase, S = {}> {
   }
 
   /**
-   * An INSERT statement for one row: `await db.model(Post).insert({ title }).run()`, or inside
-   * `db.batch([...])`. Skips validations and callbacks; declared defaults and timestamps apply,
-   * and this Relation's equality conditions are inserted too, as with `build()`. A duplicate
-   * throws, unless `onDuplicate: "skip"` (Rails' `insert`).
+   * Inserts one row now, resolving to D1's `meta`: `await db.model(Post).insert({ title })`.
+   * Skips validations and callbacks; declared defaults and timestamps apply, and this
+   * Relation's equality conditions are inserted too, as with `build()`. A duplicate throws,
+   * unless `onDuplicate: "skip"` (Rails' `insert`). `toInsert` is the same write, for a batch.
    */
-  insert(attributes: Partial<AttributesOf<M>>, options: InsertOptions = {}): Statement {
+  async insert(attributes: Partial<AttributesOf<M>>, options: InsertOptions = {}): Promise<D1Meta> {
+    return runAlone(this.toInsert(attributes, options));
+  }
+
+  /** `insert`, as a Statement for `db.batch([...])`. */
+  toInsert(attributes: Partial<AttributesOf<M>>, options: InsertOptions = {}): Statement {
     return this.#insertStatement([attributes], skipOn(options, "insert"), "insert");
   }
 
-  /** An INSERT statement for several rows with the same attributes (Rails' `insert_all!`). */
-  insertAll(rows: readonly Partial<AttributesOf<M>>[], options: InsertOptions = {}): Statement {
+  /** Inserts several rows with the same attributes now, in one statement (Rails' `insert_all!`). */
+  async insertAll(
+    rows: readonly Partial<AttributesOf<M>>[],
+    options: InsertOptions = {},
+  ): Promise<D1Meta> {
+    return runAlone(this.toInsertAll(rows, options));
+  }
+
+  /** `insertAll`, as a Statement for `db.batch([...])`. */
+  toInsertAll(rows: readonly Partial<AttributesOf<M>>[], options: InsertOptions = {}): Statement {
     return this.#insertStatement(rows, skipOn(options, "insertAll"), "insertAll");
   }
 
   /**
-   * An INSERT statement that updates a row instead when it clashes with the unique index on
-   * `uniqueBy` (the primary key by default): every given attribute but those and `createdAt`,
-   * with `updatedAt` set, as Rails' `upsert` does.
+   * Inserts a row now, or updates it when it clashes with the unique index on `uniqueBy` (the
+   * primary key by default): every given attribute but those and `createdAt`, with `updatedAt`
+   * set, as Rails' `upsert` does.
    */
-  upsert(attributes: Partial<AttributesOf<M>>, options: UpsertOptions<M> = {}): Statement {
+  async upsert(
+    attributes: Partial<AttributesOf<M>>,
+    options: UpsertOptions<M> = {},
+  ): Promise<D1Meta> {
+    return runAlone(this.toUpsert(attributes, options));
+  }
+
+  /** `upsert`, as a Statement for `db.batch([...])`. */
+  toUpsert(attributes: Partial<AttributesOf<M>>, options: UpsertOptions<M> = {}): Statement {
     return this.#insertStatement([attributes], this.#updateOn(options), "upsert");
   }
 
-  /** `upsert` for several rows with the same attributes (Rails' `upsert_all`). */
-  upsertAll(rows: readonly Partial<AttributesOf<M>>[], options: UpsertOptions<M> = {}): Statement {
+  /** `upsert` for several rows with the same attributes, now (Rails' `upsert_all`). */
+  async upsertAll(
+    rows: readonly Partial<AttributesOf<M>>[],
+    options: UpsertOptions<M> = {},
+  ): Promise<D1Meta> {
+    return runAlone(this.toUpsertAll(rows, options));
+  }
+
+  /** `upsertAll`, as a Statement for `db.batch([...])`. */
+  toUpsertAll(
+    rows: readonly Partial<AttributesOf<M>>[],
+    options: UpsertOptions<M> = {},
+  ): Statement {
     return this.#insertStatement(rows, this.#updateOn(options), "upsertAll");
   }
 
@@ -399,11 +431,17 @@ export class Relation<M extends ModelBase, S = {}> {
   }
 
   /**
-   * An UPDATE statement for every row this Relation matches, setting attribute values or an
-   * `sql` fragment: ``updateAll(sql`${column("views")} = ${column("views")} + 1`)``. Skips
-   * validations and callbacks, and leaves `updatedAt` alone, as in Rails.
+   * Updates every row this Relation matches, now, setting attribute values or an `sql`
+   * fragment: ``updateAll(sql`${column("views")} = ${column("views")} + 1`)``. Resolves to the
+   * number of rows updated. Skips validations and callbacks, and leaves `updatedAt` alone, as in
+   * Rails. A `none()` Relation sends nothing and resolves to 0.
    */
-  updateAll(changes: Partial<AttributesOf<M>> | SafeSql): Statement {
+  async updateAll(changes: Partial<AttributesOf<M>> | SafeSql): Promise<number> {
+    return this.#countOf(this.toUpdateAll(changes));
+  }
+
+  /** `updateAll`, as a Statement for `db.batch([...])`. */
+  toUpdateAll(changes: Partial<AttributesOf<M>> | SafeSql): Statement {
     const checked = this.#checkChanges(changes);
     const query = compileUpdateAll(this.#writableQuery("updateAll"), checked);
     this.#collection?.invalidate();
@@ -411,10 +449,17 @@ export class Relation<M extends ModelBase, S = {}> {
   }
 
   /**
-   * A DELETE statement for every row this Relation matches. On a hasMany association itself
-   * (`user.posts().deleteAll()`), the rows' foreign key is set to NULL instead, as in Rails.
+   * Deletes every row this Relation matches, now, resolving to the number of rows. On a hasMany
+   * association itself (`user.posts().deleteAll()`), the rows' foreign key is set to NULL
+   * instead unless its `dependent:` deletes, as in Rails. A `none()` Relation sends nothing and
+   * resolves to 0.
    */
-  deleteAll(): Statement {
+  async deleteAll(): Promise<number> {
+    return this.#countOf(this.toDeleteAll());
+  }
+
+  /** `deleteAll`, as a Statement for `db.batch([...])`. */
+  toDeleteAll(): Statement {
     const query = this.#writableQuery("deleteAll");
     this.#collection?.invalidate();
     const nullifies = this.#collection?.nullifies;
@@ -423,6 +468,12 @@ export class Relation<M extends ModelBase, S = {}> {
         ? compileDeleteAll(query)
         : compileUpdateAll(query, [[nullifies, null]]);
     return new Statement(this.#executor, compiled);
+  }
+
+  /** Runs a statement built from this Relation: the rows it changed, or 0 without a query on `none()`. */
+  async #countOf(statement: Statement): Promise<number> {
+    if (this.#query.none) return 0;
+    return (await runAlone(statement)).changes;
   }
 
   /** Builds and saves a record; resolves to it whether or not it was saved (check `isPersisted()`). */

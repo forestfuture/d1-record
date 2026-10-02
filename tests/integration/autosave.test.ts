@@ -307,7 +307,7 @@ describe("autosave: records built through a hasMany are saved with their owner",
     const titles = async () => (await user.posts().toArray()).map((post) => post.title);
 
     expect(await titles()).toEqual(["Stored", "Built"]);
-    await user.posts().updateAll({ title: "Changed" }).run();
+    await user.posts().updateAll({ title: "Changed" });
     expect(await titles()).toEqual(["Changed", "Built"]);
   });
 });

@@ -96,10 +96,10 @@ function statementFor(owner: ModelBase, association: ResolvedAssociation): Compi
   const { dependent, foreignKey } = association.definition;
   let statement: Statement;
   if (dependent === "deleteAll" || dependent === "delete") {
-    statement = recordsOf(owner, association).deleteAll();
+    statement = recordsOf(owner, association).toDeleteAll();
   } else if (dependent === "nullify") {
     // The foreign key was checked as a target attribute when the Model was prepared.
-    statement = recordsOf(owner, association).updateAll({ [foreignKey]: null } as never);
+    statement = recordsOf(owner, association).toUpdateAll({ [foreignKey]: null } as never);
   } else {
     return [];
   }
