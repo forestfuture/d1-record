@@ -201,6 +201,33 @@ migrations_dir = "db\\u002Fmigrate"
     ]);
   });
 
+  test("notes come with a file that's written, not again when it's up to date, or with --check", () => {
+    const cwd = project({
+      "wrangler.jsonc": wranglerJsonc,
+      "drizzle.config.ts": "export default {};",
+      "migrations/0000_init.sql":
+        "CREATE TABLE posts (id INTEGER PRIMARY KEY, published_at INTEGER);",
+    });
+
+    const first = run(cwd);
+    const again = run(cwd);
+    const checked = run(cwd, { check: true });
+
+    expect(first.output).toContain("Note: posts.published_at");
+    expect(again.output).toBe("src/db/schema.ts is up to date (1 table)");
+    expect(checked.output).toBe("src/db/schema.ts is up to date");
+  });
+
+  test("migrations in folders, as Drizzle writes them, get Wrangler's hint to set migrations_pattern", () => {
+    const cwd = project({
+      "wrangler.jsonc": wranglerJsonc,
+      "migrations/0000_init/migration.sql": "CREATE TABLE posts (id INTEGER PRIMARY KEY);",
+    });
+
+    expect(run(cwd).output).toBe(`Wrote src/db/schema.ts (0 tables) from migrations/
+Note: migrations/ has its migrations in folders, as Drizzle writes them; set migrations_pattern to "migrations/*/migration.sql" in your Wrangler config, so Wrangler and d1-record read them`);
+  });
+
   test("--watch regenerates when a migration changes", async () => {
     const cwd = project({
       "wrangler.jsonc": wranglerJsonc,
