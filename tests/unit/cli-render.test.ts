@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
 import { fingerprintOf, renderSchema } from "../../cli/schema/render.ts";
-import { schemaOf, type TableSchema } from "../../cli/schema/schema.ts";
+import { schemaOf, type GeneratedTable } from "../../cli/schema/schema.ts";
 
-function tablesOf(sql: string): TableSchema[] {
+function tablesOf(sql: string): GeneratedTable[] {
   const result = schemaOf([{ name: "0001_create.sql", sql }]);
   if (!result.ok) throw new Error(result.errors.join("\n"));
   return result.tables;

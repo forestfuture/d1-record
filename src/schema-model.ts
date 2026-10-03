@@ -1,10 +1,5 @@
 import { InvalidModel } from "./errors.ts";
-import {
-  ignoresColumns,
-  type AttributeSpec,
-  type AttributeSpecs,
-  type AttributeType,
-} from "./metadata.ts";
+import { markIgnoringColumns, type AttributeSpecs, type AttributeType } from "./metadata.ts";
 import { Model, type ModelBaseFor } from "./model.ts";
 import { bindTable } from "./table-names.ts";
 
@@ -18,18 +13,20 @@ export interface TableSchema {
 export type TableSchemas = Readonly<Record<string, TableSchema>>;
 
 /** A change to a generated attribute: its type alone, or its type, nullability and default. */
-export type AttributeOverride =
+type AttributeOverride =
   | AttributeType
   | { type?: AttributeType; null?: boolean; default?: () => unknown };
 
 /** What `Model("products", {...})` may change: any attribute, and ignore any but the key. */
-export type Overrides<T extends TableSchema> = {
+type Overrides<T extends TableSchema> = {
   readonly [K in keyof T["attributes"]]?: K extends T["primaryKey"]
     ? AttributeOverride
     : AttributeOverride | false;
 };
 
+/** The type a spec declares, written either way. */
 type TypeOf<S> = S extends AttributeType ? S : S extends { type: infer T } ? T : never;
+/** Whether a spec's attribute can be `null`. */
 type NullOf<S> = S extends { null: false } ? false : true;
 
 /** An attribute's spec with its override applied. */
@@ -64,45 +61,78 @@ export interface SchemaModel<T extends TableSchemas> {
   <const A extends AttributeSpecs>(specs: A): ModelBaseFor<A>;
 }
 
-/** An attribute's spec with one override applied. */
-function overridden(spec: AttributeSpec, override: AttributeOverride): AttributeSpec {
-  const base = typeof spec === "string" ? { type: spec } : spec;
-  return typeof override === "string" ? { ...base, type: override } : { ...base, ...override };
+const types: readonly unknown[] = ["string", "integer", "real", "boolean", "datetime", "json"];
+
+/** Whether `value` is an object override: only `type`, `null` and `default`, each well formed. */
+function isSpecOverride(value: unknown): value is Exclude<AttributeOverride, AttributeType> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const { type, null: nullable, default: initial, ...rest } = value as Record<string, unknown>;
+  return (
+    Object.keys(rest).length === 0 &&
+    (type === undefined || types.includes(type)) &&
+    (nullable === undefined || typeof nullable === "boolean") &&
+    (initial === undefined || typeof initial === "function")
+  );
+}
+
+/**
+ * An override as given, checked (TypeScript checks it too, but not in plain JavaScript or past
+ * a cast): `false` to ignore the column, or the spec changes, with unset keys left out.
+ */
+function checked(
+  where: string,
+  attribute: string,
+  override: unknown,
+): Partial<Exclude<AttributeOverride, AttributeType>> | false {
+  if (override === false) return false;
+  if (typeof override === "string" && types.includes(override)) {
+    return { type: override as AttributeType };
+  }
+  if (!isSpecOverride(override)) {
+    throw new InvalidModel(
+      `${where}: ${attribute}'s override must be a type name, { type, null, default }, or false`,
+    );
+  }
+  return Object.fromEntries(Object.entries(override).filter(([, value]) => value !== undefined));
 }
 
 /** A table's attribute specs with `overrides` applied; throws `InvalidModel` for a bad one. */
 function specsFor(
   name: string,
   table: TableSchema,
-  overrides: Readonly<Record<string, AttributeOverride | false>>,
+  overrides: Readonly<Record<string, unknown>>,
 ): { specs: AttributeSpecs; ignoring: boolean } {
   const where = `Model("${name}")`;
+  const changes = new Map<string, ReturnType<typeof checked>>();
   for (const [attribute, override] of Object.entries(overrides)) {
+    if (override === undefined) continue;
     if (!Object.hasOwn(table.attributes, attribute)) {
       throw new InvalidModel(`${where}: ${name} has no attribute ${attribute} to override`);
     }
     if (override === false && attribute === table.primaryKey) {
       throw new InvalidModel(`${where}: the primary key ${attribute} can't be ignored`);
     }
+    changes.set(attribute, checked(where, attribute, override));
   }
   const specs: AttributeSpecs = {};
   for (const [attribute, spec] of Object.entries(table.attributes)) {
-    const override = overrides[attribute];
-    if (override === false) continue;
-    specs[attribute] = override === undefined ? spec : overridden(spec, override);
+    const change = changes.get(attribute);
+    if (change === false) continue;
+    const base = typeof spec === "string" ? { type: spec } : spec;
+    specs[attribute] = change === undefined ? spec : { ...base, ...change };
   }
-  return { specs, ignoring: Object.values(overrides).includes(false) };
+  return { specs, ignoring: [...changes.values()].includes(false) };
 }
 
 /**
- * The `Model` for a generated schema (#66): `export const Model = modelFor(tables)` in
- * `src/db/schema.ts`. `Model("products")` is a base class bound to that table, with its
+ * The `Model` for a generated schema: `export const Model = modelFor(tables)` ends the
+ * `src/db/schema.ts` that `d1-record schema` writes. `Model("products")` is a base class bound to that table, with its
  * attributes and primary key; `Model({...})` is the library's own, for anything else.
  */
 export function modelFor<const T extends TableSchemas>(tables: T): SchemaModel<T> {
   function SchemaModel(
     table: string | AttributeSpecs,
-    overrides: Readonly<Record<string, AttributeOverride | false>> = {},
+    overrides: Readonly<Record<string, unknown>> = {},
   ) {
     if (typeof table !== "string") return Model(table);
     const schema = Object.hasOwn(tables, table) ? tables[table] : undefined;
@@ -113,7 +143,7 @@ export function modelFor<const T extends TableSchemas>(tables: T): SchemaModel<T
     const base = Model(specs);
     bindTable(base, table);
     base.primaryKey = schema.primaryKey;
-    if (ignoring) ignoresColumns(base);
+    if (ignoring) markIgnoringColumns(base);
     return base;
   }
   return SchemaModel as SchemaModel<T>;

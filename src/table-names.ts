@@ -1,3 +1,4 @@
+import { ancestors } from "./ancestors.ts";
 import { InvalidModel } from "./errors.ts";
 import { pluralize } from "./inflections.ts";
 import type { ModelClass } from "./model.ts";
@@ -53,12 +54,9 @@ export function inferTableNames(base: object): void {
 
 /** The class name a Model's table name was inferred from, or undefined when it's declared. */
 function tableNameSource(model: object): string | undefined {
-  let current: object | null = model;
-  while (current !== null && !Object.hasOwn(current, "tableName")) {
-    current = Object.getPrototypeOf(current) as object | null;
-  }
-  return current !== null && bases.has(current) && !boundTables.has(current)
-    ? className(current, model)
+  const owner = ancestors(model).find((each) => Object.hasOwn(each, "tableName"));
+  return owner !== undefined && bases.has(owner) && !boundTables.has(owner)
+    ? className(owner, model)
     : undefined;
 }
 
@@ -66,27 +64,15 @@ function tableNameSource(model: object): string | undefined {
  * Binds a generated Model's base class to its table: the table isn't inferred, and a subclass
  * can't name another, since the attributes are that table's columns.
  */
-export function bindTable(base: object, table: string): void {
-  Object.defineProperty(base, "tableName", {
-    value: table,
-    writable: true,
-    enumerable: true,
-    configurable: true,
-  });
+export function bindTable(base: ModelClass, table: string): void {
+  base.tableName = table;
   boundTables.set(base, table);
 }
 
 /** The table a generated Model's base class is bound to, if `model` has one. */
 function boundTableOf(model: object): string | undefined {
-  for (
-    let current: object | null = model;
-    current !== null;
-    current = Object.getPrototypeOf(current)
-  ) {
-    const table = boundTables.get(current);
-    if (table !== undefined) return table;
-  }
-  return undefined;
+  const owner = ancestors(model).find((each) => boundTables.has(each));
+  return owner && boundTables.get(owner);
 }
 
 /** A Model must have a table name: its own, or one inferred from its class name. */
@@ -127,9 +113,6 @@ export function explainMissingTable(error: unknown, models: readonly ModelClass[
 
 /** The class name a Model's names are inferred from: its table's and its foreign keys'. */
 export function modelClassName(model: object): string {
-  let current: object | null = model;
-  while (current !== null && !bases.has(current)) {
-    current = Object.getPrototypeOf(current) as object | null;
-  }
-  return current === null ? (model as { name: string }).name : className(current, model);
+  const base = ancestors(model).find((each) => bases.has(each));
+  return base === undefined ? (model as { name: string }).name : className(base, model);
 }

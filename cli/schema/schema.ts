@@ -9,7 +9,7 @@ export interface Migration {
 }
 
 /** One table, ready to generate: its attributes in column order. */
-export interface TableSchema {
+export interface GeneratedTable {
   name: string;
   /** The `const` it's exported as in the generated file. */
   exportName: string;
@@ -20,7 +20,7 @@ export interface TableSchema {
 }
 
 export type SchemaResult =
-  | { ok: true; tables: TableSchema[]; notes: string[] }
+  | { ok: true; tables: GeneratedTable[]; notes: string[] }
   | { ok: false; errors: string[] };
 
 interface Options {
@@ -172,7 +172,7 @@ function attributesOf(columns: readonly Column[]): {
 function tableSchema(
   columns: Column[],
   lastChangedBy: string,
-): { table?: TableSchema; errors: string[]; notes: string[] } {
+): { table?: GeneratedTable; errors: string[]; notes: string[] } {
   const name = columns[0]!.table;
   const keys = columns.filter((column) => column.primaryKey).map((column) => column.name);
   const error = keyError(name, keys);
@@ -213,7 +213,7 @@ export function schemaOf(migrations: readonly Migration[], options: Options = {}
   const { db, changedBy, error } = applied(migrations);
   if (db === undefined) return { ok: false, errors: [error!] };
   const migrationsTable = options.migrationsTable ?? "d1_migrations";
-  const tables: TableSchema[] = [];
+  const tables: GeneratedTable[] = [];
   const errors: string[] = [];
   const notes: string[] = [];
   const own = ownTables(definitions(db), migrationsTable).sort(([a], [b]) => byName(a, b));

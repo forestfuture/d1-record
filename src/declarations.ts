@@ -1,3 +1,4 @@
+import { ancestors } from "./ancestors.ts";
 import { InvalidModel } from "./errors.ts";
 import type { Callback, ModelBase } from "./model.ts";
 import type { Validation } from "./validations.ts";
@@ -46,11 +47,7 @@ export function declared<K extends keyof Declarations>(
   model: object,
   kind: K,
 ): readonly Declarations[K][] {
-  for (
-    let current: object | null = model;
-    current !== null && current !== Function.prototype;
-    current = Object.getPrototypeOf(current) as object | null
-  ) {
+  for (const current of ancestors(model)) {
     const list = registry.get(current)?.get(kind);
     if (list !== undefined) return list as readonly Declarations[K][];
   }
