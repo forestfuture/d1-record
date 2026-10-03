@@ -12,6 +12,10 @@ _Avoid_: Record (as the base class), entity, schema
 The file `d1-record schema` writes from a project's migrations: each table's attributes, and a `Model` bound to those tables. It's committed, and never edited by hand.
 _Avoid_: Schema dump, types file
 
+**Generator**:
+The `d1-record g model` and `g migration` commands: they write a migration (and a Model) from a name and columns, checked against the existing migrations first.
+_Avoid_: Scaffold, codegen
+
 **Override**:
 A change a Model makes to an attribute of the **Generated schema** (its type, nullability or default), or `false` to ignore the column.
 _Avoid_: Patch, customization

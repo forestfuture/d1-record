@@ -4,6 +4,8 @@ import { basename, dirname, join, resolve } from "node:path";
 /** One D1 database a Worker binds, and where its migrations are. */
 export interface DatabaseConfig {
   binding: string;
+  /** Its `database_name`, which Wrangler's commands take. */
+  databaseName?: string;
   /** Relative to the config file. */
   migrationsDir: string;
   /** Cloudflare's `migrations_pattern`, a glob for nested layouts. */
@@ -92,6 +94,7 @@ function databaseOf(entry: Record<string, unknown>): DatabaseConfig {
   if (typeof entry.migrations_pattern === "string")
     database.migrationsPattern = entry.migrations_pattern;
   if (typeof entry.migrations_table === "string") database.migrationsTable = entry.migrations_table;
+  if (typeof entry.database_name === "string") database.databaseName = entry.database_name;
   return database;
 }
 

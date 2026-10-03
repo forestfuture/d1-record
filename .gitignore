@@ -8,3 +8,4 @@ site/.vitepress/dist
 site/.vitepress/cache
 .wrangler
 /llms-full.txt
+/tests/.scratch
