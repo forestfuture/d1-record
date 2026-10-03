@@ -1,4 +1,4 @@
-import { attributeOf, type AttributeDefinition } from "./metadata.ts";
+import { attributeOf, listsColumns, type AttributeDefinition } from "./metadata.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { Comparison, comparisonParts, type Operator } from "./comparisons.ts";
 import { Either, Negated, type Condition, type QueryDescription } from "./query.ts";
@@ -69,20 +69,24 @@ function compileCondition(
 /** An attribute and the value to write to it. */
 export type Assignment = readonly [attribute: string, value: unknown];
 
-/** `INSERT … RETURNING *` for the given attribute values, or `DEFAULT VALUES` for none. */
+/** `INSERT … RETURNING` the row (`*`, or the declared columns) for the given attribute values, or `DEFAULT VALUES` for none. */
 export function compileInsert(
   model: ModelClass<ModelBase>,
   assignments: readonly Assignment[],
 ): CompiledSql {
   const table = quoteIdentifier(model.tableName);
   if (assignments.length === 0) {
-    return { sql: `INSERT INTO ${table} DEFAULT VALUES RETURNING *`, params: [], model };
+    return {
+      sql: `INSERT INTO ${table} DEFAULT VALUES RETURNING ${compileColumns(model, undefined)}`,
+      params: [],
+      model,
+    };
   }
   const definitions = assignments.map(([name]) => attributeOf(model, name));
   const columns = definitions.map(({ column }) => quoteIdentifier(column)).join(", ");
   const placeholders = assignments.map(() => "?").join(", ");
   return {
-    sql: `INSERT INTO ${table} (${columns}) VALUES (${placeholders}) RETURNING *`,
+    sql: `INSERT INTO ${table} (${columns}) VALUES (${placeholders}) RETURNING ${compileColumns(model, undefined)}`,
     params: assignments.map(([, value], index) => writeValue(definitions[index]!.type, value)),
     model,
   };
@@ -218,12 +222,18 @@ export function compileDelete(model: ModelClass<ModelBase>, storedKey: unknown):
   };
 }
 
-/** The quoted columns for `attributes`, or `*` for every column. */
+/**
+ * The quoted columns for `attributes`; for none given, `*`, or every declared attribute's
+ * column when the Model ignores some of its table's.
+ */
 export function compileColumns(
   model: ModelClass<ModelBase>,
   attributes: readonly string[] | undefined,
 ): string {
-  if (attributes === undefined) return "*";
+  if (attributes === undefined) {
+    if (!listsColumns(model)) return "*";
+    return compileColumns(model, [...model.attributeDefinitions.keys()]);
+  }
   return attributes.map((name) => quoteIdentifier(attributeOf(model, name).column)).join(", ");
 }
 

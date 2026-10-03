@@ -5,8 +5,16 @@ A Rails-inspired Active Record library for Cloudflare Workers backed by Cloudfla
 ## Language
 
 **Model**:
-A class created with `Model({...attributes})` that describes one D1 table: its attributes, validations, callbacks, associations and scopes.
+A class created with `Model({...attributes})`, or `Model("table")` from the **Generated schema**, that describes one D1 table: its attributes, validations, callbacks, associations and scopes.
 _Avoid_: Record (as the base class), entity, schema
+
+**Generated schema**:
+The file `d1-record schema` writes from a project's migrations: each table's attributes, and a `Model` bound to those tables. It's committed, and never edited by hand.
+_Avoid_: Schema dump, types file
+
+**Override**:
+A change a Model makes to an attribute of the **Generated schema** (its type, nullability or default), or `false` to ignore the column.
+_Avoid_: Patch, customization
 
 **Record**:
 One instance of a **Model**, representing a single row that is either persisted or not yet saved.

@@ -45,6 +45,29 @@ export type AttributeProperties<A extends AttributeSpecs> = {
   -readonly [K in keyof A]: AttributeValue<A[K]>;
 };
 
+/**
+ * Models whose table has columns they ignore (`Model("products", { notes: false })`): their
+ * queries name their columns rather than `*`, so an ignored column is never read, as in Rails.
+ */
+const ignoringColumns = new WeakSet<object>();
+
+/** Marks a Model's base class as ignoring some of its table's columns. */
+export function ignoresColumns(base: object): void {
+  ignoringColumns.add(base);
+}
+
+/** Whether a Model (or a class it extends) ignores some of its table's columns. */
+export function listsColumns(model: object): boolean {
+  for (
+    let current: object | null = model;
+    current !== null;
+    current = Object.getPrototypeOf(current)
+  ) {
+    if (ignoringColumns.has(current)) return true;
+  }
+  return false;
+}
+
 /** Resolves an attribute's spec into its type, column and default. */
 export function define(name: string, spec: AttributeSpec): AttributeDefinition {
   return typeof spec === "string"

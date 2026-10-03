@@ -68,6 +68,33 @@ class User extends Model({
 - Timestamps are on when `createdAt`/`updatedAt` are declared as `datetime` attributes. They're set in JavaScript (`new Date()`) just before the write is compiled: both on insert, and `updatedAt` on an update that changes something. A clean save leaves `updatedAt` alone. A timestamp assigned explicitly is kept.
 - Keys that aren't declared attributes throw `UnknownAttribute` in `build`, `create`, `update` and `where`, and are compile errors where the types can see them.
 
+## The generated schema
+
+`npx d1-record schema` (Node 22.13+) writes `src/db/schema.ts` from the project's D1 migrations, found through its Wrangler config (`migrations_dir`, `migrations_pattern`, `migrations_table`; one file per binding when there are several). It applies them to an in-memory SQLite database and converts each table's columns to attributes by convention: the declared type first (`INTEGER`, `TEXT`, `REAL`, `BOOLEAN`, `DATETIME`/`TIMESTAMP`/`DATE`, `JSON`, a `TEXT` with `CHECK (json_valid(…))` as `json`), then, only for a column declared exactly `TEXT` or `INTEGER`, its name (`…_at` `TEXT` → `datetime`, `is_…`/`has_…` `INTEGER` → `boolean`, printed as a note). `NOT NULL` → `null: false`; literal defaults are copied, and a `TEXT` primary key gets `default: () => crypto.randomUUID()`. `NUMERIC`/`DECIMAL`, `BLOB`, composite or missing primary keys, and names that would collide are errors that say what to do; a broken migration is reported by file name and the last good file is kept. `--check` fails when the file is stale (it compares a fingerprint of the schema, so formatting doesn't matter), and `--watch` regenerates as migrations change.
+
+```ts
+import { belongsTo } from "@forestfuture/d1-record";
+import { Model } from "./db/schema"; // generated
+
+class Product extends Model("products") {
+  user = belongsTo(User);
+}
+
+class Listing extends Model("products", {
+  available: "integer", // a type alone
+  tagline: { null: false, default: () => "New!" }, // type, null and default
+  notes: false, // ignored
+}) {}
+
+class Visit extends Model({ id: "integer", path: "string" }) {} // the library's Model, unchanged
+```
+
+- The generated file exports `Model = modelFor(tables)`. `Model("products")` is a base class bound to that table: its attributes and `primaryKey` come from the schema, and `tableName` is the argument, never inferred, so it doesn't depend on the class name. Subclasses share it. Setting `tableName` on such a Model throws `InvalidModel` when it's first used, since its attributes are that table's; `primaryKey` can still be set, and must name an attribute.
+- The table is typed from the schema: a name that isn't one is a compile error (and an `InvalidModel` if the types are bypassed).
+- Overrides are keyed by the generated attribute names, and typed from them: an unknown key is a compile error and an `InvalidModel`. An override is a type name (`"integer"`), or `{ type?, null?, default? }` merged into the generated spec; the column can't change, and an attribute can't be added. The record's TypeScript types follow the merged spec.
+- `false` ignores a column, as Rails' `ignored_columns`: it isn't an attribute, so it's never typed, assigned or written, and the Model's queries name its columns instead of `*` (`SELECT` and `RETURNING`), so it's never read. The primary key can't be ignored. Inserts leave an ignored column to its database default, so a `NOT NULL` column without one makes them fail.
+- `Model({...})` from the same import is the library's `Model`, for views and tables outside the migrations.
+
 ## Scopes
 
 - Declared with `static scopes = this.defineScopes({ name: (q, ...args) => q… })`. A scope receives the current Relation and its arguments and returns a changed Relation of the **same Model on the same Database**; anything else throws `TypeError` naming the scope, so a query never silently moves to another connection.
