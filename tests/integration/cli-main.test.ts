@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, onTestFinished, test, vi } from "vite-plus/test";
 import { main } from "../../cli/main.ts";
 
 describe("the d1-record command line", () => {
@@ -19,7 +19,7 @@ describe("the d1-record command line", () => {
     );
 
     expect(help).toBe(0);
-    expect(output[0]).toMatch(/^Usage: d1-record schema \[options\]/);
+    expect(output[0]).toMatch(/^Usage:\n  d1-record schema \[options\]/);
     expect(generated).toBe(0);
     expect(output[1]).toMatch(/^Wrote .*out\.ts \(1 table\)/);
   });
@@ -50,5 +50,35 @@ describe("the d1-record command line", () => {
     expect(output).toEqual([
       `d1-record schema needs Node 22.13 or later, for node:sqlite (this is Node ${process.versions.node})`,
     ]);
+  });
+
+  test("g model and g migration run the generators, with their own options", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "d1-record-main-"));
+    writeFileSync(join(cwd, "wrangler.jsonc"), '{ "d1_databases": [{ "binding": "DB" }] }');
+    const output: string[] = [];
+    const print = (line: string) => output.push(line);
+    const config = ["--config", join(cwd, "wrangler.jsonc")];
+    // Paths are relative to where the command runs, so run it in the project.
+    const inProject = vi.spyOn(process, "cwd").mockReturnValue(cwd);
+    onTestFinished(() => inProject.mockRestore());
+
+    expect(
+      main(
+        ["g", "model", "Product", "name:string!", "--id", "integer", "--no-timestamps", ...config],
+        print,
+      ),
+    ).toBe(0);
+    expect(main(["generate", "migration", "AddSkuToProducts", "sku", ...config], print)).toBe(0);
+    expect(main(["g", "model", "Tag", "--id", "uuid", ...config], print)).toBe(1);
+    expect(main(["g", "widget", "Tag", ...config], print)).toBe(1);
+
+    expect(output.filter((line) => line.startsWith("Wrote migrations"))).toEqual([
+      "Wrote migrations/0001_create_products.sql",
+      "Wrote migrations/0002_add_sku_to_products.sql",
+    ]);
+    expect(output.at(-1)).toMatch(
+      /^Name what to generate: g model <Name> or g migration <Name>\n\nUsage:/,
+    );
+    expect(output).toContainEqual(expect.stringMatching(/^--id is integer or text, not uuid/));
   });
 });

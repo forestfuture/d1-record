@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, watch, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { existsSync, mkdirSync, readFileSync, watch, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { migrationsOf, shown, targetsOf, type Print, type Target } from "./project.ts";
 import { fingerprintIn, fingerprintOf, renderSchema } from "./render.ts";
-import { byName, schemaOf, type Migration } from "./schema.ts";
-import { readWranglerConfig, type DatabaseConfig } from "./wrangler.ts";
+import { schemaOf } from "./schema.ts";
 
 export interface SchemaOptions {
   /** The project's folder; the current one by default. */
@@ -15,55 +15,6 @@ export interface SchemaOptions {
   migrations?: string;
   /** The Wrangler config file, in place of finding it. */
   config?: string;
-}
-
-type Print = (line: string) => void;
-
-/** One database to generate: where its migrations are read from, and where its schema goes. */
-interface Target {
-  database: DatabaseConfig;
-  configDir: string;
-  migrationsDir: string;
-  out: string;
-}
-
-/** A path as printed: relative to the project, with forward slashes. */
-function shown(cwd: string, path: string): string {
-  return relative(cwd, path).split(sep).join("/") || ".";
-}
-
-/** The databases to generate, from the Wrangler config and the options; or why there are none. */
-function targetsOf(cwd: string, options: SchemaOptions): Target[] | string {
-  const config = readWranglerConfig(cwd, options.config);
-  if (!config.ok) return config.error;
-  const { databases, dir } = config;
-  if (options.migrations !== undefined && databases.length > 1) {
-    return `--migrations needs a single database; this config has ${databases.length}`;
-  }
-  return databases.map((database) => {
-    const migrationsDir = resolve(cwd, options.migrations ?? join(dir, database.migrationsDir));
-    const out =
-      databases.length === 1
-        ? resolve(cwd, options.out ?? "src/db/schema.ts")
-        : resolve(cwd, options.out ?? "src/db", `${database.binding}.ts`);
-    return { database, configDir: dir, migrationsDir, out };
-  });
-}
-
-/** A database's migrations, in the order Wrangler applies them: by file name. */
-function migrationsOf(target: Target): Migration[] {
-  const { migrationsPattern } = target.database;
-  const files =
-    migrationsPattern === undefined
-      ? readdirSync(target.migrationsDir).filter((name) => name.endsWith(".sql"))
-      : // Loaded when used (Node 22+), so an older Node gets the command's own message (cli/main.ts).
-        process
-          .getBuiltinModule("node:fs")
-          .globSync(migrationsPattern, { cwd: target.configDir })
-          .map((path) => relative(target.migrationsDir, join(target.configDir, path)));
-  return files
-    .sort(byName)
-    .map((name) => ({ name, sql: readFileSync(join(target.migrationsDir, name), "utf8") }));
 }
 
 /** Reports a schema that couldn't be generated; the last good file stays as it was. */
@@ -92,7 +43,7 @@ function written(rendered: string, target: Target): void {
 }
 
 /** Generates (or, with `check`, checks) one database's schema; 0 when it went well. */
-function generate(cwd: string, target: Target, check: boolean, print: Print): number {
+export function generateSchema(cwd: string, target: Target, check: boolean, print: Print): number {
   const out = shown(cwd, target.out);
   const source = `${shown(cwd, target.migrationsDir)}/`;
   if (!existsSync(target.migrationsDir)) {
@@ -126,7 +77,9 @@ export function runSchema(options: SchemaOptions, print: Print): number {
     print(targets);
     return 1;
   }
-  return Math.max(...targets.map((target) => generate(cwd, target, options.check === true, print)));
+  return Math.max(
+    ...targets.map((target) => generateSchema(cwd, target, options.check === true, print)),
+  );
 }
 
 /**
