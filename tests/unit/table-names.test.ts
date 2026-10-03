@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { connect, InvalidModel, Model } from "../../src/index.ts";
+import { singularize } from "../../src/inflections.ts";
+import { underscore } from "../../src/naming.ts";
 
 const db = connect({} as never);
 
@@ -8,67 +10,69 @@ function modelNamed(name: string) {
   return { [name]: class extends Model({ id: "integer" }) {} }[name]!;
 }
 
+// Rails' tableize cases (from Rails' inflector tests): a class name, and its table.
+const inflected: [string, string][] = [
+  ["User", "users"],
+  ["BlogPost", "blog_posts"],
+  ["APIKey", "api_keys"],
+  ["Search", "searches"],
+  ["Switch", "switches"],
+  ["Box", "boxes"],
+  ["Process", "processes"],
+  ["Address", "addresses"],
+  ["Wish", "wishes"],
+  ["Category", "categories"],
+  ["Query", "queries"],
+  ["Day", "days"],
+  ["Movie", "movies"],
+  ["Archive", "archives"],
+  ["Index", "indices"],
+  ["Vertex", "vertices"],
+  ["Matrix", "matrices"],
+  ["MatrixFu", "matrix_fus"],
+  ["Wife", "wives"],
+  ["Safe", "saves"],
+  ["Half", "halves"],
+  ["Dwarf", "dwarves"],
+  ["Basis", "bases"],
+  ["Analysis", "analyses"],
+  ["Datum", "data"],
+  ["Medium", "media"],
+  ["Quiz", "quizzes"],
+  ["Bus", "buses"],
+  ["Status", "statuses"],
+  ["Alias", "aliases"],
+  ["Octopus", "octopi"],
+  ["Axis", "axes"],
+  ["Ox", "oxen"],
+  ["Mouse", "mice"],
+  ["House", "houses"],
+  ["Buffalo", "buffaloes"],
+  ["Tomato", "tomatoes"],
+  ["Photo", "photos"],
+  ["Person", "people"],
+  ["Salesperson", "salespeople"],
+  ["Man", "men"],
+  ["Woman", "women"],
+  ["Child", "children"],
+  ["NodeChild", "node_children"],
+  ["Move", "moves"],
+  ["Zombie", "zombies"],
+  ["Sheep", "sheep"],
+  ["Fish", "fish"],
+  ["Series", "series"],
+  ["Species", "species"],
+  ["Equipment", "equipment"],
+  ["Information", "information"],
+  ["Police", "police"],
+  ["Rice", "rice"],
+  ["Price", "prices"],
+  ["News", "news"],
+];
+
 describe("inferred table names", () => {
-  // Rails' tableize: underscore, then pluralize by Active Support's English inflections
-  // (cases from Rails' inflector tests).
-  test.each([
-    ["User", "users"],
-    ["BlogPost", "blog_posts"],
-    ["APIKey", "api_keys"],
-    ["Search", "searches"],
-    ["Switch", "switches"],
-    ["Box", "boxes"],
-    ["Process", "processes"],
-    ["Address", "addresses"],
-    ["Wish", "wishes"],
-    ["Category", "categories"],
-    ["Query", "queries"],
-    ["Day", "days"],
-    ["Movie", "movies"],
-    ["Archive", "archives"],
-    ["Index", "indices"],
-    ["Vertex", "vertices"],
-    ["Matrix", "matrices"],
-    ["MatrixFu", "matrix_fus"],
-    ["Wife", "wives"],
-    ["Safe", "saves"],
-    ["Half", "halves"],
-    ["Dwarf", "dwarves"],
-    ["Basis", "bases"],
-    ["Analysis", "analyses"],
-    ["Datum", "data"],
-    ["Medium", "media"],
-    ["Quiz", "quizzes"],
-    ["Bus", "buses"],
-    ["Status", "statuses"],
-    ["Alias", "aliases"],
-    ["Octopus", "octopi"],
-    ["Axis", "axes"],
-    ["Ox", "oxen"],
-    ["Mouse", "mice"],
-    ["House", "houses"],
-    ["Buffalo", "buffaloes"],
-    ["Tomato", "tomatoes"],
-    ["Photo", "photos"],
-    ["Person", "people"],
-    ["Salesperson", "salespeople"],
-    ["Man", "men"],
-    ["Woman", "women"],
-    ["Child", "children"],
-    ["NodeChild", "node_children"],
-    ["Move", "moves"],
-    ["Zombie", "zombies"],
-    ["Sheep", "sheep"],
-    ["Fish", "fish"],
-    ["Series", "series"],
-    ["Species", "species"],
-    ["Equipment", "equipment"],
-    ["Information", "information"],
-    ["Police", "police"],
-    ["Rice", "rice"],
-    ["Price", "prices"],
-    ["News", "news"],
-  ])("%s → %s", (className, table) => {
+  // Rails' tableize: underscore, then pluralize by Active Support's English inflections.
+  test.each(inflected)("%s → %s", (className, table) => {
     expect(modelNamed(className).tableName).toBe(table);
   });
 
@@ -136,5 +140,12 @@ describe("inferred table names", () => {
         /has no class name to infer its table from; set static tableName/,
       );
     }
+  });
+});
+
+describe("singularize", () => {
+  // The reverse of the same cases, as Active Support's singular rules turn them back.
+  test.each(inflected)("%s ← %s", (className, table) => {
+    expect(singularize(table)).toBe(underscore(className));
   });
 });

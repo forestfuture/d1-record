@@ -1,4 +1,4 @@
-import { underscore } from "../../src/naming.ts";
+import { moduleName } from "./names.ts";
 
 /** A Model to write: its class, its table, and the `belongsTo`s its references suggest. */
 export interface ModelToWrite {
@@ -13,7 +13,7 @@ const library = "@forestfuture/d1-record";
 
 /** A Model's file name: its class name in kebab-case (`LineItem` → `line-item.ts`). */
 export function modelFileName(className: string): string {
-  return `${underscore(className).replaceAll("_", "-")}.ts`;
+  return `${moduleName(className)}.ts`;
 }
 
 /** The class itself: `export class LineItem extends Model("line_items") { … }`. */
@@ -39,7 +39,7 @@ export function modelSource(
   imports.push(`import { Model } from "${model.schemaImport}";`);
   if (separateFiles) {
     for (const { className } of model.associations) {
-      imports.push(`import { ${className} } from "./${modelFileName(className).slice(0, -3)}";`);
+      imports.push(`import { ${className} } from "./${moduleName(className)}";`);
     }
   }
   return `${imports.join("\n")}\n\n${classSource(model)}`;
@@ -59,9 +59,35 @@ function importingBelongsTo(source: string): string {
   return source.replace(existing, `import { ${sorted.join(", ")} } from "${library}";`);
 }
 
-/** A models file with one more Model at its end (`--models src/models.ts`). */
-export function appendModel(existing: string, model: ModelToWrite): string {
-  if (existing.trim() === "") return modelSource(model, { separateFiles: false });
-  const source = model.associations.length > 0 ? importingBelongsTo(existing) : existing;
-  return `${source.trimEnd()}\n\n${classSource(model)}`;
+/**
+ * `source` importing `Model` from the schema, adding the import if it has none; or why not, when
+ * it imports another database's `Model`.
+ */
+function importingModel(
+  source: string,
+  schemaImport: string,
+): { ok: true; source: string } | { ok: false; error: string } {
+  const existing = /^import \{[^}]*\bModel\b[^}]*\} from "([^"]+)";$/m.exec(source);
+  if (existing === null)
+    return { ok: true, source: `import { Model } from "${schemaImport}";\n${source}` };
+  return existing[1] === schemaImport
+    ? { ok: true, source }
+    : {
+        ok: false,
+        error: `it imports Model from ${existing[1]}, not ${schemaImport}; keep each database's Models in their own file`,
+      };
+}
+
+/** A models file with one more Model at its end (`--models src/models.ts`), or why it can't be. */
+export function appendModel(
+  existing: string,
+  model: ModelToWrite,
+): { ok: true; source: string } | { ok: false; error: string } {
+  if (existing.trim() === "")
+    return { ok: true, source: modelSource(model, { separateFiles: false }) };
+  const imported = importingModel(existing, model.schemaImport);
+  if (!imported.ok) return imported;
+  const source =
+    model.associations.length > 0 ? importingBelongsTo(imported.source) : imported.source;
+  return { ok: true, source: `${source.trimEnd()}\n\n${classSource(model)}` };
 }

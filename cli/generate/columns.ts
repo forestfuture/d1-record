@@ -27,27 +27,40 @@ const types: readonly ColumnType[] = [
   "references",
 ];
 
-// name[:type][!][=default][:unique|:index]…, where a missing type is string (`slug:index`).
+// name[:type][!][=default][:unique|:index]…, where a missing type is string (`slug:index`),
+// and a default runs to the index modifiers, so it may hold a `:` (`starts:string=09:00`).
 const syntax =
-  /^([A-Za-z_]\w*)(?::(?!(?:unique|index)\b)(\w+))?(!)?(?:=([^:]*))?((?::(?:unique|index))*)$/;
+  /^([A-Za-z_]\w*)(?::(?!(?:unique|index)\b)(\w+))?(!)?(?:=(.*?))?((?::(?:unique|index))*)$/;
+
+type Literal = string | number | boolean;
 
 /** A `=value` default as its type's literal, or why it can't be one. */
-function defaultOf(type: ColumnType, value: string): string | number | boolean | { error: string } {
-  if (type === "string") return value;
-  if (type === "boolean") {
-    return value === "true" || value === "false"
-      ? value === "true"
-      : { error: `${value} isn't true or false` };
+function defaultOf(
+  type: ColumnType,
+  value: string,
+): { ok: true; value: Literal } | { ok: false; error: string } {
+  const number = Number(value);
+  switch (type) {
+    case "string":
+      return { ok: true, value };
+    case "boolean":
+      return value === "true" || value === "false"
+        ? { ok: true, value: value === "true" }
+        : { ok: false, error: `${value} isn't true or false` };
+    case "integer":
+      return /^-?\d+$/.test(value) && Number.isSafeInteger(number)
+        ? { ok: true, value: number }
+        : { ok: false, error: `${value} isn't an integer` };
+    case "real":
+      return /^-?\d+(\.\d+)?$/.test(value)
+        ? { ok: true, value: number }
+        : { ok: false, error: `${value} isn't a number` };
+    default:
+      return {
+        ok: false,
+        error: "only string, integer, real and boolean columns can have a default here",
+      };
   }
-  if (type === "integer") {
-    return /^-?\d+$/.test(value) && Number.isSafeInteger(Number(value))
-      ? Number(value)
-      : { error: `${value} isn't an integer` };
-  }
-  if (type === "real") {
-    return /^-?\d+(\.\d+)?$/.test(value) ? Number(value) : { error: `${value} isn't a number` };
-  }
-  return { error: "only string, integer, real and boolean columns can have a default here" };
 }
 
 /** The index `:unique` or `:index` asks for. */
@@ -83,8 +96,7 @@ function parseColumn(arg: string): ColumnArg | string {
   const column: ColumnArg = { name, type, notNull: bang !== undefined, index };
   if (value === undefined) return column;
   const literal = defaultOf(type, value);
-  if (typeof literal === "object") return `${arg}: ${literal.error}`;
-  return { ...column, default: literal };
+  return literal.ok ? { ...column, default: literal.value } : `${arg}: ${literal.error}`;
 }
 
 /** The columns given to a generator, or every one that can't be read. */

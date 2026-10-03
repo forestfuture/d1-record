@@ -90,7 +90,10 @@ function usage(print: (line: string) => void, problem: string): number {
   return 1;
 }
 
-const commands: Record<string, typeof schema> = { schema, g: generate, generate };
+/** A command: it runs with the arguments after its name, and returns the exit code. */
+type Command = (argv: readonly string[], print: (line: string) => void) => number | "watching";
+
+const commands: Record<string, Command> = { schema, g: generate, generate };
 
 /** Runs the command line; resolves to the exit code (or never, while watching). */
 export function main(argv: readonly string[], print = console.log): number | "watching" {

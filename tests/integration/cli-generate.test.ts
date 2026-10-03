@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -15,11 +16,16 @@ import { connect } from "../../src/index.ts";
 // Inside tests/ (gitignored), so a generated project's imports of the library resolve as they
 // do in the repo, through tsconfig.json's paths.
 const scratch = new URL("../.scratch/", import.meta.url).pathname;
+const made: string[] = [];
+afterAll(() => {
+  for (const dir of made) rmSync(dir, { recursive: true, force: true });
+});
 
 /** A throwaway project with a Wrangler config: its files, by path. */
 function project(files: Record<string, string> = {}): string {
   mkdirSync(scratch, { recursive: true });
   const dir = mkdtempSync(join(scratch, "generate-"));
+  made.push(dir);
   const all = {
     "wrangler.jsonc": '{ "d1_databases": [{ "binding": "DB", "database_name": "shop-db" }] }',
     ...files,
@@ -134,6 +140,38 @@ export class Post extends Model("posts") {
       ),
     });
     expect(readdirSync(join(cwd, "migrations"))).toEqual(["0001_create_products.sql"]);
+  });
+});
+
+describe("names", () => {
+  test("a plural Model name is made singular, with a note, as Rails does", () => {
+    const cwd = project();
+
+    const { code, output } = generate(cwd, ["model", "line_items"]);
+
+    expect(code).toBe(0);
+    expect(output).toContain("Wrote src/models/line-item.ts");
+    expect(output).toContain(
+      "Note: line_items looks plural, so the Model is LineItem, as Rails names it",
+    );
+    expect(read(cwd, "src/models/line-item.ts")).toContain(
+      'export class LineItem extends Model("line_items") {}',
+    );
+  });
+
+  test("a name that isn't letters, digits and _ is refused, and nothing is written", () => {
+    const cwd = project();
+
+    expect(generate(cwd, ["migration", "../../evil"])).toEqual({
+      code: 1,
+      output:
+        "../../evil isn't a migration name; use letters, digits and _, like AddSkuToProducts\nWrote nothing",
+    });
+    expect(generate(cwd, ["model", "foo-bar"])).toEqual({
+      code: 1,
+      output: "foo-bar isn't a Model name; use letters and digits, like LineItem\nWrote nothing",
+    });
+    expect(readdirSync(cwd)).toEqual(["wrangler.jsonc"]);
   });
 });
 

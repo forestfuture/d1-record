@@ -1,3 +1,4 @@
+import { pluralize } from "../../src/inflections.ts";
 import { underscore } from "../../src/naming.ts";
 import type { ColumnArg } from "./columns.ts";
 
@@ -12,6 +13,9 @@ export interface MigrationOptions {
 type MigrationPlan =
   | { kind: "create" | "add" | "remove"; table: string }
   | { kind: "empty"; table?: undefined };
+
+/** A table's key type, which a column referencing it takes. */
+export type KeyType = "TEXT" | "INTEGER";
 
 export type MigrationResult = { ok: true; sql: string } | { ok: false; error: string };
 
@@ -54,7 +58,7 @@ function literal(value: string | number | boolean): string {
 /** A column's definition, as `CREATE TABLE` and `ADD COLUMN` write it. */
 function definition(
   column: ColumnArg,
-  keys: ReadonlyMap<string, string>,
+  keys: ReadonlyMap<string, KeyType>,
   notNull: boolean,
 ): string {
   const name = identifier(column.name);
@@ -90,7 +94,7 @@ function indexes(table: string, columns: readonly ColumnArg[]): string {
 function createTable(
   table: string,
   columns: readonly ColumnArg[],
-  keys: ReadonlyMap<string, string>,
+  keys: ReadonlyMap<string, KeyType>,
   options: MigrationOptions,
 ): string {
   const lines = [options.integerId ? "id INTEGER PRIMARY KEY" : "id TEXT PRIMARY KEY NOT NULL"];
@@ -104,8 +108,8 @@ function createTable(
 function addColumns(
   table: string,
   columns: readonly ColumnArg[],
-  keys: ReadonlyMap<string, string>,
-): MigrationResult | string {
+  keys: ReadonlyMap<string, KeyType>,
+): MigrationResult {
   const refused = columns.find(
     (column) => column.type !== "references" && column.notNull && column.default === undefined,
   );
@@ -121,29 +125,42 @@ function addColumns(
       return `ALTER TABLE ${identifier(table)} ADD COLUMN ${definition(column, keys, notNull)};\n`;
     })
     .join("");
-  return added + indexes(table, columns);
+  return { ok: true, sql: added + indexes(table, columns) };
 }
 
-/** `DROP COLUMN` for each column, after dropping the index the generators would have made on it. */
-function removeColumns(table: string, columns: readonly ColumnArg[]): string {
-  return columns
+/**
+ * `DROP COLUMN` for each column, after dropping the index the generators would have made on it.
+ * SQLite can't drop a column with a foreign key, so a reference is refused, saying what to do.
+ */
+function removeColumns(table: string, columns: readonly ColumnArg[]): MigrationResult {
+  const reference = columns.find((column) => column.type === "references");
+  if (reference !== undefined) {
+    return {
+      ok: false,
+      error:
+        `${table}.${reference.name}: SQLite can't drop a column with a foreign key; write a ` +
+        "migration that rebuilds the table without it (https://www.sqlite.org/lang_altertable.html#otheralter)",
+    };
+  }
+  const sql = columns
     .map(
       (column) =>
         `DROP INDEX IF EXISTS ${indexName(table, column.name)};\n` +
         `ALTER TABLE ${identifier(table)} DROP COLUMN ${identifier(column.name)};\n`,
     )
     .join("");
+  return { ok: true, sql };
 }
 
-/** What a migration's name says to do, as Rails' generator reads it. */
+/** What a migration's name says to do, as Rails' generator reads it, with its table plural. */
 function planOf(name: string): MigrationPlan {
   const words = underscore(name);
   const create = /^create_(\w+)$/.exec(words);
-  if (create) return { kind: "create", table: create[1]! };
+  if (create) return { kind: "create", table: pluralize(create[1]!) };
   const add = /^add_\w+?_to_(\w+)$/.exec(words);
-  if (add) return { kind: "add", table: add[1]! };
+  if (add) return { kind: "add", table: pluralize(add[1]!) };
   const remove = /^remove_\w+?_from_(\w+)$/.exec(words);
-  return remove ? { kind: "remove", table: remove[1]! } : { kind: "empty" };
+  return remove ? { kind: "remove", table: pluralize(remove[1]!) } : { kind: "empty" };
 }
 
 /**
@@ -153,7 +170,7 @@ function planOf(name: string): MigrationPlan {
 export function migrationFor(
   name: string,
   columns: readonly ColumnArg[],
-  keys: ReadonlyMap<string, string>,
+  keys: ReadonlyMap<string, KeyType>,
   options: MigrationOptions = {},
 ): MigrationResult {
   const plan = planOf(name);
@@ -170,9 +187,8 @@ export function migrationFor(
   }
   if (plan.kind === "create")
     return { ok: true, sql: createTable(plan.table, columns, keys, options) };
-  if (plan.kind === "remove") return { ok: true, sql: removeColumns(plan.table, columns) };
-  const added = addColumns(plan.table, columns, keys);
-  return typeof added === "string" ? { ok: true, sql: added } : added;
+  if (plan.kind === "remove") return removeColumns(plan.table, columns);
+  return addColumns(plan.table, columns, keys);
 }
 
 /** The next migration's file name, numbered as Wrangler numbers them: the highest + 1, in 4 digits. */
