@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "vite-plus/test";
+import { describe, expect, test, vi } from "vite-plus/test";
 import { main } from "../../cli/main.ts";
 
 describe("the d1-record command line", () => {
@@ -29,5 +29,26 @@ describe("the d1-record command line", () => {
 
     expect(main(["migrate"], (line) => output.push(line))).toBe(1);
     expect(output[0]).toMatch(/^Usage:/);
+  });
+
+  test("an unknown option says so, with the usage", () => {
+    const output: string[] = [];
+
+    expect(main(["schema", "--chek"], (line) => output.push(line))).toBe(1);
+    expect(output[0]).toMatch(/^Unknown option '--chek'.*\n\nUsage:/s);
+  });
+
+  test("a Node without node:sqlite is told which Node it needs", () => {
+    const output: string[] = [];
+    const spy = vi.spyOn(process, "getBuiltinModule").mockReturnValue(undefined);
+
+    try {
+      expect(main(["schema"], (line) => output.push(line))).toBe(1);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(output).toEqual([
+      `d1-record schema needs Node 22.13 or later, for node:sqlite (this is Node ${process.versions.node})`,
+    ]);
   });
 });

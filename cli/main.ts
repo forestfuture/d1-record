@@ -14,20 +14,32 @@ Options:
   --config <file>     Use this Wrangler config
   -h, --help          Show this help`;
 
+const options = {
+  check: { type: "boolean" },
+  watch: { type: "boolean" },
+  out: { type: "string" },
+  migrations: { type: "string" },
+  config: { type: "string" },
+  help: { type: "boolean", short: "h" },
+} as const;
+
+/** The parsed arguments, or why they can't be (an unknown flag, a missing value). */
+function argsOf(argv: readonly string[]) {
+  try {
+    return parseArgs({ args: [...argv], allowPositionals: true, options });
+  } catch (error) {
+    return (error as Error).message;
+  }
+}
+
 /** Runs the command line; resolves to the exit code (or never, while watching). */
 export function main(argv: readonly string[], print = console.log): number | "watching" {
-  const { values, positionals } = parseArgs({
-    args: [...argv],
-    allowPositionals: true,
-    options: {
-      check: { type: "boolean" },
-      watch: { type: "boolean" },
-      out: { type: "string" },
-      migrations: { type: "string" },
-      config: { type: "string" },
-      help: { type: "boolean", short: "h" },
-    },
-  });
+  const args = argsOf(argv);
+  if (typeof args === "string") {
+    print(`${args}\n\n${help}`);
+    return 1;
+  }
+  const { values, positionals } = args;
   if (values.help || positionals[0] !== "schema") {
     print(help);
     return values.help ? 0 : 1;
@@ -38,10 +50,10 @@ export function main(argv: readonly string[], print = console.log): number | "wa
     );
     return 1;
   }
-  const { watch, ...options } = values;
+  const { watch, help: _, ...schemaOptions } = values;
   if (watch) {
-    watchSchema(options, print);
+    watchSchema(schemaOptions, print);
     return "watching";
   }
-  return runSchema(options, print);
+  return runSchema(schemaOptions, print);
 }
