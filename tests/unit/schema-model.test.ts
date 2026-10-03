@@ -122,4 +122,35 @@ describe("modelFor: the generated Model", () => {
 
     expect(() => db.model(Product)).not.toThrow();
   });
+
+  test("an override left undefined changes nothing, so a generated default stays", () => {
+    class Product extends Model("products", { id: { default: undefined }, sku: undefined }) {}
+
+    expect(db.model(Product).build().id).toBe("key");
+  });
+
+  test("an override past the types is checked too: the column, or anything but a spec, is an InvalidModel", () => {
+    const message = (attribute: string) =>
+      new InvalidModel(
+        `Model("products"): ${attribute}'s override must be a type name, { type, null, default }, or false`,
+      );
+
+    expect(() => Model("products", { sku: { column: "code" } } as never)).toThrow(message("sku"));
+    expect(() => Model("products", { sku: "money" } as never)).toThrow(message("sku"));
+    expect(() => Model("products", { sku: true } as never)).toThrow(message("sku"));
+    expect(() => Model("products", { sku: { default: "SKU" } } as never)).toThrow(message("sku"));
+    expect(() => Model("products", { sku: { null: "no" } } as never)).toThrow(message("sku"));
+  });
+
+  test("a primaryKey that isn't an attribute, or is an ignored column, is an InvalidModel", () => {
+    class Unknown extends Model("products") {
+      static override primaryKey = "code";
+    }
+    class Ignored extends Model("products", { sku: false }) {
+      static override primaryKey = "sku";
+    }
+
+    expect(() => db.model(Unknown)).toThrow(InvalidModel);
+    expect(() => db.model(Ignored)).toThrow(/primaryKey "sku" isn't a declared attribute/);
+  });
 });

@@ -1,4 +1,4 @@
-import { attributeOf, listsColumns, type AttributeDefinition } from "./metadata.ts";
+import { attributeOf, ignoresColumns, type AttributeDefinition } from "./metadata.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { Comparison, comparisonParts, type Operator } from "./comparisons.ts";
 import { Either, Negated, type Condition, type QueryDescription } from "./query.ts";
@@ -77,7 +77,7 @@ export function compileInsert(
   const table = quoteIdentifier(model.tableName);
   if (assignments.length === 0) {
     return {
-      sql: `INSERT INTO ${table} DEFAULT VALUES RETURNING ${compileColumns(model, undefined)}`,
+      sql: `INSERT INTO ${table} DEFAULT VALUES RETURNING ${allColumns(model)}`,
       params: [],
       model,
     };
@@ -86,7 +86,7 @@ export function compileInsert(
   const columns = definitions.map(({ column }) => quoteIdentifier(column)).join(", ");
   const placeholders = assignments.map(() => "?").join(", ");
   return {
-    sql: `INSERT INTO ${table} (${columns}) VALUES (${placeholders}) RETURNING ${compileColumns(model, undefined)}`,
+    sql: `INSERT INTO ${table} (${columns}) VALUES (${placeholders}) RETURNING ${allColumns(model)}`,
     params: assignments.map(([, value], index) => writeValue(definitions[index]!.type, value)),
     model,
   };
@@ -222,18 +222,19 @@ export function compileDelete(model: ModelClass<ModelBase>, storedKey: unknown):
   };
 }
 
-/**
- * The quoted columns for `attributes`; for none given, `*`, or every declared attribute's
- * column when the Model ignores some of its table's.
- */
+/** A whole row: `*`, or the declared columns when the Model ignores some of its table's. */
+function allColumns(model: ModelClass<ModelBase>): string {
+  return ignoresColumns(model)
+    ? compileColumns(model, [...model.attributeDefinitions.keys()])
+    : "*";
+}
+
+/** The quoted columns for `attributes`, or the whole row. */
 export function compileColumns(
   model: ModelClass<ModelBase>,
   attributes: readonly string[] | undefined,
 ): string {
-  if (attributes === undefined) {
-    if (!listsColumns(model)) return "*";
-    return compileColumns(model, [...model.attributeDefinitions.keys()]);
-  }
+  if (attributes === undefined) return allColumns(model);
   return attributes.map((name) => quoteIdentifier(attributeOf(model, name).column)).join(", ");
 }
 

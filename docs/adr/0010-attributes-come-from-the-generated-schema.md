@@ -1,0 +1,13 @@
+# A Model's attributes come from the generated schema
+
+Migrations are the source of truth for columns, as in Rails. `d1-record schema` reads them and writes `src/db/schema.ts`, which exports a `Model` bound to its tables, so a Model names its table and declares only behaviour: `class Product extends Model("products") {}`. A Model can override an attribute's type, nullability or default, or ignore a column, but it can't add attributes or change columns. The generated file is committed, like Rails' `schema.rb`, so each schema change shows up as a readable diff next to its migration.
+
+ADR-0007 made `Model({...})` the single declaration of a Model's attributes, which stopped attributes drifting from their TypeScript types. But the migration still said everything a second time (`price_cents INTEGER NOT NULL`, then `priceCents: { type: "integer", null: false }`), and the two could drift. Rails reads columns from the database when the app runs, which d1-record can't: TypeScript needs the types before anything runs, and a Worker shouldn't query its schema on every request. Generating them is the TypeScript way to get the same result: the types come from the migrations, at build time.
+
+## Consequences
+
+- **Two ways to declare a Model, from one import:** `Model("products")` for tables made by the migrations, and `Model({...})` (ADR-0007, unchanged) for views and tables made elsewhere.
+- **The table is the argument,** not inferred from the class name, so a generated Model doesn't depend on its class keeping its name when bundled. Setting another `tableName` on one is an `InvalidModel`.
+- **The schema must be regenerated** after each migration (`d1-record schema`, or `--watch`), and CI can check it with `--check`. A stale file is a compile-time mismatch, not a runtime one.
+- **The command runs on Node,** with `node:sqlite` applying the migrations in memory, so the library itself stays Workers-only with no dependencies. Migrations that only D1 accepts would need D1 itself (#72).
+- **Conventions decide types** (declared types, then a few names, as in #66), so a column the conventions read wrongly is fixed with an override in the Model, or by declaring the column's type in the migration.

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Default, Spec } from "./conventions.ts";
 import { isIdentifier } from "./names.ts";
-import type { TableSchema } from "./schema.ts";
+import type { GeneratedTable } from "./schema.ts";
 
 /**
  * The generated file's format. Bump it when the output changes, so `--check` reports files an
@@ -47,7 +47,7 @@ function commentText(text: string): string {
   return text.replaceAll("*/", "*\\/");
 }
 
-function tableSource(table: TableSchema): string {
+function tableSource(table: GeneratedTable): string {
   const attributes = Object.entries(table.attributes)
     .map(([name, spec]) => `  ${keySource(name)}: ${specSource(spec)},`)
     .join("\n");
@@ -58,7 +58,7 @@ ${attributes}
 }
 
 /** A short hash of the schema itself, so `--check` ignores how the file is formatted. */
-export function fingerprintOf(tables: readonly TableSchema[]): string {
+export function fingerprintOf(tables: readonly GeneratedTable[]): string {
   const hash = createHash("sha256").update(JSON.stringify({ format, tables }));
   return hash.digest("hex").slice(0, 12);
 }
@@ -67,7 +67,7 @@ export function fingerprintOf(tables: readonly TableSchema[]): string {
  * The generated `schema.ts`: each table's attributes, every table by name, and the `Model`
  * bound to them (`class Product extends Model("products")`).
  */
-export function renderSchema(tables: readonly TableSchema[], source: string): string {
+export function renderSchema(tables: readonly GeneratedTable[], source: string): string {
   const entries = tables
     .map((table) => {
       const primaryKey = JSON.stringify(table.primaryKey);
