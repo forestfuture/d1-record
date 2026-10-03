@@ -1,0 +1,160 @@
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, test } from "vite-plus/test";
+import { runSchema, watchSchema } from "../../cli/schema/command.ts";
+
+/** A throwaway project: its files, by path. */
+function project(files: Record<string, string>): string {
+  const dir = mkdtempSync(join(tmpdir(), "d1-record-schema-"));
+  for (const [path, content] of Object.entries(files)) {
+    mkdirSync(join(dir, path, ".."), { recursive: true });
+    writeFileSync(join(dir, path), content);
+  }
+  return dir;
+}
+
+/** Runs the command, collecting what it prints. */
+function run(cwd: string, options: Parameters<typeof runSchema>[0] = {}) {
+  const output: string[] = [];
+  const code = runSchema({ cwd, ...options }, (line) => output.push(line));
+  return { code, output: output.join("\n") };
+}
+
+const wranglerJsonc = `{
+  // A comment, as wrangler.jsonc allows.
+  "name": "app",
+  "d1_databases": [{ "binding": "DB", "database_name": "app-db", "database_id": "x" }],
+}`;
+
+describe("d1-record schema", () => {
+  test("writes src/db/schema.ts from the Wrangler config's migrations", () => {
+    const cwd = project({
+      "wrangler.jsonc": wranglerJsonc,
+      "migrations/0001_create_users.sql":
+        "CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT NOT NULL);",
+      "migrations/0002_add_bio.sql": "ALTER TABLE users ADD COLUMN bio TEXT;",
+    });
+
+    const { code, output } = run(cwd);
+
+    const schema = readFileSync(join(cwd, "src/db/schema.ts"), "utf8");
+    expect(code).toBe(0);
+    expect(output).toBe("Wrote src/db/schema.ts (1 table) from migrations/");
+    expect(schema).toContain("/** users — last changed by 0002_add_bio.sql */");
+    expect(schema).toContain('  bio: "string",');
+  });
+
+  test("reads wrangler.toml, and a database's own migrations_dir and migrations_table", () => {
+    const cwd = project({
+      "wrangler.toml": `name = "app"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "app-db"
+database_id = "x"
+migrations_dir = "db/migrate"
+migrations_table = "seen"
+`,
+      "db/migrate/0001_create.sql":
+        "CREATE TABLE seen (id INTEGER PRIMARY KEY); CREATE TABLE posts (id INTEGER PRIMARY KEY);",
+    });
+
+    expect(run(cwd).code).toBe(0);
+    const schema = readFileSync(join(cwd, "src/db/schema.ts"), "utf8");
+    expect(schema).toContain("from db/migrate/");
+    expect(schema).toContain("export const posts");
+    expect(schema).not.toContain("export const seen");
+  });
+
+  test("writes one file per database when there are several", () => {
+    const cwd = project({
+      "wrangler.json": JSON.stringify({
+        d1_databases: [
+          { binding: "DB", database_name: "app" },
+          { binding: "ANALYTICS", database_name: "stats", migrations_dir: "analytics-migrations" },
+        ],
+      }),
+      "migrations/0001.sql": "CREATE TABLE users (id INTEGER PRIMARY KEY);",
+      "analytics-migrations/0001.sql": "CREATE TABLE events (id INTEGER PRIMARY KEY);",
+    });
+
+    expect(run(cwd).code).toBe(0);
+    expect(readFileSync(join(cwd, "src/db/DB.ts"), "utf8")).toContain("export const users");
+    expect(readFileSync(join(cwd, "src/db/ANALYTICS.ts"), "utf8")).toContain("export const events");
+    expect(existsSync(join(cwd, "src/db/schema.ts"))).toBe(false);
+  });
+
+  test("--out and --migrations choose other places", () => {
+    const cwd = project({
+      "wrangler.jsonc": wranglerJsonc,
+      "sql/0001.sql": "CREATE TABLE users (id INTEGER PRIMARY KEY);",
+    });
+
+    expect(run(cwd, { out: "app/schema.ts", migrations: "sql" }).code).toBe(0);
+    expect(readFileSync(join(cwd, "app/schema.ts"), "utf8")).toContain("export const users");
+  });
+
+  test("--check passes when current, ignores formatting, and fails when a migration changed it", () => {
+    const cwd = project({
+      "wrangler.jsonc": wranglerJsonc,
+      "migrations/0001.sql": "CREATE TABLE users (id INTEGER PRIMARY KEY);",
+    });
+    run(cwd);
+    const path = join(cwd, "src/db/schema.ts");
+    writeFileSync(path, readFileSync(path, "utf8").replaceAll("  ", "    ").replaceAll('"', "'"));
+
+    const current = run(cwd, { check: true });
+    writeFileSync(join(cwd, "migrations/0002.sql"), "ALTER TABLE users ADD COLUMN name TEXT;");
+    const stale = run(cwd, { check: true });
+
+    expect(current).toEqual({ code: 0, output: "src/db/schema.ts is up to date" });
+    expect(stale.code).toBe(1);
+    expect(stale.output).toBe("src/db/schema.ts is out of date: run `d1-record schema`");
+  });
+
+  test("a broken migration is reported, and the last good schema.ts is kept", () => {
+    const cwd = project({
+      "wrangler.jsonc": wranglerJsonc,
+      "migrations/0001.sql": "CREATE TABLE users (id INTEGER PRIMARY KEY);",
+    });
+    run(cwd);
+    const before = readFileSync(join(cwd, "src/db/schema.ts"), "utf8");
+    writeFileSync(join(cwd, "migrations/0002.sql"), "ALTER TABLE user ADD COLUMN x TEXT;");
+
+    const { code, output } = run(cwd);
+
+    expect(code).toBe(1);
+    expect(output).toMatch(
+      /^0002\.sql: .*no such table: user\nKept src\/db\/schema\.ts as it was$/,
+    );
+    expect(readFileSync(join(cwd, "src/db/schema.ts"), "utf8")).toBe(before);
+  });
+
+  test("no Wrangler config, or no D1 database in it, says so", () => {
+    expect(run(project({ "readme.md": "" }))).toEqual({
+      code: 1,
+      output: "No wrangler.jsonc, wrangler.json or wrangler.toml here (pass --config)",
+    });
+    expect(run(project({ "wrangler.jsonc": "{}" }))).toEqual({
+      code: 1,
+      output: "wrangler.jsonc has no d1_databases",
+    });
+  });
+
+  test("--watch regenerates when a migration changes", async () => {
+    const cwd = project({
+      "wrangler.jsonc": wranglerJsonc,
+      "migrations/0001.sql": "CREATE TABLE users (id INTEGER PRIMARY KEY);",
+    });
+    const stop = watchSchema({ cwd }, () => {});
+    // Let the file watcher settle first, as it has by the time anyone edits a migration.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    writeFileSync(join(cwd, "migrations/0002.sql"), "ALTER TABLE users ADD COLUMN name TEXT;");
+
+    await expect
+      .poll(() => readFileSync(join(cwd, "src/db/schema.ts"), "utf8"), { timeout: 5000 })
+      .toContain('  name: "string",');
+    stop();
+  });
+});
