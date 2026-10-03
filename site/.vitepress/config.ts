@@ -53,6 +53,7 @@ export default defineConfig({
         items: [
           { text: "Connecting", link: "/guide/connecting" },
           { text: "Models", link: "/guide/models" },
+          { text: "Migrations", link: "/guide/migrations" },
           { text: "Querying", link: "/guide/querying" },
           { text: "Saving and destroying", link: "/guide/persistence" },
           { text: "Validations", link: "/guide/validations" },
