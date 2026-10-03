@@ -1,9 +1,10 @@
-import { camelize, underscore } from "../../src/naming.ts";
+import { underscore } from "../../src/naming.ts";
+import { attributeName } from "./names.ts";
 
 type AttributeType = "string" | "integer" | "real" | "boolean" | "datetime" | "json";
 
-/** A default the generated spec carries: a literal, or a key generated in code. */
-export type Default = { literal: string | number | boolean } | { generated: "uuid" };
+/** A default the generated spec carries: a literal value, a date, or a key generated in code. */
+export type Default = { literal: unknown } | { date: string } | { generated: "uuid" };
 
 /** One attribute as the generated schema declares it, the shape `Model({...})` takes. */
 export interface Spec {
@@ -49,27 +50,33 @@ function baseType(declared: string): string {
     .trim();
 }
 
+/** Why a declared type can't be an attribute, if it can't. */
+function unsupported(declared: string, name: string, where: string): string | undefined {
+  if (/^(NUMERIC|DECIMAL)$/.test(declared)) {
+    return `${where}: ${declared} loses precision as a number; store money as integer cents (${name}_cents INTEGER)`;
+  }
+  return declared === "BLOB" ? `${where}: BLOB columns aren't supported yet (#20)` : undefined;
+}
+
 /** A column's attribute type: its declared type first, then its name for plain TEXT/INTEGER. */
 function typeOf(column: Column): { type?: AttributeType; error?: string; note?: string } {
   const declared = baseType(column.declaredType || (column.referencedType ?? ""));
   const where = `${column.table}.${column.name}`;
-  if (/^(NUMERIC|DECIMAL)$/.test(declared)) {
-    return {
-      error: `${where}: ${declared} loses precision as a number; store money as integer cents (${column.name}_cents INTEGER)`,
-    };
-  }
-  if (declared === "BLOB") return { error: `${where}: BLOB columns aren't supported yet (#20)` };
+  const error = unsupported(declared, column.name, where);
+  if (error !== undefined) return { error };
   const type = declaredTypes.find(([pattern]) => pattern.test(declared))?.[1] ?? "string";
-  return refinedByName(column, type, where);
+  if (type === "string" && column.jsonChecked) return { type: "json" };
+  return declared === "TEXT" || declared === "INTEGER"
+    ? refinedByName(column, type, where)
+    : { type };
 }
 
-/** A plain TEXT or INTEGER refined by the column's checks and name (Rails' conventions). */
+/** A column declared exactly TEXT or INTEGER, refined by its name (Rails' conventions). */
 function refinedByName(
   column: Column,
   type: AttributeType,
   where: string,
 ): { type: AttributeType; note?: string } {
-  if (type === "string" && column.jsonChecked) return { type: "json" };
   if (type === "string" && column.name.endsWith("_at")) return { type: "datetime" };
   const prefix = /^(is|has)_/.exec(column.name)?.[1];
   if (type === "integer" && prefix !== undefined && !column.primaryKey) {
@@ -78,35 +85,58 @@ function refinedByName(
   return { type };
 }
 
-/** A SQL literal default as a value of the attribute's type; undefined for anything else. */
-function literalDefault(text: string | null, type: AttributeType): Default | undefined {
-  if (text === null) return undefined;
-  const value = text.trim();
-  if (type === "boolean") {
-    if (/^(TRUE|1)$/i.test(value)) return { literal: true };
-    if (/^(FALSE|0)$/i.test(value)) return { literal: false };
+/** A quoted SQL string literal's text: `'it''s'` → `it's`; undefined if it isn't one. */
+function quoted(value: string): string | undefined {
+  return /^'(?:[^']|'')*'$/.test(value) ? value.slice(1, -1).replaceAll("''", "'") : undefined;
+}
+
+function booleanDefault(value: string): Default | undefined {
+  if (/^(TRUE|1)$/i.test(value)) return { literal: true };
+  return /^(FALSE|0)$/i.test(value) ? { literal: false } : undefined;
+}
+
+/** A number, when JavaScript holds it exactly; larger integers are left to D1. */
+function numberDefault(value: string, type: AttributeType): Default | undefined {
+  if (type === "integer" && /^(TRUE|FALSE)$/i.test(value))
+    return { literal: /^TRUE$/i.test(value) ? 1 : 0 };
+  if (!/^-?\d+(\.\d+)?$/.test(value)) return undefined;
+  const number = Number(value);
+  return type === "integer" && !Number.isSafeInteger(number) ? undefined : { literal: number };
+}
+
+/** A quoted default for a json column (its JSON) or a datetime column (its date). */
+function textDefault(text: string, type: AttributeType): Default | undefined {
+  if (type === "string") return { literal: text };
+  if (type === "datetime") return Number.isNaN(Date.parse(text)) ? undefined : { date: text };
+  try {
+    return { literal: JSON.parse(text) as unknown };
+  } catch {
     return undefined;
   }
-  if ((type === "integer" || type === "real") && /^-?\d+(\.\d+)?$/.test(value)) {
-    return { literal: Number(value) };
-  }
-  if (type === "string" && /^'(?:[^']|'')*'$/.test(value)) {
-    return { literal: value.slice(1, -1).replaceAll("''", "'") };
-  }
-  return undefined;
+}
+
+/** A SQL literal default as a value of the attribute's type; undefined for anything else. */
+function literalDefault(sql: string | null, type: AttributeType): Default | undefined {
+  if (sql === null) return undefined;
+  const value = sql.trim();
+  if (type === "boolean") return booleanDefault(value);
+  if (type === "integer" || type === "real") return numberDefault(value, type);
+  const text = quoted(value);
+  return text === undefined ? undefined : textDefault(text, type);
 }
 
 /** A column as an attribute, by the conventions (#66): name, type, nullability and default. */
 export function convert(column: Column): Converted {
   const { type, error, note } = typeOf(column);
   if (type === undefined) return { ok: false, error: error! };
-  const attribute = camelize(column.name);
+  const attribute = attributeName(column.name);
   const spec: Spec = { type };
   if (column.notNull || column.primaryKey) spec.null = false;
   if (underscore(attribute) !== column.name) spec.column = column.name;
-  const fallback =
+  // A key's own literal default wins; a TEXT key without one is generated in code.
+  const generated =
     column.primaryKey && type === "string" ? { generated: "uuid" as const } : undefined;
-  const defaultValue = column.primaryKey ? fallback : literalDefault(column.defaultValue, type);
+  const defaultValue = literalDefault(column.defaultValue, type) ?? generated;
   if (defaultValue !== undefined) spec.default = defaultValue;
   return note === undefined ? { ok: true, attribute, spec } : { ok: true, attribute, spec, note };
 }

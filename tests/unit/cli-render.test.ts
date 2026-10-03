@@ -67,4 +67,32 @@ export const tables = {
     expect(fingerprintOf(same)).toBe(fingerprintOf(first));
     expect(fingerprintOf(changed)).not.toBe(fingerprintOf(first));
   });
+
+  test("names that aren't plain identifiers are quoted or made valid, and comments stay closed", () => {
+    const source = renderSchema(
+      tablesOf(`CREATE TABLE "2fa" (id INTEGER PRIMARY KEY, "first name" TEXT, "a-b" TEXT);
+        CREATE TABLE "odd */ name" (id INTEGER PRIMARY KEY);`),
+      "migrations/",
+    );
+
+    expect(source).toContain("export const table2fa = {");
+    expect(source).toContain('  "first name": "string",');
+    expect(source).toContain('  "a-b": "string",');
+    expect(source).toContain("/** odd *\\/ name — last changed by 0001_create.sql */");
+    expect(source).toContain("export const oddName = {");
+  });
+
+  test("defaults are written as functions: literals, JSON values and dates", () => {
+    const source = renderSchema(
+      tablesOf(`CREATE TABLE t (id INTEGER PRIMARY KEY,
+        settings TEXT DEFAULT '{"a":1}' CHECK (json_valid(settings)),
+        starts_at DATETIME DEFAULT '2026-01-01T00:00:00.000Z')`),
+      "migrations/",
+    );
+
+    expect(source).toContain('  settings: { type: "json", default: () => ({ a: 1 }) },');
+    expect(source).toContain(
+      '  startsAt: { type: "datetime", default: () => new Date("2026-01-01T00:00:00.000Z") },',
+    );
+  });
 });

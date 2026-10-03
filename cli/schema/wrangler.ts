@@ -30,7 +30,9 @@ function parseJsonc(text: string): unknown {
       index = text.indexOf("\n", index) - 1;
       if (index < 0) break;
     } else if (text.startsWith("/*", index)) {
-      index = text.indexOf("*/", index) + 1;
+      const end = text.indexOf("*/", index + 2);
+      if (end < 0) throw new SyntaxError("Unterminated /* comment");
+      index = end + 1;
     } else out += char;
   }
   return JSON.parse(out.replace(/,(\s*[}\]])/g, "$1"));
@@ -43,20 +45,42 @@ function endOfString(text: string, start: number): number {
   return index + 1;
 }
 
+/** A TOML basic string's contents, its escapes decoded (`\\` → `\`, `\u00e9` → `é`). */
+function basicString(body: string): string {
+  return JSON.parse(
+    `"${body.replace(/\\U([0-9a-fA-F]{8})/g, (_, hex: string) => {
+      const point = String.fromCodePoint(Number.parseInt(hex, 16));
+      return JSON.stringify(point).slice(1, -1);
+    })}"`,
+  ) as string;
+}
+
 /** The `[[d1_databases]]` entries of a wrangler.toml: only the keys this command reads. */
 function parseToml(text: string): { d1_databases: Record<string, string>[] } {
   const databases: Record<string, string>[] = [];
   let current: Record<string, string> | undefined;
   for (const line of text.split("\n").map((each) => each.trim())) {
     if (line.startsWith("[")) {
-      current = line === "[[d1_databases]]" ? {} : undefined;
+      current = /^\[\[\s*d1_databases\s*\]\](\s*#.*)?$/.test(line) ? {} : undefined;
       if (current !== undefined) databases.push(current);
       continue;
     }
-    const pair = /^([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/.exec(line);
-    if (current !== undefined && pair !== null) current[pair[1]!] = pair[2] ?? pair[3]!;
+    const pair = /^([\w-]+)\s*=\s*(?:"((?:[^"\\]|\\.)*)"|'([^']*)')/.exec(line);
+    if (current !== undefined && pair !== null) {
+      current[pair[1]!] = pair[2] === undefined ? pair[3]! : basicString(pair[2]);
+    }
   }
   return { d1_databases: databases };
+}
+
+/** The parsed config file, or why it couldn't be read. */
+function parsed(file: string): { d1_databases?: Record<string, unknown>[] } | string {
+  const text = readFileSync(file, "utf8");
+  try {
+    return file.endsWith(".toml") ? parseToml(text) : (parseJsonc(text) as object);
+  } catch (error) {
+    return `${basename(file)} couldn't be read: ${(error as Error).message}`;
+  }
 }
 
 /** A config entry as a database: its binding, and its migrations' folder, pattern and table. */
@@ -86,11 +110,12 @@ export function readWranglerConfig(cwd: string, configPath?: string): ConfigResu
       error: "No wrangler.jsonc, wrangler.json or wrangler.toml here (pass --config)",
     };
   }
-  const text = readFileSync(file, "utf8");
-  const config = (file.endsWith(".toml") ? parseToml(text) : parseJsonc(text)) as {
-    d1_databases?: Record<string, unknown>[];
-  };
+  const config = parsed(file);
+  if (typeof config === "string") return { ok: false, error: config };
   const entries = config.d1_databases ?? [];
   if (entries.length === 0) return { ok: false, error: `${basename(file)} has no d1_databases` };
+  if (entries.some((entry) => typeof entry.binding !== "string")) {
+    return { ok: false, error: `${basename(file)} has a d1_databases entry with no binding` };
+  }
   return { ok: true, dir: dirname(file), databases: entries.map(databaseOf) };
 }

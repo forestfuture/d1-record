@@ -1,15 +1,7 @@
-import {
-  existsSync,
-  globSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  watch,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, watch, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fingerprintIn, fingerprintOf, renderSchema } from "./render.ts";
-import { schemaOf, type Migration } from "./schema.ts";
+import { byName, schemaOf, type Migration } from "./schema.ts";
 import { readWranglerConfig, type DatabaseConfig } from "./wrangler.ts";
 
 export interface SchemaOptions {
@@ -64,11 +56,13 @@ function migrationsOf(target: Target): Migration[] {
   const files =
     migrationsPattern === undefined
       ? readdirSync(target.migrationsDir).filter((name) => name.endsWith(".sql"))
-      : globSync(migrationsPattern, { cwd: target.configDir }).map((path) =>
-          relative(target.migrationsDir, join(target.configDir, path)),
-        );
+      : // Loaded when used (Node 22+), so an older Node gets the command's own message (cli/main.ts).
+        process
+          .getBuiltinModule("node:fs")
+          .globSync(migrationsPattern, { cwd: target.configDir })
+          .map((path) => relative(target.migrationsDir, join(target.configDir, path)));
   return files
-    .sort((a, b) => a.localeCompare(b))
+    .sort(byName)
     .map((name) => ({ name, sql: readFileSync(join(target.migrationsDir, name), "utf8") }));
 }
 

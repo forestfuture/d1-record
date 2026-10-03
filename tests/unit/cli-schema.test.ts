@@ -206,4 +206,109 @@ describe("schemaOf: from migrations to table schemas", () => {
       errors: [expect.stringMatching(/^0002_typo\.sql: .*no such table: thing/)],
     });
   });
+
+  test("virtual tables, and the shadow tables SQLite keeps for them, are left out", () => {
+    const result = tables(
+      "CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT)",
+      "CREATE VIRTUAL TABLE notes_search USING fts5(body)",
+    );
+
+    expect(result.tables.map((table) => table.name)).toEqual(["notes"]);
+  });
+
+  test("a foreign key that names no column takes the parent's primary key's type", () => {
+    const result = tables(
+      "CREATE TABLE orgs (oid INTEGER PRIMARY KEY)",
+      "CREATE TABLE teams (id INTEGER PRIMARY KEY, org_id REFERENCES orgs)",
+    );
+
+    expect(result.tables.find((table) => table.name === "teams")!.attributes.orgId).toEqual({
+      type: "integer",
+    });
+  });
+
+  test("names refine only a column declared exactly TEXT or INTEGER", () => {
+    const result = tables(`CREATE TABLE things (
+      id INTEGER PRIMARY KEY, has_x BIGINT, seen_at VARCHAR(20), done_at, payload_at TEXT CHECK (json_valid(payload_at))
+    )`);
+
+    expect(result.tables[0]!.attributes).toMatchObject({
+      hasX: { type: "integer" },
+      seenAt: { type: "string" },
+      doneAt: { type: "string" },
+      payloadAt: { type: "json" },
+    });
+    expect(result.notes).toEqual([]);
+  });
+
+  test("a primary key's own literal default wins over a key generated in code", () => {
+    expect(attributes("CREATE TABLE things (code TEXT PRIMARY KEY DEFAULT 'main')").code).toEqual({
+      type: "string",
+      null: false,
+      default: { literal: "main" },
+    });
+  });
+
+  test("defaults are copied for json and datetime columns, and large integers are left to D1", () => {
+    expect(
+      attributes(`CREATE TABLE things (
+        id INTEGER PRIMARY KEY,
+        settings TEXT DEFAULT '{"a":[1]}' CHECK (json_valid(settings)),
+        tags JSON DEFAULT '[]',
+        starts_at DATETIME DEFAULT '2026-01-01T00:00:00.000Z',
+        big INTEGER DEFAULT 99999999999999999999,
+        flag INTEGER DEFAULT TRUE
+      )`),
+    ).toMatchObject({
+      settings: { default: { literal: { a: [1] } } },
+      tags: { default: { literal: [] } },
+      startsAt: { default: { date: "2026-01-01T00:00:00.000Z" } },
+      big: { type: "integer" },
+      flag: { default: { literal: 1 } },
+    });
+    expect(
+      attributes(
+        "CREATE TABLE things (id INTEGER PRIMARY KEY, big INTEGER DEFAULT 99999999999999999999)",
+      ).big,
+    ).not.toHaveProperty("default");
+  });
+
+  test("a leading underscore stays, and json_valid finds quoted names", () => {
+    expect(
+      attributes(`CREATE TABLE things (
+        id INTEGER PRIMARY KEY, _secret TEXT, "my col" TEXT CHECK (json_valid("my col"))
+      )`),
+    ).toMatchObject({ _secret: { type: "string" }, "my col": { type: "json" } });
+  });
+
+  test("tables are in plain character order, whatever the machine's locale", () => {
+    expect(
+      tables(
+        "CREATE TABLE a (id INTEGER PRIMARY KEY)",
+        "CREATE TABLE B (id INTEGER PRIMARY KEY)",
+        "CREATE TABLE _z (id INTEGER PRIMARY KEY)",
+      ).tables.map((table) => table.name),
+    ).toEqual(["B", "_z", "a"]);
+  });
+
+  test("a table with no primary key, and names that would collide, are errors that say what to do", () => {
+    const result = schemaOf([
+      {
+        name: "0001_m.sql",
+        sql: `CREATE TABLE logs (message TEXT);
+          CREATE TABLE things (id INTEGER PRIMARY KEY, user_id INTEGER, userId INTEGER);
+          CREATE TABLE line_items (id INTEGER PRIMARY KEY);
+          CREATE TABLE "line-items" (id INTEGER PRIMARY KEY);`,
+      },
+    ]);
+
+    expect(result).toEqual({
+      ok: false,
+      errors: [
+        "line-items and line_items would both be exported as lineItems; rename one of the tables",
+        "logs: no primary key; d1-record needs one (id INTEGER PRIMARY KEY, or id TEXT PRIMARY KEY)",
+        "things: columns user_id and userId would both be the attribute userId; rename one",
+      ],
+    });
+  });
 });

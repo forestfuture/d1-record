@@ -142,6 +142,46 @@ migrations_table = "seen"
     });
   });
 
+  test("a Wrangler config it can't use says why", () => {
+    expect(run(project({ "wrangler.jsonc": '{ /* never closed "d1_databases": [] }' }))).toEqual({
+      code: 1,
+      output: "wrangler.jsonc couldn't be read: Unterminated /* comment",
+    });
+    expect(
+      run(project({ "wrangler.jsonc": '{ "d1_databases": [{ "database_name": "x" }] }' })),
+    ).toEqual({
+      code: 1,
+      output: "wrangler.jsonc has a d1_databases entry with no binding",
+    });
+  });
+
+  test("reads wrangler.toml's spaced and commented headers, and its escaped strings", () => {
+    const cwd = project({
+      "wrangler.toml": `[[ d1_databases ]] # the app's database
+binding = "DB"
+migrations_dir = "db\\u002Fmigrate"
+`,
+      "db/migrate/0001.sql": "CREATE TABLE users (id INTEGER PRIMARY KEY);",
+    });
+
+    expect(run(cwd)).toMatchObject({ code: 0, output: expect.stringMatching(/^Wrote/) });
+  });
+
+  test("reads nested migrations through the config's migrations_pattern", () => {
+    const cwd = project({
+      "wrangler.jsonc": `{ "d1_databases": [{ "binding": "DB", "migrations_pattern": "migrations/*/migration.sql" }] }`,
+      "migrations/0001_init/migration.sql": "CREATE TABLE users (id INTEGER PRIMARY KEY);",
+      "migrations/0002_bio/migration.sql": "ALTER TABLE users ADD COLUMN bio TEXT;",
+      "migrations/0002_bio/notes.md": "Not a migration.",
+    });
+
+    const { code } = run(cwd);
+
+    const schema = readFileSync(join(cwd, "src/db/schema.ts"), "utf8");
+    expect(code).toBe(0);
+    expect(schema).toContain("/** users — last changed by 0002_bio/migration.sql */");
+  });
+
   test("--watch regenerates when a migration changes", async () => {
     const cwd = project({
       "wrangler.jsonc": wranglerJsonc,
@@ -150,6 +190,25 @@ migrations_table = "seen"
     const stop = watchSchema({ cwd }, () => {});
     // Let the file watcher settle first, as it has by the time anyone edits a migration.
     await new Promise((resolve) => setTimeout(resolve, 250));
+    writeFileSync(join(cwd, "migrations/0002.sql"), "ALTER TABLE users ADD COLUMN name TEXT;");
+
+    await expect
+      .poll(() => readFileSync(join(cwd, "src/db/schema.ts"), "utf8"), { timeout: 5000 })
+      .toContain('  name: "string",');
+    stop();
+  });
+
+  test("--watch carries on after a broken migration, and regenerates once it's fixed", async () => {
+    const cwd = project({
+      "wrangler.jsonc": wranglerJsonc,
+      "migrations/0001.sql": "CREATE TABLE users (id INTEGER PRIMARY KEY);",
+    });
+    const output: string[] = [];
+    const stop = watchSchema({ cwd }, (line) => output.push(line));
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    writeFileSync(join(cwd, "migrations/0002.sql"), "ALTER TABLE user ADD COLUMN name TEXT;");
+    await expect.poll(() => output.join("\n"), { timeout: 5000 }).toContain("no such table: user");
+
     writeFileSync(join(cwd, "migrations/0002.sql"), "ALTER TABLE users ADD COLUMN name TEXT;");
 
     await expect

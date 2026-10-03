@@ -8,6 +8,8 @@ export default defineConfig({
     {
       target: "es2022",
       tsconfig: "src/tsconfig.json",
+      // The two builds run together, so each cleans only its own files.
+      clean: ["dist/index.*"],
       dts: {
         generator: "tsgo",
       },
@@ -23,7 +25,7 @@ export default defineConfig({
       target: "node22",
       tsconfig: "cli/tsconfig.json",
       dts: false,
-      clean: false,
+      clean: ["dist/cli.*"],
     },
   ],
   resolve: {

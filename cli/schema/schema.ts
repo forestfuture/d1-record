@@ -1,5 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { convert, type Column, type Spec } from "./conventions.ts";
+import { exportName } from "./names.ts";
 
 export interface Migration {
   /** The file's name, as Wrangler orders and records it. */
@@ -10,6 +11,8 @@ export interface Migration {
 /** One table, ready to generate: its attributes in column order. */
 export interface TableSchema {
   name: string;
+  /** The `const` it's exported as in the generated file. */
+  exportName: string;
   primaryKey: string;
   /** The migration that created or last changed it. */
   lastChangedBy: string;
@@ -60,14 +63,30 @@ function applied(migrations: readonly Migration[]): {
   return { db, changedBy };
 }
 
-function isOwnTable(name: string, migrationsTable: string): boolean {
-  return !name.startsWith("sqlite_") && !name.startsWith("_cf_") && name !== migrationsTable;
+/** Plain character order, the same on every machine (unlike `localeCompare`). */
+export function byName(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * The tables a Model can be built on: not SQLite's, Cloudflare's or Wrangler's own, and not a
+ * virtual table (full-text search, say) or the shadow tables SQLite keeps for one.
+ */
+function ownTables(all: Map<string, string>, migrationsTable: string): [string, string][] {
+  const virtual = [...all]
+    .filter(([, sql]) => /^CREATE\s+VIRTUAL\s+TABLE/i.test(sql))
+    .map(([name]) => name);
+  const shadow = (name: string) =>
+    virtual.some((table) => name === table || name.startsWith(`${table}_`));
+  const internal = (name: string) =>
+    name.startsWith("sqlite_") || name.startsWith("_cf_") || name === migrationsTable;
+  return [...all].filter(([name]) => !internal(name) && !shadow(name));
 }
 
 /** The columns `json_valid` checks in a table's definition: `CHECK (json_valid(settings))`. */
 function jsonChecked(definition: string): Set<string> {
-  const pattern = /json_valid\(\s*["`[]?(\w+)["`\]]?\s*\)/gi;
-  return new Set([...definition.matchAll(pattern)].map(([, name]) => name!));
+  const pattern = /json_valid\(\s*(?:"([^"]+)"|`([^`]+)`|\[([^\]]+)\]|(\w+))\s*\)/gi;
+  return new Set([...definition.matchAll(pattern)].map((match) => match.slice(1).find(Boolean)!));
 }
 
 /** The declared type of each column a foreign key references, by the referencing column. */
@@ -78,9 +97,12 @@ function referencedTypes(db: DatabaseSync, table: string): Map<string, string> {
   const types = new Map<string, string>();
   for (const key of keys) {
     const columns = db
-      .prepare("SELECT name, type FROM pragma_table_info(?)")
+      .prepare("SELECT name, type, pk FROM pragma_table_info(?)")
       .all(String(key.table));
-    const target = columns.find((column) => column.name === (key.to ?? "id"));
+    // A key that names no column points at the parent's primary key.
+    const target = columns.find((column) =>
+      key.to === null ? Number(column.pk) > 0 : column.name === key.to,
+    );
     if (target !== undefined) types.set(String(key.from), String(target.type));
   }
   return types;
@@ -105,6 +127,47 @@ function columnsOf(db: DatabaseSync, table: string, definition: string): Column[
     }));
 }
 
+/** Why a table's primary key won't do: none, or more than one column. */
+function keyError(name: string, keys: readonly string[]): string | undefined {
+  if (keys.length === 0) {
+    return `${name}: no primary key; d1-record needs one (id INTEGER PRIMARY KEY, or id TEXT PRIMARY KEY)`;
+  }
+  if (keys.length > 1) {
+    return `${name}: a composite primary key (${keys.join(", ")}) isn't supported; give the table a single key`;
+  }
+  return undefined;
+}
+
+/** A table's attributes, in column order, with the errors and notes their columns raise. */
+function attributesOf(columns: readonly Column[]): {
+  attributes: Record<string, Spec>;
+  errors: string[];
+  notes: string[];
+} {
+  const attributes: Record<string, Spec> = {};
+  const errors: string[] = [];
+  const notes: string[] = [];
+  const columnOf = new Map<string, string>();
+  for (const column of columns) {
+    const converted = convert(column);
+    if (!converted.ok) {
+      errors.push(converted.error);
+      continue;
+    }
+    const { attribute, spec, note } = converted;
+    const taken = columnOf.get(attribute);
+    if (taken !== undefined) {
+      errors.push(
+        `${column.table}: columns ${taken} and ${column.name} would both be the attribute ${attribute}; rename one`,
+      );
+    }
+    columnOf.set(attribute, column.name);
+    attributes[attribute] = spec;
+    if (note !== undefined) notes.push(note);
+  }
+  return { attributes, errors, notes };
+}
+
 /** One table's schema, or the errors that stop it from being generated. */
 function tableSchema(
   columns: Column[],
@@ -112,28 +175,32 @@ function tableSchema(
 ): { table?: TableSchema; errors: string[]; notes: string[] } {
   const name = columns[0]!.table;
   const keys = columns.filter((column) => column.primaryKey).map((column) => column.name);
-  if (keys.length > 1) {
-    const list = keys.join(", ");
-    return {
-      errors: [
-        `${name}: a composite primary key (${list}) isn't supported; give the table a single key`,
-      ],
-      notes: [],
-    };
-  }
+  const error = keyError(name, keys);
+  if (error !== undefined) return { errors: [error], notes: [] };
+  const { attributes, errors, notes } = attributesOf(columns);
+  const table = {
+    name,
+    exportName: exportName(name),
+    primaryKey: keys[0]!,
+    lastChangedBy,
+    attributes,
+  };
+  return { table, errors, notes };
+}
+
+/** Tables whose names become the same export (`line_items`, `line-items` → `lineItems`). */
+function exportCollisions(names: readonly string[]): string[] {
+  const seen = new Map<string, string>();
   const errors: string[] = [];
-  const notes: string[] = [];
-  const attributes: Record<string, Spec> = {};
-  for (const column of columns) {
-    const converted = convert(column);
-    if (!converted.ok) errors.push(converted.error);
-    else {
-      attributes[converted.attribute] = converted.spec;
-      if (converted.note !== undefined) notes.push(converted.note);
+  for (const name of names) {
+    const as = exportName(name);
+    const other = seen.get(as);
+    if (other !== undefined) {
+      errors.push(`${other} and ${name} would both be exported as ${as}; rename one of the tables`);
     }
+    seen.set(as, name);
   }
-  const primaryKey = keys[0] ?? "id";
-  return { table: { name, primaryKey, lastChangedBy, attributes }, errors, notes };
+  return errors;
 }
 
 /**
@@ -149,8 +216,9 @@ export function schemaOf(migrations: readonly Migration[], options: Options = {}
   const tables: TableSchema[] = [];
   const errors: string[] = [];
   const notes: string[] = [];
-  const own = [...definitions(db)].filter(([name]) => isOwnTable(name, migrationsTable));
-  for (const [name, definition] of own.sort(([a], [b]) => a.localeCompare(b))) {
+  const own = ownTables(definitions(db), migrationsTable).sort(([a], [b]) => byName(a, b));
+  errors.push(...exportCollisions(own.map(([name]) => name)));
+  for (const [name, definition] of own) {
     const result = tableSchema(columnsOf(db, name, definition), changedBy.get(name)!);
     errors.push(...result.errors);
     notes.push(...result.notes);
