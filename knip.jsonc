@@ -7,7 +7,12 @@
       // A generated schema, committed as the end-to-end test's fixture: all of it is output.
       "ignore": ["tests/fixtures/schema-project/schema.ts"],
       "typescript": {
-        "config": ["tsconfig.json", "src/tsconfig.json", "cli/tsconfig.json"],
+        "config": [
+          "tsconfig.json",
+          "src/tsconfig.json",
+          "cli/tsconfig.json",
+          "tests/tsconfig.json",
+        ],
       },
       "ignoreDependencies": ["@arethetypeswrong/core", "publint"],
     },

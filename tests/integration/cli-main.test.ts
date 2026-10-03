@@ -11,6 +11,9 @@ describe("the d1-record command line", () => {
     writeFileSync(join(cwd, "wrangler.jsonc"), '{ "d1_databases": [{ "binding": "DB" }] }');
     writeFileSync(join(cwd, "migrations/0001.sql"), "CREATE TABLE users (id INTEGER PRIMARY KEY);");
     const output: string[] = [];
+    // Paths are relative to where the command runs, so run it in the project, not the repo.
+    const inProject = vi.spyOn(process, "cwd").mockReturnValue(cwd);
+    onTestFinished(() => inProject.mockRestore());
 
     const help = main(["--help"], (line) => output.push(line));
     const generated = main(

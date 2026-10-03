@@ -23,11 +23,40 @@ export interface Target {
   configDir: string;
   migrationsDir: string;
   out: string;
+  /** The app's base class for this database's Models: its file, and its name. */
+  base: { path: string; className: string };
+}
+
+/**
+ * A database's base class: `ApplicationRecord` when there's one database, as in Rails, and one
+ * per binding when there are several (`LOGS` → `LogsRecord`), as Rails names them.
+ */
+function baseFor(cwd: string, binding: string, several: boolean): Target["base"] {
+  if (!several)
+    return {
+      path: resolve(cwd, "src/models/application-record.ts"),
+      className: "ApplicationRecord",
+    };
+  const words = binding
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  const name = words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join("");
+  return {
+    path: resolve(cwd, `src/models/${words.join("-")}-record.ts`),
+    className: `${name}Record`,
+  };
 }
 
 /** A relative path with forward slashes, as Wrangler names migrations on every system. */
 export function slashed(path: string): string {
   return path.split(sep).join("/");
+}
+
+/** A module path from one file's folder to another file, as an import writes it (`../db/schema`). */
+export function importPath(fromDir: string, to: string): string {
+  const path = slashed(relative(fromDir, to)).replace(/\.ts$/, "");
+  return path.startsWith(".") ? path : `./${path}`;
 }
 
 /** A path as printed: relative to the project, with forward slashes. */
@@ -49,7 +78,8 @@ export function targetsOf(cwd: string, options: ProjectOptions): Target[] | stri
       databases.length === 1
         ? resolve(cwd, options.out ?? "src/db/schema.ts")
         : resolve(cwd, options.out ?? "src/db", `${database.binding}.ts`);
-    return { database, configDir: dir, migrationsDir, out };
+    const base = baseFor(cwd, database.binding, databases.length > 1);
+    return { database, configDir: dir, migrationsDir, out, base };
   });
 }
 

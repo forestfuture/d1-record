@@ -3,23 +3,23 @@ import { Miniflare } from "miniflare";
 import { afterAll, beforeAll, describe, expect, expectTypeOf, test } from "vite-plus/test";
 import { runSchema } from "../../cli/schema/command.ts";
 import { belongsTo, connect, type QueryEvent } from "../../src/index.ts";
-import { Model } from "../fixtures/schema-project/schema.ts";
+import { ApplicationRecord } from "../fixtures/schema-project/src/models/application-record.ts";
 
 const projectDir = new URL("../fixtures/schema-project/", import.meta.url).pathname;
 
 // Models declared from the generated schema, as a project's are.
-class User extends Model("users") {}
-class Product extends Model("products") {
+class User extends ApplicationRecord("users") {}
+class Product extends ApplicationRecord("products") {
   user = belongsTo(User);
 }
 // The same table, with overrides and an ignored column.
-class Listing extends Model("products", {
+class Listing extends ApplicationRecord("products", {
   available: "integer",
   tagline: { null: false, default: () => "Listed" },
   settings: false,
 }) {}
-// A table outside the migrations, declared in full, from the same import.
-class Visit extends Model({
+// A table outside the migrations, declared in full through the same base class.
+class Visit extends ApplicationRecord({
   id: { type: "integer", null: false },
   path: { type: "string", null: false },
 }) {}

@@ -40,7 +40,12 @@ describe("d1-record schema", () => {
 
     const schema = readFileSync(join(cwd, "src/db/schema.ts"), "utf8");
     expect(code).toBe(0);
-    expect(output).toBe("Wrote src/db/schema.ts (1 table) from migrations/");
+    expect(output).toBe(
+      "Wrote src/db/schema.ts (1 table) from migrations/\nWrote src/models/application-record.ts",
+    );
+    expect(readFileSync(join(cwd, "src/models/application-record.ts"), "utf8")).toContain(
+      'import { tables } from "../db/schema";',
+    );
     expect(schema).toContain("/** users — last changed by 0002_add_bio.sql */");
     expect(schema).toContain('  bio: "string",');
   });
@@ -67,7 +72,7 @@ migrations_table = "seen"
     expect(schema).not.toContain("export const seen");
   });
 
-  test("writes one file per database when there are several", () => {
+  test("writes one file per database when there are several, each with its own base class", () => {
     const cwd = project({
       "wrangler.json": JSON.stringify({
         d1_databases: [
@@ -83,6 +88,27 @@ migrations_table = "seen"
     expect(readFileSync(join(cwd, "src/db/DB.ts"), "utf8")).toContain("export const users");
     expect(readFileSync(join(cwd, "src/db/ANALYTICS.ts"), "utf8")).toContain("export const events");
     expect(existsSync(join(cwd, "src/db/schema.ts"))).toBe(false);
+    expect(readFileSync(join(cwd, "src/models/db-record.ts"), "utf8")).toContain(
+      'import { tables } from "../db/DB";\n',
+    );
+    expect(readFileSync(join(cwd, "src/models/analytics-record.ts"), "utf8")).toContain(
+      "export const AnalyticsRecord = modelFor(tables);",
+    );
+  });
+
+  test("the base class is written once, then it's the app's: never overwritten", () => {
+    const cwd = project({
+      "wrangler.jsonc": wranglerJsonc,
+      "migrations/0001.sql": "CREATE TABLE users (id INTEGER PRIMARY KEY);",
+    });
+    run(cwd);
+    writeFileSync(join(cwd, "src/models/application-record.ts"), "// edited\n");
+    writeFileSync(join(cwd, "migrations/0002.sql"), "ALTER TABLE users ADD COLUMN name TEXT;");
+
+    const { output } = run(cwd);
+
+    expect(output).toBe("Wrote src/db/schema.ts (1 table) from migrations/");
+    expect(readFileSync(join(cwd, "src/models/application-record.ts"), "utf8")).toBe("// edited\n");
   });
 
   test("--out and --migrations choose other places", () => {
@@ -193,7 +219,7 @@ migrations_dir = "db\\u002Fmigrate"
     const { code, output } = run(cwd);
 
     expect(code).toBe(0);
-    expect(output.split("\n").slice(1)).toEqual([
+    expect(output.split("\n").slice(2)).toEqual([
       expect.stringMatching(
         /^Note: these migrations look like Drizzle's\. Some columns may convert/,
       ),
@@ -225,6 +251,7 @@ migrations_dir = "db\\u002Fmigrate"
     });
 
     expect(run(cwd).output).toBe(`Wrote src/db/schema.ts (0 tables) from migrations/
+Wrote src/models/application-record.ts
 Note: migrations/ has its migrations in folders, as Drizzle writes them; set migrations_pattern to "migrations/*/migration.sql" in your Wrangler config, so Wrangler and d1-record read them`);
   });
 

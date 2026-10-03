@@ -73,27 +73,37 @@ class User extends Model({
 `npx d1-record schema` (Node 22.13+) writes `src/db/schema.ts` from the project's D1 migrations, found through its Wrangler config (`migrations_dir`, `migrations_pattern`, `migrations_table`; one file per binding when there are several). It applies them to an in-memory SQLite database and converts each table's columns to attributes by convention: the declared type first (`INTEGER`, `TEXT`, `REAL`, `BOOLEAN`, `DATETIME`/`TIMESTAMP`/`DATE`, `JSON`, a `TEXT` with `CHECK (json_valid(…))` as `json`), then, only for a column declared exactly `TEXT` or `INTEGER`, its name (`…_at` `TEXT` → `datetime`, `is_…`/`has_…` `INTEGER` → `boolean`, printed as a note). `NOT NULL` → `null: false`; literal defaults are copied, and a `TEXT` primary key gets `default: () => crypto.randomUUID()`. `NUMERIC`/`DECIMAL`, `BLOB`, composite or missing primary keys, and names that would collide are errors that say what to do; a broken migration is reported by file name and the last good file is kept. Migrations written by Drizzle or Prisma (recognised by `drizzle.config.*`, `schema.prisma`, `prisma/schema.prisma` or `prisma.config.ts` in the project or a folder above it up to the repository's root, or by the `--> statement-breakpoint` and `-- CreateTable` lines they write) add notes, since those tools can store values differently: one naming the tool and linking #73, then one for each column worth checking, whether it's named in snake_case or camelCase (an `INTEGER` named `…_at`/`…At`, which may hold a Unix timestamp; a `TEXT` without a `json_valid` check named `…_json`/`…Json`, `metadata`, `settings`, `payload` or `properties`; and for Prisma, each `datetime`, which may hold a number). Notes come with a file that's written, so they don't repeat when it's up to date, while watching, or with `--check`. Migrations in folders (`migrations/0000_init/migration.sql`, as Drizzle writes them) with no `migrations_pattern` to find them get Wrangler's hint to set one, every time. `--check` fails when the file is stale (it compares a fingerprint of the schema, so formatting doesn't matter), and `--watch` regenerates as migrations change.
 
 ```ts
-import { belongsTo } from "@forestfuture/d1-record";
-import { Model } from "./db/schema"; // generated
+// src/models/application-record.ts (written once by `d1-record schema`, then the app's)
+import { modelFor } from "@forestfuture/d1-record";
+import { tables } from "../db/schema"; // generated
 
-class Product extends Model("products") {
+export const ApplicationRecord = modelFor(tables);
+```
+
+```ts
+// src/models/product.ts
+import { belongsTo } from "@forestfuture/d1-record";
+import { ApplicationRecord } from "./application-record";
+
+class Product extends ApplicationRecord("products") {
   user = belongsTo(User);
 }
 
-class Listing extends Model("products", {
+class Listing extends ApplicationRecord("products", {
   available: "integer", // a type alone
   tagline: { null: false, default: () => "New!" }, // type, null and default
   notes: false, // ignored
 }) {}
 
-class Visit extends Model({ id: "integer", path: "string" }) {} // the library's Model, unchanged
+class Visit extends ApplicationRecord({ id: "integer", path: "string" }) {} // the library's Model({...}), unchanged
 ```
 
-- The generated file exports `Model = modelFor(tables)`. `Model("products")` is a base class bound to that table: its attributes and `primaryKey` come from the schema, and `tableName` is the argument, never inferred, so it doesn't depend on the class name. Subclasses share it. Setting `tableName` to another table on such a Model throws `InvalidModel` when it's first used, since its attributes are that table's; `primaryKey` can still be set, and must name an attribute.
+- The generated `schema.ts` is a document, like Rails' `schema.rb`: each table's attributes and `tables`, importing nothing. The first time it's written, `d1-record schema` also writes the app's base class, `src/models/application-record.ts` (`ApplicationRecord = modelFor(tables)`), as Rails apps have `ApplicationRecord`; it's never written again, so it's the app's to edit. With several databases, each binding gets its own, named as Rails names them (`LOGS` → `LogsRecord` in `src/models/logs-record.ts`). `modelFor(tables)` is the library's.
+- `ApplicationRecord("products")` is a base class bound to that table: its attributes and `primaryKey` come from the schema, and `tableName` is the argument, never inferred, so it doesn't depend on the class name. Subclasses share it. Setting `tableName` to another table on such a Model throws `InvalidModel` when it's first used, since its attributes are that table's; `primaryKey` can still be set, and must name an attribute.
 - The table is typed from the schema: a name that isn't one is a compile error (and an `InvalidModel` if the types are bypassed).
-- Overrides are keyed by the generated attribute names, and typed from them: an unknown key is a compile error and an `InvalidModel`. An override is a type name (`"integer"`), or `{ type?, null?, default? }` merged into the generated spec; a key left `undefined` changes nothing, the column can't change, and an attribute can't be added. Anything else is an `InvalidModel` naming the attribute, checked when `Model("…")` is called, so plain JavaScript and casts get the same rules. The record's TypeScript types follow the merged spec; like `Model({...})`'s, a `default` isn't type-checked against the attribute's type yet (#74).
+- Overrides are keyed by the generated attribute names, and typed from them: an unknown key is a compile error and an `InvalidModel`. An override is a type name (`"integer"`), or `{ type?, null?, default? }` merged into the generated spec; a key left `undefined` changes nothing, the column can't change, and an attribute can't be added. Anything else is an `InvalidModel` naming the attribute, checked when `ApplicationRecord("…")` is called, so plain JavaScript and casts get the same rules. The record's TypeScript types follow the merged spec; like `Model({...})`'s, a `default` isn't type-checked against the attribute's type yet (#74).
 - `false` ignores a column, as Rails' `ignored_columns`: it isn't an attribute, so it's never typed, assigned or written, and the Model's queries name its columns instead of `*` (`SELECT` and `RETURNING`), so it's never read. The primary key can't be ignored. Inserts leave an ignored column to its database default, so a `NOT NULL` column without one makes them fail.
-- `Model({...})` from the same import is the library's `Model`, for views and tables outside the migrations.
+- `ApplicationRecord({...})` is the library's `Model({...})`, for views and tables outside the migrations. A Model can also extend the library's `Model({...})` directly.
 
 ### Generators
 
@@ -101,7 +111,7 @@ class Visit extends Model({ id: "integer", path: "string" }) {} // the library's
 
 - **Columns** are `name:type`: `string` (the default, so `title` and `slug:index` are strings), `integer`, `real`, `boolean`, `datetime`, `json` or `references`; then `!` for `NOT NULL`, `=value` for a literal default (`string`, `integer`, `real` and `boolean` only, and it may hold a `:`; Rails' generators have no such syntax), and `:unique` or `:index` for an index named as Rails names it (`index_products_on_sku`). Names are written in snake_case whichever way they're given. Types write `TEXT`, `INTEGER`, `REAL`, `BOOLEAN`, `DATETIME` and `TEXT CHECK (json_valid(…))`. `user:references` writes `user_id`, typed like the `users` key (`TEXT` if `users` isn't in the migrations yet, with a note), `NOT NULL` with `REFERENCES users (id)`, and an index. Names SQLite reserves are quoted.
 - **Names** are letters, digits and `_`, starting with a letter; anything else is refused, so a file can only land in the migrations or Models folder. A Model's name is made singular, as Rails makes it (`g model line_items` writes `LineItem`, with a note), and a migration's table plural (`CreateWidget` creates `widgets`).
-- **`g model LineItem`** creates `line_items` with `id TEXT PRIMARY KEY NOT NULL` (a key generated in code; `--id integer` for `INTEGER PRIMARY KEY`, generated by D1), the columns, and `created_at`/`updated_at DATETIME NOT NULL` (`--no-timestamps` leaves them out). It writes `src/models/line-item.ts` with `export class LineItem extends Model("line_items") {}`, a `belongsTo` field for each reference, and extensionless imports of the schema and of each target's file. `--models src/models.ts` appends the class to one file instead, adding `belongsTo` to its library import and the schema's `Model` import if they're missing; a file that imports another database's `Model` is refused.
+- **`g model LineItem`** creates `line_items` with `id TEXT PRIMARY KEY NOT NULL` (a key generated in code; `--id integer` for `INTEGER PRIMARY KEY`, generated by D1), the columns, and `created_at`/`updated_at DATETIME NOT NULL` (`--no-timestamps` leaves them out). It writes `src/models/line-item.ts` with `export class LineItem extends ApplicationRecord("line_items") {}` (the database's base class), a `belongsTo` field for each reference, and extensionless imports of the base class and of each target's file. `--models src/models.ts` appends the class to one file instead, adding the `belongsTo` and base-class imports if they're missing; a file that imports a base class of that name from somewhere else is refused.
 - **`g migration`** reads its name as Rails does (`AddSkuToProducts` or `add_sku_to_products`): `Create<Table>` creates the table as `g model` does, `Add…To<Table>` adds the columns (a reference added this way can be `NULL`, as Rails' `add_reference`), `Remove…From<Table>` drops them, after `DROP INDEX IF EXISTS` for the index a generator would have named, and any other name is an empty migration. Removing a `references` column is refused, since SQLite can't drop a column with a foreign key: that takes a migration that rebuilds the table. Adding a `NOT NULL` column without a default is refused, since SQLite can't.
 - **Files** are numbered as Wrangler numbers them: the highest leading number in the migrations folder, plus one, in four digits (`0008_add_sku_to_products.sql`). A file the config's `migrations_pattern` wouldn't match is refused, as `wrangler d1 migrations create` refuses it.
 - **Nothing is written** unless the new migration applies after the existing ones (in memory, as `d1-record schema` applies them) and the Model file is new (or, for `--models` with one file, doesn't have the class yet). Otherwise the command prints why, then "Wrote nothing". With several D1 databases, `--database <binding>` chooses one, and the Model imports that database's schema file.
