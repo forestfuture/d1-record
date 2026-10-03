@@ -2,9 +2,18 @@
 // where its generated schema goes. Shared by \`d1-record schema\` and the generators.
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
-import type { SchemaOptions } from "./command.ts";
 import { byName, type Migration } from "./schema.ts";
 import { readWranglerConfig, type DatabaseConfig } from "./wrangler.ts";
+
+/** Where a project's config, migrations and generated schema are, when not the defaults. */
+export interface ProjectOptions {
+  /** The Wrangler config file, in place of finding it. */
+  config?: string;
+  /** The migrations folder, in place of the Wrangler config's. */
+  migrations?: string;
+  /** The file to write (or, with several databases, the folder). */
+  out?: string;
+}
 
 export type Print = (line: string) => void;
 
@@ -16,16 +25,18 @@ export interface Target {
   out: string;
 }
 
+/** A relative path with forward slashes, as Wrangler names migrations on every system. */
+export function slashed(path: string): string {
+  return path.split(sep).join("/");
+}
+
 /** A path as printed: relative to the project, with forward slashes. */
 export function shown(cwd: string, path: string): string {
-  return relative(cwd, path).split(sep).join("/") || ".";
+  return slashed(relative(cwd, path)) || ".";
 }
 
 /** The databases to generate, from the Wrangler config and the options; or why there are none. */
-export function targetsOf(
-  cwd: string,
-  options: Pick<SchemaOptions, "config" | "migrations" | "out">,
-): Target[] | string {
+export function targetsOf(cwd: string, options: ProjectOptions): Target[] | string {
   const config = readWranglerConfig(cwd, options.config);
   if (!config.ok) return config.error;
   const { databases, dir } = config;
@@ -52,7 +63,7 @@ export function migrationsOf(target: Target): Migration[] {
         process
           .getBuiltinModule("node:fs")
           .globSync(migrationsPattern, { cwd: target.configDir })
-          .map((path) => relative(target.migrationsDir, join(target.configDir, path)));
+          .map((path) => slashed(relative(target.migrationsDir, join(target.configDir, path))));
   return files
     .sort(byName)
     .map((name) => ({ name, sql: readFileSync(join(target.migrationsDir, name), "utf8") }));

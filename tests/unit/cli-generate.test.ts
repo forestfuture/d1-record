@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { parseColumns } from "../../cli/generate/columns.ts";
-import { migrationFor, migrationFileName } from "../../cli/generate/migration.ts";
+import { migrationFor, migrationFileName, type KeyType } from "../../cli/generate/migration.ts";
+import { migrationNameError, modelName } from "../../cli/generate/names.ts";
 import { appendModel, modelFileName, modelSource } from "../../cli/generate/model-file.ts";
 import { schemaOf } from "../../cli/schema/schema.ts";
 
@@ -11,7 +12,7 @@ function columns(...args: string[]) {
   return result.columns;
 }
 
-const noKeys = new Map<string, string>();
+const noKeys = new Map<string, KeyType>();
 
 /** The migration's SQL, or its error. */
 function sqlFor(name: string, args: string[], options = {}, keys = noKeys) {
@@ -60,6 +61,13 @@ describe("the column syntax", () => {
     ]);
   });
 
+  test("a default may hold a colon; only :unique or :index at the end is an index", () => {
+    expect(columns("starts:string=09:00", "tag:string=a:b:unique")).toEqual([
+      { name: "starts", type: "string", notNull: false, index: "none", default: "09:00" },
+      { name: "tag", type: "string", notNull: false, index: "unique", default: "a:b" },
+    ]);
+  });
+
   test("a mistyped column says what's allowed", () => {
     expect(
       parseColumns([
@@ -105,7 +113,7 @@ CREATE UNIQUE INDEX index_products_on_sku ON products (sku);
         "create_line_items",
         ["order:references", "settings:json", "quantity:integer!=1", "note=it's"],
         { integerId: true, timestamps: false },
-        new Map([["orders", "INTEGER"]]),
+        new Map<string, KeyType>([["orders", "INTEGER"]]),
       ),
     ).toBe(
       `CREATE TABLE line_items (
@@ -146,12 +154,23 @@ CREATE INDEX index_products_on_user_id ON products (user_id);
   });
 
   test("RemoveSkuFromProducts drops the columns, and the indexes the generators made on them first", () => {
-    expect(sqlFor("RemoveSkuFromProducts", ["sku", "user:references"])).toBe(
+    expect(sqlFor("RemoveSkuFromProducts", ["sku", "code:index"])).toBe(
       `DROP INDEX IF EXISTS index_products_on_sku;
 ALTER TABLE products DROP COLUMN sku;
-DROP INDEX IF EXISTS index_products_on_user_id;
-ALTER TABLE products DROP COLUMN user_id;
+DROP INDEX IF EXISTS index_products_on_code;
+ALTER TABLE products DROP COLUMN code;
 `,
+    );
+  });
+
+  test("the table in a migration's name is made plural, as Rails makes it", () => {
+    expect(sqlFor("CreateWidget", ["title"])).toMatch(/^CREATE TABLE widgets \(/);
+    expect(sqlFor("AddSkuToProduct", ["sku"])).toBe("ALTER TABLE products ADD COLUMN sku TEXT;\n");
+  });
+
+  test("removing a reference is refused, since SQLite can't drop a column with a foreign key", () => {
+    expect(sqlFor("RemoveUserFromOrders", ["user:references"])).toBe(
+      "orders.user_id: SQLite can't drop a column with a foreign key; write a migration that rebuilds the table without it (https://www.sqlite.org/lang_altertable.html#otheralter)",
     );
   });
 
@@ -232,9 +251,11 @@ export class Order extends Model("orders") {
   lineItems = hasMany(LineItem);
 }
 `;
+    const inOneFile = { ...model, schemaImport: "./db/schema" };
 
-    expect(appendModel(existing, { ...model, schemaImport: "./db/schema" }))
-      .toBe(`import { belongsTo, hasMany } from "@forestfuture/d1-record";
+    expect(appendModel(existing, inOneFile)).toEqual({
+      ok: true,
+      source: `import { belongsTo, hasMany } from "@forestfuture/d1-record";
 import { Model } from "./db/schema";
 
 export class Order extends Model("orders") {
@@ -244,9 +265,57 @@ export class Order extends Model("orders") {
 export class LineItem extends Model("line_items") {
   order = belongsTo(Order);
 }
-`);
-    expect(appendModel("", { ...model, schemaImport: "./db/schema" })).toBe(
-      modelSource({ ...model, schemaImport: "./db/schema" }, { separateFiles: false }),
+`,
+    });
+    expect(appendModel("", inOneFile)).toEqual({
+      ok: true,
+      source: modelSource(inOneFile, { separateFiles: false }),
+    });
+  });
+
+  test("a models file without the imports gets them; one importing another database's Model is refused", () => {
+    const inOneFile = { ...model, schemaImport: "./db/DB" };
+
+    expect(appendModel("export const version = 1;\n", inOneFile)).toEqual({
+      ok: true,
+      source: `import { belongsTo } from "@forestfuture/d1-record";
+import { Model } from "./db/DB";
+export const version = 1;
+
+export class LineItem extends Model("line_items") {
+  order = belongsTo(Order);
+}
+`,
+    });
+    expect(appendModel('import { Model } from "./db/LOGS";\n', inOneFile)).toEqual({
+      ok: false,
+      error:
+        "it imports Model from ./db/LOGS, not ./db/DB; keep each database's Models in their own file",
+    });
+  });
+});
+
+describe("names", () => {
+  test("a Model's name is made singular and a class, as Rails makes it, with a note when it was plural", () => {
+    expect(modelName("LineItem")).toEqual({ ok: true, className: "LineItem" });
+    expect(modelName("line_item")).toEqual({ ok: true, className: "LineItem" });
+    expect(modelName("line_items")).toEqual({
+      ok: true,
+      className: "LineItem",
+      note: "line_items looks plural, so the Model is LineItem, as Rails names it",
+    });
+    expect(modelName("People")).toMatchObject({ className: "Person" });
+  });
+
+  test("names that aren't letters, digits and _ are refused, so no file lands anywhere unexpected", () => {
+    expect(modelName("foo-bar")).toEqual({
+      ok: false,
+      error: "foo-bar isn't a Model name; use letters and digits, like LineItem",
+    });
+    expect(migrationNameError("../../evil")).toBe(
+      "../../evil isn't a migration name; use letters, digits and _, like AddSkuToProducts",
     );
+    expect(migrationNameError("Add Thing")).toBeDefined();
+    expect(migrationNameError("add_sku_to_products")).toBeUndefined();
   });
 });

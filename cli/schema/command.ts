@@ -1,20 +1,21 @@
 import { existsSync, mkdirSync, readFileSync, watch, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { migrationsOf, shown, targetsOf, type Print, type Target } from "./project.ts";
+import {
+  migrationsOf,
+  shown,
+  targetsOf,
+  type Print,
+  type ProjectOptions,
+  type Target,
+} from "./project.ts";
 import { fingerprintIn, fingerprintOf, renderSchema } from "./render.ts";
 import { schemaOf } from "./schema.ts";
 
-export interface SchemaOptions {
+export interface SchemaOptions extends ProjectOptions {
   /** The project's folder; the current one by default. */
   cwd?: string;
   /** Only report whether the generated files are current (for CI). */
   check?: boolean;
-  /** The file to write (or, with several databases, the folder). */
-  out?: string;
-  /** The migrations folder, in place of the Wrangler config's. */
-  migrations?: string;
-  /** The Wrangler config file, in place of finding it. */
-  config?: string;
 }
 
 /** Reports a schema that couldn't be generated; the last good file stays as it was. */
