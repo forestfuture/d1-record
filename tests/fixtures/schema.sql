@@ -70,8 +70,10 @@ CREATE TABLE comments (
   body TEXT
 );
 
--- A json attribute over a column declared JSON, which SQLite gives numeric affinity.
+-- json attributes over a TEXT column checked with json_valid, as D1 recommends, and a column
+-- declared JSON, which SQLite gives numeric affinity.
 CREATE TABLE json_values (
   id INTEGER PRIMARY KEY,
+  checked TEXT CHECK (json_valid(checked)),
   value JSON
 );

@@ -19,8 +19,8 @@ const converters: Record<AttributeType, Converter> = {
     write: (value) => (value as Date).toISOString(),
   },
   json: {
-    // Text is parsed. A JSON column has numeric affinity, so D1 returns a number-like value
-    // (written as the text 123) as the number itself, which is already the value.
+    // Text is parsed. Under a column declared JSON, SQLite stores a number-like value (123) as
+    // a number, and D1 returns it as one, which is already the value.
     read: (value) => (typeof value === "string" ? JSON.parse(value) : value),
     write: (value) => JSON.stringify(value),
   },
