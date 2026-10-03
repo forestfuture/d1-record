@@ -24,14 +24,14 @@ Write each table as d1-record expects to read it:
 - **Columns are snake_case**, and the Model's attributes are their camelCase names: `created_at` is `createdAt`, `user_id` is `userId`. An attribute can map to any column with `{ column: "…" }`.
 - **Types** map like this:
 
-  | Attribute  | Column                 |
-  | ---------- | ---------------------- |
-  | `string`   | `TEXT`                 |
-  | `integer`  | `INTEGER`              |
-  | `real`     | `REAL`                 |
-  | `boolean`  | `INTEGER` (`0` or `1`) |
-  | `datetime` | `TEXT` (ISO-8601)      |
-  | `json`     | `TEXT`                 |
+  | Attribute  | Column                                               |
+  | ---------- | ---------------------------------------------------- |
+  | `string`   | `TEXT`                                               |
+  | `integer`  | `INTEGER`                                            |
+  | `real`     | `REAL`                                               |
+  | `boolean`  | `INTEGER` (`0` or `1`)                               |
+  | `datetime` | `TEXT` (ISO-8601)                                    |
+  | `json`     | `TEXT`, optionally with `CHECK (json_valid(column))` |
 
 - **`NOT NULL`** columns are attributes declared `null: false`. Any other attribute can be `null`, as its column can.
 - **The primary key** is `id` unless the Model sets `primaryKey`. Use `TEXT PRIMARY KEY` for keys generated in code (`default: () => crypto.randomUUID()`), so records can be [saved together atomically](./d1#generate-keys-in-code), or `INTEGER PRIMARY KEY` for keys D1 generates.

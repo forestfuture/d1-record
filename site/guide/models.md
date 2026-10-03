@@ -49,6 +49,8 @@ An attribute is a type name, or `{ type, column?, null?, default? }`.
 
 As in SQLite, an attribute can be `null` unless it's declared `null: false`, and its TypeScript type includes `| null` to match.
 
+Store `json` attributes in a `TEXT` column, as [D1 recommends](https://developers.cloudflare.com/d1/sql-api/query-json/#types), and add `CHECK (json_valid(settings))` to have D1 reject anything that isn't valid JSON. A column declared `JSON` works too.
+
 ## Building records
 
 `build()` makes a new record without touching the database:

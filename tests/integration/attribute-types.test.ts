@@ -14,7 +14,11 @@ class Sample extends Model({
   static tableName = "samples";
 }
 
-class JsonValue extends Model({ id: { type: "integer", null: false }, value: "json" }) {
+class JsonValue extends Model({
+  id: { type: "integer", null: false },
+  checked: "json", // TEXT CHECK (json_valid(checked)), as D1 recommends
+  value: "json", // declared JSON
+}) {
   static tableName = "json_values";
 }
 
@@ -51,25 +55,56 @@ describe("attribute types", () => {
     expect(sample?.settings).toEqual({ theme: "dark", sizes: [1, 2] });
   });
 
-  test("json reads back as written from a JSON column, which D1 returns number-like values from as numbers", async () => {
-    // A JSON column has numeric affinity: SQLite stores the text 123 as the number 123.
-    const values = [123, 1.5, -7, 0, 0.1 + 0.2, 1e21, "123", "  42 ", "abc", true, false, null];
-    const objects = [{ a: 1 }, [1, "2"]];
-    const all: unknown[] = [...values, ...objects];
+  // Every kind of JSON value, numbers written as text included.
+  const jsonValues: unknown[] = [
+    123,
+    1.5,
+    -7,
+    0,
+    0.1 + 0.2,
+    1e21,
+    "123",
+    "  42 ",
+    "abc",
+    true,
+    false,
+    null,
+    { a: 1 },
+    [1, "2"],
+  ];
+
+  async function writeJsonValues() {
     const records = connect(binding).model(JsonValue);
-    for (const [index, value] of all.entries()) await records.create({ id: index + 1, value });
+    for (const [index, value] of jsonValues.entries()) {
+      await records.create({ id: index + 1, checked: value, value });
+    }
+    return records;
+  }
 
+  test("json reads back as written, from a TEXT column and from one declared JSON", async () => {
+    const records = await writeJsonValues();
+
+    // Declared JSON, the column has numeric affinity: SQLite stores 123 as a number.
     const stored = await binding
-      .prepare("SELECT typeof(value) AS type FROM json_values WHERE id = 1")
-      .first<{ type: string }>();
-    const read = await records.order({ id: "asc" }).pluck("value");
+      .prepare(
+        "SELECT typeof(checked) AS text, typeof(value) AS json FROM json_values WHERE id = 1",
+      )
+      .first<{ text: string; json: string }>();
 
-    expect(stored?.type).toBe("integer");
-    expect(read).toEqual(all);
-    expect(await records.where({ value: 123 }).pluck("id")).toEqual([1]);
-    expect(await records.where({ value: "123" }).pluck("id")).toEqual([7]);
-    expect(await records.where({ value: { a: 1 } }).pluck("id")).toEqual([13]);
-    expect(await records.where({ value: [123, "abc"] }).pluck("id")).toEqual([1, 9]);
+    expect(stored).toEqual({ text: "text", json: "integer" });
+    expect(await records.order({ id: "asc" }).pluck("checked")).toEqual(jsonValues);
+    expect(await records.order({ id: "asc" }).pluck("value")).toEqual(jsonValues);
+  });
+
+  test("a json column is queried by value or by list, whichever way it's declared", async () => {
+    const records = await writeJsonValues();
+
+    for (const column of ["checked", "value"] as const) {
+      expect(await records.where({ [column]: 123 }).pluck("id")).toEqual([1]);
+      expect(await records.where({ [column]: "123" }).pluck("id")).toEqual([7]);
+      expect(await records.where({ [column]: { a: 1 } }).pluck("id")).toEqual([13]);
+      expect(await records.where({ [column]: [123, "abc"] }).pluck("id")).toEqual([1, 9]);
+    }
   });
 
   test("NULL reads back as null for every type", async () => {
