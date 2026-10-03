@@ -18,7 +18,12 @@ const converters: Record<AttributeType, Converter> = {
     read: (value) => new Date(value as string),
     write: (value) => (value as Date).toISOString(),
   },
-  json: { read: (value) => JSON.parse(value as string), write: (value) => JSON.stringify(value) },
+  json: {
+    // Text is parsed. A JSON column has numeric affinity, so D1 returns a number-like value
+    // (written as the text 123) as the number itself, which is already the value.
+    read: (value) => (typeof value === "string" ? JSON.parse(value) : value),
+    write: (value) => JSON.stringify(value),
+  },
 };
 
 export function readValue(type: AttributeType, value: unknown): unknown {
