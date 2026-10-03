@@ -43,6 +43,20 @@ describe("recognising another tool's migrations", () => {
     ).toBe("Prisma");
   });
 
+  test("a config with any of Drizzle's extensions, or Prisma's schema at the root, counts", () => {
+    expect(migrationTool(projectWith("drizzle.config.mts"), plain)).toBe("Drizzle");
+    expect(migrationTool(projectWith("drizzle.config.cts"), plain)).toBe("Drizzle");
+    expect(migrationTool(projectWith("schema.prisma"), plain)).toBe("Prisma");
+  });
+
+  test("in a monorepo, a config above the project counts, up to the repository's root", () => {
+    const repo = projectWith(".git/HEAD", "drizzle.config.ts", "apps/api/wrangler.jsonc");
+    const outside = projectWith("drizzle.config.ts", "apps/api/wrangler.jsonc");
+
+    expect(migrationTool(join(repo, "apps/api"), plain)).toBe("Drizzle");
+    expect(migrationTool(join(outside, "apps/api"), plain)).toBeUndefined();
+  });
+
   test("Wrangler's own migrations aren't another tool's", () => {
     expect(migrationTool(projectWith("wrangler.jsonc"), plain)).toBeUndefined();
   });
@@ -57,23 +71,32 @@ describe("notes for another tool's migrations", () => {
         title TEXT,
         metadata TEXT,
         published_at INTEGER,
-        created_at DATETIME
+        created_at DATETIME,
+        "updatedAt" INTEGER,
+        "payloadJson" TEXT,
+        data TEXT,
+        config TEXT
       );`,
     },
   ]);
   const tables = result.ok ? result.tables : [];
 
-  test("the tool, then each column to check: numeric timestamps, and JSON in plain TEXT", () => {
+  test("the tool, then each column to check: numeric timestamps, and JSON in plain TEXT, named either way", () => {
     expect(originNotes("Drizzle", tables)).toEqual([
       "these migrations look like Drizzle's. Some columns may convert to the wrong type without an error, especially numeric timestamps: check the generated types (https://github.com/forestfuture/d1-record/issues/73)",
       'posts.metadata: read as a string; if it holds JSON, override it as "json" in its Model',
       "posts.published_at: read as an integer; if it holds a Unix timestamp, it's a number, not a Date",
+      "posts.updatedAt: read as an integer; if it holds a Unix timestamp, it's a number, not a Date",
+      'posts.payloadJson: read as a string; if it holds JSON, override it as "json" in its Model',
     ]);
   });
 
   test("for Prisma, its DATETIME columns too, since it may store numbers in them", () => {
-    expect(originNotes("Prisma", tables)).toContain(
-      "posts.created_at: read as a datetime (ISO text); if it holds a number, as Prisma may write, reads will fail",
+    expect(originNotes("Prisma", tables)).toEqual(
+      expect.arrayContaining([
+        "posts.created_at: read as a datetime (ISO text); if it holds a number, as Prisma may write, reads will fail",
+        'posts.metadata: read as a string; if it holds JSON, override it as "json" in its Model',
+      ]),
     );
   });
 

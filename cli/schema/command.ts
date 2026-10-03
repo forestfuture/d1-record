@@ -9,7 +9,7 @@ import {
   type Target,
 } from "./project.ts";
 import { fingerprintIn, fingerprintOf, renderSchema } from "./render.ts";
-import { migrationTool, originNotes } from "./origin.ts";
+import { layoutNote, migrationTool, originNotes } from "./origin.ts";
 import { schemaOf } from "./schema.ts";
 
 export interface SchemaOptions extends ProjectOptions {
@@ -58,13 +58,18 @@ export function generateSchema(cwd: string, target: Target, check: boolean, prin
   if (check) return checked(existing, fingerprintOf(result.tables), out, print);
   const rendered = renderSchema(result.tables, source);
   const count = `${result.tables.length} table${result.tables.length === 1 ? "" : "s"}`;
+  // Notes come with a file that's written, so watching or generating again doesn't repeat them;
+  // the hint for migrations it can't see comes every time, since nothing else would show them.
+  const layout = layoutNote(cwd, target);
+  const notes = layout === undefined ? [] : [layout];
   if (rendered === existing) print(`${out} is up to date (${count})`);
   else {
     written(rendered, target);
     print(`Wrote ${out} (${count}) from ${source}`);
+    const tool = migrationTool(target.configDir, migrations);
+    notes.unshift(...result.notes, ...originNotes(tool, result.tables));
   }
-  const tool = migrationTool(target.configDir, migrations);
-  for (const note of [...result.notes, ...originNotes(tool, result.tables)]) print(`Note: ${note}`);
+  for (const note of notes) print(`Note: ${note}`);
   return 0;
 }
 
