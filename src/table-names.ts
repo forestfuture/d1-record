@@ -9,6 +9,9 @@ import { underscore } from "./naming.ts";
  */
 const bases = new WeakSet<object>();
 
+/** The tables generated Models are bound to (`Model("products")`), by their base class. */
+const boundTables = new WeakMap<object, string>();
+
 /**
  * The name of the class that extends `base` directly, the one a table is named after, as in
  * Rails; empty when it has none (anonymous, `export default`, or `Model({...})` itself).
@@ -54,12 +57,48 @@ function tableNameSource(model: object): string | undefined {
   while (current !== null && !Object.hasOwn(current, "tableName")) {
     current = Object.getPrototypeOf(current) as object | null;
   }
-  return current !== null && bases.has(current) ? className(current, model) : undefined;
+  return current !== null && bases.has(current) && !boundTables.has(current)
+    ? className(current, model)
+    : undefined;
+}
+
+/**
+ * Binds a generated Model's base class to its table: the table isn't inferred, and a subclass
+ * can't name another, since the attributes are that table's columns.
+ */
+export function bindTable(base: object, table: string): void {
+  Object.defineProperty(base, "tableName", {
+    value: table,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+  boundTables.set(base, table);
+}
+
+/** The table a generated Model's base class is bound to, if `model` has one. */
+function boundTableOf(model: object): string | undefined {
+  for (
+    let current: object | null = model;
+    current !== null;
+    current = Object.getPrototypeOf(current)
+  ) {
+    const table = boundTables.get(current);
+    if (table !== undefined) return table;
+  }
+  return undefined;
 }
 
 /** A Model must have a table name: its own, or one inferred from its class name. */
 export function requireTableName(model: ModelClass): void {
   const { tableName } = model;
+  const bound = boundTableOf(model);
+  if (bound !== undefined && tableName !== bound) {
+    throw new InvalidModel(
+      `${model.name} sets tableName "${String(tableName)}", but its attributes are the ${bound} ` +
+        'table\'s; name the table in Model("…") instead',
+    );
+  }
   if (typeof tableName === "string" && tableName !== "") return;
   throw new InvalidModel(
     tableNameSource(model) === ""

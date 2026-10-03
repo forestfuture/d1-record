@@ -417,15 +417,16 @@ export class ModelBase {
 export type ModelClass<M extends ModelBase = ModelBase> = (new () => M) &
   Omit<typeof ModelBase, "prototype">;
 
+/** The base class `Model({...})` makes: records with the attributes `A`. */
+export type ModelBaseFor<A extends AttributeSpecs> = (new () => ModelBase &
+  AttributeProperties<A> & { readonly [attributeTypes]?: AttributeProperties<A> }) &
+  Omit<typeof ModelBase, "prototype">;
+
 /**
  * Creates a Model base class whose records have the given attributes.
  * The attribute object is the single source of truth (ADR-0007).
  */
-export function Model<const A extends AttributeSpecs>(
-  specs: A,
-): (new () => ModelBase &
-  AttributeProperties<A> & { readonly [attributeTypes]?: AttributeProperties<A> }) &
-  Omit<typeof ModelBase, "prototype"> {
+export function Model<const A extends AttributeSpecs>(specs: A): ModelBaseFor<A> {
   class DefinedModel extends ModelBase {
     static override attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map(
       Object.entries(specs).map(([name, spec]) => [name, define(name, spec)]),

@@ -44,6 +44,14 @@ export {
 export type { QueryEvent, QueryListener } from "./executor.ts";
 export { Errors, type ValidationError } from "./errors-collection.ts";
 export { Model } from "./model.ts";
+export {
+  modelFor,
+  type AttributeOverride,
+  type Overrides,
+  type SchemaModel,
+  type TableSchema,
+  type TableSchemas,
+} from "./schema-model.ts";
 export type {
   LengthOptions,
   NumericalityOptions,
