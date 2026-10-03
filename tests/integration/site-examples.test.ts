@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { connect } from "../../src/index.ts";
 import {
@@ -18,6 +19,7 @@ import { Booking, errorsExample } from "../../site/snippets/guide/validations.ts
 import { publishDraftsAndRemove } from "../../site/snippets/getting-started/batch.ts";
 import { Post, User } from "../../site/snippets/getting-started/models.ts";
 import worker from "../../site/snippets/getting-started/worker.ts";
+import { User as MigratedUser, writeBio } from "../../site/snippets/migrations/models.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 // The documentation's Getting started runs as written, on its own migration.
@@ -241,5 +243,54 @@ describe("the guide's examples", () => {
         .find("x1")
         .then((article) => article.comments().count()),
     ).toBe(0);
+  });
+});
+
+// The Migrations guide: Getting started's tables, then a migration that adds a column.
+describe("Migrations", () => {
+  test("after 0002 adds users.bio, the Model's bio attribute reads and writes it", async () => {
+    const { db: binding, dispose } = await createTestDatabase(
+      new URL(
+        "../../site/snippets/getting-started/0001_create_users_and_posts.sql",
+        import.meta.url,
+      ),
+    );
+    const migration = readFileSync(
+      new URL("../../site/snippets/migrations/0002_add_bio_to_users.sql", import.meta.url),
+      "utf8",
+    );
+    await binding.prepare(migration).run();
+
+    const db = connect(binding);
+    const user = await writeBio(db, "ada@example.com");
+
+    expect((await db.model(MigratedUser).find(user.id)).bio).toBe("Writes about D1");
+    await dispose();
+  });
+
+  test("code that doesn't declare a newer column keeps working, as the guide says", async () => {
+    const { db: binding, dispose } = await createTestDatabase(
+      new URL(
+        "../../site/snippets/getting-started/0001_create_users_and_posts.sql",
+        import.meta.url,
+      ),
+    );
+    await binding.prepare("ALTER TABLE users ADD COLUMN bio TEXT").run();
+    await binding
+      .prepare("INSERT INTO users (id, email, bio) VALUES ('u1', 'a@example.com', 'hi')")
+      .run();
+    // The User of Getting started, deployed before the migration: no bio attribute.
+    const db = connect(binding);
+    const user = await db.model(User).find("u1");
+
+    user.email = "b@example.com";
+    await user.save();
+    await user.reload();
+    const created = await db.model(User).create({ email: "c@example.com" });
+
+    expect(user.email).toBe("b@example.com");
+    expect(created.isPersisted()).toBe(true);
+    expect(JSON.stringify(user)).not.toContain("bio");
+    await dispose();
   });
 });
