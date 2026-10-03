@@ -2,8 +2,12 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
+      // The `d1-record` command: package.json's bin points at its build, dist/cli.mjs.
+      "entry": ["cli/bin.ts"],
+      // A generated schema, committed as the end-to-end test's fixture: all of it is output.
+      "ignore": ["tests/fixtures/schema-project/schema.ts"],
       "typescript": {
-        "config": ["tsconfig.json", "src/tsconfig.json"],
+        "config": ["tsconfig.json", "src/tsconfig.json", "cli/tsconfig.json"],
       },
       "ignoreDependencies": ["@arethetypeswrong/core", "publint"],
     },

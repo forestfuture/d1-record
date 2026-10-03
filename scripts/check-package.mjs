@@ -1,5 +1,5 @@
-// The published tarball holds exactly these files: the library, its docs for agents, and the
-// package's own metadata. Run with `vp run check:package`, after `vp pack` and `vp run docs:build`
+// The published tarball holds exactly these files: the library, its `d1-record` command, its docs for
+// agents, and the package's own metadata. Run with `vp run check:package`, after `vp pack` and `vp run docs:build`
 // (as CI does): it packs what's built, skipping `prepack`, so pnpm prints only the JSON.
 import { execFileSync } from "node:child_process";
 
@@ -7,6 +7,7 @@ const expected = [
   "LICENSE",
   "README.md",
   "SKILL.md",
+  "dist/cli.mjs",
   "dist/index.d.mts",
   "dist/index.mjs",
   "llms-full.txt",

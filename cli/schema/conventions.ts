@@ -1,6 +1,6 @@
 import { camelize, underscore } from "../../src/naming.ts";
 
-export type AttributeType = "string" | "integer" | "real" | "boolean" | "datetime" | "json";
+type AttributeType = "string" | "integer" | "real" | "boolean" | "datetime" | "json";
 
 /** A default the generated spec carries: a literal, or a key generated in code. */
 export type Default = { literal: string | number | boolean } | { generated: "uuid" };
@@ -79,7 +79,7 @@ function refinedByName(
 }
 
 /** A SQL literal default as a value of the attribute's type; undefined for anything else. */
-export function literalDefault(text: string | null, type: AttributeType): Default | undefined {
+function literalDefault(text: string | null, type: AttributeType): Default | undefined {
   if (text === null) return undefined;
   const value = text.trim();
   if (type === "boolean") {

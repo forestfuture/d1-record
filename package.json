@@ -20,6 +20,9 @@
     "type": "git",
     "url": "git+https://github.com/forestfuture/d1-record.git"
   },
+  "bin": {
+    "d1-record": "./dist/cli.mjs"
+  },
   "files": [
     "dist",
     "llms-full.txt",
