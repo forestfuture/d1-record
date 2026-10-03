@@ -69,3 +69,9 @@ CREATE TABLE comments (
   post_id INTEGER REFERENCES posts (id),
   body TEXT
 );
+
+-- A json attribute over a column declared JSON, which SQLite gives numeric affinity.
+CREATE TABLE json_values (
+  id INTEGER PRIMARY KEY,
+  value JSON
+);
