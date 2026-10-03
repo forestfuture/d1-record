@@ -222,47 +222,50 @@ describe("Model files", () => {
     className: "LineItem",
     table: "line_items",
     associations: [{ name: "order", className: "Order" }],
-    schemaImport: "../db/schema",
+    base: { className: "ApplicationRecord", importPath: "./application-record" },
   };
 
-  test("one per Model, named in kebab-case, importing the schema and its belongsTo targets", () => {
+  test("one per Model, named in kebab-case, extending ApplicationRecord and importing its belongsTo targets", () => {
     expect(modelFileName("LineItem")).toBe("line-item.ts");
     expect(modelSource(model, { separateFiles: true }))
       .toBe(`import { belongsTo } from "@forestfuture/d1-record";
-import { Model } from "../db/schema";
+import { ApplicationRecord } from "./application-record";
 import { Order } from "./order";
 
-export class LineItem extends Model("line_items") {
+export class LineItem extends ApplicationRecord("line_items") {
   order = belongsTo(Order);
 }
 `);
     expect(modelSource({ ...model, associations: [] }, { separateFiles: true }))
-      .toBe(`import { Model } from "../db/schema";
+      .toBe(`import { ApplicationRecord } from "./application-record";
 
-export class LineItem extends Model("line_items") {}
+export class LineItem extends ApplicationRecord("line_items") {}
 `);
   });
 
   test("appended to one models file, adding belongsTo to its import from the library", () => {
     const existing = `import { hasMany } from "@forestfuture/d1-record";
-import { Model } from "./db/schema";
+import { ApplicationRecord } from "./models/application-record";
 
-export class Order extends Model("orders") {
+export class Order extends ApplicationRecord("orders") {
   lineItems = hasMany(LineItem);
 }
 `;
-    const inOneFile = { ...model, schemaImport: "./db/schema" };
+    const inOneFile = {
+      ...model,
+      base: { className: "ApplicationRecord", importPath: "./models/application-record" },
+    };
 
     expect(appendModel(existing, inOneFile)).toEqual({
       ok: true,
       source: `import { belongsTo, hasMany } from "@forestfuture/d1-record";
-import { Model } from "./db/schema";
+import { ApplicationRecord } from "./models/application-record";
 
-export class Order extends Model("orders") {
+export class Order extends ApplicationRecord("orders") {
   lineItems = hasMany(LineItem);
 }
 
-export class LineItem extends Model("line_items") {
+export class LineItem extends ApplicationRecord("line_items") {
   order = belongsTo(Order);
 }
 `,
@@ -273,24 +276,32 @@ export class LineItem extends Model("line_items") {
     });
   });
 
-  test("a models file without the imports gets them; one importing another database's Model is refused", () => {
-    const inOneFile = { ...model, schemaImport: "./db/DB" };
+  test("a models file without the imports gets them, so Models of several databases can share one", () => {
+    const logs = {
+      ...model,
+      base: { className: "LogsRecord", importPath: "./models/logs-record" },
+    };
+    const existing = `import { DbRecord } from "./models/db-record";
 
-    expect(appendModel("export const version = 1;\n", inOneFile)).toEqual({
+export class Order extends DbRecord("orders") {}
+`;
+
+    expect(appendModel(existing, logs)).toEqual({
       ok: true,
       source: `import { belongsTo } from "@forestfuture/d1-record";
-import { Model } from "./db/DB";
-export const version = 1;
+import { LogsRecord } from "./models/logs-record";
+import { DbRecord } from "./models/db-record";
 
-export class LineItem extends Model("line_items") {
+export class Order extends DbRecord("orders") {}
+
+export class LineItem extends LogsRecord("line_items") {
   order = belongsTo(Order);
 }
 `,
     });
-    expect(appendModel('import { Model } from "./db/LOGS";\n', inOneFile)).toEqual({
+    expect(appendModel('import { LogsRecord } from "./elsewhere";\n', logs)).toEqual({
       ok: false,
-      error:
-        "it imports Model from ./db/LOGS, not ./db/DB; keep each database's Models in their own file",
+      error: "it imports LogsRecord from ./elsewhere, not ./models/logs-record",
     });
   });
 });

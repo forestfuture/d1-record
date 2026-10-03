@@ -72,10 +72,12 @@ describe("d1-record g model", () => {
     expect(output).toBe(`Wrote migrations/0001_create_products.sql
 Wrote src/models/product.ts
 Wrote src/db/schema.ts (1 table) from migrations/
+Wrote src/models/application-record.ts
 Next: npx wrangler d1 migrations apply shop-db --local`);
-    expect(read(cwd, "src/models/product.ts")).toBe(`import { Model } from "../db/schema";
+    expect(read(cwd, "src/models/product.ts"))
+      .toBe(`import { ApplicationRecord } from "./application-record";
 
-export class Product extends Model("products") {}
+export class Product extends ApplicationRecord("products") {}
 `);
     expect(read(cwd, "src/db/schema.ts")).toContain(
       '  priceCents: { type: "integer", null: false, default: () => 0 },',
@@ -99,10 +101,10 @@ export class Product extends Model("products") {}
     );
     expect(read(cwd, "src/models/line-item.ts"))
       .toBe(`import { belongsTo } from "@forestfuture/d1-record";
-import { Model } from "../db/schema";
+import { ApplicationRecord } from "./application-record";
 import { Order } from "./order";
 
-export class LineItem extends Model("line_items") {
+export class LineItem extends ApplicationRecord("line_items") {
   order = belongsTo(Order);
 }
 `);
@@ -115,11 +117,11 @@ export class LineItem extends Model("line_items") {
     generate(cwd, ["model", "Post", "user:references"], { models: "src/models.ts" });
 
     expect(read(cwd, "src/models.ts")).toBe(`import { belongsTo } from "@forestfuture/d1-record";
-import { Model } from "./db/schema";
+import { ApplicationRecord } from "./models/application-record";
 
-export class User extends Model("users") {}
+export class User extends ApplicationRecord("users") {}
 
-export class Post extends Model("posts") {
+export class Post extends ApplicationRecord("posts") {
   user = belongsTo(User);
 }
 `);
@@ -155,7 +157,7 @@ describe("names", () => {
       "Note: line_items looks plural, so the Model is LineItem, as Rails names it",
     );
     expect(read(cwd, "src/models/line-item.ts")).toContain(
-      'export class LineItem extends Model("line_items") {}',
+      'export class LineItem extends ApplicationRecord("line_items") {}',
     );
   });
 

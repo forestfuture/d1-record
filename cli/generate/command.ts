@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { generateSchema } from "../schema/command.ts";
 import {
+  importPath,
   migrationsOf,
   shown,
   slashed,
@@ -111,12 +112,6 @@ function keyTypes(tables: readonly GeneratedTable[]): Map<string, KeyType> {
   );
 }
 
-/** A module path from one file's folder to another file, as an import writes it (`../db/schema`). */
-function importPath(fromDir: string, to: string): string {
-  const path = slashed(relative(fromDir, to)).replace(/\.ts$/, "");
-  return path.startsWith(".") ? path : `./${path}`;
-}
-
 /** The Model `g model` writes, and where (its own file, or appended to one); or why it can't. */
 function modelFile(request: Request): FileToWrite | Refusal {
   const { cwd, target, options, columns } = request;
@@ -130,7 +125,10 @@ function modelFile(request: Request): FileToWrite | Refusal {
     associations: columns
       .filter((column) => column.type === "references")
       .map((column) => ({ name: column.association!, className: classify(column.association!) })),
-    schemaImport: importPath(dirname(path), target.out),
+    base: {
+      className: target.base.className,
+      importPath: importPath(dirname(path), target.base.path),
+    },
   };
   if (!existsSync(path)) return { path, source: modelSource(model, { separateFiles }) };
   const existing = readFileSync(path, "utf8");

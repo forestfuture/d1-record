@@ -5,8 +5,8 @@ export interface ModelToWrite {
   className: string;
   table: string;
   associations: readonly { name: string; className: string }[];
-  /** The generated schema, as the Model's file imports it (`../db/schema`). */
-  schemaImport: string;
+  /** The app's base class for the database, and its module as this file imports it. */
+  base: { className: string; importPath: string };
 }
 
 const library = "@forestfuture/d1-record";
@@ -16,9 +16,9 @@ export function modelFileName(className: string): string {
   return `${moduleName(className)}.ts`;
 }
 
-/** The class itself: `export class LineItem extends Model("line_items") { … }`. */
-function classSource({ className, table, associations }: ModelToWrite): string {
-  const head = `export class ${className} extends Model(${JSON.stringify(table)})`;
+/** The class itself: `export class LineItem extends ApplicationRecord("line_items") { … }`. */
+function classSource({ className, table, associations, base }: ModelToWrite): string {
+  const head = `export class ${className} extends ${base.className}(${JSON.stringify(table)})`;
   if (associations.length === 0) return `${head} {}\n`;
   const fields = associations.map(
     ({ name, className: target }) => `  ${name} = belongsTo(${target});\n`,
@@ -27,8 +27,8 @@ function classSource({ className, table, associations }: ModelToWrite): string {
 }
 
 /**
- * A Model's source, with its imports: the library's `belongsTo` when it has one, the schema's
- * `Model`, and, in a file of its own, each target's file (`./order`), as Rails assumes it exists.
+ * A Model's source, with its imports: the library's `belongsTo` when it has one, the app's
+ * base class (`ApplicationRecord`), and, in a file of its own, each target's file (`./order`), as Rails assumes it exists.
  */
 export function modelSource(
   model: ModelToWrite,
@@ -36,7 +36,7 @@ export function modelSource(
 ): string {
   const imports: string[] = [];
   if (model.associations.length > 0) imports.push(`import { belongsTo } from "${library}";`);
-  imports.push(`import { Model } from "${model.schemaImport}";`);
+  imports.push(`import { ${model.base.className} } from "${model.base.importPath}";`);
   if (separateFiles) {
     for (const { className } of model.associations) {
       imports.push(`import { ${className} } from "./${moduleName(className)}";`);
@@ -60,22 +60,23 @@ function importingBelongsTo(source: string): string {
 }
 
 /**
- * `source` importing `Model` from the schema, adding the import if it has none; or why not, when
- * it imports another database's `Model`.
+ * `source` importing the base class, adding the import if it has none; or why not, when it
+ * imports a class of that name from somewhere else.
  */
-function importingModel(
+function importingBase(
   source: string,
-  schemaImport: string,
+  { className, importPath }: ModelToWrite["base"],
 ): { ok: true; source: string } | { ok: false; error: string } {
-  const existing = /^import \{[^}]*\bModel\b[^}]*\} from "([^"]+)";$/m.exec(source);
-  if (existing === null)
-    return { ok: true, source: `import { Model } from "${schemaImport}";\n${source}` };
-  return existing[1] === schemaImport
+  const existing = new RegExp(
+    `^import \\{[^}]*\\b${className}\\b[^}]*\\} from "([^"]+)";$`,
+    "m",
+  ).exec(source);
+  if (existing === null) {
+    return { ok: true, source: `import { ${className} } from "${importPath}";\n${source}` };
+  }
+  return existing[1] === importPath
     ? { ok: true, source }
-    : {
-        ok: false,
-        error: `it imports Model from ${existing[1]}, not ${schemaImport}; keep each database's Models in their own file`,
-      };
+    : { ok: false, error: `it imports ${className} from ${existing[1]}, not ${importPath}` };
 }
 
 /** A models file with one more Model at its end (`--models src/models.ts`), or why it can't be. */
@@ -85,7 +86,7 @@ export function appendModel(
 ): { ok: true; source: string } | { ok: false; error: string } {
   if (existing.trim() === "")
     return { ok: true, source: modelSource(model, { separateFiles: false }) };
-  const imported = importingModel(existing, model.schemaImport);
+  const imported = importingBase(existing, model.base);
   if (!imported.ok) return imported;
   const source =
     model.associations.length > 0 ? importingBelongsTo(imported.source) : imported.source;

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, watch, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import {
+  importPath,
   migrationsOf,
   shown,
   targetsOf,
@@ -8,7 +9,7 @@ import {
   type ProjectOptions,
   type Target,
 } from "./project.ts";
-import { fingerprintIn, fingerprintOf, renderSchema } from "./render.ts";
+import { fingerprintIn, fingerprintOf, renderBase, renderSchema } from "./render.ts";
 import { layoutNote, migrationTool, originNotes } from "./origin.ts";
 import { schemaOf } from "./schema.ts";
 
@@ -44,6 +45,15 @@ function written(rendered: string, target: Target): void {
   writeFileSync(target.out, rendered);
 }
 
+/** Writes the app's base class for the database (`ApplicationRecord`) the first time; never again. */
+function writeBase(cwd: string, target: Target, print: Print): void {
+  const { path, className } = target.base;
+  if (existsSync(path)) return;
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, renderBase(className, importPath(dirname(path), target.out)));
+  print(`Wrote ${shown(cwd, path)}`);
+}
+
 /** Generates (or, with `check`, checks) one database's schema; 0 when it went well. */
 export function generateSchema(cwd: string, target: Target, check: boolean, print: Print): number {
   const out = shown(cwd, target.out);
@@ -66,6 +76,7 @@ export function generateSchema(cwd: string, target: Target, check: boolean, prin
   else {
     written(rendered, target);
     print(`Wrote ${out} (${count}) from ${source}`);
+    writeBase(cwd, target, print);
     const tool = migrationTool(target.configDir, migrations);
     notes.unshift(...result.notes, ...originNotes(tool, result.tables));
   }

@@ -1,0 +1,11 @@
+{
+  // Tests run through Vite, which resolves modules as a bundler does, so they're checked that way
+  // too. That's also how Worker projects resolve them, so a generated project's extensionless
+  // imports (tests/fixtures/schema-project) resolve here as they would in an app.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "module": "preserve",
+    "moduleResolution": "bundler"
+  },
+  "include": ["."]
+}
