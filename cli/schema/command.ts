@@ -9,6 +9,7 @@ import {
   type Target,
 } from "./project.ts";
 import { fingerprintIn, fingerprintOf, renderSchema } from "./render.ts";
+import { migrationTool, originNotes } from "./origin.ts";
 import { schemaOf } from "./schema.ts";
 
 export interface SchemaOptions extends ProjectOptions {
@@ -50,9 +51,8 @@ export function generateSchema(cwd: string, target: Target, check: boolean, prin
   if (!existsSync(target.migrationsDir)) {
     return failed([`No migrations folder at ${source}`], target, out, print);
   }
-  const result = schemaOf(migrationsOf(target), {
-    migrationsTable: target.database.migrationsTable,
-  });
+  const migrations = migrationsOf(target);
+  const result = schemaOf(migrations, { migrationsTable: target.database.migrationsTable });
   if (!result.ok) return failed(result.errors, target, out, print);
   const existing = existsSync(target.out) ? readFileSync(target.out, "utf8") : undefined;
   if (check) return checked(existing, fingerprintOf(result.tables), out, print);
@@ -63,7 +63,8 @@ export function generateSchema(cwd: string, target: Target, check: boolean, prin
     written(rendered, target);
     print(`Wrote ${out} (${count}) from ${source}`);
   }
-  for (const note of result.notes) print(`Note: ${note}`);
+  const tool = migrationTool(target.configDir, migrations);
+  for (const note of [...result.notes, ...originNotes(tool, result.tables)]) print(`Note: ${note}`);
   return 0;
 }
 

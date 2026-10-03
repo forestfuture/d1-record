@@ -182,6 +182,25 @@ migrations_dir = "db\\u002Fmigrate"
     expect(schema).toContain("/** users — last changed by 0002_bio/migration.sql */");
   });
 
+  test("migrations from Drizzle get notes on the columns worth checking", () => {
+    const cwd = project({
+      "wrangler.jsonc": `{ "d1_databases": [{ "binding": "DB", "migrations_dir": "drizzle" }] }`,
+      "drizzle.config.ts": "export default {};",
+      "drizzle/0000_init.sql":
+        "CREATE TABLE posts (id INTEGER PRIMARY KEY, published_at INTEGER);\n--> statement-breakpoint\nCREATE INDEX i ON posts (published_at);",
+    });
+
+    const { code, output } = run(cwd);
+
+    expect(code).toBe(0);
+    expect(output.split("\n").slice(1)).toEqual([
+      expect.stringMatching(
+        /^Note: these migrations look like Drizzle's\. Some columns may convert/,
+      ),
+      "Note: posts.published_at: read as an integer; if it holds a Unix timestamp, it's a number, not a Date",
+    ]);
+  });
+
   test("--watch regenerates when a migration changes", async () => {
     const cwd = project({
       "wrangler.jsonc": wranglerJsonc,
