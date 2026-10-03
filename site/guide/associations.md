@@ -160,6 +160,11 @@ Everything a destroy does, the owner's DELETE included, is written in one atomic
 
 As in Rails, `deleteAll()` on the association itself follows its `dependent:` strategy: it deletes the records for `"destroy"` or `"deleteAll"`, and otherwise sets their foreign key to `NULL`. See [Batches and bulk writes](./batches).
 
-## Not supported
+## Not built yet
 
-Polymorphic associations, `has_many :through`, counter caches and inverse inference aren't supported.
+These Rails association features aren't in d1-record yet. Nothing in D1 prevents any of them:
+
+- **Associations through another** (`has_many :projects, through: :assignments`) ([#59](https://github.com/forestfuture/d1-record/issues/59)). Reading them needs no SQL join, only a subquery; writing through them is the larger part.
+- **Polymorphic associations** (`belongs_to :commentable, polymorphic: true`) ([#60](https://github.com/forestfuture/d1-record/issues/60)). They need a stable name for each Model, since the stored type can't rely on class names a bundler may change.
+- **Counter caches** (`counter_cache: true`) ([#61](https://github.com/forestfuture/d1-record/issues/61)). The count's update can go in the same atomic batch as the write, so it can't drift.
+- **Inverse associations** (`inverse_of`, so `comment.post()` returns the post its comments were loaded from, without a query) ([#62](https://github.com/forestfuture/d1-record/issues/62)).
