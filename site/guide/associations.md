@@ -162,9 +162,9 @@ As in Rails, `deleteAll()` on the association itself follows its `dependent:` st
 
 ## Not built yet
 
-These Rails association features aren't in d1-record yet. Nothing in D1 prevents any of them:
+These association features aren't in d1-record yet, though nothing in D1 prevents any of them. The code shows the shape they're likely to take; it may change when they're designed.
 
-- **Associations through another** (`has_many :projects, through: :assignments`) ([#59](https://github.com/forestfuture/d1-record/issues/59)). Reading them needs no SQL join, only a subquery; writing through them is the larger part.
-- **Polymorphic associations** (`belongs_to :commentable, polymorphic: true`) ([#60](https://github.com/forestfuture/d1-record/issues/60)). They need a stable name for each Model, since the stored type can't rely on class names a bundler may change.
-- **Counter caches** (`counter_cache: true`) ([#61](https://github.com/forestfuture/d1-record/issues/61)). The count's update can go in the same atomic batch as the write, so it can't drift.
-- **Inverse associations** (`inverse_of`, so `comment.post()` returns the post its comments were loaded from, without a query) ([#62](https://github.com/forestfuture/d1-record/issues/62)).
+- **Associations through another** ([#59](https://github.com/forestfuture/d1-record/issues/59)): `projects = hasMany(Project, { through: "assignments" })`, a user's projects reached through their assignments. Reading them needs no SQL join, only a subquery; writing through them is the larger part.
+- **Polymorphic associations** ([#60](https://github.com/forestfuture/d1-record/issues/60)): `commentable = belongsTo([Post, Photo])`, a comment that belongs to a post or a photo, with `comments = hasMany(Comment, { as: "commentable" })` on each. They need a stable name for each Model, since the stored type can't rely on class names a bundler may change.
+- **Counter caches** ([#61](https://github.com/forestfuture/d1-record/issues/61)): `post = belongsTo(Post, { counterCache: true })`, keeping a `commentsCount` on each post. Its update can go in the same atomic batch as the write, so it can't drift.
+- **Inverse associations** ([#62](https://github.com/forestfuture/d1-record/issues/62)): after `await post.comments().toArray()`, each `comment.post()` returns that same post, without a query.

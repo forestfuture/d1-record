@@ -66,12 +66,12 @@ Only `abort()` stops a save. Returning `false` from a callback does nothing, and
 
 - **`after_commit`, `after_rollback`** and their `after_*_commit` shortcuts. In Rails, a save runs inside a database transaction, and `after_save` runs before that transaction commits, so `after_commit` exists to wait until it has. Here, D1 has already committed a save's writes before any after-callback runs, so `afterSave`, `afterCreate`, `afterUpdate` and `afterDestroy` are already "after commit". In a [`db.batch`](./batches#records-in-a-batch), after-callbacks run once the whole batch is written. There's no rollback to hook into: when D1 refuses a write, nothing was written, and the save throws the [constraint error](./errors#constraint-errors).
 
-**Not built yet**, since nothing in D1 prevents them:
+**Not built yet**, since nothing in D1 prevents them. The code shows their likely shape, which may change when they're designed:
 
-- `around_save`, `around_create`, `around_update` and `around_destroy` ([#48](https://github.com/forestfuture/d1-record/issues/48)).
-- `after_initialize` and `after_find` ([#49](https://github.com/forestfuture/d1-record/issues/49)).
-- `touch` and `after_touch` ([#50](https://github.com/forestfuture/d1-record/issues/50)).
-- The `on: :create` / `on: :update` option ([#51](https://github.com/forestfuture/d1-record/issues/51)). Until then, use `if: (record) => record.isNewRecord()` on a validation, or check `isNewRecord()` inside a callback.
+- **Around callbacks** ([#48](https://github.com/forestfuture/d1-record/issues/48)): `this.aroundSave(async (record, proceed) => { …; await proceed(); … })`, and `aroundCreate`, `aroundUpdate` and `aroundDestroy`.
+- **`afterInitialize` and `afterFind`** ([#49](https://github.com/forestfuture/d1-record/issues/49)): for every record built or loaded, and every record loaded.
+- **`record.touch()` and `afterTouch`** ([#50](https://github.com/forestfuture/d1-record/issues/50)): sets `updatedAt` without a full save.
+- **`on: "create"` / `on: "update"`** ([#51](https://github.com/forestfuture/d1-record/issues/51)): `this.validates("password", { presence: true, on: "create" })`. Until then, use `if: (record) => record.isNewRecord()` on a validation, or check `isNewRecord()` inside a callback.
 
 Rails' `if:` and `unless:` options for callbacks aren't needed: a callback is a function, so write the condition inside it.
 
