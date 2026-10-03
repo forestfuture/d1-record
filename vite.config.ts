@@ -4,17 +4,28 @@ export default defineConfig({
   staged: {
     "*": "vp check --fix",
   },
-  pack: {
-    target: "es2022",
-    tsconfig: "src/tsconfig.json",
-    dts: {
-      generator: "tsgo",
+  pack: [
+    {
+      target: "es2022",
+      tsconfig: "src/tsconfig.json",
+      dts: {
+        generator: "tsgo",
+      },
+      exports: true,
+      // ESM-only package for Workers: skip node10/CommonJS resolution checks.
+      attw: { profile: "esm-only" },
+      publint: true,
     },
-    exports: true,
-    // ESM-only package for Workers: skip node10/CommonJS resolution checks.
-    attw: { profile: "esm-only" },
-    publint: true,
-  },
+    {
+      // The `d1-record` command (package.json's bin): Node only, never imported by a Worker.
+      entry: { cli: "cli/bin.ts" },
+      platform: "node",
+      target: "node22",
+      tsconfig: "cli/tsconfig.json",
+      dts: false,
+      clean: false,
+    },
+  ],
   resolve: {
     // Resolves the package's own name to src/, from tsconfig.json's `paths` (one mapping for
     // TypeScript and tests), so the documentation's examples import it as an app would.

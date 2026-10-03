@@ -1,4 +1,4 @@
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 import { convert, type Column, type Spec } from "./conventions.ts";
 
 export interface Migration {
@@ -40,7 +40,9 @@ function applied(migrations: readonly Migration[]): {
   changedBy: Map<string, string>;
   error?: string;
 } {
-  const db = new DatabaseSync(":memory:");
+  // Loaded when used, so a Node without node:sqlite gets the command's own message (cli/main.ts).
+  const { DatabaseSync: Database } = process.getBuiltinModule("node:sqlite");
+  const db = new Database(":memory:");
   const changedBy = new Map<string, string>();
   let before = definitions(db);
   for (const { name, sql } of migrations) {
