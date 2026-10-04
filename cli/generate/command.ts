@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import { generateSchema } from "../schema/command.ts";
+import { generateSchema, schemaRefusal } from "../schema/command.ts";
 import {
   importPath,
   migrationsOf,
@@ -184,6 +184,9 @@ function requestFor(
 ): (Request & { notes: string[] }) | Refusal {
   const target = targetFor(cwd, options);
   if (typeof target === "string") return { ok: false, errors: [target], wroteNothing: false };
+  // Checked first, so a generator never writes a migration whose schema it then can't write.
+  const refusal = schemaRefusal(cwd, target);
+  if (refusal !== undefined) return refused(refusal);
   const parsed = parseColumns(options.columns);
   if (!parsed.ok) return refused(...parsed.errors);
   const request = { cwd, target, options, columns: parsed.columns, notes: [] as string[] };
