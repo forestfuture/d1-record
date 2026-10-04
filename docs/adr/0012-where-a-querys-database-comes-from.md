@@ -8,7 +8,7 @@ Supersedes ADR-0003. A query finds its database one of three ways, and nothing a
 
 A record keeps the database a query used to load it, or the one it was first saved or destroyed on, past the end of `withDatabase`. `batch([...])` writes on the database its entries resolve to; entries reached through a Model's statics and through `db.model(…)` of the same database share it.
 
-ADR-0003 allowed only the explicit Database, to guarantee that no binding or Session was stored on a class where concurrent requests in one isolate could share it. That guarantee holds: level 1 stores only a binding (no request state), and level 2 stores a request's Database only in that request's `AsyncLocalStorage`. `User.using(env.DB)` stays unoffered, since it would bind a database to a class.
+ADR-0003 allowed only the explicit Database, to guarantee that no binding or Session was stored on a class where concurrent requests in one isolate could share it. That guarantee holds: level 1 stores only a binding (no request state), and level 2 stores a request's Database only in that request's `AsyncLocalStorage`. `User.using(env.DB)` stays unoffered, since it would bind a database to a class. A query listener that holds nothing about a request may live on a class, as `static onQuery` does (#78): it's shared by every request, like the binding, and can't tell them apart.
 
 ## Consequences
 

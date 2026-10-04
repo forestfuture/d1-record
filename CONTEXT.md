@@ -88,6 +88,10 @@ _Avoid_: Scope (on its own), default scope
 What destroying a **Record** does to an **Association**'s records: destroy them, delete them, nullify their foreign key, or refuse while they exist (a restriction, which isn't an **Abort**).
 _Avoid_: Cascade (that's the database's), dependent destroy (for all of them)
 
+**Query listener**:
+A function called once per statement sent to D1 (`onQuery`): a database's, for one request's queries, or a Model class's (`static onQuery`, usually on the **Base class**), for every query of its Models. It only observes: it never changes a query's outcome.
+_Avoid_: Logger, hook, middleware
+
 **Current database**:
 The database a query started from a Model (`User.find(id)`) uses: the request's, set with `withDatabase`, or else the Model's **Binding**'s. Never stored on a class.
 _Avoid_: Default connection, global database

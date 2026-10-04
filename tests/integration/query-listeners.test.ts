@@ -1,10 +1,23 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { batch, connect, Model, modelFor, withDatabase, type QueryEvent } from "../../src/index.ts";
+import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import {
+  batch,
+  connect,
+  Model,
+  modelFor,
+  NotNullViolation,
+  withDatabase,
+  type QueryEvent,
+} from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
+
+// Level 1 reads the binding from cloudflare:workers; here, this test's D1.
+const workers: { env: Record<string, unknown> } = { env: {} };
+vi.mock("cloudflare:workers", () => workers);
 
 // An app's base class with an app-wide listener (#78), as application-record.ts would declare it.
 const logged: QueryEvent[] = [];
 class Base extends Model.Base {
+  static override binding = "DB";
   static override onQuery = (event: QueryEvent) => {
     logged.push(event);
   };
@@ -32,7 +45,10 @@ class Quiet extends User {
 
 let binding: TestDatabase;
 let dispose: () => Promise<void>;
-beforeAll(async () => ({ db: binding, dispose } = await createTestDatabase()));
+beforeAll(async () => {
+  ({ db: binding, dispose } = await createTestDatabase());
+  workers.env = { DB: binding };
+});
 afterAll(() => dispose());
 beforeEach(() => {
   logged.length = 0;
@@ -43,25 +59,30 @@ describe("an app-wide onQuery on the base class", () => {
   test("sees every statement of every Model built on it, with the Model's name, whichever database runs it", async () => {
     const db = connect(binding);
 
-    await db.model(User).count();
-    await withDatabase(connect(binding), () => Post.count());
+    await db.model(User).count(); // an explicit database
+    await withDatabase(connect(binding), () => Post.count()); // the request's
+    await User.count(); // the Model's binding
 
     expect(logged.map(({ model, sql }) => [model, sql.split(" ")[0]])).toEqual([
       ["User", "SELECT"],
       ["Post", "SELECT"],
+      ["User", "SELECT"],
     ]);
     expect(logged[0]).toMatchObject({ params: [], durationMs: expect.any(Number) });
   });
 
   test("runs after a database's own listener, which sees the Model too", async () => {
     const order: string[] = [];
+    class Ordered extends User {
+      static override onQuery = ({ model }: QueryEvent) => {
+        order.push(`class: ${model}`);
+      };
+    }
     const db = connect(binding, { onQuery: ({ model }) => order.push(`database: ${model}`) });
-    const before = logged.length;
 
-    await withDatabase(db, () => User.count());
+    await withDatabase(db, () => Ordered.count());
 
-    expect(order).toEqual(["database: User"]);
-    expect(logged.length - before).toBe(1);
+    expect(order).toEqual(["database: Ordered", "class: Ordered"]);
   });
 
   test("a Model's own replaces the inherited one, as any static does", async () => {
@@ -82,5 +103,68 @@ describe("an app-wide onQuery on the base class", () => {
     await expect(connect(binding).model(User).insert({ id: 1, email: null })).rejects.toThrow();
 
     expect(logged.at(-1)).toMatchObject({ model: "User", error: expect.any(Error) });
+  });
+});
+
+describe("a listener that throws", () => {
+  // Never changes a query's outcome: it's logged, and the other listener still runs.
+  const failing = () => {
+    throw new Error("listener bug");
+  };
+  class Fragile extends User {
+    static override onQuery = failing;
+  }
+
+  test("on success: the query's result stands, and the error is logged", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(await connect(binding, { onQuery: failing }).model(Fragile).count()).toBe(0);
+      expect(errors.mock.calls.map(([message]) => message)).toEqual([
+        "onQuery threw; the query's result is unaffected:",
+        "onQuery threw; the query's result is unaffected:",
+      ]);
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
+  test("on a D1 error: the caller gets D1's error, translated, and the other listener still runs", async () => {
+    const seen: QueryEvent[] = [];
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    class Watched extends User {
+      static override onQuery = (event: QueryEvent) => {
+        seen.push(event);
+      };
+    }
+    try {
+      await expect(
+        connect(binding, { onQuery: failing }).model(Watched).insert({ id: 1, email: null }),
+      ).rejects.toThrow(NotNullViolation);
+      expect(seen).toHaveLength(1);
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
+  test("in a failed batch: every statement is still reported, and D1's error reaches the caller", async () => {
+    const seen: QueryEvent[] = [];
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const db = connect(binding, { onQuery: failing });
+      class Watched extends User {
+        static override onQuery = (event: QueryEvent) => {
+          seen.push(event);
+        };
+      }
+      await expect(
+        db.batch([
+          db.model(Watched).where({ id: 0 }).toDeleteAll(),
+          db.model(Watched).toInsert({ id: 2, email: null }),
+        ]),
+      ).rejects.toThrow(NotNullViolation);
+      expect(seen.map(({ error }) => error !== undefined)).toEqual([true, true]);
+    } finally {
+      errors.mockRestore();
+    }
   });
 });
