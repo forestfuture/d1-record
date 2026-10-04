@@ -8,7 +8,10 @@ import { explainMissingTable } from "./table-names.ts";
  * statement's Model's (`static onQuery`, usually on the app's base class).
  */
 export interface QueryEvent {
-  /** The Model the statement is for: its class name (`"Product"`). */
+  /**
+   * The Model the statement is for: its class name (`"Product"`). It's `""` for an anonymous
+   * class, and a bundler that renames classes changes it; Wrangler keeps names by default.
+   */
   model: string;
   sql: string;
   params: unknown[];
@@ -31,6 +34,19 @@ function outsideRequest(error: unknown): NoDatabase | undefined {
       "the query into your fetch handler, or a function it calls",
     { cause: error },
   );
+}
+
+/**
+ * Calls a query listener, which never changes the query's outcome: a listener that throws is
+ * logged, and the query's result or D1's error reaches the caller as it would have (#78).
+ */
+function notify(listener: QueryListener | undefined, event: QueryEvent): void {
+  if (listener === undefined) return;
+  try {
+    listener(event);
+  } catch (error) {
+    console.error("onQuery threw; the query's result is unaffected:", error);
+  }
 }
 
 /** Where a Relation's or record's statements go: one database, or the current one (#77). */
@@ -124,7 +140,6 @@ export class D1Executor implements Executor {
         explainMissingTable(translateConstraintError(error, [model]), [model])
       );
     }
-    // Reported outside the try, so a listener that throws isn't mistaken for a D1 failure.
     this.#report(query, { durationMs: performance.now() - started, meta: result.meta });
     return result;
   }
@@ -135,8 +150,8 @@ export class D1Executor implements Executor {
     outcome: Pick<QueryEvent, "durationMs" | "meta" | "error">,
   ): void {
     const event: QueryEvent = { model: model.name, sql, params, ...outcome };
-    this.#onQuery?.(event);
-    model.onQuery?.(event);
+    notify(this.#onQuery, event);
+    notify(model.onQuery, event);
   }
 
   #prepare({ sql, params }: CompiledSql): D1PreparedStatement {

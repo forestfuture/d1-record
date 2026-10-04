@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 import { connect, Model, type QueryEvent } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
@@ -43,7 +43,7 @@ describe("instrumentation", () => {
     expect(String(queries[0]?.error)).toMatch(/no such table/);
   });
 
-  test("a listener that throws is called once and its error propagates unchanged", async () => {
+  test("a listener that throws is called once, logged, and never changes the query's result (#78)", async () => {
     const events: QueryEvent[] = [];
     const listenerError = new Error("listener failed");
     const db = connect(binding, {
@@ -52,8 +52,16 @@ describe("instrumentation", () => {
         throw listenerError;
       },
     });
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    await expect(db.model(User).toArray()).rejects.toBe(listenerError);
+    try {
+      expect(await db.model(User).toArray()).toEqual(expect.any(Array));
+      expect(errors.mock.calls).toEqual([
+        ["onQuery threw; the query's result is unaffected:", listenerError],
+      ]);
+    } finally {
+      errors.mockRestore();
+    }
     expect(events).toHaveLength(1);
     expect(events[0]?.error).toBeUndefined();
   });

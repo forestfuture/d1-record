@@ -7,6 +7,7 @@ import {
   type Database,
   type QueryListener,
 } from "@forestfuture/d1-record";
+import { env as workerEnv } from "cloudflare:workers";
 import { tables } from "../db/schema";
 import { Post, User } from "../getting-started/models";
 
@@ -74,6 +75,7 @@ declare const app: ExportedHandler<Env> & { fetch: NonNullable<ExportedHandler<E
 
 // #region per-request
 // src/worker.ts: one request's queries, tagged with its ID, as JSON lines for Workers Logs.
+// `app` stands for what your app exports as its Worker today: a framework's handler, or your own.
 export const logged = {
   fetch(request, env, ctx) {
     const requestId = request.headers.get("cf-ray") ?? crypto.randomUUID();
@@ -96,6 +98,18 @@ export const logged = {
   },
 } satisfies ExportedHandler<Env>;
 // #endregion per-request
+
+// #region app-wide-development
+// Logs only when LOG_SQL is set (in .dev.vars), read from the Worker's env when a query runs.
+class QuietInProduction extends Model.Base {
+  static override onQuery: QueryListener = ({ model, sql, durationMs }) => {
+    if ((workerEnv as { LOG_SQL?: string }).LOG_SQL) {
+      console.log(`${model} ${durationMs.toFixed(1)}ms ${sql}`);
+    }
+  };
+}
+// #endregion app-wide-development
+export const quiet = modelFor(tables, QuietInProduction);
 
 export const development = {
   fetch(request, env: Env & { LOG_SQL?: string }, ctx) {

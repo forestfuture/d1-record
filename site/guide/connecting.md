@@ -108,9 +108,13 @@ To group a request's queries, open its database with a listener that knows the r
 
 ### Only in development
 
-Leave `onQuery` out in production by keying it on a variable that only `.dev.vars` sets:
+Leave `onQuery` out in production by keying it on a variable that only `.dev.vars` sets. For one request's listener:
 
 <<< @/snippets/guide/connecting.ts#development{ts}
+
+The app-wide listener on your base class has no `env` of its own, so it reads the variable from `cloudflare:workers` when a query runs:
+
+<<< @/snippets/guide/connecting.ts#app-wide-development{ts}
 
 ### `Server-Timing`
 
