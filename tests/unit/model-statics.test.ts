@@ -40,7 +40,7 @@ describe("Relation methods as a Model's statics", () => {
       // @ts-expect-error find takes ids
       void User.find({ id: 1 });
     };
-    expect(typeof typed).toBe("function");
+    void typed; // type-checked only
   });
 });
 
@@ -57,5 +57,23 @@ describe("withDatabase", () => {
     } finally {
       builtin.mockRestore();
     }
+  });
+});
+
+describe("the statics' list", () => {
+  test("every Relation method is a static of every Model, defined and typed", () => {
+    const relationMethods = Object.getOwnPropertyNames(Relation.prototype).filter(
+      (name) => name !== "constructor" && !name.startsWith("#"),
+    );
+
+    for (const name of relationMethods) {
+      expect([name, typeof (User as unknown as Record<string, unknown>)[name]]).toEqual([
+        name,
+        "function",
+      ]);
+    }
+    // And in the types: no public Relation method is missing from a Model's statics.
+    type Missing = Exclude<Extract<keyof Relation<User>, string>, keyof typeof User>;
+    expectTypeOf<Missing>().toEqualTypeOf<never>();
   });
 });

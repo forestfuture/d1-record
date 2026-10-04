@@ -132,4 +132,93 @@ describe("batch([...]): atomic writes on the current database", () => {
       batch([User.toUpdateAll(sql`role = role`), explicit.model(User).toDeleteAll()]),
     ).rejects.toThrow(IncompatibleRelation);
   });
+
+  test("batch([]) writes nothing", async () => {
+    expect(await batch([])).toEqual([]);
+  });
+
+  test("a Model's statics and db.model(…) on the request's database are one database to a batch", async () => {
+    const db = connect(binding);
+
+    const results = await withDatabase(db, async () => {
+      await batch([
+        User.where({ id: 2 }).toUpdateAll(sql`role = role`),
+        db
+          .model(User)
+          .where({ id: 1 })
+          .toUpdateAll(sql`role = role`),
+      ]);
+      return db.batch([User.where({ id: 2 }).toUpdateAll(sql`role = role`)]);
+    });
+
+    expect(results).toHaveLength(1);
+  });
+});
+
+describe("records keep the database they came from", () => {
+  test("a record loaded inside withDatabase saves through that database after it returns", async () => {
+    const events: QueryEvent[] = [];
+    const request = connect(binding, { onQuery: (event) => events.push(event) });
+
+    const user = await withDatabase(request, () => User.find(2));
+    await user.update({ role: "editor-in-chief" });
+
+    expect(events.map((event) => event.sql.split(" ")[0])).toEqual(["SELECT", "UPDATE"]);
+  });
+
+  test("a record built from a Model takes the database it's saved on, and keeps it", async () => {
+    const events: QueryEvent[] = [];
+    const user = User.build({ id: 4, email: "barbara@example.com" });
+
+    await withDatabase(connect(binding, { onQuery: (event) => events.push(event) }), () =>
+      user.save(),
+    );
+    await user.update({ role: "author" });
+
+    expect(events.map((event) => event.sql.split(" ")[0])).toEqual(["INSERT", "UPDATE"]);
+  });
+});
+
+describe("withDatabase, request by request", () => {
+  test("concurrent requests each use their own database, however their awaits interleave", async () => {
+    const seen = { a: [] as string[], b: [] as string[] };
+    const run = (name: "a" | "b", delay: number) =>
+      withDatabase(
+        connect(binding, { onQuery: (event) => seen[name].push(event.sql) }),
+        async () => {
+          await User.find(1);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          await User.count();
+        },
+      );
+
+    await Promise.all([run("a", 15), run("b", 1)]);
+
+    expect([seen.a.length, seen.b.length]).toEqual([2, 2]);
+  });
+
+  test("nested calls add to the outer databases, the inner one first", async () => {
+    const outer: string[] = [];
+    const inner: string[] = [];
+
+    await withDatabase(connect(binding, { onQuery: (event) => outer.push(event.sql) }), () =>
+      withDatabase(connect(binding, { onQuery: (event) => inner.push(event.sql) }), () =>
+        User.count(),
+      ),
+    );
+
+    expect([outer.length, inner.length]).toEqual([0, 1]);
+  });
+
+  test("given several, each Model uses the one on its binding; others keep their own", async () => {
+    const onDb: string[] = [];
+    const elsewhere = connect({} as never); // another binding's database, never matched
+
+    await withDatabase(
+      [elsewhere, connect(binding, { onQuery: (event) => onDb.push(event.sql) })],
+      () => User.count(),
+    );
+
+    expect(onDb).toHaveLength(1);
+  });
 });

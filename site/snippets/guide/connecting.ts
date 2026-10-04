@@ -12,25 +12,40 @@ export const plain = {
   },
 } satisfies ExportedHandler<Env>;
 
-export const withSession = {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    // #region session
-    // Read at least as new as this client's last request wrote, or from any replica.
-    const bookmark = request.headers.get("x-d1-bookmark") ?? "first-unconstrained";
-    const db = connect(env.DB, { session: bookmark });
+/** A cookie's value from a request's Cookie header. */
+function cookie(request: Request, name: string): string | undefined {
+  const pair = request.headers
+    .get("cookie")
+    ?.split(/;\s*/)
+    .find((each) => each.startsWith(`${name}=`));
+  return pair?.slice(name.length + 1);
+}
 
-    // Every query inside, from any Model on env.DB, goes through this request's session.
-    const found = await withDatabase(db, async () => {
-      const user = await User.createOrThrow({ email: "ada@example.com" });
-      return User.find(user.id); // reads its own write
-    });
+async function handle(_request: Request): Promise<Response> {
+  const user = await User.createOrThrow({ email: "ada@example.com" });
+  return Response.json(await User.find(user.id)); // reads its own write
+}
 
-    const response = Response.json(found);
-    response.headers.set("x-d1-bookmark", db.bookmark() ?? bookmark);
-    return response;
-    // #endregion session
-  },
+// #region session
+// Middleware: each request reads at least as new as this browser's last write, from any replica.
+async function withSession(request: Request, env: Env, next: () => Promise<Response>) {
+  const bookmark = cookie(request, "d1-bookmark") ?? "first-unconstrained";
+  const db = connect(env.DB, { session: bookmark });
+
+  const response = await withDatabase(db, next); // every query in it uses the Session
+
+  const latest = db.bookmark() ?? bookmark;
+  response.headers.append(
+    "set-cookie",
+    `d1-bookmark=${latest}; Path=/; HttpOnly; Secure; SameSite=Lax`,
+  );
+  return response;
+}
+
+export default {
+  fetch: (request, env) => withSession(request, env, () => handle(request)),
 } satisfies ExportedHandler<Env>;
+// #endregion session
 
 export const observed = {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -44,6 +59,31 @@ export const observed = {
 
     return withDatabase(db, async () => Response.json(await User.count()));
     // #endregion on-query
+  },
+} satisfies ExportedHandler<Env>;
+
+export const timed = {
+  async fetch(_request: Request, env: Env): Promise<Response> {
+    // #region server-timing
+    let queries = 0;
+    let total = 0;
+    const db = connect(env.DB, {
+      onQuery({ durationMs }) {
+        queries += 1;
+        total += durationMs;
+      },
+    });
+
+    const response = await withDatabase(db, async () =>
+      Response.json(await User.active().toArray()),
+    );
+    // Shown in the browser's developer tools, under the request's Timing.
+    response.headers.append(
+      "server-timing",
+      `d1;dur=${total.toFixed(1)};desc="${queries} queries"`,
+    );
+    return response;
+    // #endregion server-timing
   },
 } satisfies ExportedHandler<Env>;
 

@@ -90,6 +90,14 @@ export class RecordState {
     this.#executor = executor;
   }
 
+  /**
+   * Binds a record built on the current database (`User.build(…)`) to the database it's saved or
+   * destroyed on, which it keeps from then on, as a loaded record keeps the one it came from.
+   */
+  async bindToResolved(): Promise<void> {
+    if (this.#executor !== undefined) this.#executor = await this.#executor.resolved();
+  }
+
   /** The record's Database; `NoDatabase` for a record constructed directly (`new User()`). */
   get executor(): Executor {
     if (this.#executor === undefined) {

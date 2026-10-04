@@ -45,7 +45,7 @@ With [D1 read replication](https://developers.cloudflare.com/d1/best-practices/r
 - `"first-primary"`: the first query goes to the primary, so it sees every write made so far.
 - A **bookmark**: read at least as new as the moment that bookmark was taken.
 
-`db.bookmark()` is the Session's latest bookmark. Hand it to the client, and pass it back on the next request, so a user never sees data older than their own last write:
+`db.bookmark()` is the Session's latest bookmark. Keep it in a cookie, and open the next request's Session from it, so a user never sees data older than their own last write. As middleware, around every request:
 
 <<< @/snippets/guide/connecting.ts#session{ts}
 
@@ -56,6 +56,10 @@ After the first query, D1 keeps the Session consistent: each later query reads d
 `onQuery` is called once for every statement sent to D1, batches included, with its SQL, bound values, timing, D1's `meta`, and the error if it failed. Opened for the request, it can tag each line with the request:
 
 <<< @/snippets/guide/connecting.ts#on-query{ts}
+
+To see a request's database time in the browser's developer tools, add it up and send it as a `Server-Timing` header:
+
+<<< @/snippets/guide/connecting.ts#server-timing{ts}
 
 There's no logger built in, so send these wherever you like. In a batch, each statement's `durationMs` is D1's own timing for it. When a batch fails, D1 doesn't say which statement failed, so every statement is reported with the error.
 

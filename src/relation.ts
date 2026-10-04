@@ -795,8 +795,10 @@ export class Relation<M extends ModelBase, S = {}> {
           ]
         : query.select;
     const rows = await this.#all(compileSelect(query, compileColumns(this.#model, loaded)));
-    const records = rows.map((row) => hydrate(this.#model, row, this.#executor));
-    if (query.includes !== undefined) await preload(records, query.includes, this.#executor);
+    // Bound to the database the query used, which they keep, even past a request's withDatabase.
+    const executor = await this.#executor.resolved();
+    const records = rows.map((row) => hydrate(this.#model, row, executor));
+    if (query.includes !== undefined) await preload(records, query.includes, executor);
     return records;
   }
 

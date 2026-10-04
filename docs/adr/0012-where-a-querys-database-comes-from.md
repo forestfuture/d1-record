@@ -1,0 +1,17 @@
+# Where a query's database comes from
+
+Supersedes ADR-0003. A query finds its database one of three ways, and nothing about a request is ever stored on a Model class:
+
+1. **The Model's binding,** with no setup, as Rails' `Product.find(id)`: `static binding = "DB"` (written on the app's base class by `d1-record schema`) names a D1 binding, read from `import { env } from "cloudflare:workers"` when a query runs. Each binding gets one Database with no Session or listener, shared by every request: the binding is the same object for all of them, so sharing it leaks nothing.
+2. **The request's database:** `withDatabase(connect(env.DB, { session, onQuery }), fn)` keeps a request's Database in Workers' `AsyncLocalStorage`, which belongs to the request, and Models on its binding use it for everything `fn` awaits. This is where a D1 Session (read your own writes with replicas) and per-request `onQuery` go, and how tests and scripts outside a Worker give Models a database.
+3. **An explicit database:** `db.model(X)`, `db.models({...})` and `db.batch([...])`, always on `db`.
+
+A record keeps the database a query used to load it, or the one it was first saved or destroyed on, past the end of `withDatabase`. `batch([...])` writes on the database its entries resolve to; entries reached through a Model's statics and through `db.model(…)` of the same database share it.
+
+ADR-0003 allowed only the explicit Database, to guarantee that no binding or Session was stored on a class where concurrent requests in one isolate could share it. That guarantee holds: level 1 stores only a binding (no request state), and level 2 stores a request's Database only in that request's `AsyncLocalStorage`. `User.using(env.DB)` stays unoffered, since it would bind a database to a class.
+
+## Consequences
+
+- **Loading the runtime's modules.** `AsyncLocalStorage` comes from `process.getBuiltinModule("node:async_hooks")`, the first time `withDatabase` is called, so Workers without Node.js compatibility still build, and only `withDatabase` needs it (a `compatibility_date` of 2026-08-04 or later, or `nodejs_compat`). `cloudflare:workers` is a literal dynamic `import()` (Wrangler and Miniflare only allow literal specifiers), loaded only when a query needs a binding; outside a Worker its absence means "not in a Worker".
+- **Failures move to runtime** where the explicit form couldn't compile wrongly: a Model with no binding outside `withDatabase`, a binding missing from the Worker, or a query at a module's top level. Each throws `NoDatabase` saying what to do.
+- **Verified in workerd** (tests/integration/workerd-platform.test.ts): `env.DB` from `cloudflare:workers` is the handler's own object, so a request's database matches its Models by binding.

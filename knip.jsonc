@@ -14,7 +14,7 @@
           "tests/tsconfig.json",
         ],
       },
-      "ignoreDependencies": ["@arethetypeswrong/core", "publint"],
+      "ignoreDependencies": ["@arethetypeswrong/core", "publint", "cloudflare"],
     },
     "site": {
       // Examples are included into pages by Markdown (<<<), not imported.

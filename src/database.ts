@@ -3,7 +3,7 @@ import { prepareDestroy, prepareSave, refusalError, type Claimed } from "./lifec
 import { RecordStatement, recordStatementParts } from "./record-statement.ts";
 import { state } from "./record-state.ts";
 import { runAfter, writeAll, type PreparedWrite } from "./unit-of-work.ts";
-import { Executor, type QueryListener } from "./executor.ts";
+import { D1Executor, type Executor, type QueryListener } from "./executor.ts";
 import { prepareModel } from "./associations.ts";
 import type { ModelBase, ModelClass, ScopesOf } from "./model.ts";
 import type { Scoped } from "./relation.ts";
@@ -27,24 +27,25 @@ export interface ConnectOptions {
   session?: D1SessionConstraint | (D1SessionBookmark & {});
 }
 
-/** Each Database's D1 binding (not its Session) and Executor, for finding the current database. */
-const parts = new WeakMap<Database, { binding: D1Database; executor: Executor }>();
-
-/** A Database's D1 binding and Executor. */
-export function databaseParts(db: Database): { binding: D1Database; executor: Executor } {
-  return parts.get(db)!;
-}
+/** @internal The library's key for a Database's D1 binding and Executor (the current database, #77). */
+export const databaseParts = Symbol("databaseParts");
 
 /** A per-request wrapper around a D1 binding; every query goes through it. */
 export class Database {
-  readonly #executor: Executor;
+  readonly #binding: D1Database;
+  readonly #executor: D1Executor;
   readonly #session: D1DatabaseSession | undefined;
 
   constructor(binding: D1Database, options: ConnectOptions = {}) {
     const { session, onQuery } = options;
     this.#session = session === undefined ? undefined : binding.withSession(session);
-    this.#executor = new Executor(this.#session ?? binding, onQuery);
-    parts.set(this, { binding, executor: this.#executor });
+    this.#binding = binding;
+    this.#executor = new D1Executor(this.#session ?? binding, onQuery);
+  }
+
+  /** @internal Its D1 binding (not its Session), to match Models' bindings, and its Executor. */
+  get [databaseParts](): { binding: D1Database; executor: D1Executor } {
+    return { binding: this.#binding, executor: this.#executor };
   }
 
   /**
@@ -85,13 +86,13 @@ export class Database {
    * awaits.
    */
   async batch<const T extends readonly BatchEntry[]>(entries: T): Promise<BatchResults<T>> {
-    for (const entry of entries) this.#requireOwn(entry);
+    for (const entry of entries) await this.#requireOwn(entry);
     return runBatch(this.#executor, entries);
   }
 
-  /** A batch entry must have been built on this Database. */
-  #requireOwn(entry: BatchEntry): void {
-    if (executorOf(entry) !== this.#executor) {
+  /** A batch entry must be on this Database: built on it, or on the current one when it's this. */
+  async #requireOwn(entry: BatchEntry): Promise<void> {
+    if ((await executorOf(entry).resolved()) !== this.#executor) {
       throw new IncompatibleRelation(
         "batch() needs statements and records of this Database; one comes from another connect() call",
       );
@@ -133,7 +134,10 @@ async function runBatch<const T extends readonly BatchEntry[]>(
 export async function batch<const T extends readonly BatchEntry[]>(
   entries: T,
 ): Promise<BatchResults<T>> {
-  const executors = new Set(entries.map(executorOf));
+  // The databases they're on now: entries from a Model's statics and from db.model(…) can be one.
+  const executors = new Set(
+    await Promise.all(entries.map((entry) => executorOf(entry).resolved())),
+  );
   if (executors.size > 1) {
     throw new IncompatibleRelation(
       "batch() needs statements and records of one database; these come from more than one",

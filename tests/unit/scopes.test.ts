@@ -32,7 +32,7 @@ describe("scopes as statics", () => {
         Promise<User[]>
       >();
     };
-    expect(typeof typed).toBe("function");
+    void typed; // type-checked only
     expect(typeof User.active().withRole("editor").admins).toBe("function");
     // @ts-expect-error a scope's arguments are typed
     User.withRole(1);
@@ -45,7 +45,7 @@ describe("scopes as statics", () => {
     }
 
     const typed = () => expectTypeOf(Staff.active().first()).toEqualTypeOf<Promise<Staff | null>>();
-    expect(typeof typed).toBe("function");
+    void typed; // type-checked only
     expect(typeof Staff.active().admins().inactive).toBe("function");
     expect("inactive" in db.model(User)).toBe(false);
     expect(Staff.admins).not.toBe(User.admins);

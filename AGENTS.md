@@ -21,7 +21,7 @@ Follow `docs/agents/workflow.md` for every issue. In short: orient (the issue an
 ## Project
 
 - Read `CONTEXT.md` (glossary), `docs/contract.md` (agreed behavior) and `docs/adr/` before changing the public API. `docs/brief.md` is the build brief, updated to match the ADRs. Where it disagrees with the contract or an ADR, the contract and ADR win.
-- Library code in `src/` must run on Cloudflare Workers. It's type-checked against `@cloudflare/workers-types` only (`src/tsconfig.json`), with no Node APIs.
+- Library code in `src/` must run on Cloudflare Workers. It's type-checked against `@cloudflare/workers-types` only (`src/tsconfig.json`), with no Node APIs. The one exception is `withDatabase`'s `AsyncLocalStorage`, loaded with `process.getBuiltinModule("node:async_hooks")` when it's first called, and guarded, so Workers without Node.js compatibility still build and run (ADR-0012). `cloudflare:workers` is loaded the same way, only when a query needs a Model's binding.
 - Tests: `tests/unit/**` (no database), `tests/integration/**` (real D1 through Miniflare in Node; see ADR-0002 and `tests/support/d1.ts`), and `tests/remote/**` (a smoke suite against a real remote D1, skipped unless configured; see `docs/agents/remote-smoke.md`). Run one project with `vp test --project unit`.
 - Behavior is the contract: every public behavior needs a test, and integration tests prove it against D1.
 - User-visible changes need a changeset (`.changeset/`, see `docs/agents/releasing.md`). Merging CI's Version Packages pull request is what publishes to npm.

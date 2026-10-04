@@ -25,7 +25,7 @@ import { RecordState, state, type Changes } from "./record-state.ts";
 import type { AssociationDefinition, BelongsTo, HasOne } from "./associations.ts";
 import type { Relation, Scope, Scoped } from "./relation.ts";
 import { currentRelation } from "./current-database.ts";
-import { scopeName } from "./scoped-relation.ts";
+import { scopeBodies, scopeName } from "./scoped-relation.ts";
 import type { Validation, ValidationOptions } from "./validations.ts";
 
 /** Type-only brand on a scope static (`static newest = this.scope(…)`); never set at runtime. */
@@ -104,9 +104,6 @@ const relationMethods = [
   "exists",
   "toArray",
 ] as const;
-
-/** Each scope static, to its body: what `Product.newest()` and `relation.newest()` run. */
-export const scopeBodies = new WeakMap<object, Scope<ModelBase>>();
 
 /** A Model's association by name; `UnknownAssociation` for any other name. */
 export function associationOf(model: ModelClass, name: string): AssociationDefinition {
