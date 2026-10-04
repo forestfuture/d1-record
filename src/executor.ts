@@ -1,5 +1,6 @@
 import type { CompiledSql } from "./compiler.ts";
 import { translateConstraintError } from "./constraints.ts";
+import { NoDatabase } from "./errors.ts";
 import { explainMissingTable } from "./table-names.ts";
 
 /** Reported to `onQuery` once for every statement sent to D1. */
@@ -14,36 +15,58 @@ export interface QueryEvent {
 export type QueryListener = (event: QueryEvent) => void;
 
 /**
+ * Workers' refusal of a D1 call outside a request (a query at a module's top level), as a
+ * `NoDatabase` saying where queries belong; any other error, undefined.
+ */
+function outsideRequest(error: unknown): NoDatabase | undefined {
+  const message = error instanceof Error ? error.message : String(error);
+  if (!/within global scope/i.test(message)) return undefined;
+  return new NoDatabase(
+    "Queries run during a request: Workers don't allow D1 calls at a module's top level. Move " +
+      "the query into your fetch handler, or a function it calls",
+    { cause: error },
+  );
+}
+
+/** Where a Relation's or record's statements go: one database, or the current one (#77). */
+export interface Executor {
+  /** Runs one statement and resolves to its rows. */
+  all(query: CompiledSql): Promise<Record<string, unknown>[]>;
+  /** Runs one statement for its effect and resolves to D1's `meta`. */
+  run(query: CompiledSql): Promise<D1Meta>;
+  /** Runs statements atomically with D1's `batch()` and resolves to each one's result. */
+  batch(statements: readonly CompiledSql[]): Promise<D1Result<Record<string, unknown>>[]>;
+  /** Runs statements atomically: one on its own, several as one batch. */
+  write(statements: readonly CompiledSql[]): Promise<D1Result<Record<string, unknown>>[]>;
+  /** The Executor that sends to D1 now: itself, or the current database's. */
+  resolved(): Promise<D1Executor>;
+}
+
+/**
  * The single place the library calls D1: every statement is reported to `onQuery`, and a
  * constraint failure becomes the matching `ConstraintViolation` for the statement's Model.
  */
-export class Executor {
-  readonly #binding: D1Database | D1DatabaseSession | undefined;
+export class D1Executor implements Executor {
+  readonly #binding: D1Database | D1DatabaseSession;
   readonly #onQuery: QueryListener | undefined;
-  readonly #resolve: (() => Promise<Executor>) | undefined;
 
-  /**
-   * `binding` is the D1 binding itself, or one D1 Session every query goes through. Or it's a
-   * function that finds the Executor to use when a query runs (the current database, #77).
-   */
-  constructor(
-    binding: D1Database | D1DatabaseSession | (() => Promise<Executor>),
-    onQuery?: QueryListener,
-  ) {
-    if (typeof binding === "function") this.#resolve = binding;
-    else this.#binding = binding;
+  /** `binding` is the D1 binding itself, or one D1 Session every query goes through. */
+  constructor(binding: D1Database | D1DatabaseSession, onQuery?: QueryListener) {
+    this.#binding = binding;
     this.#onQuery = onQuery;
+  }
+
+  async resolved(): Promise<D1Executor> {
+    return this;
   }
 
   /** Runs one statement and resolves to its rows. */
   async all(query: CompiledSql): Promise<Record<string, unknown>[]> {
-    if (this.#resolve !== undefined) return (await this.#resolve()).all(query);
     return (await this.#one(query)).results;
   }
 
   /** Runs one statement for its effect and resolves to D1's `meta`. */
   async run(query: CompiledSql): Promise<D1Meta> {
-    if (this.#resolve !== undefined) return (await this.#resolve()).run(query);
     return (await this.#one(query)).meta;
   }
 
@@ -52,19 +75,21 @@ export class Executor {
    * `meta`). D1 fails a batch as a whole, so on failure every statement is reported with the error.
    */
   async batch(statements: readonly CompiledSql[]): Promise<D1Result<Record<string, unknown>>[]> {
-    if (this.#resolve !== undefined) return (await this.#resolve()).batch(statements);
     if (statements.length === 0) return [];
     const started = performance.now();
     let results: D1Result<Record<string, unknown>>[];
     try {
-      results = await this.#binding!.batch<Record<string, unknown>>(
+      results = await this.#binding.batch<Record<string, unknown>>(
         statements.map((statement) => this.#prepare(statement)),
       );
     } catch (error) {
       const durationMs = performance.now() - started;
       for (const { sql, params } of statements) this.#onQuery?.({ sql, params, durationMs, error });
       const models = statements.map(({ model }) => model);
-      throw explainMissingTable(translateConstraintError(error, models), models);
+      throw (
+        outsideRequest(error) ??
+        explainMissingTable(translateConstraintError(error, models), models)
+      );
     }
     // D1 times each statement of a batch itself.
     statements.forEach(({ sql, params }, index) => {
@@ -76,7 +101,6 @@ export class Executor {
 
   /** Runs statements atomically: one on its own, several as one batch. Resolves to each result. */
   async write(statements: readonly CompiledSql[]): Promise<D1Result<Record<string, unknown>>[]> {
-    if (this.#resolve !== undefined) return (await this.#resolve()).write(statements);
     const [only] = statements;
     if (statements.length === 1 && only !== undefined) return [await this.#one(only)];
     return this.batch(statements);
@@ -90,7 +114,10 @@ export class Executor {
       result = await this.#prepare(query).all<Record<string, unknown>>();
     } catch (error) {
       this.#onQuery?.({ sql, params, durationMs: performance.now() - started, error });
-      throw explainMissingTable(translateConstraintError(error, [model]), [model]);
+      throw (
+        outsideRequest(error) ??
+        explainMissingTable(translateConstraintError(error, [model]), [model])
+      );
     }
     // Reported outside the try, so a listener that throws isn't mistaken for a D1 failure.
     this.#onQuery?.({ sql, params, durationMs: performance.now() - started, meta: result.meta });
@@ -98,6 +125,38 @@ export class Executor {
   }
 
   #prepare({ sql, params }: CompiledSql): D1PreparedStatement {
-    return this.#binding!.prepare(sql).bind(...params);
+    return this.#binding.prepare(sql).bind(...params);
+  }
+}
+
+/**
+ * The current database's Executor (#77): finds the D1Executor to use each time a statement runs,
+ * the request's or the binding's, so a Relation built from a Model's statics can be built anywhere.
+ */
+export class CurrentExecutor implements Executor {
+  readonly #find: () => Promise<D1Executor>;
+
+  constructor(find: () => Promise<D1Executor>) {
+    this.#find = find;
+  }
+
+  resolved(): Promise<D1Executor> {
+    return this.#find();
+  }
+
+  async all(query: CompiledSql): Promise<Record<string, unknown>[]> {
+    return (await this.#find()).all(query);
+  }
+
+  async run(query: CompiledSql): Promise<D1Meta> {
+    return (await this.#find()).run(query);
+  }
+
+  async batch(statements: readonly CompiledSql[]): Promise<D1Result<Record<string, unknown>>[]> {
+    return (await this.#find()).batch(statements);
+  }
+
+  async write(statements: readonly CompiledSql[]): Promise<D1Result<Record<string, unknown>>[]> {
+    return (await this.#find()).write(statements);
   }
 }

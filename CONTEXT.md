@@ -49,7 +49,7 @@ A deliberate refusal raised by a pre-write callback with `abort(reason)`. It can
 _Avoid_: Halt, cancel, returning false
 
 **Database**:
-A per-request wrapper around a `D1Database` binding, created explicitly at the application edge. Every query and write for that request goes through it.
+A wrapper around a `D1Database` binding, made with `connect(env.DB, { session, onQuery })`, that queries go through. It's the **Current database** for a request run in `withDatabase`, or used explicitly with `db.model(User)`; a Model's **Binding** gets one with no per-request options.
 _Avoid_: Connection, client, context (on its own)
 
 **Attribute**:

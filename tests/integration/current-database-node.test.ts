@@ -1,0 +1,33 @@
+import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
+import { connect, Model, NoDatabase, withDatabase } from "../../src/index.ts";
+import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
+
+// Outside a Worker, as tests and scripts run: cloudflare:workers doesn't exist here.
+class User extends Model({ id: { type: "integer", null: false }, email: "string" }) {
+  static tableName = "users";
+  static override binding = "DB";
+}
+
+let binding: TestDatabase;
+let dispose: () => Promise<void>;
+beforeAll(async () => ({ db: binding, dispose } = await createTestDatabase()));
+afterAll(() => dispose());
+
+describe("outside a Worker", () => {
+  test("a binding is only there inside a Worker, so a query says to give it a database", async () => {
+    await expect(User.count()).rejects.toThrow(
+      new NoDatabase(
+        "No database for this query: the binding DB is only there inside a Worker. Wrap the code in withDatabase(connect(env.DB), …), or use db.model(Model)",
+      ),
+    );
+  });
+
+  test("withDatabase serves every Model; several can't be told apart, so that's an error", async () => {
+    expect(await withDatabase(connect(binding), () => User.count())).toBe(0);
+    await expect(
+      withDatabase([connect(binding), connect(binding)], () => User.count()),
+    ).rejects.toThrow(
+      "No database for this query: withDatabase was given several, and outside a Worker a binding can't tell which",
+    );
+  });
+});

@@ -3,7 +3,7 @@
 // to how records are built. Prints the median of several runs after a warm-up.
 import { Miniflare } from "miniflare";
 import { connect } from "../../src/index.ts";
-import { Executor } from "../../src/executor.ts";
+import { D1Executor } from "../../src/executor.ts";
 import { hydrate } from "../../src/model.ts";
 import { Author, schema } from "./models.ts";
 
@@ -33,7 +33,7 @@ const rows = Array.from({ length: ROWS }, (_, index) => ({
   publisher_id: null,
   created_at: "2026-01-01T00:00:00.000Z",
 }));
-const executor = new Executor({} as never);
+const executor = new D1Executor({} as never);
 await measure(`hydrate ${ROWS} records`, () => {
   for (const row of rows) hydrate(Author, row, executor);
 });

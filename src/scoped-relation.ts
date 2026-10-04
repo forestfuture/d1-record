@@ -1,13 +1,19 @@
 import { InvalidModel } from "./errors.ts";
 import type { Executor } from "./executor.ts";
 import { ancestors } from "./ancestors.ts";
-import { ModelBase, scopeBodies, type ModelClass, type ScopesOf } from "./model.ts";
-import { applyScope, Relation, type RelationArgs, type Scoped } from "./relation.ts";
+import { ModelBase, type ModelClass, type ScopesOf } from "./model.ts";
+import { applyScope, Relation, type RelationArgs, type Scope, type Scoped } from "./relation.ts";
 
 type RelationClass = new (...args: RelationArgs<ModelBase>) => Relation<ModelBase>;
 
 // Module-level, but not request state (ADR-0003): derived only from a Model's scope statics.
-const relationClasses = new WeakMap<object, { Class: RelationClass; scopes: object[] }>();
+const relationClasses = new WeakMap<
+  object,
+  { Class: RelationClass; scopes: object[]; names: Map<object, string> }
+>();
+
+/** Each scope static, to its body: what `Product.newest()` and `relation.newest()` run. */
+export const scopeBodies = new WeakMap<object, Scope<ModelBase>>();
 
 /** A Model's scopes, by name: its statics made with `this.scope(…)`, the nearest class's first. */
 function scopesOf(model: ModelClass): Map<string, object> {
@@ -24,10 +30,13 @@ function scopesOf(model: ModelClass): Map<string, object> {
   return scopes;
 }
 
-/** The name `model` (or a class it extends) gives the scope static `scoped`. */
+/** The name `model` (or a class it extends) gives the scope static `scoped`, once it's been used. */
 export function scopeName(model: ModelClass, scoped: object): string {
-  for (const [name, value] of scopesOf(model)) if (value === scoped) return name;
-  throw new InvalidModel(`${model.name} has a scope that isn't one of its statics`);
+  const name = relationClasses.get(model)?.names.get(scoped);
+  if (name === undefined) {
+    throw new InvalidModel(`${model.name} has a scope that isn't one of its statics`);
+  }
+  return name;
 }
 
 // Names a scope can't take: a Model's own statics, besides the Relation methods it mirrors.
@@ -76,7 +85,8 @@ function relationClassFor(model: ModelClass): RelationClass {
       },
     });
   }
-  relationClasses.set(model, { Class: ScopedRelation, scopes: signature });
+  const names = new Map([...scopes].map(([name, scoped]) => [scoped, name]));
+  relationClasses.set(model, { Class: ScopedRelation, scopes: signature, names });
   return ScopedRelation;
 }
 

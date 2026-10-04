@@ -4,7 +4,7 @@
 // AsyncLocalStorage, and a binding's Database holds no per-request state.
 import { connect, databaseParts, type Database } from "./database.ts";
 import { NoDatabase } from "./errors.ts";
-import { Executor } from "./executor.ts";
+import { CurrentExecutor, type Executor } from "./executor.ts";
 import { prepareModel } from "./associations.ts";
 import type { ModelClass, ScopesOf } from "./model.ts";
 import type { Scoped } from "./relation.ts";
@@ -54,13 +54,26 @@ type Env = Record<string, unknown>;
 let workersEnv: Promise<Env | undefined> | undefined;
 
 function bindings(): Promise<Env | undefined> {
-  // A variable, so bundlers and Node don't try to resolve it when it isn't used.
-  const module = "cloudflare:workers";
-  workersEnv ??= import(/* @vite-ignore */ module).then(
-    (workers: { env: Env }) => workers.env,
-    () => undefined,
+  // A literal specifier: Wrangler and Miniflare (wrangler dev) only allow those. Outside a Worker
+  // the module doesn't exist, which is the one failure that means "not in a Worker".
+  workersEnv ??= import("cloudflare:workers").then(
+    (workers) => workers.env as unknown as Env,
+    (error: unknown) => {
+      if (notAWorker(error)) return undefined;
+      throw error;
+    },
   );
   return workersEnv;
+}
+
+/** Whether importing `cloudflare:workers` failed because this isn't a Worker (Node, scripts). */
+function notAWorker(error: unknown): boolean {
+  const { code, message } = error as { code?: unknown; message?: unknown };
+  return (
+    code === "ERR_UNSUPPORTED_ESM_URL_SCHEME" ||
+    code === "ERR_MODULE_NOT_FOUND" ||
+    /cloudflare:workers/.test(String(message))
+  );
 }
 
 /** One Database per D1 binding, for queries outside `withDatabase`: it holds nothing per-request. */
@@ -109,7 +122,7 @@ async function databaseFor(name: string | undefined): Promise<Database> {
       `The binding ${name} isn't in this Worker's env; check d1_databases in your Wrangler config`,
     );
   }
-  return requested.find((db) => databaseParts(db).binding === binding) ?? defaultDatabase(binding);
+  return requested.find((db) => db[databaseParts].binding === binding) ?? defaultDatabase(binding);
 }
 
 /**
@@ -122,7 +135,7 @@ const executors = new Map<string | undefined, Executor>();
 function currentExecutor(name: string | undefined): Executor {
   let executor = executors.get(name);
   if (executor === undefined) {
-    executor = new Executor(async () => databaseParts(await databaseFor(name)).executor);
+    executor = new CurrentExecutor(async () => (await databaseFor(name))[databaseParts].executor);
     executors.set(name, executor);
   }
   return executor;

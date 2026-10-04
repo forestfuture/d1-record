@@ -205,6 +205,7 @@ export async function prepareSave(record: ModelBase, claimed: Claimed): Promise<
   if (claimed.has(record)) return { status: "ready", stages: [] };
   const recordState = record[state];
   recordState.requireLive("be saved");
+  await recordState.bindToResolved();
   const validity = await validation(record, claimed);
   if (validity === "invalid") return { status: "invalid" };
   if (validity === "aborted") return aborted(record);
@@ -378,6 +379,7 @@ export async function prepareDestroy(record: ModelBase, claimed: Claimed): Promi
   claimed.add(record);
   const recordState = record[state];
   recordState.requireLive("be destroyed");
+  await recordState.bindToResolved();
   recordState.abortReason = undefined;
   if (!(await runAbortableCallbacks(record, "beforeDestroy"))) return aborted(record);
   const dependents = recordState.isNew

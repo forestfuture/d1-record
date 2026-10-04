@@ -8,6 +8,8 @@ export default defineConfig({
     {
       target: "es2022",
       tsconfig: "src/tsconfig.json",
+      // Provided by the Workers runtime; loaded only when a Model queries its binding (#77).
+      external: ["cloudflare:workers"],
       // The two builds run together, so each cleans only its own files.
       clean: ["dist/index.*"],
       dts: {
