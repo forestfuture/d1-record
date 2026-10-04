@@ -1,5 +1,14 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
-import { connect, Model, NoDatabase, withDatabase, type QueryEvent } from "../../src/index.ts";
+import {
+  batch,
+  connect,
+  IncompatibleRelation,
+  Model,
+  NoDatabase,
+  sql,
+  withDatabase,
+  type QueryEvent,
+} from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 // Level 1 reads the Worker's bindings from cloudflare:workers, which only exists inside a Worker;
@@ -98,5 +107,29 @@ describe("Product.find(id): a query started from a Model", () => {
         "The binding LOGS isn't in this Worker's env; check d1_databases in your Wrangler config",
       ),
     );
+  });
+});
+
+describe("batch([...]): atomic writes on the current database", () => {
+  test("statements and records from a Model's statics are written together, on its database", async () => {
+    const events: QueryEvent[] = [];
+    const user = User.build({ id: 3, email: "linus@example.com", role: "guest" });
+
+    const [, saved] = await withDatabase(
+      connect(binding, { onQuery: (event) => events.push(event) }),
+      () => batch([User.where({ id: 1 }).toUpdateAll({ role: "lead" }), user.toSave()]),
+    );
+
+    expect(saved.isPersisted()).toBe(true);
+    expect((await User.find(1)).role).toBe("lead");
+    expect(events).toHaveLength(2);
+  });
+
+  test("entries from two databases are refused, as db.batch refuses another's", async () => {
+    const explicit = connect(binding);
+
+    await expect(
+      batch([User.toUpdateAll(sql`role = role`), explicit.model(User).toDeleteAll()]),
+    ).rejects.toThrow(IncompatibleRelation);
   });
 });

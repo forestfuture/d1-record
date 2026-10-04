@@ -8,6 +8,7 @@ export type {
   HasOneDependent,
 } from "./associations.ts";
 export {
+  batch,
   connect,
   Database,
   type BatchEntry,
