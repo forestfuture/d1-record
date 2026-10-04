@@ -1,6 +1,6 @@
 # Project skills
 
-Installed from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT, see `LICENSE-mattpocock-skills`). The exact versions are pinned in `/skills-lock.json`. Claude Code loads them automatically in this repo. Other agents can read each `SKILL.md` as plain instructions. `docs/agents/workflow.md` explains how they fit together.
+Installed from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT, see `LICENSE-mattpocock-skills`), and `documentation-writer` from [github/awesome-copilot](https://github.com/github/awesome-copilot) (MIT, see `LICENSE-awesome-copilot`), which writes the guide's pages by the [Diátaxis](https://diataxis.fr/) framework. The exact versions are pinned in `/skills-lock.json`. Claude Code loads them automatically in this repo. Other agents can read each `SKILL.md` as plain instructions. `docs/agents/workflow.md` explains how they fit together.
 
 These are **copies, not symlinks**, so they work for anyone who clones the repo. They're also excluded from formatting (`fmt.ignorePatterns` in `vite.config.ts`), so they stay exactly as published.
 
