@@ -4,5 +4,5 @@ A Model extends `Model({ email: { type: "string", null: false }, isActive: "bool
 
 ## Consequences
 
-- `Model({...})` always creates a subclass of the library's base class. An app-wide base class can't add attributes to its subclasses, so shared behavior uses plain functions called from `static {}` (e.g. `audited(this)`). A shared base turned out to be needed: `modelFor(tables, Base)` (ADR-0010) builds every Model on an app's class extending `Model.Base`, so its methods, statics, callbacks and scopes are inherited, as Rails' `ApplicationRecord`'s are.
+- `Model({...})` always creates a subclass of the library's base class, so an app-wide base class can't add attributes to its subclasses. Shared behavior was first plain functions called from `static {}` (e.g. `audited(this)`), until a shared base turned out to be needed: `modelFor(tables, Base)` (ADR-0010) builds every Model on an app's class extending `Model.Base`, so its methods, statics, callbacks and scopes are inherited, as Rails' `ApplicationRecord`'s are.
 - Associations needed a `declare` for their instance accessor until ADR-0008 made them record fields.

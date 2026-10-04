@@ -12,7 +12,7 @@ class Base extends Model.Base {
   }
 
   // A scope every Model has, in SQL since it runs on each Model's own table:
-  static scopes = this.defineScopes({
+  static override scopes = this.defineScopes({
     newest: (q) => q.order(sql`created_at DESC`),
   });
 
