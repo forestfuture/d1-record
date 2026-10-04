@@ -9,3 +9,6 @@ site/.vitepress/cache
 .wrangler
 /llms-full.txt
 /tests/.scratch
+
+# Python bytecode from the supply-chain auditor skill
+__pycache__/
