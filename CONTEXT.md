@@ -12,6 +12,10 @@ _Avoid_: Record (as the base class; `ApplicationRecord` is the one exception, na
 The file `d1-record schema` writes from a project's migrations: each table's attributes, as a document like Rails' `schema.rb`. It's committed, and never edited by hand; the app's `ApplicationRecord` builds Models on it.
 _Avoid_: Schema dump, types file
 
+**Base class**:
+The app's class extending `Model.Base` (in `application-record.ts`) that every Model is built on, so the methods, callbacks and scopes written on it are shared, as on Rails' `ApplicationRecord`. It's abstract: it has no table.
+_Avoid_: Mixin, concern, parent model
+
 **Generator**:
 The `d1-record g model` and `g migration` commands: they write a migration (and a Model) from a name and columns, checked against the existing migrations first.
 _Avoid_: Scaffold, codegen

@@ -97,15 +97,22 @@ export const tables = {
   });
 
   test("the app's base class is built on the schema, named as Rails names it, and the app's to edit", () => {
-    expect(renderBase("ApplicationRecord", "../db/schema"))
-      .toBe(`import { modelFor } from "@forestfuture/d1-record";
-import { tables } from "../db/schema";
+    const source = renderBase("LogsRecord", "../db/LOGS");
 
-/**
- * The base class for this app's Models, built on the schema \`d1-record schema\` generates:
- * \`class Product extends ApplicationRecord("products") {}\`. It's yours to edit.
- */
-export const ApplicationRecord = modelFor(tables);
-`);
+    expect(source).toMatch(
+      /^import \{ Model, modelFor \} from "@forestfuture\/d1-record";\nimport \{ tables \} from "\.\.\/db\/LOGS";\n/,
+    );
+    expect(source).toContain("class Base extends Model.Base {");
+    expect(source).toContain("export const LogsRecord = modelFor(tables, Base);");
+  });
+
+  test("its shared method, scope and callback are there to uncomment, each saying what it does", () => {
+    const source = renderBase("ApplicationRecord", "../db/schema");
+
+    expect(source).toContain("  // A method every record has:\n  // label() {");
+    expect(source).toContain("  // static scopes = this.defineScopes({");
+    expect(source).toContain(
+      "    // A callback that runs for every Model, before each Model's own:\n    // this.beforeSave(",
+    );
   });
 });
