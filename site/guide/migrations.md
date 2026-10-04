@@ -44,20 +44,4 @@ Write each table as d1-record expects to read it:
 
 ## Changing a table
 
-To add a column, write a migration that adds it, then add the attribute to the Model:
-
-<<< @/snippets/migrations/0002_add_bio_to_users.sql{sql} [migrations/0002_add_bio_to_users.sql]
-
-<<< @/snippets/migrations/models.ts#user{ts} [src/models.ts]
-
-<<< @/snippets/migrations/models.ts#use{ts}
-
-Order matters when the deployed database and the deployed code change separately:
-
-- **Adding a column:** apply the migration with `--remote` first, then deploy the code that uses it. Code that doesn't know the column yet keeps working, since d1-record only writes the attributes a Model declares.
-- **Removing a column:** deploy code that no longer declares the attribute first, then apply the migration that drops it.
-- **Renaming a column:** rename it in a migration (`ALTER TABLE users RENAME COLUMN bio TO about`), and map the attribute to the new name with `{ column: "about" }`, or rename the attribute too.
-
-SQLite rebuilds a table for some changes, such as changing a column's type. If the table is referenced by foreign keys, start the migration with `PRAGMA defer_foreign_keys = true`, as [Cloudflare describes](https://developers.cloudflare.com/d1/reference/migrations/).
-
-d1-record doesn't yet check that a Model's attributes match its table; a mismatch shows up as a D1 error the first time a query uses it ([#21](https://github.com/forestfuture/d1-record/issues/21)).
+See [Change a table](./change-a-table): adding, renaming and removing columns, the order to deploy them in, and rebuilding a table to change a column's type.

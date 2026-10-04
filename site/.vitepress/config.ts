@@ -50,7 +50,16 @@ export default defineConfig({
       },
       {
         text: "How-to guides",
-        items: [{ text: "Generate models and migrations", link: "/guide/generators" }],
+        items: [
+          { text: "Generate models and migrations", link: "/guide/generators" },
+          { text: "Change a table", link: "/guide/change-a-table" },
+          { text: "Adopt an existing database", link: "/guide/adopt-a-database" },
+          { text: "Share behavior across Models", link: "/guide/shared-behavior" },
+          { text: "Log queries", link: "/guide/logging" },
+          { text: "Read your own writes", link: "/guide/read-your-own-writes" },
+          { text: "Test with Miniflare", link: "/guide/testing" },
+          { text: "Use several databases", link: "/guide/several-databases" },
+        ],
       },
       {
         text: "Reference",

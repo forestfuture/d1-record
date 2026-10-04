@@ -92,6 +92,7 @@ npx d1-record g migration <Name> [columns] [options]
 | `--no-timestamps`      | Leave out `created_at` and `updated_at`.                                                                               |
 | `--models <path>`      | Write Models in this folder (importing `application-record.ts` from it), or append them to one file (`src/models.ts`). |
 | `--database <binding>` | The D1 database to use, when the Wrangler config has several.                                                          |
+| `--out <file>`         | The schema file to regenerate, as for `d1-record schema` (for a Drizzle project's `src/db/d1-record.ts`, say).         |
 | `--config <file>`      | Use this Wrangler config.                                                                                              |
 
 ### Column syntax
