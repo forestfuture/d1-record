@@ -115,6 +115,9 @@ export const tables = {
       "  // static newest = this.scope((q) => q.order(sql`created_at DESC`));",
     );
     expect(source).toContain(
+      "  // static override onQuery: QueryListener = ({ model, sql, durationMs }) =>",
+    );
+    expect(source).toContain(
       "    // A callback that runs for every Model, before each Model's own:\n    // this.beforeSave(",
     );
   });

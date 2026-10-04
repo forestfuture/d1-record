@@ -1,4 +1,13 @@
-import { batch, connect, withDatabase, type Database } from "@forestfuture/d1-record";
+import {
+  batch,
+  connect,
+  Model,
+  modelFor,
+  withDatabase,
+  type Database,
+  type QueryListener,
+} from "@forestfuture/d1-record";
+import { tables } from "../db/schema";
 import { Post, User } from "../getting-started/models";
 
 export const plain = {
@@ -47,20 +56,59 @@ export default {
 } satisfies ExportedHandler<Env>;
 // #endregion session
 
-export const observed = {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    // #region on-query
+// #region app-wide
+// src/models/application-record.ts: every query, from every Model, whichever database runs it.
+class Base extends Model.Base {
+  static override binding = "DB";
+
+  static override onQuery: QueryListener = ({ model, sql, durationMs, error }) => {
+    console.log(`${model} ${durationMs.toFixed(1)}ms ${sql}`, error ?? "");
+  };
+}
+
+export const ApplicationRecord = modelFor(tables, Base);
+// #endregion app-wide
+
+/** What your app exports as its Worker today: a framework's, or your own. */
+declare const app: ExportedHandler<Env> & { fetch: NonNullable<ExportedHandler<Env>["fetch"]> };
+
+// #region per-request
+// src/worker.ts: one request's queries, tagged with its ID, as JSON lines for Workers Logs.
+export const logged = {
+  fetch(request, env, ctx) {
     const requestId = request.headers.get("cf-ray") ?? crypto.randomUUID();
     const db = connect(env.DB, {
-      onQuery({ sql, params, durationMs, error }) {
-        console.log(requestId, `${durationMs.toFixed(1)}ms`, sql, params, error ?? "");
-      },
+      onQuery: ({ model, sql, params, durationMs, error }) =>
+        console.log(
+          JSON.stringify({
+            requestId,
+            model,
+            ms: Math.round(durationMs),
+            sql,
+            params,
+            error: error instanceof Error ? error.message : undefined,
+          }),
+        ),
     });
 
-    return withDatabase(db, async () => Response.json(await User.count()));
-    // #endregion on-query
+    // Every query from a Model inside (Product.find, user.save(), …) goes through db.
+    return withDatabase(db, () => app.fetch(request, env, ctx));
   },
 } satisfies ExportedHandler<Env>;
+// #endregion per-request
+
+export const development = {
+  fetch(request, env: Env & { LOG_SQL?: string }, ctx) {
+    // #region development
+    // LOG_SQL=1 in .dev.vars: logging in development only, nothing in production.
+    const onQuery: QueryListener | undefined = env.LOG_SQL
+      ? ({ model, sql, durationMs }) => console.log(`${model} ${durationMs.toFixed(1)}ms ${sql}`)
+      : undefined;
+
+    return withDatabase(connect(env.DB, { onQuery }), () => app.fetch(request, env, ctx));
+    // #endregion development
+  },
+} satisfies ExportedHandler<Env & { LOG_SQL?: string }>;
 
 export const timed = {
   async fetch(_request: Request, env: Env): Promise<Response> {

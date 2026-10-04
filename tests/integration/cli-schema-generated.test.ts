@@ -129,7 +129,10 @@ describe("a schema generated from migrations", () => {
     const user = await db.model(User).createOrThrow({ email: "linus@example.com" });
     await db.model(Note).createOrThrow({ userId: user.id, name: "Pen", priceCents: 150 });
     await db.model(Visit).createOrThrow({ path: "/notes" });
-    const lines = logged.mock.calls.map(([line]) => line);
+    // The callbacks' lines; the base class's onQuery logs each query too (checked below).
+    const calls = logged.mock.calls.map(([line]) => String(line));
+    const lines = calls.filter((line) => !/ \d+\.\dms /.test(line));
+    expect(calls.some((line) => /^User \d+\.\dms INSERT INTO "users"/.test(line))).toBe(true);
     logged.mockRestore();
 
     expect(lines).toEqual(["Saving User", "Saving Note", "Note's own", "Saving Visit"]);

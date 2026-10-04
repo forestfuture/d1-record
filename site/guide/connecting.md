@@ -51,17 +51,9 @@ With [D1 read replication](https://developers.cloudflare.com/d1/best-practices/r
 
 After the first query, D1 keeps the Session consistent: each later query reads data at least as new as the one before, including the request's own writes. Every query goes through it: reads, writes, uniqueness checks, association loads, preloads and batches. `db.bookmark()` is `null` before the first query, and throws `NoSession` on a database opened without one.
 
-### Watching queries
+### Logging one request's queries
 
-`onQuery` is called once for every statement sent to D1, batches included, with its SQL, bound values, timing, D1's `meta`, and the error if it failed. Opened for the request, it can tag each line with the request:
-
-<<< @/snippets/guide/connecting.ts#on-query{ts}
-
-To see a request's database time in the browser's developer tools, add it up and send it as a `Server-Timing` header:
-
-<<< @/snippets/guide/connecting.ts#server-timing{ts}
-
-There's no logger built in, so send these wherever you like. In a batch, each statement's `durationMs` is D1's own timing for it. When a batch fails, D1 doesn't say which statement failed, so every statement is reported with the error.
+A database opened for the request can carry its own `onQuery`, which can tag each query with the request. See [Logging queries](#logging-queries).
 
 ### Tests and scripts
 
@@ -86,6 +78,45 @@ If you'd rather name your Models once, `db.models({...})` gives you the same `db
 <<< @/snippets/guide/connecting.ts#models{ts}
 
 `connect(env.DB, { session, onQuery })` takes the same options as above.
+
+## Logging queries
+
+`onQuery` is called once for every statement sent to D1, batches included, with the Model it's for (`model`, its class name), its SQL, bound values, timing, D1's `meta`, and the error if it failed. There's no logger built in, so send these wherever you like. In a batch, each statement's `durationMs` is D1's own timing for it; when a batch fails, D1 doesn't say which statement failed, so every statement is reported with the error.
+
+There are two places to set it:
+
+|                           | Where                                                 | Knows the request?         |
+| ------------------------- | ----------------------------------------------------- | -------------------------- |
+| **Every query, app-wide** | `static override onQuery` on your app's base class    | No                         |
+| **One request's queries** | `connect(env.DB, { onQuery })`, run in `withDatabase` | Yes: tag lines with its ID |
+
+Both can be set: for each query, the database's runs first, then the Model's.
+
+### Every query, app-wide
+
+On your app's base class in `application-record.ts`, `onQuery` sees every statement of every Model, whichever database runs it. A function that holds nothing about a request is safe on a class, but it can't tell requests apart:
+
+<<< @/snippets/guide/connecting.ts#app-wide{ts}
+
+A Model can set its own `static override onQuery`, which replaces the base class's for that Model, as any static does.
+
+### One request's queries
+
+To group a request's queries, open its database with a listener that knows the request, around whatever your app exports as its Worker. Logged as JSON, each line can be filtered by `requestId` in [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/) (with `"observability": { "enabled": true }` in your Wrangler config):
+
+<<< @/snippets/guide/connecting.ts#per-request{ts}
+
+### Only in development
+
+Leave `onQuery` out in production by keying it on a variable that only `.dev.vars` sets:
+
+<<< @/snippets/guide/connecting.ts#development{ts}
+
+### `Server-Timing`
+
+To see a request's database time in the browser's developer tools, add it up and send it as a `Server-Timing` header:
+
+<<< @/snippets/guide/connecting.ts#server-timing{ts}
 
 ## Batches
 
