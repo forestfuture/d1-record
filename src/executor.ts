@@ -3,8 +3,13 @@ import { translateConstraintError } from "./constraints.ts";
 import { NoDatabase } from "./errors.ts";
 import { explainMissingTable } from "./table-names.ts";
 
-/** Reported to `onQuery` once for every statement sent to D1. */
+/**
+ * Reported once for every statement sent to D1: to the database's `onQuery`, then to the
+ * statement's Model's (`static onQuery`, usually on the app's base class).
+ */
 export interface QueryEvent {
+  /** The Model the statement is for: its class name (`"Product"`). */
+  model: string;
   sql: string;
   params: unknown[];
   durationMs: number;
@@ -84,7 +89,7 @@ export class D1Executor implements Executor {
       );
     } catch (error) {
       const durationMs = performance.now() - started;
-      for (const { sql, params } of statements) this.#onQuery?.({ sql, params, durationMs, error });
+      for (const statement of statements) this.#report(statement, { durationMs, error });
       const models = statements.map(({ model }) => model);
       throw (
         outsideRequest(error) ??
@@ -92,9 +97,9 @@ export class D1Executor implements Executor {
       );
     }
     // D1 times each statement of a batch itself.
-    statements.forEach(({ sql, params }, index) => {
+    statements.forEach((statement, index) => {
       const { meta } = results[index]!;
-      this.#onQuery?.({ sql, params, durationMs: meta.duration, meta });
+      this.#report(statement, { durationMs: meta.duration, meta });
     });
     return results;
   }
@@ -107,21 +112,31 @@ export class D1Executor implements Executor {
   }
 
   async #one(query: CompiledSql): Promise<D1Result<Record<string, unknown>>> {
-    const { sql, params, model } = query;
+    const { model } = query;
     const started = performance.now();
     let result: D1Result<Record<string, unknown>>;
     try {
       result = await this.#prepare(query).all<Record<string, unknown>>();
     } catch (error) {
-      this.#onQuery?.({ sql, params, durationMs: performance.now() - started, error });
+      this.#report(query, { durationMs: performance.now() - started, error });
       throw (
         outsideRequest(error) ??
         explainMissingTable(translateConstraintError(error, [model]), [model])
       );
     }
     // Reported outside the try, so a listener that throws isn't mistaken for a D1 failure.
-    this.#onQuery?.({ sql, params, durationMs: performance.now() - started, meta: result.meta });
+    this.#report(query, { durationMs: performance.now() - started, meta: result.meta });
     return result;
+  }
+
+  /** Reports a statement to the database's listener, then to its Model's (`static onQuery`). */
+  #report(
+    { sql, params, model }: CompiledSql,
+    outcome: Pick<QueryEvent, "durationMs" | "meta" | "error">,
+  ): void {
+    const event: QueryEvent = { model: model.name, sql, params, ...outcome };
+    this.#onQuery?.(event);
+    model.onQuery?.(event);
   }
 
   #prepare({ sql, params }: CompiledSql): D1PreparedStatement {

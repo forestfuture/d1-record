@@ -110,6 +110,11 @@ class Base extends Model.Base {
   // A scope every Model has, in SQL since it runs on each Model's own table (import sql too):
   // static newest = this.scope((q) => q.order(sql\`created_at DESC\`));
 
+  // Log every query, from every Model (import type QueryListener too; for one request's
+  // queries, with its ID, see withDatabase in the guide's Connecting page):
+  // static override onQuery: QueryListener = ({ model, sql, durationMs }) =>
+  //   console.log(\`\${model} \${durationMs.toFixed(1)}ms \${sql}\`);
+
   static {
     // A callback that runs for every Model, before each Model's own:
     // this.beforeSave((record) => {

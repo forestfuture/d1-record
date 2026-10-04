@@ -1,5 +1,5 @@
 import { InvalidModel } from "./errors.ts";
-import type { Executor } from "./executor.ts";
+import type { Executor, QueryListener } from "./executor.ts";
 import {
   attributeOf,
   define,
@@ -162,6 +162,14 @@ export class ModelBase {
    * Rails' `connects_to`: `static override binding = "DB"`, usually on the app's base class.
    */
   static binding: string | undefined;
+
+  /**
+   * An app-wide query listener, as `connect(env.DB, { onQuery })` is a database's: called for
+   * every statement of this Model (and those extending it), whichever database runs it, after
+   * the database's own. Holds no request state, so it's safe on a class; a request's ID comes
+   * from a database opened for it with `withDatabase` (#78).
+   */
+  static onQuery: QueryListener | undefined;
 
   /**
    * Declares a scope, as Rails' `scope :active, -> { … }`: `static active = this.scope((q) =>

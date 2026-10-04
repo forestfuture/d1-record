@@ -372,7 +372,8 @@ await db.model(Post).updateAll(sql`${column("views")} = ${column("views")} + ${1
 
 ## Instrumentation
 
-- `connect(env.DB, { onQuery(event) })` is called once per statement, batches included, with `{ sql, params, durationMs, meta, error? }`. The integration tests' query-count checks use this same hook. No logger is built in.
+- `connect(env.DB, { onQuery(event) })` is called once per statement, batches included, with `{ model, sql, params, durationMs, meta, error? }` (`model` is the statement's Model's class name). The integration tests' query-count checks use this same hook. No logger is built in.
+- **App-wide (#78):** `static onQuery` on a Model class, usually the app's base class (`static override onQuery: QueryListener = (event) => …`), is called with the same event for every statement of that Model and those extending it, at every level (the binding, `withDatabase`, an explicit `db`), after the database's own `onQuery`. It's inherited, and a Model's own replaces it. It holds no request state, so it's safe on a class, and can't tell requests apart: a request's ID comes from a database opened for it with `withDatabase`.
 - In a batch, each statement's `durationMs` is D1's own timing for it (`meta.duration`). When a batch fails, D1 doesn't say which statement failed, so every statement is reported with the error and the batch's elapsed time. `event.error` is D1's own error; the caller gets the translated `ConstraintViolation`, with D1's error as its `cause`.
 
 ## Errors
