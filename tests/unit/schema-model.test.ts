@@ -89,15 +89,15 @@ describe("modelFor: the generated Model", () => {
   test("a mistyped table or override, or ignoring the primary key, is a type error and an InvalidModel", () => {
     // @ts-expect-error not a table in the schema
     expect(() => Model("prodcts")).toThrow(
-      new InvalidModel('Model("prodcts"): no table named prodcts in this schema'),
+      new InvalidModel("There's no table named prodcts in the generated schema"),
     );
     // @ts-expect-error not an attribute of products
     expect(() => Model("products", { nmae: "string" })).toThrow(
-      new InvalidModel('Model("products"): products has no attribute nmae to override'),
+      new InvalidModel("products has no attribute nmae to override"),
     );
     // @ts-expect-error the primary key can't be ignored
     expect(() => Model("products", { id: false })).toThrow(
-      new InvalidModel('Model("products"): the primary key id can\'t be ignored'),
+      new InvalidModel("products.id is the primary key, so it can't be ignored"),
     );
     // @ts-expect-error column comes from the table
     void (() => Model("products", { sku: { column: "code" } }));
@@ -110,7 +110,7 @@ describe("modelFor: the generated Model", () => {
 
     expect(() => db.model(Product)).toThrow(
       new InvalidModel(
-        'Product sets tableName "goods", but its attributes are the products table\'s; name the table in Model("…") instead',
+        'Product sets tableName "goods", but its attributes are the products table\'s; name the table in its base class\'s call instead (ApplicationRecord("…"))',
       ),
     );
   });
@@ -132,7 +132,7 @@ describe("modelFor: the generated Model", () => {
   test("an override past the types is checked too: the column, or anything but a spec, is an InvalidModel", () => {
     const message = (attribute: string) =>
       new InvalidModel(
-        `Model("products"): ${attribute}'s override must be a type name, { type, null, default }, or false`,
+        `products.${attribute}: an override is a type name, { type, null, default }, or false`,
       );
 
     expect(() => Model("products", { sku: { column: "code" } } as never)).toThrow(message("sku"));

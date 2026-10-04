@@ -17,7 +17,7 @@ type AttributeOverride =
   | AttributeType
   | { type?: AttributeType; null?: boolean; default?: () => unknown };
 
-/** What `Model("products", {...})` may change: any attribute, and ignore any but the key. */
+/** What `ApplicationRecord("products", {...})` may change: any attribute, and ignore any but the key. */
 type Overrides<T extends TableSchema> = {
   readonly [K in keyof T["attributes"]]?: K extends T["primaryKey"]
     ? AttributeOverride
@@ -52,7 +52,7 @@ type AsSpecs<S> = S extends AttributeSpecs ? S : never;
 /** Rejects keys that aren't the table's attributes (a generic parameter skips that check). */
 type Exactly<O, T extends TableSchema> = O & Record<Exclude<keyof O, keyof T["attributes"]>, never>;
 
-/** The `Model` a generated schema exports: `Model("products")`, or the library's `Model({...})`. */
+/** The base class `modelFor` makes: `ApplicationRecord("products")`, or the library's `Model({...})`. */
 export interface SchemaModel<T extends TableSchemas> {
   <const N extends keyof T & string, const O extends Overrides<T[N]> = {}>(
     table: N,
@@ -90,7 +90,7 @@ function checked(
   }
   if (!isSpecOverride(override)) {
     throw new InvalidModel(
-      `${where}: ${attribute}'s override must be a type name, { type, null, default }, or false`,
+      `${where}.${attribute}: an override is a type name, { type, null, default }, or false`,
     );
   }
   return Object.fromEntries(Object.entries(override).filter(([, value]) => value !== undefined));
@@ -102,15 +102,15 @@ function specsFor(
   table: TableSchema,
   overrides: Readonly<Record<string, unknown>>,
 ): { specs: AttributeSpecs; ignoring: boolean } {
-  const where = `Model("${name}")`;
+  const where = name;
   const changes = new Map<string, ReturnType<typeof checked>>();
   for (const [attribute, override] of Object.entries(overrides)) {
     if (override === undefined) continue;
     if (!Object.hasOwn(table.attributes, attribute)) {
-      throw new InvalidModel(`${where}: ${name} has no attribute ${attribute} to override`);
+      throw new InvalidModel(`${name} has no attribute ${attribute} to override`);
     }
     if (override === false && attribute === table.primaryKey) {
-      throw new InvalidModel(`${where}: the primary key ${attribute} can't be ignored`);
+      throw new InvalidModel(`${name}.${attribute} is the primary key, so it can't be ignored`);
     }
     changes.set(attribute, checked(where, attribute, override));
   }
@@ -125,9 +125,10 @@ function specsFor(
 }
 
 /**
- * The `Model` for a generated schema: `export const Model = modelFor(tables)` ends the
- * `src/db/schema.ts` that `d1-record schema` writes. `Model("products")` is a base class bound to that table, with its
- * attributes and primary key; `Model({...})` is the library's own, for anything else.
+ * The app's base class for a generated schema's Models: `export const ApplicationRecord =
+ * modelFor(tables)`, in the `src/models/application-record.ts` that `d1-record schema` writes.
+ * `ApplicationRecord("products")` is a base class bound to that table, with its attributes and
+ * primary key; `ApplicationRecord({...})` is the library's `Model({...})`, for anything else.
  */
 export function modelFor<const T extends TableSchemas>(tables: T): SchemaModel<T> {
   function SchemaModel(
@@ -137,7 +138,7 @@ export function modelFor<const T extends TableSchemas>(tables: T): SchemaModel<T
     if (typeof table !== "string") return Model(table);
     const schema = Object.hasOwn(tables, table) ? tables[table] : undefined;
     if (schema === undefined) {
-      throw new InvalidModel(`Model("${table}"): no table named ${table} in this schema`);
+      throw new InvalidModel(`There's no table named ${table} in the generated schema`);
     }
     const { specs, ignoring } = specsFor(table, schema, overrides);
     const base = Model(specs);

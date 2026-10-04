@@ -2,6 +2,7 @@
 // where its generated schema goes. Shared by \`d1-record schema\` and the generators.
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
+import { classify, moduleName } from "./names.ts";
 import { byName, type Migration } from "./schema.ts";
 import { readWranglerConfig, type DatabaseConfig } from "./wrangler.ts";
 
@@ -32,20 +33,28 @@ export interface Target {
  * per binding when there are several (`LOGS` → `LogsRecord`), as Rails names them.
  */
 function baseFor(cwd: string, binding: string, several: boolean): Target["base"] {
-  if (!several)
+  if (!several) {
     return {
       path: resolve(cwd, "src/models/application-record.ts"),
       className: "ApplicationRecord",
     };
-  const words = binding
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
-  const name = words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join("");
-  return {
-    path: resolve(cwd, `src/models/${words.join("-")}-record.ts`),
-    className: `${name}Record`,
-  };
+  }
+  // Bindings are JavaScript names (env.MY_DB), so their words are split by `_`.
+  const className = `${classify(binding.toLowerCase())}Record`;
+  return { path: resolve(cwd, `src/models/${moduleName(className)}.ts`), className };
+}
+
+/** Bindings whose base classes would be the same (`DB` and `db` → `DbRecord`), as an error. */
+function sharedBase(targets: readonly Target[]): string | undefined {
+  const seen = new Map<string, string>();
+  for (const { database, base } of targets) {
+    const other = seen.get(base.className);
+    if (other !== undefined) {
+      return `The bindings ${other} and ${database.binding} would share the base class ${base.className}; rename one`;
+    }
+    seen.set(base.className, database.binding);
+  }
+  return undefined;
 }
 
 /** A relative path with forward slashes, as Wrangler names migrations on every system. */
@@ -72,7 +81,7 @@ export function targetsOf(cwd: string, options: ProjectOptions): Target[] | stri
   if (options.migrations !== undefined && databases.length > 1) {
     return `--migrations needs a single database; this config has ${databases.length}`;
   }
-  return databases.map((database) => {
+  const targets = databases.map((database) => {
     const migrationsDir = resolve(cwd, options.migrations ?? join(dir, database.migrationsDir));
     const out =
       databases.length === 1
@@ -81,6 +90,7 @@ export function targetsOf(cwd: string, options: ProjectOptions): Target[] | stri
     const base = baseFor(cwd, database.binding, databases.length > 1);
     return { database, configDir: dir, migrationsDir, out, base };
   });
+  return sharedBase(targets) ?? targets;
 }
 
 /** A database's migrations, in the order Wrangler applies them: by file name. */

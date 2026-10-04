@@ -14,7 +14,8 @@ import { schemaOf, type GeneratedTable, type Migration } from "../schema/schema.
 import { parseColumns, type ColumnArg } from "./columns.ts";
 import { migrationFileName, migrationFor, type KeyType } from "./migration.ts";
 import { appendModel, modelFileName, modelSource, type ModelToWrite } from "./model-file.ts";
-import { classify, migrationNameError, modelName, tableize } from "./names.ts";
+import { classify } from "../schema/names.ts";
+import { migrationNameError, modelName, tableize } from "./names.ts";
 
 export interface GenerateOptions {
   /** The project's folder; the current one by default. */

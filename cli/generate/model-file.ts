@@ -1,4 +1,4 @@
-import { moduleName } from "./names.ts";
+import { moduleName } from "../schema/names.ts";
 
 /** A Model to write: its class, its table, and the `belongsTo`s its references suggest. */
 export interface ModelToWrite {
