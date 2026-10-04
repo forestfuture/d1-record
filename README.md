@@ -187,7 +187,7 @@ How issues are worked, from agreeing the design to review, is in [`docs/agents/w
 
 ## Contributing and security
 
-Ideas and questions are welcome in the [ForestFuture discussions](https://github.com/orgs/forestfuture/discussions). See the organization's [contributing guide](https://github.com/forestfuture/.github/blob/main/CONTRIBUTING.md) and [code of conduct](https://github.com/forestfuture/.github/blob/main/CODE_OF_CONDUCT.md). Please report security problems privately, as described in the [security policy](https://github.com/forestfuture/.github/blob/main/SECURITY.md).
+Ideas and questions are welcome in the [ForestFuture discussions](https://github.com/orgs/forestfuture/discussions). See the [contributing guide](CONTRIBUTING.md) and the [code of conduct](https://github.com/forestfuture/.github/blob/main/CODE_OF_CONDUCT.md). Please report security problems privately, as described in the [security policy](https://github.com/forestfuture/.github/blob/main/SECURITY.md).
 
 ## License
 
