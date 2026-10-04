@@ -25,6 +25,7 @@ Options for g:
   --models <path>     Write Models here (src/models), or append them to one file (src/models.ts);
                       ApplicationRecord is imported from the same folder
   --database <name>   The D1 binding to use, when the config has several
+  --out <file>        The schema file to regenerate, when it isn't src/db/schema.ts
 
   --config <file>     Use this Wrangler config
   -h, --help          Show this help`;
@@ -49,6 +50,7 @@ const generateOptions = {
   "no-timestamps": { type: "boolean" },
   models: { type: "string" },
   database: { type: "string" },
+  out: { type: "string" },
 } as const satisfies ParseArgsOptionsConfig;
 
 /** Parses `argv` with a command's options, or says why it can't (an unknown flag, a missing value). */
@@ -76,14 +78,14 @@ function generate(argv: readonly string[], print: (line: string) => void): numbe
   const args = argsOf(argv, generateOptions);
   if (typeof args === "string") return usage(print, args);
   const [kind, name, ...columns] = args.positionals;
-  const { id, "no-timestamps": noTimestamps, models, database, config } = args.values;
+  const { id, "no-timestamps": noTimestamps, models, database, config, out } = args.values;
   if ((kind !== "model" && kind !== "migration") || name === undefined) {
     return usage(print, "Name what to generate: g model <Name> or g migration <Name>");
   }
   if (id !== undefined && id !== "integer" && id !== "text") {
     return usage(print, `--id is integer or text, not ${id}`);
   }
-  const options = { kind, name, columns, models, database, config } as const;
+  const options = { kind, name, columns, models, database, config, out } as const;
   return runGenerate({ ...options, integerId: id === "integer", timestamps: !noTimestamps }, print);
 }
 

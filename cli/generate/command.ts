@@ -34,6 +34,8 @@ export interface GenerateOptions {
   timestamps?: boolean;
   /** Where Model files go (`src/models`), or one file they're all appended to (`src/models.ts`). */
   models?: string;
+  /** The schema file to regenerate (or, with several databases, the folder), as for `schema`. */
+  out?: string;
 }
 
 /** What's being generated, once the database and the columns are known. */
@@ -75,7 +77,8 @@ function listed(names: readonly string[]): string {
 
 /** The database to generate for: the only one, or the one `--database` names. */
 function targetFor(cwd: string, options: GenerateOptions): Target | string {
-  const targets = targetsOf(cwd, { config: options.config, models: options.models });
+  const { config, models, out } = options;
+  const targets = targetsOf(cwd, { config, models, out });
   if (typeof targets === "string") return targets;
   const bindings = listed(targets.map((target) => target.database.binding));
   if (options.database !== undefined) {

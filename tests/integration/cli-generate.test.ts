@@ -142,6 +142,16 @@ Next: npx wrangler d1 migrations apply shop-db --local`);
     expect(existsSync(join(cwd, "src/models"))).toBe(false);
   });
 
+  test("--out regenerates another schema file, as in a Drizzle project with its own src/db/schema/", () => {
+    const cwd = project({ "src/db/schema/index.ts": "export {};" });
+
+    const { code, output } = generate(cwd, ["model", "Product"], { out: "src/db/d1-record.ts" });
+
+    expect(code).toBe(0);
+    expect(output).toContain("Wrote src/db/d1-record.ts (1 table) from migrations/");
+    expect(read(cwd, "src/models/application-record.ts")).toContain('from "../db/d1-record";');
+  });
+
   test("--models appends to one file", () => {
     const cwd = project();
     generate(cwd, ["model", "User", "email:string!:unique"], { models: "src/models.ts" });
