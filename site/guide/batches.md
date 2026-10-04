@@ -2,7 +2,7 @@
 description: "Reference for bulk writes (insert, insertAll, upsert, updateAll, deleteAll) and atomic batch([...]) of their to… forms and records' toSave()/toDestroy()."
 ---
 
-# Batches and bulk writes
+# Bulk writes and batches
 
 ## Bulk writes
 

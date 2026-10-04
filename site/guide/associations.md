@@ -158,7 +158,7 @@ Everything a destroy does, the owner's DELETE included, is written in one atomic
 
 <<< @/snippets/guide/associations.ts#statements{ts}
 
-As in Rails, `deleteAll()` on the association itself follows its `dependent:` strategy: it deletes the records for `"destroy"` or `"deleteAll"`, and otherwise sets their foreign key to `NULL`. See [Batches and bulk writes](./batches).
+As in Rails, `deleteAll()` on the association itself follows its `dependent:` strategy: it deletes the records for `"destroy"` or `"deleteAll"`, and otherwise sets their foreign key to `NULL`. See [Bulk writes and batches](./batches).
 
 ## Not built yet
 

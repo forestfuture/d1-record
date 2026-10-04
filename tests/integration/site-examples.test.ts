@@ -15,6 +15,10 @@ import {
 } from "../../site/snippets/guide/associations.ts";
 import * as batches from "../../site/snippets/guide/batches.ts";
 import { Booking, errorsExample } from "../../site/snippets/guide/validations.ts";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { runGenerate } from "../../cli/generate/command.ts";
 import { runSchema } from "../../cli/schema/command.ts";
 import { Post, User } from "../../site/snippets/getting-started/models.ts";
 import worker from "../../site/snippets/getting-started/src/index.ts";
@@ -41,6 +45,46 @@ describe("Getting started", () => {
     workers.env = { DB: binding };
   });
   afterAll(() => dispose());
+
+  test("its files are what the tutorial's two g model commands write, apart from its edit to user.ts", () => {
+    const fresh = mkdtempSync(join(tmpdir(), "getting-started-"));
+    writeFileSync(
+      join(fresh, "wrangler.jsonc"),
+      readFileSync(new URL("wrangler.jsonc", gettingStarted)),
+    );
+    const quiet = () => {};
+    runGenerate(
+      {
+        cwd: fresh,
+        kind: "model",
+        name: "User",
+        columns: ["email:string!:unique", "isActive:boolean!=true"],
+      },
+      quiet,
+    );
+    runGenerate(
+      {
+        cwd: fresh,
+        kind: "model",
+        name: "Post",
+        columns: ["user:references", "title:string!", "publishedAt:datetime"],
+      },
+      quiet,
+    );
+
+    for (const file of [
+      "migrations/0001_create_users.sql",
+      "migrations/0002_create_posts.sql",
+      "src/db/schema.ts",
+      "src/models/application-record.ts",
+      "src/models/post.ts",
+    ]) {
+      expect([file, readFileSync(join(fresh, file), "utf8")]).toEqual([
+        file,
+        readFileSync(new URL(file, gettingStarted), "utf8"),
+      ]);
+    }
+  });
 
   test("its schema.ts is what its migrations generate", () => {
     const output: string[] = [];

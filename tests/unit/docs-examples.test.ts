@@ -88,7 +88,8 @@ export class Post extends Model({ id: "integer" }) {
         ...readFileSync(join(site, "guide", page), "utf8").matchAll(/```ts[^\n]*\n([\s\S]*?)```/g),
       ].flatMap(([, code]) =>
         exported
-          .filter((name) => name && new RegExp(`\\b${name}\\b`).test(code!))
+          // A bare name, not a property such as `binding.batch`.
+          .filter((name) => name && new RegExp(`(?<![.\\w])${name}\\b`).test(code!))
           .filter((name) => !new RegExp(`import[^;]*\\b${name}\\b`).test(code!))
           .map((name) => `${page}: ${name}`),
       ),

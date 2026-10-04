@@ -39,15 +39,25 @@ The attribute follows the column: `bio` becomes `about`. Update the code that us
 
 ## Remove a column
 
-```sh
-npx d1-record g migration RemoveBioFromUsers bio
-```
+Work in the opposite order to adding one: the code stops using the column before the column goes.
 
-**Deploy in the opposite order:** first deploy code that no longer uses the attribute, then apply the migration with `--remote`. To stop using it before the column is gone, ignore it in the Model: `ApplicationRecord("users", { bio: false })`.
+1. Ignore the column in the Model, remove the code that uses it, and deploy:
 
-A column with a foreign key (a `references` column) can't be dropped this way, since SQLite refuses; rebuild the table instead, as below.
+   ```ts
+   export class User extends ApplicationRecord("users", { bio: false }) {}
+   ```
 
-## Change a column's type, or drop a referenced column
+2. Generate the migration, and apply it with `--remote`:
+
+   ```sh
+   npx d1-record g migration RemoveBioFromUsers bio
+   ```
+
+3. Remove `{ bio: false }`, now that the schema no longer has the column.
+
+A `references` column is removed the same way (`RemoveUserFromPosts user:references`): its index is dropped first, then the column.
+
+## Change a column's type
 
 SQLite can't change a column's type in place. Write a migration that builds the new table, copies the rows, and swaps the tables, as [SQLite describes](https://www.sqlite.org/lang_altertable.html#otheralter):
 

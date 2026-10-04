@@ -129,19 +129,10 @@ function addColumns(
 }
 
 /**
- * `DROP COLUMN` for each column, after dropping the index the generators would have made on it.
- * SQLite can't drop a column with a foreign key, so a reference is refused, saying what to do.
+ * `DROP COLUMN` for each column, after dropping the index the generators would have made on it
+ * (SQLite can't drop an indexed column). A reference drops like any column: D1 allows it.
  */
 function removeColumns(table: string, columns: readonly ColumnArg[]): MigrationResult {
-  const reference = columns.find((column) => column.type === "references");
-  if (reference !== undefined) {
-    return {
-      ok: false,
-      error:
-        `${table}.${reference.name}: SQLite can't drop a column with a foreign key; write a ` +
-        "migration that rebuilds the table without it (https://www.sqlite.org/lang_altertable.html#otheralter)",
-    };
-  }
   const sql = columns
     .map(
       (column) =>

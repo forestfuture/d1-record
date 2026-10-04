@@ -168,9 +168,9 @@ ALTER TABLE products DROP COLUMN code;
     expect(sqlFor("AddSkuToProduct", ["sku"])).toBe("ALTER TABLE products ADD COLUMN sku TEXT;\n");
   });
 
-  test("removing a reference is refused, since SQLite can't drop a column with a foreign key", () => {
+  test("removing a reference drops its index, then its column, as for any column", () => {
     expect(sqlFor("RemoveUserFromOrders", ["user:references"])).toBe(
-      "orders.user_id: SQLite can't drop a column with a foreign key; write a migration that rebuilds the table without it (https://www.sqlite.org/lang_altertable.html#otheralter)",
+      "DROP INDEX IF EXISTS index_orders_on_user_id;\nALTER TABLE orders DROP COLUMN user_id;\n",
     );
   });
 

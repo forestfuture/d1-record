@@ -4,7 +4,7 @@ description: "How a query finds its database: a Model's binding with no setup (U
 
 # Connecting
 
-A query finds its D1 database in one of three ways. Most apps only ever use the first.
+A query finds its D1 database in one of three ways. Most apps only ever use the first. To choose one for your situation, see [Which do I need?](./query-databases#which-do-i-need); for why there are three, see [Where a query's database comes from](./query-databases).
 
 |                               | How                                                      | Use it for                                                                     |
 | ----------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------ |
@@ -18,16 +18,12 @@ Each Model names the D1 binding it queries, as Rails' `connects_to` does. `d1-re
 
 <<< @/snippets/guide/connecting.ts#binding{ts}
 
-Every Relation method is there on the Model: `find`, `findBy`, `where`, `order`, `first`, `count`, `pluck`, `create`, `insertAll`, `updateAll`, `deleteAll` and the rest, plus the Model's scopes (`User.active()`) and `User.all()` for the Relation itself. Records remember where they came from, so `user.save()` and `user.posts()` use the same database later.
+Every Relation method is there on the Model: `find`, `findBy`, `where`, `order`, `first`, `count`, `pluck`, `create`, `insertAll`, `updateAll`, `deleteAll` and the rest, plus the Model's scopes (`User.active()`) and `User.all()` for the Relation itself. Records remember where they came from, so `user.save()` and `user.posts()` use the same database later. A record made with `new User()` has none, so anything that needs D1 throws `NoDatabase`: build records with `User.build(...)` (or `db.model(User).build(...)`) instead.
 
 The binding is read with `import { env } from "cloudflare:workers"`, which needs no setup. Two things follow from where that works:
 
 - **During a request only.** Workers don't allow D1 calls at a module's top level, outside a request, so a query there fails.
-- **Inside a Worker only.** Tests and scripts running in Node have no `env.DB`; give them their database with `withDatabase` ([below](#tests-and-scripts)).
-
-::: tip Why this is safe on Workers
-One isolate serves many requests at once, and a Model class is shared by all of them. So nothing about a request is ever stored on a class. The binding is the same object for every request; a request's own Session or `onQuery` lives only in its `withDatabase`, never on a class.
-:::
+- **Inside a Worker only.** Tests and scripts running in Node have no `env.DB`; give them their database with `withDatabase` ([Test with Miniflare](./testing)).
 
 ## 2. The request's database: `withDatabase`
 
@@ -58,19 +54,6 @@ If you'd rather name your Models once, `db.models({...})` gives you the same `db
 
 ## Batches
 
-`batch([...])` writes statements and records atomically, on the database they were built on: all of them, or none. Entries from a Model's statics use the current database, the request's or the binding's; `db.batch([...])` does the same for an explicit database. Entries from two databases are refused (`IncompatibleRelation`). See [Batches and bulk writes](./batches).
+`batch([...])` writes statements and records atomically, on the database they were built on: all of them, or none. Entries from a Model's statics use the current database, the request's or the binding's; `db.batch([...])` does the same for an explicit database. Entries from two databases are refused (`IncompatibleRelation`). See [Bulk writes and batches](./batches).
 
 <<< @/snippets/guide/connecting.ts#batch{ts}
-
-## Which do I need?
-
-| Your situation                                               | What to do                                                           |
-| ------------------------------------------------------------ | -------------------------------------------------------------------- |
-| A Worker with one D1 database                                | Nothing: `User.find(id)` uses its binding                            |
-| D1 read replication, reading your own writes                 | [A Session per request](./read-your-own-writes)                      |
-| Logging queries, or `Server-Timing`                          | [`onQuery`](./logging), app-wide or per request                      |
-| Vitest tests, seed or migration scripts                      | [`withDatabase(connect(binding), …)`](./testing), or `db.model(...)` |
-| Several D1 databases                                         | [One base class per binding](./several-databases)                    |
-| A compatibility date before 2026-08-04, using `withDatabase` | Add `nodejs_compat` to your Wrangler config's `compatibility_flags`  |
-
-A record made with `new User()` has no database: anything that needs D1 throws `NoDatabase`. Build records with `User.build(...)` (or `db.model(User).build(...)`) instead.
