@@ -22,6 +22,10 @@ import worker from "../../site/snippets/getting-started/worker.ts";
 import { User as MigratedUser, writeBio } from "../../site/snippets/migrations/models.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
+// Inside a Worker, a Model's binding comes from cloudflare:workers; here, Miniflare's D1 stands in.
+const workers: { env: Record<string, unknown> } = { env: {} };
+vi.mock("cloudflare:workers", () => workers);
+
 // The documentation's Getting started runs as written, on its own migration.
 describe("Getting started", () => {
   let binding: TestDatabase;
@@ -33,15 +37,13 @@ describe("Getting started", () => {
 
   beforeAll(async () => {
     ({ db: binding, dispose } = await createTestDatabase(migration));
+    workers.env = { DB: binding };
   });
   afterAll(() => dispose());
 
-  // The Worker's Env, as `wrangler types` would declare it; Miniflare's D1 stands in for it.
-  const env = () => ({ DB: binding }) as unknown as Parameters<typeof worker.fetch>[1];
-
   function request(method: string, body?: unknown): Promise<Response> {
     const init = body === undefined ? { method } : { method, body: JSON.stringify(body) };
-    return worker.fetch(new Request("https://example.com/", init), env());
+    return worker.fetch(new Request("https://example.com/", init));
   }
 
   test("POST signs up a user with a first post; a taken email is a 422 with its errors", async () => {
@@ -72,9 +74,10 @@ describe("Getting started", () => {
 
   test("a batch publishes the drafts and destroys a user with their posts, atomically", async () => {
     const db = connect(binding);
-    const ada = await db.model(User).findByOrThrow({ email: "ada@example.com" });
+    // Loaded as the example's statements are, on the current database, so they share a batch.
+    const ada = await User.findByOrThrow({ email: "ada@example.com" });
 
-    await publishDraftsAndRemove(db, ada);
+    await publishDraftsAndRemove(ada);
 
     expect(await db.model(User).pluck("email")).toEqual(["grace@example.com"]);
     expect(await db.model(Post).where({ publishedAt: null }).count()).toBe(0);

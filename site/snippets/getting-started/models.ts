@@ -8,6 +8,8 @@ export class User extends Model({
   createdAt: "datetime", // set for you on create
   updatedAt: "datetime", // set for you on every change
 }) {
+  static override binding = "DB"; // queries use env.DB: User.find(id)
+
   posts = hasMany(Post, { dependent: "destroy" }); // foreign key: Post's userId
 
   static active = this.scope((q) => q.where({ isActive: true }));
@@ -26,6 +28,8 @@ export class Post extends Model({
   title: { type: "string", null: false },
   publishedAt: "datetime",
 }) {
+  static override binding = "DB";
+
   // Named author, not user, so the foreign key is given.
   author = belongsTo(User, { foreignKey: "userId" });
 }

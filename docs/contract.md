@@ -12,7 +12,17 @@ The public behavior agreed during design, which the tests must prove. It's writt
 
 ## Connecting
 
+A query finds its database one of three ways (#77):
+
 ```ts
+// 1. The Model's binding, with no setup: static override binding = "DB" (the app's base class names it)
+await User.find(id);
+await User.where({ isActive: true }).active().toArray();
+
+// 2. The request's database, for a Session, onQuery, or code outside a Worker
+await withDatabase(connect(env.DB, { session: bookmark, onQuery }), () => User.find(id));
+
+// 3. An explicit database, always its own
 const db = connect(env.DB); // plain binding: every query goes to the primary
 const db = connect(env.DB, { session: "first-unconstrained" | "first-primary" | bookmark });
 db.bookmark(); // pass to the next request
@@ -22,8 +32,14 @@ const models = db.models({ User, Post }); // convenience: models.User has the sa
 
 - A Database with a session sends every query through that one D1 Session: record reads and writes, uniqueness checks, association reads, preloads, statements and batches. So the request reads its own writes even when reads are served by replicas. `session` takes D1's own values: `"first-primary"`, `"first-unconstrained"`, or a bookmark. Apps that want a primary Database and a replica Database call `connect()` twice.
 - `db.bookmark()` is the Session's latest bookmark (D1's `getBookmark()`), `null` before its first query. Pass it to the next request's `connect(env.DB, { session: bookmark })` to read at least as new as this request wrote. On a Database opened without a session it throws `NoSession`, since a `null` there would quietly mean "no session" next time.
-- No request state is ever stored on a Model class (ADR-0003).
-- Every record keeps the Database it was built or loaded through. Records come only from `build()`, `create()` or a query. A record constructed directly with `new User()` throws `NoDatabase` on any operation that needs D1.
+- **Statics:** every Relation method is a static of every Model (`find`, `findBy`, `where`, `whereNot`, `order`, `first`, `count`, `pluck`, `build`, `create`, `insert`, `insertAll`, `upsert`, `updateAll`, `deleteAll`, the `to…` forms, …), as Rails delegates them to `all`, plus `Model.all()`, the Relation itself, and the Model's scopes (`User.active()`). Each is typed for the class it's called on, so on a subclass it returns that subclass's records. They query the **current database**: the request's, then the Model's binding. Building a Relation never queries, so statics can be called anywhere; running one needs a database.
+- **The binding (level 1):** `static binding` names the D1 binding a Model queries when there's no request database, as Rails' `connects_to`; it's inherited, and `d1-record schema` writes it on the app's base class. It's read from `import { env } from "cloudflare:workers"`, loaded only when a query needs it, so the library imports fine in Node. Each binding gets one Database, holding nothing per request (no Session, no listener), shared by every request: safe across concurrent requests in one isolate.
+- **The request's database (level 2):** `withDatabase(db | [db, …], fn)` runs `fn` with those databases as the request's own, through Workers' `AsyncLocalStorage`: every query started from a Model inside it, and everything it awaits, uses the one whose D1 binding is that Model's binding, with its Session and `onQuery`. Nested calls add to the outer ones. Outside a Worker (Node, scripts), where there's no binding to match, the request's database serves every Model if there's one, and several are an error. `AsyncLocalStorage` is loaded with `process.getBuiltinModule("node:async_hooks")` when `withDatabase` is first called, so Workers without Node.js compatibility still build; calling it there throws `NoDatabase` naming the setting (a `compatibility_date` of 2026-08-04 or later, or `nodejs_compat`).
+- **An explicit database (level 3):** `db.model(X)`, `db.models({...})` and `db.batch([...])` always use `db`, whatever `withDatabase` says.
+- **Errors** (`NoDatabase`, saying what to do): a Model with no binding outside `withDatabase`; a binding only available inside a Worker, queried outside one; several request databases outside a Worker; a binding that isn't in the Worker's env (check `d1_databases`). A query at a module's top level fails with Workers' own error: D1 calls happen during a request.
+- **`batch([...])`** writes its entries atomically on the database they were built on, as `db.batch` does: the current database for entries from a Model's statics and their records, or one explicit database. Entries from two databases throw `IncompatibleRelation`.
+- No request state is ever stored on a Model class (ADR-0003): a request's database lives only in its `AsyncLocalStorage`.
+- Every record keeps the Database it was built or loaded through. Records come only from `build()`, `create()` or a query. A record constructed directly with `new User()` throws `NoDatabase` on any operation that needs D1; `User.build(…)` makes one on the current database.
 
 ## Declaring a Model
 
