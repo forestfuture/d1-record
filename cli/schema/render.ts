@@ -90,7 +90,7 @@ ${entries}
  * The app's base class for a database's Models, written once and then the app's own, as Rails'
  * `ApplicationRecord` is: `class Product extends ApplicationRecord("products") {}`.
  */
-export function renderBase(className: string, schemaImport: string): string {
+export function renderBase(className: string, schemaImport: string, binding: string): string {
   return `import { Model, modelFor } from "@forestfuture/d1-record";
 import { tables } from "${schemaImport}";
 
@@ -99,6 +99,9 @@ import { tables } from "${schemaImport}";
  * ApplicationRecord. It's abstract: it has no table of its own.
  */
 class Base extends Model.Base {
+  // The D1 binding Models query (Product.find(id)), from your Wrangler config's d1_databases.
+  static override binding = "${binding}";
+
   // A method every record has:
   // label() {
   //   return \`\${this.constructor.name} \${JSON.stringify(this.attributes())}\`;

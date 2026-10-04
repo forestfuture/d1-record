@@ -50,7 +50,10 @@ function writeBase(cwd: string, target: Target, print: Print): void {
   const { path, className } = target.base;
   if (existsSync(path)) return;
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, renderBase(className, importPath(dirname(path), target.out)));
+  writeFileSync(
+    path,
+    renderBase(className, importPath(dirname(path), target.out), target.database.binding),
+  );
   print(`Wrote ${shown(cwd, path)}`);
 }
 

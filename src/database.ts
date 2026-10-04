@@ -86,34 +86,61 @@ export class Database {
    */
   async batch<const T extends readonly BatchEntry[]>(entries: T): Promise<BatchResults<T>> {
     for (const entry of entries) this.#requireOwn(entry);
-    // Each record is written once, even if listed twice or already saved by its owner.
-    const claimed: Claimed = new Set();
-    const prepared: PreparedEntry[] = [];
-    for (const entry of entries) {
-      prepared.push(
-        entry instanceof RecordStatement
-          ? await recordEntry(entry, claimed)
-          : statementEntry(entry),
-      );
-    }
-    const writes = prepared.flatMap(({ writes }) => writes());
-    await writeAll(this.#executor, writes);
-    await runAfter(writes);
-    return prepared.map(({ result }) => result()) as BatchResults<T>;
+    return runBatch(this.#executor, entries);
   }
 
   /** A batch entry must have been built on this Database. */
   #requireOwn(entry: BatchEntry): void {
-    const executor =
-      entry instanceof RecordStatement
-        ? entry[recordStatementParts].record[state].executor
-        : entry[statementParts].executor;
-    if (executor !== this.#executor) {
+    if (executorOf(entry) !== this.#executor) {
       throw new IncompatibleRelation(
         "batch() needs statements and records of this Database; one comes from another connect() call",
       );
     }
   }
+}
+
+/** The Executor an entry was built on: its Relation's, or its record's. */
+function executorOf(entry: BatchEntry): Executor {
+  return entry instanceof RecordStatement
+    ? entry[recordStatementParts].record[state].executor
+    : entry[statementParts].executor;
+}
+
+/** A batch's steps, on `executor`: before-callbacks, one atomic write, then after-callbacks. */
+async function runBatch<const T extends readonly BatchEntry[]>(
+  executor: Executor,
+  entries: T,
+): Promise<BatchResults<T>> {
+  // Each record is written once, even if listed twice or already saved by its owner.
+  const claimed: Claimed = new Set();
+  const prepared: PreparedEntry[] = [];
+  for (const entry of entries) {
+    prepared.push(
+      entry instanceof RecordStatement ? await recordEntry(entry, claimed) : statementEntry(entry),
+    );
+  }
+  const writes = prepared.flatMap(({ writes }) => writes());
+  await writeAll(executor, writes);
+  await runAfter(writes);
+  return prepared.map(({ result }) => result()) as BatchResults<T>;
+}
+
+/**
+ * `db.batch`, on the database the entries were built on: the current one, for statements and
+ * records from a Model's statics (`Product.toUpdateAll(…)`, `Product.build(…).toSave()`), or one
+ * explicit `db`. Atomic, as `db.batch` is; entries from two databases throw `IncompatibleRelation`.
+ */
+export async function batch<const T extends readonly BatchEntry[]>(
+  entries: T,
+): Promise<BatchResults<T>> {
+  const executors = new Set(entries.map(executorOf));
+  if (executors.size > 1) {
+    throw new IncompatibleRelation(
+      "batch() needs statements and records of one database; these come from more than one",
+    );
+  }
+  const [executor] = executors;
+  return executor === undefined ? ([] as BatchResults<T>) : runBatch(executor, entries);
 }
 
 /** What `db.batch` accepts: statements, and records' save or destroy. */
