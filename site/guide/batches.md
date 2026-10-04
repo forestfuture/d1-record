@@ -45,3 +45,7 @@ When the batch runs:
 3. Each record takes its saved state, then its after-callbacks run.
 
 So every before-callback runs before any write, which is different from a Rails transaction, where one record's `after_save` runs before the next record's `before_save`. A record's autosaved associations and `dependent:` strategies join the same batch. A record listed twice, or already saved by its owner's autosave, is written once.
+
+Statements and records mix in one batch. From the [Getting started](./getting-started) project, publishing every draft and destroying a user, with their posts, all at once:
+
+<<< @/snippets/getting-started/src/publish.ts#batch{ts}
