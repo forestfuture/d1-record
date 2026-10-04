@@ -6,6 +6,8 @@ export class User extends Model({
   createdAt: "datetime", // createdAt and updatedAt are set on save
   updatedAt: "datetime",
 }) {
+  static override binding = "DB"; // queries use env.DB
+
   // Its table, users, is inferred from the class name; static tableName overrides it.
   posts = hasMany(Post, { dependent: "destroy" }); // foreign key inferred: Post's userId
 
@@ -19,5 +21,7 @@ export class Post extends Model({
   userId: { type: "string", null: false },
   title: { type: "string", null: false },
 }) {
+  static override binding = "DB";
+
   user = belongsTo(User); // foreign key inferred: userId
 }

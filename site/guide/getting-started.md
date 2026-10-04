@@ -61,15 +61,15 @@ A few things to notice:
 
 ## 4. Use them in your Worker
 
-Each request connects to the database with `connect(env.DB)`, then works through `db.model(...)`. (`npx wrangler types` generates the `Env` type from your Wrangler config.)
+Queries start from the Model, and use its binding during the request: there's nothing to connect. (`npx wrangler types` generates the `Env` type from your Wrangler config.)
 
 <<< @/snippets/getting-started/worker.ts{ts} [src/index.ts]
 
-`db.model(User)` is where every query starts. Nothing about the request is ever stored on the `User` class, so concurrent requests on one Worker never share a connection.
+Nothing about the request is ever stored on the `User` class, so concurrent requests on one Worker never share a D1 Session. For a Session or per-request logging, see [Connecting](./connecting).
 
 ## 5. Write several things at once, or not at all
 
-D1 can't keep a transaction open while your code awaits, so there's no `transaction()` block. Instead, `db.batch([...])` sends a prepared set of writes that all succeed or all fail. `toSave()`, `toDestroy()` and the bulk writes' `to…` forms (`toUpdateAll`, `toDeleteAll`, …) prepare a write for the batch instead of running it:
+D1 can't keep a transaction open while your code awaits, so there's no `transaction()` block. Instead, `batch([...])` sends a prepared set of writes that all succeed or all fail. `toSave()`, `toDestroy()` and the bulk writes' `to…` forms (`toUpdateAll`, `toDeleteAll`, …) prepare a write for the batch instead of running it:
 
 <<< @/snippets/getting-started/batch.ts#batch{ts}
 

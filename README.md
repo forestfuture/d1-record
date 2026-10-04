@@ -72,6 +72,8 @@ export class User extends Model({
   createdAt: "datetime", // set for you on create
   updatedAt: "datetime", // set for you on every change
 }) {
+  static override binding = "DB"; // queries use env.DB, from your Wrangler config
+
   posts = hasMany(Post, { dependent: "destroy" }); // foreign key: Post's userId
 
   static active = this.scope((q) => q.where({ isActive: true }));
@@ -90,6 +92,8 @@ export class Post extends Model({
   title: { type: "string", null: false },
   publishedAt: "datetime",
 }) {
+  static override binding = "DB";
+
   // Named author, not user, so the foreign key is given.
   author = belongsTo(User, { foreignKey: "userId" });
 }
@@ -97,22 +101,17 @@ export class Post extends Model({
 
 ### 4. Use them in your Worker
 
-Each request connects to the database with `connect(env.DB)`, then works through `db.model(...)`. (`npx wrangler types` generates the `Env` type from your Wrangler config.)
+Queries start from the Model, and use its binding during the request: there's nothing to connect. (For a D1 Session or per-request logging, see [Connecting](https://docs.forestfuture.dev/d1-record/guide/connecting).)
 
 ```ts
 // src/index.ts
-import { connect } from "@forestfuture/d1-record";
 import { User } from "./models";
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const db = connect(env.DB);
-
+  async fetch(request: Request): Promise<Response> {
     // GET: the 20 newest active users, each with their posts.
     if (request.method === "GET") {
-      const users = await db
-        .model(User)
-        .active()
+      const users = await User.active()
         .includes("posts") // loaded in one extra query, not one per user
         .order({ createdAt: "desc" })
         .limit(20)
@@ -122,7 +121,7 @@ export default {
 
     // POST: sign up a user with a first post, saved together.
     const { email } = await request.json<{ email: string }>();
-    const user = db.model(User).build({ email });
+    const user = User.build({ email });
     user.posts().build({ title: "Hello, D1" });
 
     // save() validates and runs callbacks; false means it wasn't saved, and why is in errors.
@@ -136,11 +135,11 @@ export default {
 
 ### 5. Write several things at once, or not at all
 
-D1 can't keep a transaction open while your code awaits, so there's no `transaction()` block. Instead, `db.batch([...])` sends a prepared set of writes that all succeed or all fail. `toSave()`, `toDestroy()` and the bulk writes' `to…` forms (`toUpdateAll`, `toDeleteAll`, …) prepare a write for the batch instead of running it:
+D1 can't keep a transaction open while your code awaits, so there's no `transaction()` block. Instead, `batch([...])` sends a prepared set of writes that all succeed or all fail. `toSave()`, `toDestroy()` and the bulk writes' `to…` forms (`toUpdateAll`, `toDeleteAll`, …) prepare a write for the batch instead of running it:
 
 ```ts
-await db.batch([
-  db.model(Post).where({ publishedAt: null }).toUpdateAll({ publishedAt: new Date() }),
+await batch([
+  Post.where({ publishedAt: null }).toUpdateAll({ publishedAt: new Date() }),
   user.toDestroy(), // and its posts, since posts are dependent: "destroy"
 ]);
 ```
@@ -151,19 +150,20 @@ await db.batch([
 - **Queries**: `where`/`whereNot`/`or`/`merge`, comparisons (`gte`, `between`, …), ordering (`nulls: "last"`, `reorder`), pagination, `select`, `distinct`, `pluck`, `count`, `size`, `exists`, named scopes, and hand-written conditions only through the `sql` tagged template, so values are always bound.
 - **Persistence**: `save`/`create`/`update`/`destroy` with `…OrThrow` variants, validations (`presence`, `length`, `format`, `inclusion`, `numericality`, `uniqueness`), the full Rails callback lifecycle with `abort()`, dirty tracking (`changes`, `attributeWas`, `savedChangeTo`, …).
 - **Associations**: `belongsTo`, `hasMany`, `hasOne` with scopes, `dependent:` strategies, preloading with `includes` (one query per association, never N+1), caching until reload, autosave, and `build`/`create`/`set` through the association.
-- **Bulk writes**: `insert`, `insertAll`, `upsert`, `updateAll`, `deleteAll`, and `db.batch([...])` mixing those with records' `toSave()`/`toDestroy()`.
-- **Read replicas**: `connect(env.DB, { session })` sends every query through one D1 Session, so a request reads its own writes; `db.bookmark()` carries that to the next request.
+- **Queries from the Model**, as in Rails: `User.find(id)`, `User.where(…)`, `User.active()`, on the Model's binding with no setup.
+- **Bulk writes**: `insert`, `insertAll`, `upsert`, `updateAll`, `deleteAll`, and `batch([...])` mixing those with records' `toSave()`/`toDestroy()`.
+- **Read replicas**: a request opened with `withDatabase(connect(env.DB, { session }), …)` sends every query through one D1 Session, so it reads its own writes; `db.bookmark()` carries that to the next request.
 - **Observability**: `connect(env.DB, { onQuery })` sees every statement with its SQL, bound values, timing and D1's `meta`.
 
 ## Honest about D1
 
 d1-record follows Rails wherever D1 allows, and says so where it can't:
 
-- **No interactive transactions.** D1 can't hold a transaction open across `await`s, so there's no `transaction(async tx => …)`. Instead, `db.batch([...])` writes a prepared set of statements and records atomically, and a record with `dependent: "destroy"` or new associated records is written in one batch when its keys are known in advance.
+- **No interactive transactions.** D1 can't hold a transaction open across `await`s, so there's no `transaction(async tx => …)`. Instead, `batch([...])` writes a prepared set of statements and records atomically, and a record with `dependent: "destroy"` or new associated records is written in one batch when its keys are known in advance.
 - **Keys generated in code are first-class.** With a `default: () => crypto.randomUUID()`, records can be linked and saved together atomically before D1 has seen them.
 - **D1's limits are handled for you.** Lists of any length bind as one value (`json_each`), so the 100-bound-parameter limit never bites; preloads take one query per association.
 - **Constraint errors become typed errors** (`RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation`, `CheckViolation`) naming the table, columns and attributes.
-- **No request state on Model classes.** Every query goes through the `Database` you `connect()` per request, so concurrent requests on one isolate never share a connection or session.
+- **No request state on Model classes.** A query uses the Model's binding, the same object for every request, or a database opened for its request with `withDatabase`, so concurrent requests on one isolate never share a Session or listener.
 
 ## Coming from Rails
 

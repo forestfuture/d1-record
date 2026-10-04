@@ -6,14 +6,14 @@ description: "What's different from Rails' Active Record: queries start from the
 
 Most of d1-record will feel familiar: Models, validations, callbacks, associations, scopes and dirty tracking all follow Active Record, down to the default error messages. This page covers what's different, and why.
 
-## Queries start from the request
+## Queries start from the Model
 
 ```ts
 // Rails: User.where(active: true)
-const users = await db.model(User).where({ isActive: true }).toArray();
+const users = await User.where({ isActive: true }).toArray();
 ```
 
-A Worker serves many requests at once from one isolate, so a Model class can't hold a connection. [`connect(env.DB)`](./connecting) gives each request its own Database, and every query starts from `db.model(User)`. A record keeps the Database it came from.
+As in Rails, a Model queries by itself. Its binding (`static override binding = "DB"`, on your app's base class) plays the part of `connects_to`. A Worker serves many requests at once from one isolate, so nothing about a request is ever stored on the class: for a D1 Session or per-request logging, run the request in [`withDatabase(connect(env.DB, { … }), …)`](./connecting). A record keeps the database it came from.
 
 ## Naming
 
@@ -42,7 +42,7 @@ Attributes are declared in TypeScript, not read from the schema, so TypeScript k
 
 ## Atomic writes without transactions
 
-Bulk writes run when called, as in Rails: `await db.model(Post).where(…).deleteAll()` resolves to how many rows it deleted. There's no `transaction do … end`: D1 can't keep a transaction open across awaits. [`db.batch([...])`](./batches), with records' `toSave()`/`toDestroy()` and bulk writes' `toUpdateAll()`/`toDeleteAll()`/…, writes a prepared set of statements and records atomically. Generating keys in code makes whole graphs of new records atomic too. See [D1's limits](./d1).
+Bulk writes run when called, as in Rails: `await Post.where(…).deleteAll()` resolves to how many rows it deleted. There's no `transaction do … end`: D1 can't keep a transaction open across awaits. [`db.batch([...])`](./batches), with records' `toSave()`/`toDestroy()` and bulk writes' `toUpdateAll()`/`toDeleteAll()`/…, writes a prepared set of statements and records atomically. Generating keys in code makes whole graphs of new records atomic too. See [D1's limits](./d1).
 
 ## Smaller differences
 
