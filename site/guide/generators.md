@@ -59,10 +59,7 @@ npx d1-record g migration BackfillSlugs                         # an empty migra
 
 The name can be written `AddSlugToPosts` or `add_slug_to_posts`. Apply each migration afterwards, as above.
 
-Some changes are refused, before anything is written:
-
-- **A required column added without a default**, since SQLite can't: give it one (`slug:string!=draft`), or leave out the `!`.
-- **Removing a `references` column**, since SQLite can't drop a column with a foreign key: write a migration that rebuilds the table without it ([SQLite's steps](https://www.sqlite.org/lang_altertable.html#otheralter)).
+A required column added without a default is refused, before anything is written, since SQLite can't add one: give it a default (`slug:string!=draft`), or leave out the `!`.
 
 ::: warning A default and a unique index don't mix on a table with rows
 `g migration AddSlugToPosts 'slug:string!=draft:unique'` is accepted, but applying it to a table with more than one row fails: every row gets `draft`, which the unique index refuses. Add the column without the index, fill it in, then add the index in a later migration.
@@ -81,6 +78,10 @@ Some changes are refused, before anything is written:
 2. In the Model, use `Category` itself, and add the other direction if you want it.
 
 <<< @/snippets/guide/generators.ts#self-reference{ts}
+
+::: tip Compared with Rails
+Rails writes `belongs_to :parent, class_name: "Category", optional: true`. Here the association takes the class itself, so there's no `class_name`, and whether a parent is required comes from the column: `parentId` can be `null` because the migration allows it.
+:::
 
 ## Keep Models in another folder
 

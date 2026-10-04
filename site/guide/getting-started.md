@@ -1,5 +1,5 @@
 ---
-description: "From an empty Worker to two related Models, queried and saved, in about ten minutes: install d1-record, generate Models and their tables, add behaviour, and use them in a Worker."
+description: "From an empty Worker to two related Models, queried and saved, in about ten minutes: install d1-record, generate Models and their tables, add behavior, and use them in a Worker."
 ---
 
 # Getting started
@@ -81,7 +81,7 @@ npx wrangler d1 migrations apply my-app-db --local
 
 Use `--remote` instead when you deploy.
 
-## 4. Add behaviour to the Models
+## 4. Add behavior to the Models
 
 The generated `Post` already knows it belongs to a user, from `user:references`:
 
@@ -95,7 +95,7 @@ import { ApplicationRecord } from "./application-record";
 export class User extends ApplicationRecord("users") {}
 ```
 
-Its attributes come from the generated schema, so `user.email` and `user.isActive` are already there, typed. A Model only declares behaviour. Open `src/models/user.ts` and give it a user's posts, a way to find active users, and rules for saving:
+Its attributes come from the generated schema, so `user.email` and `user.isActive` are already there, typed. A Model only declares behavior. Open `src/models/user.ts` and give it a user's posts, a way to find active users, and rules for saving:
 
 <<< @/snippets/getting-started/src/models/user.ts{ts} [src/models/user.ts]
 
@@ -130,20 +130,15 @@ curl http://localhost:8787
 
 The second request returns Ada, with her email lowercased by the `beforeSave` callback. Sign her up again, and the response is a `422` with `["Email has already been taken"]`.
 
-## 7. Write several things at once
-
-D1 can't keep a transaction open while your code awaits, so there's no `transaction()` block. Instead, `batch([...])` writes a prepared set of changes that all succeed or all fail. `toSave()`, `toDestroy()` and the bulk writes' `to…` forms prepare a change for the batch instead of running it:
-
-<<< @/snippets/getting-started/src/publish.ts#batch{ts}
-
 ## Next steps
 
-You've generated two Models, created their tables, added behaviour, and used them in a Worker.
+You've generated two Models, created their tables, added behavior, and used them in a Worker.
 
 - **[Generate models and migrations](./generators):** change a table, and every way to write columns.
-- **[Models](./models):** attributes, types, overrides and shared behaviour.
+- **[Models](./models):** attributes, types, overrides and shared behavior.
 - **[Querying](./querying):** conditions, ordering, scopes and preloading.
 - **[Saving and destroying](./persistence):** what each method returns, and when it throws.
+- **[Bulk writes and batches](./batches):** several changes that all succeed or all fail, since D1 has no transactions.
 - **[Connecting](./connecting):** read replicas, logging, tests and several databases.
 
 Every larger example on this site is type-checked against d1-record and runs against a real D1 database in its test suite, including this tutorial.

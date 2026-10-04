@@ -25,6 +25,17 @@ So a query finds its database one of three ways, in this order:
 
 Most apps only ever use the second. The first exists for what belongs to a request: Sessions, per-request logging, and tests, which run outside a Worker and have no binding to find.
 
+## Which do I need?
+
+| Your situation                                               | What to do                                                           |
+| ------------------------------------------------------------ | -------------------------------------------------------------------- |
+| A Worker with one D1 database                                | Nothing: `User.find(id)` uses its binding                            |
+| D1 read replication, reading your own writes                 | [A Session per request](./read-your-own-writes)                      |
+| Logging queries, or `Server-Timing`                          | [`onQuery`](./logging), app-wide or per request                      |
+| Vitest tests, seed or migration scripts                      | [`withDatabase(connect(binding), …)`](./testing), or `db.model(...)` |
+| Several D1 databases                                         | [One base class per binding](./several-databases)                    |
+| A compatibility date before 2026-08-04, using `withDatabase` | Add `nodejs_compat` to your Wrangler config's `compatibility_flags`  |
+
 ## What follows from it
 
 - **Records remember.** A record keeps the database it was loaded through, or first saved through, so `post.save()` and `post.user()` use it later, even after `withDatabase` has returned.

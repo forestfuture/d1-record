@@ -37,7 +37,7 @@ Applies your migrations, in order, to an in-memory SQLite database, reads each t
 - A migration SQLite rejects: the error names the file, and the last good schema is kept.
 
 ::: tip Coming from Drizzle or Prisma?
-Their schemas often live at `src/db/schema.ts` or `src/db/schema/`. Write d1-record's somewhere else, with `--out src/db/d1-record.ts`, and point `application-record.ts`'s `import { tables }` at it.
+Their schemas often live at `src/db/schema.ts` or `src/db/schema/`. Write d1-record's somewhere else, with `--out src/db/d1-record.ts`, and, if `application-record.ts` already exists, point its `import { tables }` at it (a new one is written importing the right file).
 :::
 
 ## Conventions
@@ -68,13 +68,13 @@ Also:
 - **`NOT NULL`** becomes `null: false`. A primary key is never null.
 - **Primary keys:** the key column is the Model's `primaryKey`. A `TEXT` key gets `default: () => crypto.randomUUID()`; an `INTEGER PRIMARY KEY` is left to D1. A table with no key, or a key of several columns, is an error.
 - **Defaults:** literal defaults (numbers, strings, `TRUE`/`FALSE`, JSON) are copied, so a new record shows them before it's saved. Expressions such as `CURRENT_TIMESTAMP` are left to D1.
-- **Foreign keys** take the referenced column's type. They don't create associations, which are behaviour you declare.
+- **Foreign keys** take the referenced column's type. They don't create associations, which are behavior you declare.
 - **Left out:** SQLite's own tables, Cloudflare's (`_cf_…`), the migrations table, and virtual tables.
 
 **Notes it prints**, when the schema is written:
 
 - an `INTEGER` read as a `boolean` from its name;
-- for migrations written by Drizzle or Prisma (recognised by their config files or the lines they write): a note naming the tool, then one for each column worth checking, such as an `INTEGER` named `…_at` that may hold a Unix timestamp, a `TEXT` named like JSON without a `json_valid` check, or, for Prisma, each `datetime`;
+- for migrations written by Drizzle or Prisma (recognized by their config files or the lines they write): a note naming the tool, then one for each column worth checking, such as an `INTEGER` named `…_at` that may hold a Unix timestamp, a `TEXT` named like JSON without a `json_valid` check, or, for Prisma, each `datetime`;
 - migrations in folders with no `migrations_pattern` to find them.
 
 ## `d1-record g model` and `g migration`
@@ -88,7 +88,7 @@ npx d1-record g migration <Name> [columns] [options]
 
 | Option                 |                                                                                                                        |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `--id integer`         | An `INTEGER PRIMARY KEY` that D1 generates, instead of a `TEXT` key generated in code.                                 |
+| `--id integer\|text`   | `integer`: an `INTEGER PRIMARY KEY` that D1 generates. `text` (the default): a `TEXT` key generated in code.           |
 | `--no-timestamps`      | Leave out `created_at` and `updated_at`.                                                                               |
 | `--models <path>`      | Write Models in this folder (importing `application-record.ts` from it), or append them to one file (`src/models.ts`). |
 | `--database <binding>` | The D1 database to use, when the Wrangler config has several.                                                          |
@@ -110,9 +110,13 @@ npx d1-record g migration <Name> [columns] [options]
 | `references`           | `<name>_id`, typed like the referenced table's key, `REFERENCES <plural> (id)`, and indexed |
 
 - **`!`** makes the column `NOT NULL`. A `references` column is `NOT NULL` in a new table, and can be `NULL` when added to an existing one, as in Rails.
-- **`=value`** is a literal default, for `string`, `integer`, `real` and `boolean` columns (`=draft`, `=0`, `=1.5`, `=true`). It's d1-record's own addition: Rails' generators don't have it.
+- **`=value`** is a literal default, for `string`, `integer`, `real` and `boolean` columns (`=draft`, `=0`, `=1.5`, `=true`).
 - **`:unique`** adds a unique index, and **`:index`** an index, named as Rails names them (`index_products_on_sku`).
 - **Names** can be written `priceCents` or `price_cents`; columns are always snake_case. Names SQLite reserves (`order`, `group`) are quoted.
+
+::: tip Beyond Rails
+`=value` is d1-record's own addition: Rails' generators can't give a column a default.
+:::
 
 ### Migration names
 
@@ -135,7 +139,7 @@ Nothing is written unless all of these hold:
 - the Model's file doesn't exist yet (or, with one models file, doesn't have the class yet);
 - the config's `migrations_pattern`, if it has one, would match the new file, so Wrangler would apply it;
 - the schema file can be written (see [What it refuses](#d1-record-schema));
-- it isn't a required column added without a default, or a `references` column removed.
+- it isn't a required column added without a default.
 
 Then the generator writes the files, regenerates the schema, and prints the next step: `npx wrangler d1 migrations apply <database_name> --local`.
 

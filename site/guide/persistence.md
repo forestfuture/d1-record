@@ -69,4 +69,4 @@ If the row was already gone (another request deleted it), `save` and `destroy` s
 
 ## Writing without the lifecycle
 
-To update or delete many rows at once, skipping validations and callbacks, use `updateAll`, `deleteAll`, `insert` and `upsert` on a Relation. See [Batches and bulk writes](./batches).
+To update or delete many rows at once, skipping validations and callbacks, use `updateAll`, `deleteAll`, `insert` and `upsert` on a Relation. See [Bulk writes and batches](./batches).

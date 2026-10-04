@@ -70,7 +70,7 @@ export default defineConfig({
           { text: "Validations", link: "/guide/validations" },
           { text: "Callbacks", link: "/guide/callbacks" },
           { text: "Associations", link: "/guide/associations" },
-          { text: "Batches and bulk writes", link: "/guide/batches" },
+          { text: "Bulk writes and batches", link: "/guide/batches" },
           { text: "Connecting", link: "/guide/connecting" },
           { text: "Command line", link: "/guide/command-line" },
           { text: "Errors", link: "/guide/errors" },

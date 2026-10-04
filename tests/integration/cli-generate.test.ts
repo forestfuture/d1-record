@@ -315,4 +315,27 @@ describe("generated files against D1", () => {
       "ada@example.com",
     ]);
   });
+
+  test("a generated reference can be removed again, and the migrations still apply to D1", async () => {
+    const cwd = project();
+    generate(cwd, ["model", "User"]);
+    generate(cwd, ["model", "Post", "user:references", "title"]);
+    const removed = generate(cwd, ["migration", "RemoveUserFromPosts", "user:references"]);
+    const local = new Miniflare({
+      modules: true,
+      script: "export default {}",
+      d1Databases: ["DB"],
+    });
+    const binding = await local.getD1Database("DB");
+
+    try {
+      for (const file of readdirSync(join(cwd, "migrations")).sort()) {
+        await binding.exec(read(cwd, `migrations/${file}`).replaceAll("\n", " "));
+      }
+      expect(removed.code).toBe(0);
+      expect(read(cwd, "src/db/schema.ts")).not.toContain("userId");
+    } finally {
+      await local.dispose();
+    }
+  });
 });
