@@ -176,7 +176,7 @@ export const explicit = {
 export async function batched(): Promise<void> {
   // #region batch
   const user = User.build({ email: "grace@example.com" });
-  const post = Post.build({ id: 1, userId: user.id, title: "Hello" });
+  const post = Post.build({ userId: user.id, title: "Hello" });
 
   // Atomic: all written, or none.
   await batch([user.toSave(), post.toSave(), Post.where({ userId: "old" }).toDeleteAll()]);

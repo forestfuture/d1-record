@@ -10,7 +10,7 @@ export type TestDatabase = Awaited<ReturnType<Miniflare["getD1Database"]>>;
  * fixture schema (or another, such as a documentation example's migration).
  * Call once per test file and dispose of it in `afterAll`.
  */
-export async function createTestDatabase(schemaFile: URL = fixtureSchema): Promise<{
+export async function createTestDatabase(schema: URL | readonly URL[] = fixtureSchema): Promise<{
   db: TestDatabase;
   dispose: () => Promise<void>;
 }> {
@@ -20,7 +20,10 @@ export async function createTestDatabase(schemaFile: URL = fixtureSchema): Promi
     d1Databases: ["DB"],
   });
   const db = await mf.getD1Database("DB");
-  const statements = readFileSync(schemaFile, "utf8")
+  // Several files apply in order, as a project's migrations do.
+  const statements = (Array.isArray(schema) ? schema : [schema])
+    .map((file: URL) => readFileSync(file, "utf8"))
+    .join(";\n")
     .split(/;\s*$/m)
     .map((statement) => statement.trim())
     .filter(Boolean)
