@@ -110,6 +110,25 @@ export class LineItem extends ApplicationRecord("line_items") {
 `);
   });
 
+  test("--models puts Models and ApplicationRecord in another folder, for both commands", () => {
+    const cwd = project();
+
+    const model = generate(cwd, ["model", "Product"], { models: "src/app/models" });
+
+    expect(model.output).toBe(`Wrote migrations/0001_create_products.sql
+Wrote src/app/models/product.ts
+Wrote src/db/schema.ts (1 table) from migrations/
+Wrote src/app/models/application-record.ts
+Next: npx wrangler d1 migrations apply shop-db --local`);
+    expect(read(cwd, "src/app/models/product.ts")).toContain(
+      'import { ApplicationRecord } from "./application-record";',
+    );
+    expect(read(cwd, "src/app/models/application-record.ts")).toContain(
+      'import { tables } from "../../db/schema";',
+    );
+    expect(existsSync(join(cwd, "src/models"))).toBe(false);
+  });
+
   test("--models appends to one file", () => {
     const cwd = project();
     generate(cwd, ["model", "User", "email:string!:unique"], { models: "src/models.ts" });
@@ -117,7 +136,7 @@ export class LineItem extends ApplicationRecord("line_items") {
     generate(cwd, ["model", "Post", "user:references"], { models: "src/models.ts" });
 
     expect(read(cwd, "src/models.ts")).toBe(`import { belongsTo } from "@forestfuture/d1-record";
-import { ApplicationRecord } from "./models/application-record";
+import { ApplicationRecord } from "./application-record";
 
 export class User extends ApplicationRecord("users") {}
 

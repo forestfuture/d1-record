@@ -75,7 +75,7 @@ function listed(names: readonly string[]): string {
 
 /** The database to generate for: the only one, or the one `--database` names. */
 function targetFor(cwd: string, options: GenerateOptions): Target | string {
-  const targets = targetsOf(cwd, { config: options.config });
+  const targets = targetsOf(cwd, { config: options.config, models: options.models });
   if (typeof targets === "string") return targets;
   const bindings = listed(targets.map((target) => target.database.binding));
   if (options.database !== undefined) {

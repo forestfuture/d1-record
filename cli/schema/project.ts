@@ -1,7 +1,7 @@
 // A project's D1 databases, from its Wrangler config: where each one's migrations are, and
 // where its generated schema goes. Shared by \`d1-record schema\` and the generators.
 import { readdirSync, readFileSync } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { classify, moduleName } from "./names.ts";
 import { byName, type Migration } from "./schema.ts";
 import { readWranglerConfig, type DatabaseConfig } from "./wrangler.ts";
@@ -14,6 +14,8 @@ export interface ProjectOptions {
   migrations?: string;
   /** The file to write (or, with several databases, the folder). */
   out?: string;
+  /** Where Models and their base class live (`src/models`), or one file of Models (`src/models.ts`). */
+  models?: string;
 }
 
 export type Print = (line: string) => void;
@@ -32,16 +34,19 @@ export interface Target {
  * A database's base class: `ApplicationRecord` when there's one database, as in Rails, and one
  * per binding when there are several (`LOGS` → `LogsRecord`), as Rails names them.
  */
-function baseFor(cwd: string, binding: string, several: boolean): Target["base"] {
+function baseFor(modelsDir: string, binding: string, several: boolean): Target["base"] {
   if (!several) {
-    return {
-      path: resolve(cwd, "src/models/application-record.ts"),
-      className: "ApplicationRecord",
-    };
+    return { path: join(modelsDir, "application-record.ts"), className: "ApplicationRecord" };
   }
   // Bindings are JavaScript names (env.MY_DB), so their words are split by `_`.
   const className = `${classify(binding.toLowerCase())}Record`;
-  return { path: resolve(cwd, `src/models/${moduleName(className)}.ts`), className };
+  return { path: join(modelsDir, `${moduleName(className)}.ts`), className };
+}
+
+/** The folder Models and their base class live in: `--models`, or `src/models`. */
+function modelsDirOf(cwd: string, models = "src/models"): string {
+  const path = resolve(cwd, models);
+  return path.endsWith(".ts") ? dirname(path) : path;
 }
 
 /** Bindings whose base classes would be the same (`DB` and `db` → `DbRecord`), as an error. */
@@ -87,7 +92,7 @@ export function targetsOf(cwd: string, options: ProjectOptions): Target[] | stri
       databases.length === 1
         ? resolve(cwd, options.out ?? "src/db/schema.ts")
         : resolve(cwd, options.out ?? "src/db", `${database.binding}.ts`);
-    const base = baseFor(cwd, database.binding, databases.length > 1);
+    const base = baseFor(modelsDirOf(cwd, options.models), database.binding, databases.length > 1);
     return { database, configDir: dir, migrationsDir, out, base };
   });
   return sharedBase(targets) ?? targets;
