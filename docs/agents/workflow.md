@@ -35,7 +35,7 @@ Rules that matter here:
 - If a size or complexity limit trips, split the code. Don't raise the limit.
 - Keep `docs/contract.md` in sync with what you build. If you implement something differently from the contract, update it and tell the human.
 - Add a changeset for a user-visible change (`vp exec changeset`, see `docs/agents/releasing.md`). While on 0.x, a breaking change is `minor` and anything else is `patch`.
-- Update the documentation site's guide page for the behavior too (`site/guide/`). Its larger examples live in `site/snippets/`, where `vp check` type-checks them against the library, and each is shown with the imports its code uses (`site/.vitepress/examples.ts`; an inline example must import what it uses from the package); they also run against D1 in `tests/integration/site-examples.test.ts`, on their own schemas (`site/snippets/**/*.sql`).
+- Update the documentation site's guide page for the behavior too (`site/guide/`). For a new page, or a page's structure, follow the `documentation-writer` skill: decide its Diátaxis type (tutorial, how-to, reference or explanation), audience and goal, and agree its outline with the human before writing. Its larger examples live in `site/snippets/`, where `vp check` type-checks them against the library, and each is shown with the imports its code uses (`site/.vitepress/examples.ts`; an inline example must import what it uses from the package); they also run against D1 in `tests/integration/site-examples.test.ts`, on their own schemas (`site/snippets/**/*.sql`).
 - Scope changes (pulling work in from another issue, or pushing it out) get a comment on both issues.
 
 ## 4. Review
