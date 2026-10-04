@@ -79,7 +79,7 @@ export default defineConfig({
     outline: [2, 3],
     footer: {
       message: "Released under the MIT License.",
-      copyright: 'A <a href="https://forestfuture.dev">Forest Future</a> project',
+      copyright: 'A <a href="https://forestfuture.dev">ForestFuture</a> project',
     },
   },
 });
