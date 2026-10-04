@@ -69,7 +69,8 @@ function dedent(text: string): string {
 /**
  * An example as shown: the snippet file's imports that the region uses, then the region. So
  * every example says where its names come from, and both come from the type-checked file.
- * The snippets' own model files (any relative import) are shown as the app's: `./models`.
+ * The snippets' own model files (any relative import) are shown as the app's: `./models`. The
+ * generated schema (`../db/schema`) is shown as written, since an app imports it from there.
  */
 export function exampleBlock(file: string, region: string): string | undefined {
   const code = readFileSync(file, "utf8").replaceAll("\r\n", "\n");
@@ -78,7 +79,7 @@ export function exampleBlock(file: string, region: string): string | undefined {
   const used = (name: string) => new RegExp(`\\b${bindingOf(name)}\\b`).test(body);
   const bySource = new Map<string, string[]>();
   for (const { source, names } of importsOf(code)) {
-    const shown = /^["']\./.test(source) ? '"./models"' : source;
+    const shown = /^["']\./.test(source) && !/\/schema["']$/.test(source) ? '"./models"' : source;
     bySource.set(shown, [...(bySource.get(shown) ?? []), ...names.filter(used)]);
   }
   const imports = [...bySource]

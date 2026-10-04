@@ -7,6 +7,7 @@ import {
   type AttributeDefinition,
   type AttributeSpecs,
 } from "./metadata.ts";
+import { ancestors } from "./ancestors.ts";
 import type { Errors } from "./errors-collection.ts";
 import { declare, seal } from "./declarations.ts";
 import {
@@ -518,7 +519,11 @@ export function verifyModel(model: ModelClass): void {
   requirePrimaryKeyAttribute(model);
   rejectReservedAttributeNames(model);
   rejectShadowingFields(model);
-  seal(model);
+  // The classes it inherits declarations from too (an app's Base), so none can change later.
+  for (const each of ancestors(model)) {
+    if (each === ModelBase) break;
+    seal(each);
+  }
   verified.add(model);
 }
 

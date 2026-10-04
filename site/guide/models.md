@@ -104,9 +104,11 @@ Anything the query methods can't express is written as an `sql` tagged template,
 
 A subclass (`class Admin extends User`) inherits a copy of its parent's attributes, validations, callbacks, scopes and associations, and declaring more on the child never changes the parent. Single-table inheritance isn't supported.
 
-To share behavior between Models, write a plain function and call it from each Model's `static {}` block, rather than building an app-wide base class:
+To share behavior between Models, write it on your app's base class, as on Rails' `ApplicationRecord`. `d1-record schema` writes `application-record.ts` with an empty `Base` to fill in; the methods, static methods, callbacks and scopes written there are shared by every Model built on it:
 
 <<< @/snippets/guide/models.ts#shared{ts}
+
+`Base` has every record method but no attributes, since those differ by table: read them with `this.attributes()`, and write shared scopes with `sql` fragments. Its callbacks run before each Model's own. It's abstract, as Rails' `abstract_class`: it has no table, so `db.model(Base)` throws `InvalidModel`.
 
 ## Checked when first used
 

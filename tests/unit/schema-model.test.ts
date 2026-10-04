@@ -200,6 +200,18 @@ describe("modelFor(tables, Base): an app's own base class, as Rails' Application
     void db.model(Event).cheap;
   });
 
+  test("once a Model is used, its base class's declarations are fixed too, as its own are", () => {
+    class Sealed extends LibraryModel.Base {}
+    class Product extends modelFor(tables, Sealed)("products") {}
+    db.model(Product);
+
+    expect(() => Sealed.beforeSave(() => {})).toThrow(
+      new InvalidModel(
+        "Sealed has already been used; declare validations and callbacks in its static {} block",
+      ),
+    );
+  });
+
   test("the base class is abstract: it has no table, so using it is an InvalidModel, as Rails' abstract_class", () => {
     expect(() => db.model(Base)).toThrow(
       new InvalidModel(

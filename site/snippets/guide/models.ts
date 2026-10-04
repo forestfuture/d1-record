@@ -1,4 +1,5 @@
-import { column, connect, Model, sql } from "@forestfuture/d1-record";
+import { column, connect, Model, modelFor, sql } from "@forestfuture/d1-record";
+import { tables } from "../db/schema";
 
 // #region declare
 export class User extends Model({
@@ -22,24 +23,23 @@ export class User extends Model({
 // #endregion declare
 
 // #region shared
-// Shared behavior is a plain function, called from each Model's static block.
-function audited(model: typeof Account): void {
-  model.beforeSave((record) => {
-    record.updatedBy = "system";
-  });
-}
-
-export class Account extends Model({
-  id: { type: "integer", null: false },
-  name: { type: "string", null: false },
-  updatedBy: "string",
-}) {
-  static tableName = "billing_accounts"; // instead of the inferred "accounts"
+// src/models/application-record.ts: what's written on Base, every Model has.
+class Base extends Model.Base {
+  label() {
+    return `${this.constructor.name} ${JSON.stringify(this.attributes())}`;
+  }
 
   static {
-    audited(this);
+    this.beforeSave((record) => {
+      console.log(`Saving ${record.constructor.name}`); // before each Model's own callbacks
+    });
   }
 }
+
+export const ApplicationRecord = modelFor(tables, Base);
+
+// Every Model built on it has label(), and Base's beforeSave.
+export class Account extends ApplicationRecord("billing_accounts") {}
 // #endregion shared
 
 export async function examples(env: Env): Promise<unknown> {

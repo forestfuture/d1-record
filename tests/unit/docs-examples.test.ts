@@ -12,6 +12,7 @@ describe("the guide's example blocks", () => {
     `import { belongsTo, connect, hasMany, Model, type Database } from "@forestfuture/d1-record";
 import { User } from "../shared/users";
 import { Tag } from "./tags";
+import { tables } from "../db/schema";
 
 // #region declare
 export class Post extends Model({ id: "integer" }) {
@@ -19,6 +20,10 @@ export class Post extends Model({ id: "integer" }) {
   tags = hasMany(Tag);
 }
 // #endregion declare
+
+// #region schema
+export const shown = tables;
+// #endregion schema
 
 export async function read(db: Database) {
   // #region read
@@ -28,6 +33,12 @@ export async function read(db: Database) {
 }
 `,
   );
+
+  test("the generated schema is imported as written, not as one of the app's models", () => {
+    expect(exampleBlock(file, "schema")).toBe(`import { tables } from "../db/schema";
+
+export const shown = tables;`);
+  });
 
   test("start with the imports their code uses, and only those; the app's models come from ./models", () => {
     expect(exampleBlock(file, "declare"))
