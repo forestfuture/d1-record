@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, test, vi } from "vite-plus/test";
-import { Model, Relation } from "../../src/index.ts";
+import { connect, Model, NoDatabase, Relation } from "../../src/index.ts";
 
 class User extends Model({
   id: { type: "integer", null: false },
@@ -75,5 +75,31 @@ describe("the statics' list", () => {
     // And in the types: no public Relation method is missing from a Model's statics.
     type Missing = Exclude<Extract<keyof Relation<User>, string>, keyof typeof User>;
     expectTypeOf<Missing>().toEqualTypeOf<never>();
+  });
+});
+
+describe("a query at a module's top level", () => {
+  test("Workers' refusal becomes a NoDatabase saying queries run during a request", async () => {
+    // What workerd throws for a D1 call outside a request (checked in workerd itself).
+    const refusal = new Error(
+      "Disallowed operation called within global scope. Asynchronous I/O (ex: fetch() or connect()), setting a timeout, and generating random values are not allowed within global scope.",
+    );
+    const binding = {
+      prepare: () => {
+        throw refusal;
+      },
+    } as never;
+
+    const error = await connect(binding)
+      .model(User)
+      .count()
+      .catch((caught: unknown) => caught);
+
+    expect(error).toEqual(
+      new NoDatabase(
+        "Queries run during a request: Workers don't allow D1 calls at a module's top level. Move the query into your fetch handler, or a function it calls",
+      ),
+    );
+    expect((error as Error).cause).toBe(refusal);
   });
 });
