@@ -17,11 +17,13 @@ Options for schema:
   --watch             Regenerate whenever a migration changes
   --out <file>        Write here instead (a folder, with several databases)
   --migrations <dir>  Read migrations from here instead
+  --models <dir>      Write ApplicationRecord here (src/models by default)
 
 Options for g:
   --id integer        Give the table an INTEGER key D1 generates (a TEXT key made in code by default)
   --no-timestamps     Leave out created_at and updated_at
-  --models <path>     Write Models here (src/models), or append them to one file (src/models.ts)
+  --models <path>     Write Models here (src/models), or append them to one file (src/models.ts);
+                      ApplicationRecord is imported from the same folder
   --database <name>   The D1 binding to use, when the config has several
 
   --config <file>     Use this Wrangler config
@@ -38,6 +40,7 @@ const schemaOptions = {
   watch: { type: "boolean" },
   out: { type: "string" },
   migrations: { type: "string" },
+  models: { type: "string" },
 } as const satisfies ParseArgsOptionsConfig;
 
 const generateOptions = {

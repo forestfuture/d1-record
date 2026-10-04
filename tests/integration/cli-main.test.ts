@@ -72,9 +72,11 @@ describe("the d1-record command line", () => {
       ),
     ).toBe(0);
     expect(main(["generate", "migration", "AddSkuToProducts", "sku", ...config], print)).toBe(0);
+    expect(main(["schema", "--models", "src/app/models", ...config], print)).toBe(0);
     expect(main(["g", "model", "Tag", "--id", "uuid", ...config], print)).toBe(1);
     expect(main(["g", "widget", "Tag", ...config], print)).toBe(1);
 
+    expect(output).toContain("Wrote src/app/models/application-record.ts");
     expect(output.filter((line) => line.startsWith("Wrote migrations"))).toEqual([
       "Wrote migrations/0001_create_products.sql",
       "Wrote migrations/0002_add_sku_to_products.sql",
