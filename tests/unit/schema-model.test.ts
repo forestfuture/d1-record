@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, test } from "vite-plus/test";
-import { connect, InvalidModel, modelFor } from "../../src/index.ts";
+import { connect, InvalidModel, Model as LibraryModel, modelFor, sql } from "../../src/index.ts";
 
 const db = connect({} as never);
 
@@ -152,5 +152,59 @@ describe("modelFor: the generated Model", () => {
 
     expect(() => db.model(Unknown)).toThrow(InvalidModel);
     expect(() => db.model(Ignored)).toThrow(/primaryKey "sku" isn't a declared attribute/);
+  });
+});
+
+describe("modelFor(tables, Base): an app's own base class, as Rails' ApplicationRecord", () => {
+  class Base extends LibraryModel.Base {
+    label() {
+      return `${this.constructor.name} ${JSON.stringify(this.attributes())}`;
+    }
+
+    static describe() {
+      return `${this.name} on ${this.tableName}`;
+    }
+
+    static override scopes = this.defineScopes({
+      newest: (q) => q.order(sql`created_at DESC`),
+    });
+  }
+  const ApplicationRecord = modelFor(tables, Base);
+
+  test("every Model built on it has its methods and statics, typed, whichever way it's declared", () => {
+    class Product extends ApplicationRecord("products") {}
+    class Visit extends ApplicationRecord({ id: "integer", path: "string" }) {}
+
+    expect(db.model(Product).build({ name: "Lamp" }).label()).toMatch(
+      /^Product \{"id":"key","name":"Lamp"/,
+    );
+    expect(db.model(Visit).build().label()).toBe('Visit {"id":null,"path":null}');
+    expect(Product.describe()).toBe("Product on products");
+    expectTypeOf<Product["label"]>().toEqualTypeOf<() => string>();
+    expectTypeOf<Visit["label"]>().toEqualTypeOf<() => string>();
+    expect(Object.getPrototypeOf(Object.getPrototypeOf(Product))).toBe(Base);
+  });
+
+  test("its scopes add to a Model's own, in types as at runtime", () => {
+    class Product extends ApplicationRecord("products") {
+      static override scopes = this.defineScopes({
+        cheap: (q) => q.where(sql`flags = 0`),
+      });
+    }
+    class Event extends ApplicationRecord("events") {}
+
+    expect(Object.keys(Product.scopes)).toEqual(["newest", "cheap"]);
+    expectTypeOf(db.model(Product).cheap().newest).toBeFunction();
+    expectTypeOf(db.model(Event).newest).toBeFunction();
+    // @ts-expect-error another Model's own scope isn't inherited
+    void db.model(Event).cheap;
+  });
+
+  test("the base class is abstract: it has no table, so using it is an InvalidModel, as Rails' abstract_class", () => {
+    expect(() => db.model(Base)).toThrow(
+      new InvalidModel(
+        'Base is an abstract base class, with no table; use a Model built on it, such as class Product extends ApplicationRecord("products") {}',
+      ),
+    );
   });
 });

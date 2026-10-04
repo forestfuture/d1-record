@@ -19,7 +19,7 @@ import {
 import { destroyLifecycle, reloadRecord, saveLifecycle, validateRecord } from "./lifecycle.ts";
 import { associationsOf, declarationIn, newRecord, probeOf } from "./association-fields.ts";
 import { RecordStatement } from "./record-statement.ts";
-import { inferTableNames, requireTableName } from "./table-names.ts";
+import { inferTableNames, rejectAbstract, requireTableName } from "./table-names.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
 import type { AssociationDefinition, BelongsTo, HasMany, HasOne } from "./associations.ts";
 import type { Relation, Scope } from "./relation.ts";
@@ -28,12 +28,22 @@ import type { Validation, ValidationOptions } from "./validations.ts";
 /** Any Model's scope, whatever its record type and arguments. */
 type AnyScope = (relation: never, ...args: never[]) => unknown;
 
-/** A Model class's scopes, as declared with `defineScopes`. */
-export type ScopesOf<C> = C extends { scopes: infer S }
+/**
+ * Type-only key carrying the scopes a Model inherits from an app's base class (`ApplicationRecord`'s
+ * `Base`), kept apart from its own `scopes` so declaring those adds to them; never set at runtime.
+ */
+declare const inheritedScopes: unique symbol;
+
+/** The scopes a class declares itself, with `defineScopes`. */
+type OwnScopesOf<C> = C extends { scopes: infer S }
   ? string extends keyof S
     ? {} // only the base class's catch-all type: no declared scopes
     : S
   : {};
+
+/** A Model class's scopes: its own, and those it inherits from an app's base class. */
+export type ScopesOf<C> = OwnScopesOf<C> &
+  (C extends { readonly [inheritedScopes]?: infer I } ? NonNullable<I> : {});
 
 /** A Model's association by name; `UnknownAssociation` for any other name. */
 export function associationOf(model: ModelClass, name: string): AssociationDefinition {
@@ -417,17 +427,45 @@ export class ModelBase {
 export type ModelClass<M extends ModelBase = ModelBase> = (new () => M) &
   Omit<typeof ModelBase, "prototype">;
 
-/** The base class `Model({...})` makes: records with the attributes `A`. */
-export type ModelBaseFor<A extends AttributeSpecs> = (new () => ModelBase &
+/** A class to build Models on: `Model.Base`, or an app's class extending it (`ApplicationRecord`'s). */
+export type BaseClass = abstract new () => ModelBase;
+
+/**
+ * The base class `Model({...})` makes: records with the attributes `A`, built on `B` (the
+ * library's base, or an app's), so they have its methods and statics too.
+ */
+export type ModelBaseFor<
+  A extends AttributeSpecs,
+  B extends BaseClass = typeof ModelBase,
+> = (new () => InstanceType<B> &
   AttributeProperties<A> & { readonly [attributeTypes]?: AttributeProperties<A> }) &
-  Omit<typeof ModelBase, "prototype">;
+  Omit<B, "prototype" | "scopes"> & {
+    scopes: Readonly<Record<string, AnyScope>>;
+    readonly [inheritedScopes]?: ScopesOf<B>;
+  };
 
 /**
  * Creates a Model base class whose records have the given attributes.
  * The attribute object is the single source of truth (ADR-0007).
  */
 export function Model<const A extends AttributeSpecs>(specs: A): ModelBaseFor<A> {
-  class DefinedModel extends ModelBase {
+  return defineModel(specs, ModelBase);
+}
+
+/**
+ * The library's base class, for an app's own (Rails' `ActiveRecord::Base`): methods, statics,
+ * callbacks and scopes declared on a class extending it are shared by every Model built on it
+ * with `modelFor(tables, Base)`. It's abstract: it has no table, so it's never used directly.
+ */
+Model.Base = ModelBase;
+
+/** `Model({...})` on `base`: a class with the attributes' accessors, extending `base`. */
+export function defineModel<const A extends AttributeSpecs, B extends BaseClass>(
+  specs: A,
+  base: B,
+): ModelBaseFor<A, B> {
+  const Parent = base as unknown as typeof ModelBase;
+  class DefinedModel extends Parent {
     static override attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map(
       Object.entries(specs).map(([name, spec]) => [name, define(name, spec)]),
     );
@@ -475,6 +513,7 @@ const verified = new WeakSet<object>();
 /** Checks a Model's declaration the first time it's used; throws `InvalidModel`. */
 export function verifyModel(model: ModelClass): void {
   if (verified.has(model)) return;
+  rejectAbstract(model);
   requireTableName(model);
   requirePrimaryKeyAttribute(model);
   rejectReservedAttributeNames(model);

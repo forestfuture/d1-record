@@ -1,6 +1,12 @@
 import { InvalidModel } from "./errors.ts";
 import { markIgnoringColumns, type AttributeSpecs, type AttributeType } from "./metadata.ts";
-import { Model, type ModelBaseFor } from "./model.ts";
+import {
+  defineModel,
+  ModelBase,
+  type BaseClass,
+  type ModelBaseFor,
+  type ModelClass,
+} from "./model.ts";
 import { bindTable } from "./table-names.ts";
 
 /** One table in a generated schema: its attributes, and which is the primary key. */
@@ -53,12 +59,12 @@ type AsSpecs<S> = S extends AttributeSpecs ? S : never;
 type Exactly<O, T extends TableSchema> = O & Record<Exclude<keyof O, keyof T["attributes"]>, never>;
 
 /** The base class `modelFor` makes: `ApplicationRecord("products")`, or the library's `Model({...})`. */
-export interface SchemaModel<T extends TableSchemas> {
+export interface SchemaModel<T extends TableSchemas, B extends BaseClass = typeof ModelBase> {
   <const N extends keyof T & string, const O extends Overrides<T[N]> = {}>(
     table: N,
     overrides?: Exactly<O, T[N]>,
-  ): ModelBaseFor<AsSpecs<OverriddenSpecs<T[N]["attributes"], O>>>;
-  <const A extends AttributeSpecs>(specs: A): ModelBaseFor<A>;
+  ): ModelBaseFor<AsSpecs<OverriddenSpecs<T[N]["attributes"], O>>, B>;
+  <const A extends AttributeSpecs>(specs: A): ModelBaseFor<A, B>;
 }
 
 const types: readonly unknown[] = ["string", "integer", "real", "boolean", "datetime", "json"];
@@ -130,22 +136,26 @@ function specsFor(
  * `ApplicationRecord("products")` is a base class bound to that table, with its attributes and
  * primary key; `ApplicationRecord({...})` is the library's `Model({...})`, for anything else.
  */
-export function modelFor<const T extends TableSchemas>(tables: T): SchemaModel<T> {
+export function modelFor<const T extends TableSchemas, B extends BaseClass = typeof ModelBase>(
+  tables: T,
+  base: B = ModelBase as unknown as B,
+): SchemaModel<T, B> {
   function SchemaModel(
     table: string | AttributeSpecs,
     overrides: Readonly<Record<string, unknown>> = {},
   ) {
-    if (typeof table !== "string") return Model(table);
+    if (typeof table !== "string") return defineModel(table, base);
     const schema = Object.hasOwn(tables, table) ? tables[table] : undefined;
     if (schema === undefined) {
       throw new InvalidModel(`There's no table named ${table} in the generated schema`);
     }
     const { specs, ignoring } = specsFor(table, schema, overrides);
-    const base = Model(specs);
-    bindTable(base, table);
-    base.primaryKey = schema.primaryKey;
-    if (ignoring) markIgnoringColumns(base);
-    return base;
+    // Generic in the app's base class, so seen here as the library's, which every base extends.
+    const model = defineModel(specs, base) as unknown as ModelClass;
+    bindTable(model, table);
+    model.primaryKey = schema.primaryKey;
+    if (ignoring) markIgnoringColumns(model);
+    return model;
   }
-  return SchemaModel as SchemaModel<T>;
+  return SchemaModel as SchemaModel<T, B>;
 }

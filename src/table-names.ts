@@ -75,6 +75,18 @@ function boundTableOf(model: object): string | undefined {
   return owner && boundTables.get(owner);
 }
 
+/**
+ * An abstract base class (one extending `Model.Base` directly, like `ApplicationRecord`'s) has no
+ * table, as Rails' `abstract_class`: it's only inherited from, so using it is an `InvalidModel`.
+ */
+export function rejectAbstract(model: ModelClass): void {
+  if (ancestors(model).some((each) => bases.has(each))) return;
+  throw new InvalidModel(
+    `${model.name || "This class"} is an abstract base class, with no table; use a Model built on it, ` +
+      'such as class Product extends ApplicationRecord("products") {}',
+  );
+}
+
 /** A Model must have a table name: its own, or one inferred from its class name. */
 export function requireTableName(model: ModelClass): void {
   const { tableName } = model;

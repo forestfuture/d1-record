@@ -92,7 +92,7 @@ migrations_table = "seen"
       'import { tables } from "../db/DB";\n',
     );
     expect(readFileSync(join(cwd, "src/models/analytics-record.ts"), "utf8")).toContain(
-      "export const AnalyticsRecord = modelFor(tables);",
+      "export const AnalyticsRecord = modelFor(tables, Base);",
     );
   });
 
@@ -123,7 +123,7 @@ migrations_table = "seen"
 
     expect(run(named).output).toContain("Wrote src/models/my-db-record.ts");
     expect(readFileSync(join(named, "src/models/logs2-record.ts"), "utf8")).toContain(
-      "export const Logs2Record = modelFor(tables);",
+      "export const Logs2Record = modelFor(tables, Base);",
     );
     expect(run(shared)).toEqual({
       code: 1,

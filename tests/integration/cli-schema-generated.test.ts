@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { Miniflare } from "miniflare";
-import { afterAll, beforeAll, describe, expect, expectTypeOf, test } from "vite-plus/test";
+import { afterAll, beforeAll, describe, expect, expectTypeOf, test, vi } from "vite-plus/test";
 import { runSchema } from "../../cli/schema/command.ts";
 import { belongsTo, connect, type QueryEvent } from "../../src/index.ts";
 import { ApplicationRecord } from "../fixtures/schema-project/src/models/application-record.ts";
@@ -115,5 +115,27 @@ describe("a schema generated from migrations", () => {
 
     expect(Visit.tableName).toBe("visits");
     expect((await db.model(Visit).find(visit.id)).path).toBe("/");
+  });
+
+  test("what ApplicationRecord's Base declares, every Model has: a method, a scope, and a callback that runs first", async () => {
+    class Note extends ApplicationRecord("products") {
+      static {
+        this.beforeSave(() => console.log("Note's own"));
+      }
+    }
+    const logged = vi.spyOn(console, "log").mockImplementation(() => {});
+    const db = connect(binding);
+
+    const user = await db.model(User).createOrThrow({ email: "linus@example.com" });
+    await db.model(Note).createOrThrow({ userId: user.id, name: "Pen", priceCents: 150 });
+    await db.model(Visit).createOrThrow({ path: "/notes" });
+    const lines = logged.mock.calls.map(([line]) => line);
+    logged.mockRestore();
+
+    expect(lines).toEqual(["Saving User", "Saving Note", "Note's own", "Saving Visit"]);
+    expectTypeOf<User["label"]>().toEqualTypeOf<() => string>();
+    expect(user.label()).toMatch(/^User \{"id":".+","email":"linus@example.com"/);
+    expect((await db.model(Product).newest().first())?.name).toBe("Pen");
+    expect((await db.model(User).newest().first())?.email).toBe("linus@example.com");
   });
 });
