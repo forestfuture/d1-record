@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
@@ -96,6 +96,41 @@ migrations_table = "seen"
     );
   });
 
+  test("a missing base class is written even when the schema is up to date; --check writes nothing", () => {
+    const cwd = project({
+      "wrangler.jsonc": wranglerJsonc,
+      "migrations/0001.sql": "CREATE TABLE users (id INTEGER PRIMARY KEY);",
+    });
+    run(cwd);
+    rmSync(join(cwd, "src/models"), { recursive: true });
+
+    expect(run(cwd, { check: true }).output).toBe("src/db/schema.ts is up to date");
+    expect(existsSync(join(cwd, "src/models"))).toBe(false);
+    expect(run(cwd).output).toBe(
+      "src/db/schema.ts is up to date (1 table)\nWrote src/models/application-record.ts",
+    );
+  });
+
+  test("each binding's base class is named after it, and two that would share one are refused", () => {
+    const named = project({
+      "wrangler.jsonc": '{ "d1_databases": [{ "binding": "MY_DB" }, { "binding": "Logs2" }] }',
+      "migrations/0001.sql": "CREATE TABLE users (id INTEGER PRIMARY KEY);",
+    });
+    const shared = project({
+      "wrangler.jsonc":
+        '{ "d1_databases": [{ "binding": "DB" }, { "binding": "db", "migrations_dir": "other" }] }',
+    });
+
+    expect(run(named).output).toContain("Wrote src/models/my-db-record.ts");
+    expect(readFileSync(join(named, "src/models/logs2-record.ts"), "utf8")).toContain(
+      "export const Logs2Record = modelFor(tables);",
+    );
+    expect(run(shared)).toEqual({
+      code: 1,
+      output: "The bindings DB and db would share the base class DbRecord; rename one",
+    });
+  });
+
   test("the base class is written once, then it's the app's: never overwritten", () => {
     const cwd = project({
       "wrangler.jsonc": wranglerJsonc,
@@ -119,6 +154,9 @@ migrations_table = "seen"
 
     expect(run(cwd, { out: "app/schema.ts", migrations: "sql" }).code).toBe(0);
     expect(readFileSync(join(cwd, "app/schema.ts"), "utf8")).toContain("export const users");
+    expect(readFileSync(join(cwd, "src/models/application-record.ts"), "utf8")).toContain(
+      'import { tables } from "../../app/schema";',
+    );
   });
 
   test("--check passes when current, ignores formatting, and fails when a migration changed it", () => {

@@ -10,7 +10,7 @@ import { underscore } from "./naming.ts";
  */
 const bases = new WeakSet<object>();
 
-/** The tables generated Models are bound to (`Model("products")`), by their base class. */
+/** The tables generated Models are bound to (`ApplicationRecord("products")`), by their base class. */
 const boundTables = new WeakMap<object, string>();
 
 /**
@@ -82,7 +82,7 @@ export function requireTableName(model: ModelClass): void {
   if (bound !== undefined && tableName !== bound) {
     throw new InvalidModel(
       `${model.name} sets tableName "${String(tableName)}", but its attributes are the ${bound} ` +
-        'table\'s; name the table in Model("…") instead',
+        "table's; name the table in its base class's call instead (ApplicationRecord(\"…\"))",
     );
   }
   if (typeof tableName === "string" && tableName !== "") return;

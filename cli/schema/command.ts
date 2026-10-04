@@ -45,7 +45,7 @@ function written(rendered: string, target: Target): void {
   writeFileSync(target.out, rendered);
 }
 
-/** Writes the app's base class for the database (`ApplicationRecord`) the first time; never again. */
+/** Writes the app's base class for the database (`ApplicationRecord`) when it's missing; never over it. */
 function writeBase(cwd: string, target: Target, print: Print): void {
   const { path, className } = target.base;
   if (existsSync(path)) return;
@@ -76,10 +76,11 @@ export function generateSchema(cwd: string, target: Target, check: boolean, prin
   else {
     written(rendered, target);
     print(`Wrote ${out} (${count}) from ${source}`);
-    writeBase(cwd, target, print);
     const tool = migrationTool(target.configDir, migrations);
     notes.unshift(...result.notes, ...originNotes(tool, result.tables));
   }
+  // Whenever it's missing, not only with a new schema: a Model imports it either way.
+  writeBase(cwd, target, print);
   for (const note of notes) print(`Note: ${note}`);
   return 0;
 }
