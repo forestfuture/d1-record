@@ -214,13 +214,11 @@ describe("types", () => {
   test("scope calls are typed through chaining", () => {
     class Post extends Model({ id: "integer", published: "boolean", createdAt: "datetime" }) {
       static tableName = "posts";
-      static scopes = this.defineScopes({
-        published: (q) => q.where({ published: true }),
-        since: (q, date: Date) => q.where({ createdAt: date }),
-        // Q6: sibling scopes aren't typed inside a scope body.
-        // @ts-expect-error `published` isn't visible on q here
-        both: (q) => q.published(),
-      });
+      static published = this.scope((q) => q.where({ published: true }));
+      static since = this.scope((q, date: Date) => q.where({ createdAt: date }));
+      // Q6: sibling scopes aren't typed inside a scope body.
+      // @ts-expect-error `published` isn't visible on q here
+      static both = this.scope((q) => q.published());
     }
     const posts = db.model(Post);
 
@@ -299,7 +297,7 @@ describe("types", () => {
 
   test("an association scope's q is typed from the target, its scopes included", () => {
     class Article extends Model({ id: "integer", authorId: "integer", live: "boolean" }) {
-      static scopes = this.defineScopes({ live: (q) => q.where({ live: true }) });
+      static live = this.scope((q) => q.where({ live: true }));
     }
     // Checked by the type checker only; never used.
     class Author extends Model({ id: "integer" }) {
@@ -315,7 +313,7 @@ describe("types", () => {
   test("a self-referencing association whose scope uses the Model's own scopes annotates its field", () => {
     // TypeScript can't infer this one field's type from itself, so it's written out (ADR-0008).
     class Category extends Model({ id: "integer", parentId: "integer" }) {
-      static scopes = this.defineScopes({ top: (q) => q.where({ parentId: null }) });
+      static top = this.scope((q) => q.where({ parentId: null }));
       children: HasMany<typeof Category> = hasMany(Category, {
         foreignKey: "parentId",
         scope: (q) => q.top(),
@@ -338,7 +336,7 @@ describe("types", () => {
     class Article extends Model({ id: "integer", authorId: "integer", live: "boolean" }) {
       static tableName = "posts";
       author = belongsTo(Author, { foreignKey: "authorId" });
-      static scopes = this.defineScopes({ live: (q) => q.where({ live: true }) });
+      static live = this.scope((q) => q.where({ live: true }));
     }
     class Bio extends Model({ id: "integer", authorId: "integer" }) {
       static tableName = "profiles";

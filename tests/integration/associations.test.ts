@@ -48,9 +48,7 @@ class Post extends Model({
 
   author = belongsTo(User, { foreignKey: "userId" });
 
-  static scopes = this.defineScopes({
-    published: (q) => q.where({ published: true }),
-  });
+  static published = this.scope((q) => q.where({ published: true }));
 }
 
 describe("associations", () => {

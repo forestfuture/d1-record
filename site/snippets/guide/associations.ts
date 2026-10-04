@@ -123,7 +123,7 @@ export class Category extends Model({
   id: { type: "integer", null: false },
   parentId: "integer",
 }) {
-  static scopes = this.defineScopes({ top: (q) => q.where({ parentId: null }) });
+  static top = this.scope((q) => q.where({ parentId: null }));
 
   // Written out: TypeScript can't infer a field whose scope uses its own Model's scopes.
   children: HasMany<typeof Category> = hasMany(Category, {

@@ -68,12 +68,9 @@ export class User extends Model({
 
   posts = hasMany(Post, { foreignKey: "userId" });
 
-  static scopes = this.defineScopes({
-    active: (q) => q.where({ isActive: true }),
-    recent: (q) => q.order({ createdAt: "desc" }),
-    createdAfter: (q, since: Date) =>
-      q.where(sql`created_at > ${since}`),
-  });
+  static active = this.scope((q) => q.where({ isActive: true }));
+  static recent = this.scope((q) => q.order({ createdAt: "desc" }));
+  static createdAfter = this.scope((q, since: Date) => q.where(sql`created_at > ${since}`));
 
 
   static {
@@ -92,9 +89,7 @@ export class Post extends Model({
 
   author = belongsTo(User, { foreignKey: "userId" });
 
-  static scopes = this.defineScopes({
-    published: (q) => q.where({ published: true }),
-  });
+  static published = this.scope((q) => q.where({ published: true }));
 
 
   static {
@@ -190,7 +185,7 @@ await db.model(User)
   .toArray();
 ```
 
-Scopes are declared with `static scopes = this.defineScopes({ … })` so that TypeScript can infer them. The same registered scope should be callable from a model relation, not merely from the root model. Parameterized scopes receive the current relation and their arguments. Their dynamic values must be evaluated when called, rather than at class-definition time.
+Scopes are declared one static each, `static active = this.scope((q) => …)`, as Rails' `scope :active, -> { … }`, so that TypeScript can type `User.active()` and inherit them (#77). The same registered scope should be callable from a model relation, not merely from the root model. Parameterized scopes receive the current relation and their arguments. Their dynamic values must be evaluated when called, rather than at class-definition time.
 
 Implement `defaultScope` and `unscoped` only if their interaction rules are fully documented and tested. If implementation pressure forces a choice, defer default scopes rather than ship surprising behavior.
 

@@ -191,7 +191,7 @@ export type Scope<M extends ModelBase> = (relation: Relation<M>, ...args: any[])
 
 /** The scope methods a Model's scopes `S` add to its Relations: `active()`, `createdAfter(date)`. */
 export type ScopeMethods<M extends ModelBase, S> = {
-  [K in keyof S]: S[K] extends (relation: never, ...args: infer A) => unknown
+  [K in keyof S]: S[K] extends (this: never, ...args: infer A) => unknown
     ? (...args: A) => Scoped<M, S>
     : never;
 };

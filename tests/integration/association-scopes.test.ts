@@ -48,9 +48,7 @@ class Post extends Model({
 }) {
   static tableName = "posts";
 
-  static scopes = this.defineScopes({
-    drafts: (q) => q.where({ published: false }),
-  });
+  static drafts = this.scope((q) => q.where({ published: false }));
 
   admin = belongsTo(User, {
     foreignKey: "userId",

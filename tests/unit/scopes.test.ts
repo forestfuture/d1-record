@@ -1,5 +1,12 @@
 import { describe, expect, expectTypeOf, test } from "vite-plus/test";
-import { connect, IncompatibleRelation, InvalidModel, Model } from "../../src/index.ts";
+import {
+  connect,
+  IncompatibleRelation,
+  InvalidModel,
+  Model,
+  type Relation,
+  type ScopeStatic,
+} from "../../src/index.ts";
 
 class User extends Model({
   id: { type: "integer", null: false },
@@ -8,69 +15,74 @@ class User extends Model({
 }) {
   static tableName = "users";
 
-  static scopes = this.defineScopes({
-    active: (q) => q.where({ isActive: true }),
-    admins: (q) => q.where({ role: "admin" }),
-  });
+  static active = this.scope((q) => q.where({ isActive: true }));
+  static admins = this.scope((q) => q.where({ role: "admin" }));
+  static withRole = this.scope((q, role: string) => q.where({ role }));
 }
 
 // No D1 needed: calling scopes only builds Relations.
 const db = connect({} as never);
 
-describe("scope inheritance", () => {
-  test("a subclass without its own scopes has all of its parent's", () => {
-    class Member extends User {}
-
-    const members = db.model(Member);
-
-    expect(typeof members.active().admins).toBe("function");
-    expectTypeOf(members.active).toBeFunction();
+describe("scopes as statics", () => {
+  test("a scope is a static of its Model and a method of its Relations, typed with its arguments", () => {
+    // Type-checked, never run: these would query.
+    const typed = () => {
+      expectTypeOf(User.active().admins().toArray()).toEqualTypeOf<Promise<User[]>>();
+      expectTypeOf(db.model(User).where({ role: "x" }).withRole("a").toArray()).toEqualTypeOf<
+        Promise<User[]>
+      >();
+    };
+    expect(typeof typed).toBe("function");
+    expect(typeof User.active().withRole("editor").admins).toBe("function");
+    // @ts-expect-error a scope's arguments are typed
+    User.withRole(1);
   });
 
-  test("a subclass adds scopes and can replace one; the parent never gains them", () => {
+  test("a subclass inherits its parent's scopes, typed as the subclass, and can add or replace one", () => {
     class Staff extends User {
-      static override scopes = this.defineScopes({
-        ...User.scopes,
-        admins: (q) => q.where({ role: "staff-admin" }),
-        inactive: (q) => q.where({ isActive: false }),
-      });
+      static override admins = this.scope((q) => q.where({ role: "staff-admin" }));
+      static inactive = this.scope((q) => q.where({ isActive: false }));
     }
 
-    const staff = db.model(Staff).active().admins().inactive();
-    const users = db.model(User);
-
-    expect(staff).toBeDefined();
-    expect("inactive" in users).toBe(false);
-    expect(Object.keys(Staff.scopes).sort()).toEqual(["active", "admins", "inactive"]);
-    expect(Staff.scopes.admins).not.toBe(User.scopes.admins);
+    const typed = () => expectTypeOf(Staff.active().first()).toEqualTypeOf<Promise<Staff | null>>();
+    expect(typeof typed).toBe("function");
+    expect(typeof Staff.active().admins().inactive).toBe("function");
+    expect("inactive" in db.model(User)).toBe(false);
+    expect(Staff.admins).not.toBe(User.admins);
+    // @ts-expect-error the parent never gains a subclass's scope
+    void User.inactive;
   });
 });
 
 describe("scope rules", () => {
-  test("a scope named like a Relation method, or then, is rejected on first use", () => {
+  test("a scope named like a Relation method, a Model static, or then, is rejected on first use", () => {
     class Clash extends Model({ id: "integer" }) {
       static tableName = "users";
-      static scopes = this.defineScopes({ count: (q) => q.limit(1) });
+      // A compile error too (count is a static); reached through a cast to test the runtime check.
+      static override count = this.scope((q) => q.limit(1)) as never;
+    }
+    class Static extends Model({ id: "integer" }) {
+      static tableName = "users";
+      static override validates = this.scope((q) => q) as never;
     }
     class Thenable extends Model({ id: "integer" }) {
       static tableName = "users";
       // oxlint-disable-next-line unicorn/no-thenable -- the point of the test: a "then" scope is rejected
-      static scopes = this.defineScopes({ then: (q) => q });
+      static then = this.scope((q) => q);
     }
 
     expect(() => db.model(Clash)).toThrow(InvalidModel);
     expect(() => db.model(Clash)).toThrow(/Clash.*"count"/);
+    expect(() => db.model(Static)).toThrow(/Static.*"validates"/);
     expect(() => db.model(Thenable)).toThrow(/"then"/);
   });
 
   test("a scope must return a Relation of its own Model", () => {
     class Sloppy extends Model({ id: "integer", role: "string" }) {
       static tableName = "users";
-      static scopes = this.defineScopes({
-        // @ts-expect-error forgot to return the Relation
-        forgetful: (q) => {
-          q.where({ role: "admin" });
-        },
+      // @ts-expect-error forgot to return the Relation
+      static forgetful = this.scope((q) => {
+        q.where({ role: "admin" });
       });
     }
 
@@ -83,11 +95,13 @@ describe("scope rules", () => {
 
 describe("relations stay on their Database", () => {
   test("a scope that returns a Relation on another Database is rejected", () => {
-    // Typed loosely: a scope can't name its own class's scoped Relation type (Q6).
-    const otherDb = connect({} as never) as unknown as { model(model: unknown): never };
+    const otherDb = connect({} as never);
     class Wanderer extends Model({ id: "integer" }) {
       static tableName = "users";
-      static scopes = this.defineScopes({ elsewhere: () => otherDb.model(Wanderer) });
+      // Naming its own class, the scope needs its type written out, as any self-reference does.
+      static elsewhere: ScopeStatic<[]> = this.scope(
+        () => otherDb.model(Wanderer) as unknown as Relation<Wanderer>,
+      );
     }
 
     expect(() => db.model(Wanderer).elsewhere()).toThrow(TypeError);
@@ -104,14 +118,14 @@ describe("relations stay on their Database", () => {
 });
 
 describe("scope timing", () => {
-  test("replacing a Model's scopes after its first use throws, rather than being ignored", () => {
+  test("replacing a scope after the Model's first use throws, rather than being ignored", () => {
     class Late extends Model({ id: "integer", role: "string" }) {
       static tableName = "users";
-      static scopes = this.defineScopes({ admins: (q) => q.where({ role: "admin" }) });
+      static admins = this.scope((q) => q.where({ role: "admin" }));
     }
     db.model(Late);
 
-    Late.scopes = Late.defineScopes({ admins: (q) => q.where({ role: "owner" }) });
+    Late.admins = Late.scope((q) => q.where({ role: "owner" }));
 
     expect(() => db.model(Late)).toThrow(InvalidModel);
     expect(() => db.model(Late)).toThrow(/Late.*scopes.*static/);

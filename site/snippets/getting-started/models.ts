@@ -10,9 +10,7 @@ export class User extends Model({
 }) {
   posts = hasMany(Post, { dependent: "destroy" }); // foreign key: Post's userId
 
-  static scopes = this.defineScopes({
-    active: (q) => q.where({ isActive: true }),
-  });
+  static active = this.scope((q) => q.where({ isActive: true }));
 
   static {
     this.validates("email", { presence: true, uniqueness: true });
