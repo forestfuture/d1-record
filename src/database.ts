@@ -27,6 +27,14 @@ export interface ConnectOptions {
   session?: D1SessionConstraint | (D1SessionBookmark & {});
 }
 
+/** Each Database's D1 binding (not its Session) and Executor, for finding the current database. */
+const parts = new WeakMap<Database, { binding: D1Database; executor: Executor }>();
+
+/** A Database's D1 binding and Executor. */
+export function databaseParts(db: Database): { binding: D1Database; executor: Executor } {
+  return parts.get(db)!;
+}
+
 /** A per-request wrapper around a D1 binding; every query goes through it. */
 export class Database {
   readonly #executor: Executor;
@@ -36,6 +44,7 @@ export class Database {
     const { session, onQuery } = options;
     this.#session = session === undefined ? undefined : binding.withSession(session);
     this.#executor = new Executor(this.#session ?? binding, onQuery);
+    parts.set(this, { binding, executor: this.#executor });
   }
 
   /**

@@ -22,29 +22,91 @@ import { associationsOf, declarationIn, newRecord, probeOf } from "./association
 import { RecordStatement } from "./record-statement.ts";
 import { inferTableNames, rejectAbstract, requireTableName } from "./table-names.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
-import type { AssociationDefinition, BelongsTo, HasMany, HasOne } from "./associations.ts";
-import type { Relation, Scope } from "./relation.ts";
+import type { AssociationDefinition, BelongsTo, HasOne } from "./associations.ts";
+import type { Relation, Scope, Scoped } from "./relation.ts";
+import { currentRelation } from "./current-database.ts";
+import { scopeName } from "./scoped-relation.ts";
 import type { Validation, ValidationOptions } from "./validations.ts";
 
-/** Any Model's scope, whatever its record type and arguments. */
-type AnyScope = (relation: never, ...args: never[]) => unknown;
+/** Type-only brand on a scope static (`static newest = this.scope(…)`); never set at runtime. */
+declare const scopeBrand: unique symbol;
 
 /**
- * Type-only key carrying the scopes a Model inherits from an app's base class (`ApplicationRecord`'s
- * `Base`), kept apart from its own `scopes` so declaring those adds to them; never set at runtime.
+ * A scope, as a static on its Model: called on that Model or any class extending it
+ * (`Product.newest()`), it returns a Relation of that class, with all its scopes.
  */
-declare const inheritedScopes: unique symbol;
+export type ScopeStatic<A extends unknown[]> = (<C extends ModelClass>(
+  this: C,
+  ...args: A
+) => Scoped<InstanceType<C>, ScopesOf<C>>) & { readonly [scopeBrand]: true };
 
-/** The scopes a class declares itself, with `defineScopes`. */
-type OwnScopesOf<C> = C extends { scopes: infer S }
-  ? string extends keyof S
-    ? {} // only the base class's catch-all type: no declared scopes
-    : S
-  : {};
+/** A Model class's scopes: its statics made with `this.scope(…)`, its own and inherited. */
+export type ScopesOf<C> = {
+  // Not `prototype`: that's the record type, whose association fields lead back to other Models.
+  [
+    K in Exclude<keyof C, "prototype"> as C[K] extends { readonly [scopeBrand]: true } ? K : never
+  ]: C[K];
+};
 
-/** A Model class's scopes: its own, and those it inherits from an app's base class. */
-export type ScopesOf<C> = OwnScopesOf<C> &
-  (C extends { readonly [inheritedScopes]?: infer I } ? NonNullable<I> : {});
+/** A Model's Relation, as its statics return them: `Product.where(…)` is `Product.all().where(…)`. */
+type On<C extends ModelClass> = Scoped<InstanceType<C>, ScopesOf<C>>;
+
+/** A Relation method with no overloads, by name. */
+type RelationMethod = (typeof relationMethods)[number];
+
+/**
+ * A Relation method as a static of every Model, typed for the class it's called on: `Product.where`
+ * returns a Relation of `Product`, and on a subclass, of the subclass.
+ */
+type RelationStatic<K extends RelationMethod> = <C extends ModelClass>(
+  this: C,
+  ...args: On<C>[K] extends (...args: infer A) => unknown ? A : never
+) => On<C>[K] extends (...args: never) => infer R ? R : never;
+
+/** The Relation methods every Model has as statics (besides `find` and `pluck`, overloaded). */
+const relationMethods = [
+  "where",
+  "whereNot",
+  "none",
+  "or",
+  "merge",
+  "order",
+  "reorder",
+  "limit",
+  "offset",
+  "select",
+  "distinct",
+  "includes",
+  "build",
+  "insert",
+  "toInsert",
+  "insertAll",
+  "toInsertAll",
+  "upsert",
+  "toUpsert",
+  "upsertAll",
+  "toUpsertAll",
+  "updateAll",
+  "toUpdateAll",
+  "deleteAll",
+  "toDeleteAll",
+  "create",
+  "createOrThrow",
+  "findBy",
+  "findByOrThrow",
+  "first",
+  "last",
+  "take",
+  "count",
+  "size",
+  "isEmpty",
+  "hasAny",
+  "exists",
+  "toArray",
+] as const;
+
+/** Each scope static, to its body: what `Product.newest()` and `relation.newest()` run. */
+export const scopeBodies = new WeakMap<object, Scope<ModelBase>>();
 
 /** A Model's association by name; `UnknownAssociation` for any other name. */
 export function associationOf(model: ModelClass, name: string): AssociationDefinition {
@@ -62,11 +124,16 @@ export type LoadedValue<F> = F extends () => Promise<infer R>
     ? T
     : never;
 
+/**
+ * Any association accessor, whatever its target: by shape, since a Relation of one Model isn't
+ * assignable to a Relation of the library's base class.
+ */
+// oxlint-disable-next-line typescript/no-explicit-any -- any Model's association
+type AnyAssociation = BelongsTo<any> | HasOne<any> | (() => Relation<any, any>);
+
 /** The names of a record's association accessors (from their fields' types). */
 export type AssociationName<R> = {
-  [K in keyof R]: R[K] extends BelongsTo<ModelClass> | HasOne<ModelClass> | HasMany<ModelClass>
-    ? K
-    : never;
+  [K in keyof R]: R[K] extends AnyAssociation ? K : never;
 }[keyof R] &
   string;
 
@@ -93,21 +160,105 @@ export class ModelBase {
   static tableName: string;
   static primaryKey = "id";
   static attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map();
-  /** This Model's scopes, from `static scopes = this.defineScopes({...})`. */
-  static scopes: Readonly<Record<string, AnyScope>> = {};
+  /**
+   * The D1 binding this Model queries when there's no request database (`withDatabase`), as
+   * Rails' `connects_to`: `static override binding = "DB"`, usually on the app's base class.
+   */
+  static binding: string | undefined;
 
   /**
-   * Declares scopes: `static scopes = this.defineScopes({ active: (q) => q.where(...) })`.
-   * A subclass's scopes are added to its parent's (a same-named one replaces the parent's).
+   * Declares a scope, as Rails' `scope :active, -> { … }`: `static active = this.scope((q) =>
+   * q.where({ isActive: true }))`. It's a static (`User.active()`) and a Relation method
+   * (`User.where(…).active()`), inherited like any static. Inside it, `q` has every Relation
+   * method, but not the Model's other scopes (their types would refer to themselves).
    */
-  // Constrained on the constructor only: `C`'s static side includes the `scopes` being defined.
-  static defineScopes<
-    C extends abstract new () => ModelBase,
-    S extends Record<string, Scope<InstanceType<C>>>,
-  >(this: C, scopes: S): S {
-    const inherited = (this as unknown as typeof ModelBase).scopes;
-    return { ...inherited, ...scopes } as S;
+  static scope<C extends ModelClass, A extends unknown[]>(
+    this: C,
+    body: (q: Relation<InstanceType<C>>, ...args: A) => Relation<InstanceType<C>>,
+  ): ScopeStatic<A> {
+    function scoped(this: ModelClass, ...args: unknown[]): unknown {
+      const relation = this.all() as unknown as Record<string, (...args: unknown[]) => unknown>;
+      return relation[scopeName(this, scoped)]!(...args);
+    }
+    scopeBodies.set(scoped, body as unknown as Scope<ModelBase>);
+    return scoped as unknown as ScopeStatic<A>;
   }
+
+  /**
+   * All of this Model's records, as Rails' `Product.all`: a Relation on the current database
+   * (the request's, set with `withDatabase`, or else the Model's `binding`).
+   */
+  static all<C extends ModelClass>(this: C): Scoped<InstanceType<C>, ScopesOf<C>> {
+    return currentRelation(this);
+  }
+
+  // Every Relation method, as Rails delegates them to `all`: `Product.find(id)`, `Product.where(…)`.
+  // Defined below the class, all the same way; declared here for their types.
+  declare static where: RelationStatic<"where">;
+  declare static whereNot: RelationStatic<"whereNot">;
+  declare static none: RelationStatic<"none">;
+  declare static or: RelationStatic<"or">;
+  declare static merge: RelationStatic<"merge">;
+  declare static order: RelationStatic<"order">;
+  declare static reorder: RelationStatic<"reorder">;
+  declare static limit: RelationStatic<"limit">;
+  declare static offset: RelationStatic<"offset">;
+  declare static select: RelationStatic<"select">;
+  declare static distinct: RelationStatic<"distinct">;
+  declare static includes: RelationStatic<"includes">;
+  declare static build: RelationStatic<"build">;
+  declare static insert: RelationStatic<"insert">;
+  declare static toInsert: RelationStatic<"toInsert">;
+  declare static insertAll: RelationStatic<"insertAll">;
+  declare static toInsertAll: RelationStatic<"toInsertAll">;
+  declare static upsert: RelationStatic<"upsert">;
+  declare static toUpsert: RelationStatic<"toUpsert">;
+  declare static upsertAll: RelationStatic<"upsertAll">;
+  declare static toUpsertAll: RelationStatic<"toUpsertAll">;
+  declare static updateAll: RelationStatic<"updateAll">;
+  declare static toUpdateAll: RelationStatic<"toUpdateAll">;
+  declare static deleteAll: RelationStatic<"deleteAll">;
+  declare static toDeleteAll: RelationStatic<"toDeleteAll">;
+  declare static create: RelationStatic<"create">;
+  declare static createOrThrow: RelationStatic<"createOrThrow">;
+  declare static findBy: RelationStatic<"findBy">;
+  declare static findByOrThrow: RelationStatic<"findByOrThrow">;
+  declare static first: RelationStatic<"first">;
+  declare static last: RelationStatic<"last">;
+  declare static take: RelationStatic<"take">;
+  declare static count: RelationStatic<"count">;
+  declare static size: RelationStatic<"size">;
+  declare static isEmpty: RelationStatic<"isEmpty">;
+  declare static hasAny: RelationStatic<"hasAny">;
+  declare static exists: RelationStatic<"exists">;
+  declare static toArray: RelationStatic<"toArray">;
+  declare static find: {
+    <C extends ModelClass>(this: C, id: string | number): Promise<InstanceType<C>>;
+    <C extends ModelClass>(this: C, ids: readonly (string | number)[]): Promise<InstanceType<C>[]>;
+    <C extends ModelClass>(
+      this: C,
+      first: string | number,
+      second: string | number,
+      ...rest: (string | number)[]
+    ): Promise<InstanceType<C>[]>;
+  };
+  declare static pluck: {
+    <C extends ModelClass, K extends keyof AttributesOf<InstanceType<C>> & string>(
+      this: C,
+      attribute: K,
+    ): Promise<AttributesOf<InstanceType<C>>[K][]>;
+    <
+      C extends ModelClass,
+      const K extends readonly [
+        keyof AttributesOf<InstanceType<C>> & string,
+        keyof AttributesOf<InstanceType<C>> & string,
+        ...(keyof AttributesOf<InstanceType<C>> & string)[],
+      ],
+    >(
+      this: C,
+      ...attributes: K
+    ): Promise<{ -readonly [I in keyof K]: AttributesOf<InstanceType<C>>[K[I]] }[]>;
+  };
 
   /** Declares a validation, e.g. `this.validates("email", { presence: true })` in `static {}`. */
   static validates<C extends ModelClass>(
@@ -428,6 +579,17 @@ export class ModelBase {
 export type ModelClass<M extends ModelBase = ModelBase> = (new () => M) &
   Omit<typeof ModelBase, "prototype">;
 
+for (const name of [...relationMethods, "find", "pluck"]) {
+  Object.defineProperty(ModelBase, name, {
+    value(this: ModelClass, ...args: unknown[]): unknown {
+      const relation = this.all() as unknown as Record<string, (...args: unknown[]) => unknown>;
+      return relation[name]!(...args);
+    },
+    writable: true,
+    configurable: true,
+  });
+}
+
 /** A class to build Models on: `Model.Base`, or an app's class extending it (`ApplicationRecord`'s). */
 export type BaseClass = abstract new () => ModelBase;
 
@@ -440,10 +602,7 @@ export type ModelBaseFor<
   B extends BaseClass = typeof ModelBase,
 > = (new () => InstanceType<B> &
   AttributeProperties<A> & { readonly [attributeTypes]?: AttributeProperties<A> }) &
-  Omit<B, "prototype" | "scopes"> & {
-    scopes: Readonly<Record<string, AnyScope>>;
-    readonly [inheritedScopes]?: ScopesOf<B>;
-  };
+  Omit<B, "prototype">;
 
 /**
  * Creates a Model base class whose records have the given attributes.

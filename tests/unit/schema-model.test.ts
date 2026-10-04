@@ -165,9 +165,7 @@ describe("modelFor(tables, Base): an app's own base class, as Rails' Application
       return `${this.name} on ${this.tableName}`;
     }
 
-    static override scopes = this.defineScopes({
-      newest: (q) => q.order(sql`created_at DESC`),
-    });
+    static newest = this.scope((q) => q.order(sql`created_at DESC`));
   }
   const ApplicationRecord = modelFor(tables, Base);
 
@@ -187,13 +185,11 @@ describe("modelFor(tables, Base): an app's own base class, as Rails' Application
 
   test("its scopes add to a Model's own, in types as at runtime", () => {
     class Product extends ApplicationRecord("products") {
-      static override scopes = this.defineScopes({
-        cheap: (q) => q.where(sql`flags = 0`),
-      });
+      static cheap = this.scope((q) => q.where(sql`flags = 0`));
     }
     class Event extends ApplicationRecord("events") {}
 
-    expect(Object.keys(Product.scopes)).toEqual(["newest", "cheap"]);
+    expect([typeof Product.newest, typeof Product.cheap]).toEqual(["function", "function"]);
     expectTypeOf(db.model(Product).cheap().newest).toBeFunction();
     expectTypeOf(db.model(Event).newest).toBeFunction();
     // @ts-expect-error another Model's own scope isn't inherited

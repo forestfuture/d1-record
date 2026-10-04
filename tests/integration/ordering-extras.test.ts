@@ -16,9 +16,7 @@ class User extends Model({
 }) {
   static tableName = "users";
 
-  static scopes = this.defineScopes({
-    byEmail: (q) => q.order({ email: "asc" }),
-  });
+  static byEmail = this.scope((q) => q.order({ email: "asc" }));
 }
 
 describe("ordering extras", () => {

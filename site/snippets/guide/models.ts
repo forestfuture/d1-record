@@ -15,10 +15,10 @@ export class User extends Model({
 }) {
   static primaryKey = "id"; // the default
 
-  static scopes = this.defineScopes({
-    active: (q) => q.where({ isActive: true }),
-    createdAfter: (q, since: Date) => q.where(sql`${column("createdAt")} > ${since}`),
-  });
+  static active = this.scope((q) => q.where({ isActive: true }));
+  static createdAfter = this.scope((q, since: Date) =>
+    q.where(sql`${column("createdAt")} > ${since}`),
+  );
 }
 // #endregion declare
 

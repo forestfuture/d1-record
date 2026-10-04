@@ -39,10 +39,8 @@ class User extends Model({
 }) {
   static primaryKey = "id"; // default
 
-  static scopes = this.defineScopes({
-    active: (q) => q.where({ isActive: true }),
-    createdAfter: (q, since: Date) => q.where(sql`created_at > ${since}`),
-  });
+  static active = this.scope((q) => q.where({ isActive: true }));
+  static createdAfter = this.scope((q, since: Date) => q.where(sql`created_at > ${since}`));
 
   static {
     this.validates("email", { presence: true, uniqueness: true });
@@ -104,7 +102,7 @@ class Visit extends ApplicationRecord({ id: "integer", path: "string" }) {} // t
 - Overrides are keyed by the generated attribute names, and typed from them: an unknown key is a compile error and an `InvalidModel`. An override is a type name (`"integer"`), or `{ type?, null?, default? }` merged into the generated spec; a key left `undefined` changes nothing, the column can't change, and an attribute can't be added. Anything else is an `InvalidModel` naming the attribute, checked when `ApplicationRecord("…")` is called, so plain JavaScript and casts get the same rules. The record's TypeScript types follow the merged spec; like `Model({...})`'s, a `default` isn't type-checked against the attribute's type yet (#74).
 - `false` ignores a column, as Rails' `ignored_columns`: it isn't an attribute, so it's never typed, assigned or written, and the Model's queries name its columns instead of `*` (`SELECT` and `RETURNING`), so it's never read. The primary key can't be ignored. Inserts leave an ignored column to its database default, so a `NOT NULL` column without one makes them fail.
 - `ApplicationRecord({...})` is the library's `Model({...})` built on the same base, for views and tables outside the migrations. A Model can also extend the library's `Model({...})` directly.
-- **Shared behaviour**, as on Rails' `ApplicationRecord`: `modelFor(tables, Base)` builds every Model on `Base`, a class the app writes extending `Model.Base` (the library's base class; `modelFor(tables)` uses it directly). The generated `application-record.ts` declares an empty `Base`, with commented-out examples of a shared method, scope and callback. Instance methods and getters, static methods, callbacks declared in its `static {}` (they run for every Model, before the Model's own, in declaration order), and scopes (`static scopes = this.defineScopes({...})`) are inherited, by Models declared either way. A Model's own scopes add to the base's, in types as at runtime; a further subclass of that Model has both at runtime, but its types drop its parent's own scopes (#76), as a plain `Model({...})` subclass's do. Once a Model is used, the classes it inherits declarations from (the base class too) are sealed as it is. Inside `Base`, `this` is typed as `Base`: it has every record method, but no attributes, since those differ by table (read them with `this.attributes()`), so shared scopes use `sql` fragments and `this.validates(…)`, which names an attribute, isn't available there; shared validation logic goes in a callback. `Base` is abstract, as Rails' `abstract_class`: it has no table, so `db.model(Base)` throws `InvalidModel`.
+- **Shared behaviour**, as on Rails' `ApplicationRecord`: `modelFor(tables, Base)` builds every Model on `Base`, a class the app writes extending `Model.Base` (the library's base class; `modelFor(tables)` uses it directly). The generated `application-record.ts` declares an empty `Base`, with commented-out examples of a shared method, scope and callback. Instance methods and getters, static methods, callbacks declared in its `static {}` (they run for every Model, before the Model's own, in declaration order), and scopes (`static newest = this.scope(…)`) are inherited, by Models declared either way. A Model's own scopes add to the base's, as scopes inherit down any chain of classes. Once a Model is used, the classes it inherits declarations from (the base class too) are sealed as it is. Inside `Base`, `this` is typed as `Base`: it has every record method, but no attributes, since those differ by table (read them with `this.attributes()`), so shared scopes use `sql` fragments and `this.validates(…)`, which names an attribute, isn't available there; shared validation logic goes in a callback. `Base` is abstract, as Rails' `abstract_class`: it has no table, so `db.model(Base)` throws `InvalidModel`.
 
 ### Generators
 
@@ -119,13 +117,14 @@ class Visit extends ApplicationRecord({ id: "integer", path: "string" }) {} // t
 
 ## Scopes
 
-- Declared with `static scopes = this.defineScopes({ name: (q, ...args) => q… })`. A scope receives the current Relation and its arguments and returns a changed Relation of the **same Model on the same Database**; anything else throws `TypeError` naming the scope, so a query never silently moves to another connection.
-- Callable on `db.model(X)` and on any Relation of that Model, and chainable with everything: `db.model(User).where(…).active().createdAfter(d).order(…)`. Chained scope calls are typed: a wrong argument type or an unknown scope name is a compile error.
+- Declared one static each, as Rails' `scope :active, -> { … }`: `static active = this.scope((q, ...args) => q…)`. A scope receives the current Relation and its arguments and returns a changed Relation of the **same Model on the same Database**; anything else throws `TypeError` naming the scope, so a query never silently moves to another connection.
+- Callable as a static (`User.active()`, on the current database, #77), on `db.model(X)`, and on any Relation of that Model, and chainable with everything: `User.where(…).active().createdAfter(d).order(…)`. Scope calls are typed, including what a static scope returns when called on a subclass (`Admin.active()` is a Relation of `Admin`): a wrong argument type or an unknown scope name is a compile error.
 - Calling a scope never queries. A scope's arguments, and anything it computes such as `new Date()`, are evaluated when it's called, not when the class is defined.
 - Inside a scope body, `q` has every Relation method but not the Model's other scopes (their types would refer to themselves). To reuse logic, share a plain function between scopes.
-- A subclass has its parent's scopes plus its own, and a same-named scope replaces the parent's. The parent never gains the subclass's scopes. A subclass that declares no scopes keeps its parent's types; one that declares its own should spread its parent's to keep them typed: `this.defineScopes({ ...User.scopes, admins: … })`. Only `defineScopes` inherits: a plain `static scopes = { … }` replaces the parent's scopes entirely.
-- A scope can't use any name a Relation already has: its methods (`where`, `count`, …), the standard object ones (`constructor`, `toString`, …), or `then`, which would make Relations awaitable. `db.model(X)` throws `InvalidModel` for such a name.
-- Scopes are fixed once a Model is used: replacing `scopes` afterwards makes `db.model(X)` throw `InvalidModel`.
+- Scopes are statics, so they inherit as statics do, down any chain of classes, in types and at runtime: a subclass has its parent's scopes plus its own, and a same-named one (`static override admins = this.scope(…)`) replaces the parent's. The parent never gains the subclass's. Scopes on the app's base class (`ApplicationRecord`'s `Base`) are every Model's.
+- A scope whose body names its own class needs its type written out, as any self-reference does: `static elsewhere: ScopeStatic<[]> = this.scope(…)` (`ScopeStatic<[...arguments]>`).
+- A scope can't use any name a Relation already has: its methods (`where`, `count`, …), the standard object ones (`constructor`, `toString`, …), or `then`, which would make Relations awaitable; nor a Model static's (`validates`, `beforeSave`, `scope`, `all`, …). `db.model(X)` throws `InvalidModel` for such a name.
+- Scopes are fixed once a Model is used: replacing one afterwards (`User.active = User.scope(…)`) makes `db.model(X)` throw `InvalidModel`.
 - Default scopes and `unscoped` are deferred (#25).
 
 ## Inheritance, shared behavior and serialization

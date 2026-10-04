@@ -31,9 +31,7 @@ class Post extends Model({
   author = belongsTo(User, { foreignKey: "userId" });
   comments = hasMany(Comment, { foreignKey: "postId" });
 
-  static scopes = this.defineScopes({
-    titled: (q, title: string) => q.where({ title }),
-  });
+  static titled = this.scope((q, title: string) => q.where({ title }));
 }
 
 class Comment extends Model({

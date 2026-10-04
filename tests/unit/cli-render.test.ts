@@ -110,7 +110,9 @@ export const tables = {
     const source = renderBase("ApplicationRecord", "../db/schema");
 
     expect(source).toContain("  // A method every record has:\n  // label() {");
-    expect(source).toContain("  // static override scopes = this.defineScopes({");
+    expect(source).toContain(
+      "  // static newest = this.scope((q) => q.order(sql`created_at DESC`));",
+    );
     expect(source).toContain(
       "    // A callback that runs for every Model, before each Model's own:\n    // this.beforeSave(",
     );

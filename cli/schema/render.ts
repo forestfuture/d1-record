@@ -105,9 +105,7 @@ class Base extends Model.Base {
   // }
 
   // A scope every Model has, in SQL since it runs on each Model's own table (import sql too):
-  // static override scopes = this.defineScopes({
-  //   newest: (q) => q.order(sql\`created_at DESC\`),
-  // });
+  // static newest = this.scope((q) => q.order(sql\`created_at DESC\`));
 
   static {
     // A callback that runs for every Model, before each Model's own:

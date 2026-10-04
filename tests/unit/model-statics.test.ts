@@ -1,0 +1,61 @@
+import { describe, expect, expectTypeOf, test, vi } from "vite-plus/test";
+import { Model, Relation } from "../../src/index.ts";
+
+class User extends Model({
+  id: { type: "integer", null: false },
+  email: { type: "string", null: false },
+  age: "integer",
+}) {
+  static tableName = "users";
+  static adults = this.scope((q) => q.where({ age: 18 }));
+}
+
+class Admin extends User {
+  level = 1;
+}
+
+describe("Relation methods as a Model's statics", () => {
+  test("they build Relations without a database, as Relations always do: nothing runs until awaited", () => {
+    const relation = User.where({ email: "ada@example.com" }).order({ id: "desc" }).limit(2);
+
+    expect(relation).toBeInstanceOf(Relation);
+    expect(User.build({ email: "x@example.com" }).email).toBe("x@example.com");
+  });
+
+  test("each is typed for the class it's called on, overloads included", () => {
+    // Type-checked, never run: these would query.
+    const typed = () => {
+      expectTypeOf(User.find(1)).toEqualTypeOf<Promise<User>>();
+      expectTypeOf(User.find([1, 2])).toEqualTypeOf<Promise<User[]>>();
+      expectTypeOf(User.find(1, 2)).toEqualTypeOf<Promise<User[]>>();
+      expectTypeOf(User.pluck("email")).toEqualTypeOf<Promise<string[]>>();
+      expectTypeOf(User.pluck("id", "age")).toEqualTypeOf<Promise<[number, number | null][]>>();
+      expectTypeOf(User.first()).toEqualTypeOf<Promise<User | null>>();
+      expectTypeOf(User.where({ age: 30 }).adults().toArray()).toEqualTypeOf<Promise<User[]>>();
+      expectTypeOf(Admin.where({ age: 30 }).toArray()).toEqualTypeOf<Promise<Admin[]>>();
+      expectTypeOf(Admin.adults().first()).toEqualTypeOf<Promise<Admin | null>>();
+      expectTypeOf(Admin.create({ email: "a@example.com" })).toEqualTypeOf<Promise<Admin>>();
+      // @ts-expect-error only User's attributes
+      User.where({ nope: 1 });
+      // @ts-expect-error find takes ids
+      void User.find({ id: 1 });
+    };
+    expect(typeof typed).toBe("function");
+  });
+});
+
+describe("withDatabase", () => {
+  test("without Node.js compatibility, it says which Wrangler setting turns it on", async () => {
+    vi.resetModules();
+    const builtin = vi.spyOn(process, "getBuiltinModule").mockReturnValue(undefined as never);
+    try {
+      const { withDatabase, connect } = await import("../../src/index.ts");
+
+      await expect(withDatabase(connect({} as never), () => 1)).rejects.toThrow(
+        "withDatabase needs Node.js compatibility: a compatibility_date of 2026-08-04 or later, or the nodejs_compat flag, in your Wrangler config",
+      );
+    } finally {
+      builtin.mockRestore();
+    }
+  });
+});

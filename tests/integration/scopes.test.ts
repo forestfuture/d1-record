@@ -11,13 +11,12 @@ class User extends Model({
 }) {
   static tableName = "users";
 
-  static scopes = this.defineScopes({
-    active: (q) => q.where({ isActive: true }),
-    recent: (q) => q.order({ createdAt: "desc" }),
-    createdAfter: (q, since: Date) => q.where(sql`created_at > ${since}`),
-    createdWithinDays: (q, days: number) =>
-      q.where(sql`created_at > ${new Date(Date.now() - days * 86_400_000)}`),
-  });
+  static active = this.scope((q) => q.where({ isActive: true }));
+  static recent = this.scope((q) => q.order({ createdAt: "desc" }));
+  static createdAfter = this.scope((q, since: Date) => q.where(sql`created_at > ${since}`));
+  static createdWithinDays = this.scope((q, days: number) =>
+    q.where(sql`created_at > ${new Date(Date.now() - days * 86_400_000)}`),
+  );
 }
 
 describe("scopes", () => {
