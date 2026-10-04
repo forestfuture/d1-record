@@ -1,4 +1,4 @@
-import { column, connect, Model, modelFor, sql } from "@forestfuture/d1-record";
+import { column, Model, modelFor, sql } from "@forestfuture/d1-record";
 import { tables } from "../db/schema";
 
 // #region declare
@@ -42,10 +42,20 @@ export const ApplicationRecord = modelFor(tables, Base);
 export class Account extends ApplicationRecord("billing_accounts") {}
 // #endregion shared
 
-export async function examples(env: Env): Promise<unknown> {
-  const db = connect(env.DB);
+// #region generated
+// src/models/product.ts (ApplicationRecord comes from ./application-record)
+export class Product extends ApplicationRecord("products", {
+  available: "boolean", // the column is a plain INTEGER: read it as a boolean
+  internalNotes: false, // ignored: never read or written
+  priceCents: { default: () => 100 }, // replaces the column's default, 0
+}) {
+  static inStock = this.scope((q) => q.where({ available: true }));
+}
+// #endregion generated
+
+export async function examples(): Promise<unknown> {
   // #region build
-  const user = db.model(User).build({ email: "ada@example.com" });
+  const user = User.build({ email: "ada@example.com" });
   console.log(user.id); // already generated, before saving: "3b241101-e2bb-…"
   console.log(user.role); // null: not assigned yet
   console.log(user.settings); // { theme: "light" }
@@ -67,11 +77,8 @@ export async function examples(env: Env): Promise<unknown> {
   // #endregion dirty
 
   // #region scopes
-  const admins = await db.model(User).active().where({ role: "admin" }).toArray();
-  const recent = await db
-    .model(User)
-    .createdAfter(new Date(Date.now() - 86_400_000))
-    .count();
+  const admins = await User.active().where({ role: "admin" }).toArray();
+  const recent = await User.createdAfter(new Date(Date.now() - 86_400_000)).count();
   // #endregion scopes
 
   // #region json

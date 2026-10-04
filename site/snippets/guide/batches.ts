@@ -1,55 +1,54 @@
-import { column, sql, type Database } from "@forestfuture/d1-record";
+import { batch, column, sql } from "@forestfuture/d1-record";
 import { Article, Author, Comment } from "./associations";
 
-export async function statementsExample(db: Database, articleId: string) {
+export async function statementsExample(articleId: string) {
   // #region statements
-  const deleted = await db.model(Comment).where({ articleId }).deleteAll(); // how many
-  await db.model(Article).where({ id: articleId }).updateAll({ title: "Edited" });
-  await db
-    .model(Article)
-    .where({ id: articleId })
-    .updateAll(sql`${column("title")} = upper(${column("title")})`);
-  const meta = await db.model(Comment).insert({ articleId, body: "First!" });
+  const deleted = await Comment.where({ articleId }).deleteAll(); // how many
+  await Article.where({ id: articleId }).updateAll({ title: "Edited" });
+  await Article.where({ id: articleId }).updateAll(
+    sql`${column("title")} = upper(${column("title")})`,
+  );
+  const meta = await Comment.insert({ articleId, body: "First!" });
   console.log(deleted, meta.last_row_id);
   // #endregion statements
   return meta;
 }
 
-export async function insertAllExample(db: Database, articleId: string) {
+export async function insertAllExample(articleId: string) {
   // #region insert-all
-  await db.model(Comment).insertAll([
+  await Comment.insertAll([
     { articleId, body: "One" },
     { articleId, body: "Two" },
   ]);
-  await db.model(Author).upsert({ id: "author-1", name: "Ada" }); // insert, or update the name
-  await db.model(Author).insert({ id: "author-1", name: "Ada" }, { onDuplicate: "skip" });
+  await Author.upsert({ id: "author-1", name: "Ada" }); // insert, or update the name
+  await Author.insert({ id: "author-1", name: "Ada" }, { onDuplicate: "skip" });
   // #endregion insert-all
 }
 
-export async function batchExample(db: Database) {
+export async function batchExample() {
   // #region batch
   const authorId = crypto.randomUUID(); // generated in code, so rows can point at it
-  await db.batch([
-    db.model(Author).toInsert({ id: authorId, name: "Grace" }),
-    db.model(Article).toInsert({ authorId, title: "Hello" }),
-    db.model(Article).where({ authorId: "author-1" }).toDeleteAll(),
+  await batch([
+    Author.toInsert({ id: authorId, name: "Grace" }),
+    Article.toInsert({ authorId, title: "Hello" }),
+    Article.where({ authorId: "author-1" }).toDeleteAll(),
   ]);
   // #endregion batch
   return authorId;
 }
 
-export async function recordsExample(db: Database, articleId: string, oldAuthorId: string) {
+export async function recordsExample(articleId: string, oldAuthorId: string) {
   // #region records
-  const article = await db.model(Article).find(articleId);
+  const article = await Article.find(articleId);
   article.title = "Final";
-  const author = db.model(Author).build({ name: "Hedy" });
-  const old = await db.model(Author).find(oldAuthorId);
+  const author = Author.build({ name: "Hedy" });
+  const old = await Author.find(oldAuthorId);
 
-  const [savedArticle, savedAuthor] = await db.batch([
+  const [savedArticle, savedAuthor] = await batch([
     article.toSave(),
     author.toSave(),
     old.toDestroy(), // with its dependents
-    db.model(Comment).where({ articleId }).toDeleteAll(),
+    Comment.where({ articleId }).toDeleteAll(),
   ]);
   // #endregion records
   return { savedArticle, savedAuthor };

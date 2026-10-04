@@ -1,16 +1,43 @@
 ---
-description: "Declaring a Model: attributes and types, camelCase to snake_case columns, defaults, timestamps, change tracking, scopes, serialization and inheritance."
+description: 'Reference for Models: ApplicationRecord("table") and overrides, declaring attributes yourself with Model({...}), table names, attributes and types, building records, timestamps, change tracking, SQL fragments and serialization.'
 ---
 
 # Models
 
-A Model describes one table. You declare its attributes once, in the object passed to `Model({...})`, and TypeScript infers the record's properties from it.
+A Model describes one table: its attributes, and its behavior. Usually its attributes come from your migrations, through the generated schema, and the Model declares only behavior.
+
+## Declaring a Model
+
+A Model extends your app's `ApplicationRecord`, naming its table. The table's attributes, primary key and types come from `src/db/schema.ts`, which [`d1-record schema`](./command-line#d1-record-schema) generates:
+
+<<< @/snippets/guide/models.ts#generated{ts}
+
+- **The table is the argument**, not inferred from the class name, so the Model doesn't depend on its class keeping its name when bundled. A table that isn't in the schema is a compile error.
+- **Subclasses share it.** Setting another `tableName` on such a Model throws `InvalidModel`; `static primaryKey` can still be set, and must name an attribute.
+
+### Overrides
+
+The second argument changes how attributes are read and written, never the table. It's keyed by attribute name, and typed: an unknown name is a compile error.
+
+| Override                     | Does                                                                                                 |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `"boolean"` (a type name)    | Reads and writes the attribute as that type                                                          |
+| `{ type?, null?, default? }` | Replaces those parts of the generated attribute; `null: false` makes it non-null in TypeScript       |
+| `false`                      | Ignores the column: it's never typed, read or written, and queries name their columns instead of `*` |
+
+The column can't change, an attribute can't be added, and the primary key can't be ignored: each is an `InvalidModel`, even past a cast. A `default` isn't type-checked against the attribute's type yet ([#74](https://github.com/forestfuture/d1-record/issues/74)). An ignored `NOT NULL` column without a default makes inserts fail, so give it a default in a migration first.
+
+## Declaring attributes yourself
+
+For a view, or a table your migrations don't make, declare the attributes in the Model, with `Model({...})` or `ApplicationRecord({...})` (the same, with your base class's shared behavior). TypeScript infers the record's properties from the object:
 
 <<< @/snippets/guide/models.ts#declare{ts}
 
+An attribute is a type name, or `{ type, column?, null?, default? }`. The rest of this page applies to both ways of declaring a Model.
+
 ## Table names
 
-A Model's table is named after its class, as Rails names it: the class name in snake_case, pluralized. `User` → `users`, `BlogPost` → `blog_posts`, `Category` → `categories`, `Person` → `people`, `Sheep` → `sheep`. A subclass shares its parent's table.
+A Model declared with `Model({...})` has its table named after its class, as Rails names it: the class name in snake_case, pluralized. `User` → `users`, `BlogPost` → `blog_posts`, `Category` → `categories`, `Person` → `people`, `Sheep` → `sheep`. A subclass shares its parent's table.
 
 The rules are Rails' own English ones, quirks included: `Human` becomes `humen`, as `man` becomes `men`, and `Leaf` becomes `leafs`. When a table is named differently, say so with `static tableName = "billing_accounts"`. There's no way to add your own pluralization rules: name the table instead.
 
@@ -63,6 +90,8 @@ Store `json` attributes in a `TEXT` column, as [D1 recommends](https://developer
 
 `assign(attrs)` sets several attributes without saving. `update(attrs)` is `assign` then `save`.
 
+Records also keep the database they were built or loaded through, for their later saves and association loads. A record made with `new User()` has none: build records with `User.build(…)`.
+
 ## Timestamps
 
 Declare `createdAt` and `updatedAt` as `datetime` attributes and they're managed for you: both are set when a record is created, and `updatedAt` whenever a save changes something. A save with nothing to change leaves `updatedAt` alone, and a timestamp you assign yourself is kept.
@@ -79,16 +108,6 @@ Records know what's changed since they were loaded or last saved, as in Rails:
 - `restoreAttributes()` undoes unsaved changes, to all attributes or the ones you name.
 
 Changes are found by comparing stored values, so editing a `json` value or a `Date` in place counts as a change. An update writes only the attributes that changed, and a save with nothing changed sends nothing.
-
-## Scopes
-
-Scopes are named, reusable parts of a query. A scope receives the current Relation, plus any arguments, and returns a narrower one:
-
-<<< @/snippets/guide/models.ts#scopes{ts}
-
-Scopes are typed, chain with everything else, and never query on their own. Their arguments, and anything they compute such as `new Date()`, are evaluated when you call them, not when the class is defined.
-
-A scope can't reuse a name a Relation already has, like `where` or `count`. Inside a scope, `q` has every Relation method but not the Model's other scopes, so share logic between scopes with a plain function.
 
 ## SQL fragments
 
@@ -108,4 +127,4 @@ To share methods, callbacks and scopes across every Model, write them on your ap
 
 ## Checked when first used
 
-The first time a Model is used, `db.model(X)` checks its declaration and throws `InvalidModel` if something's wrong: no table name (an empty `tableName`, or a class with no name to infer one from), a `primaryKey` that isn't an attribute, an attribute named like a record method (`save`, `attributes`, …), or a class field that hides an attribute (such as `email!: string` in the class body). After that, a Model's declarations are fixed, so request code can never change them.
+The first time a Model is used (its first query, or `db.model(X)`), d1-record checks its declaration and throws `InvalidModel` if something's wrong: no table name (an empty `tableName`, or a class with no name to infer one from), a `primaryKey` that isn't an attribute, an attribute named like a record method (`save`, `attributes`, …), or a class field that hides an attribute (such as `email!: string` in the class body). After that, a Model's declarations are fixed, so request code can never change them.

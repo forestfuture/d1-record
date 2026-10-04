@@ -11,11 +11,13 @@ description: d1-record (`@forestfuture/d1-record`), a Rails-style Active Record 
 
 d1-record (`@forestfuture/d1-record`) is a Rails-style Active Record for Cloudflare D1. Its guide for the installed version is `node_modules/@forestfuture/d1-record/llms-full.txt`: read the part for the task before writing code with it.
 
+- Create tables with the generators, never by hand-declaring attributes: `npx d1-record g model Post user:references 'title:string!'` writes the migration and the Model; `npx d1-record g migration AddSlugToPosts slug:string:unique` writes a change. Apply them with `npx wrangler d1 migrations apply <db> --local`. After a hand-written migration, run `npx d1-record schema`. Never edit the generated `src/db/schema.ts`.
+- A Model extends the app's base class, naming its table: `class Post extends ApplicationRecord("posts")`. Its attributes come from the schema, so it declares only behavior. Change how a column is read with an override, `ApplicationRecord("posts", { metadata: "json" })`, never by editing the schema.
 - Start queries and new records from the Model, as in Rails: `User.find(id)`, `User.where(…)`, `User.build(…)`. Each Model queries its binding (`static override binding = "DB"`, usually on the app's base class) during a request. For a D1 Session, per-request `onQuery`, or tests and scripts outside a Worker, wrap the code once in `withDatabase(connect(env.DB, { … }), fn)`. Records keep the database they came from.
 - Name attributes in camelCase everywhere: `where`, `order`, `pluck`, `foreignKey`. Column names (snake_case) appear only inside `sql` fragments.
 - Write custom SQL as an `sql` tagged template, which binds every value: ``where(sql`lower(${column("email")}) = ${email}`)``.
 - Bulk writes run when called: `await posts.deleteAll()` and `updateAll(…)` resolve to how many rows; `insert(…)` to D1's `meta`. Make several writes atomic with one `batch([...])` of their `to…` forms (`toInsert`, `toUpdateAll`, `toDeleteAll`, …) and records' `toSave()`/`toDestroy()`. D1 has no interactive transactions, so a read-then-write can't be atomic.
-- Generate keys in code (`id: { type: "string", null: false, default: () => crypto.randomUUID() }`) for records saved together. An owner whose key is known before its INSERT (generated in code, or already saved) is written in one atomic batch with the records built through it. A key D1 generates exists only after its own write, so each level is then written in a separate batch.
+- Keep the generators' `TEXT` keys, generated in code, for records saved together (`--id integer` gives a key D1 generates instead). An owner whose key is known before its INSERT (generated in code, or already saved) is written in one atomic batch with the records built through it. A key D1 generates exists only after its own write, so each level is then written in a separate batch.
 - Declare associations as fields, passing the target class: `posts = hasMany(Post, { dependent: "destroy" })`, `author = belongsTo(User)`. The field's name is the association's name.
 - Check what writes return. `save()` and `update()` resolve to `false` when validation fails (reasons in `record.errors`) or a callback aborts (`record.abortReason`). `destroy()` resolves to `false` when a callback aborts, or a `restrictWithError` association refuses (reason in `record.errors`). The `…OrThrow` methods throw instead. Constraint errors, such as `RecordNotUnique`, always throw.
 
@@ -27,34 +29,23 @@ The installed package's `llms-full.txt` is one Markdown file, a `#` heading per 
 
 ## Shapes to follow
 
-Models declare their attributes once, and TypeScript infers the record's properties from them. Validations and callbacks go in the `static {}` block:
+Generated Models extend `ApplicationRecord`, with their attributes from the schema. Associations are fields, scopes are statics, and validations and callbacks go in the `static {}` block:
 
 ```ts
-import { belongsTo, hasMany, Model } from "@forestfuture/d1-record";
+import { belongsTo, hasMany } from "@forestfuture/d1-record";
+import { ApplicationRecord } from "./application-record";
 
-export class User extends Model({
-  id: { type: "string", null: false, default: () => crypto.randomUUID() },
-  email: { type: "string", null: false },
-  createdAt: "datetime", // createdAt and updatedAt are set on save
-  updatedAt: "datetime",
-}) {
-  static override binding = "DB"; // queries use env.DB
-
-  // Its table, users, is inferred from the class name; static tableName overrides it.
+export class User extends ApplicationRecord("users") {
   posts = hasMany(Post, { dependent: "destroy" }); // foreign key inferred: Post's userId
+
+  static active = this.scope((q) => q.where({ isActive: true }));
 
   static {
     this.validates("email", { presence: true, uniqueness: true });
   }
 }
 
-export class Post extends Model({
-  id: { type: "string", null: false, default: () => crypto.randomUUID() },
-  userId: { type: "string", null: false },
-  title: { type: "string", null: false },
-}) {
-  static override binding = "DB";
-
+export class Post extends ApplicationRecord("posts") {
   user = belongsTo(User); // foreign key inferred: userId
 }
 ```
