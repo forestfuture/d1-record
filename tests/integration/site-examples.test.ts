@@ -16,9 +16,10 @@ import {
 } from "../../site/snippets/guide/associations.ts";
 import * as batches from "../../site/snippets/guide/batches.ts";
 import { Booking, errorsExample } from "../../site/snippets/guide/validations.ts";
-import { publishDraftsAndRemove } from "../../site/snippets/getting-started/batch.ts";
+import { runSchema } from "../../cli/schema/command.ts";
 import { Post, User } from "../../site/snippets/getting-started/models.ts";
-import worker from "../../site/snippets/getting-started/worker.ts";
+import worker from "../../site/snippets/getting-started/src/index.ts";
+import { publishDraftsAndRemove } from "../../site/snippets/getting-started/src/publish.ts";
 import { User as MigratedUser, writeBio } from "../../site/snippets/migrations/models.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
@@ -26,20 +27,30 @@ import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 const workers: { env: Record<string, unknown> } = { env: {} };
 vi.mock("cloudflare:workers", () => workers);
 
-// The documentation's Getting started runs as written, on its own migration.
+// The Getting started project: the generators' own output (its migrations, schema.ts and
+// application-record.ts), with the tutorial's edits to the Models.
+const gettingStarted = new URL("../../site/snippets/getting-started/", import.meta.url);
+const gettingStartedMigrations = ["0001_create_users.sql", "0002_create_posts.sql"].map(
+  (file) => new URL(`migrations/${file}`, gettingStarted),
+);
+
+// The documentation's Getting started runs as written, on its own migrations.
 describe("Getting started", () => {
   let binding: TestDatabase;
   let dispose: () => Promise<void>;
-  const migration = new URL(
-    "../../site/snippets/getting-started/0001_create_users_and_posts.sql",
-    import.meta.url,
-  );
-
   beforeAll(async () => {
-    ({ db: binding, dispose } = await createTestDatabase(migration));
+    ({ db: binding, dispose } = await createTestDatabase(gettingStartedMigrations));
     workers.env = { DB: binding };
   });
   afterAll(() => dispose());
+
+  test("its schema.ts is what its migrations generate", () => {
+    const output: string[] = [];
+
+    expect(
+      runSchema({ cwd: gettingStarted.pathname, check: true }, (line) => output.push(line)),
+    ).toBe(0);
+  });
 
   function request(method: string, body?: unknown): Promise<Response> {
     const init = body === undefined ? { method } : { method, body: JSON.stringify(body) };
@@ -252,12 +263,7 @@ describe("the guide's examples", () => {
 // The Migrations guide: Getting started's tables, then a migration that adds a column.
 describe("Migrations", () => {
   test("after 0002 adds users.bio, the Model's bio attribute reads and writes it", async () => {
-    const { db: binding, dispose } = await createTestDatabase(
-      new URL(
-        "../../site/snippets/getting-started/0001_create_users_and_posts.sql",
-        import.meta.url,
-      ),
-    );
+    const { db: binding, dispose } = await createTestDatabase(gettingStartedMigrations);
     const migration = readFileSync(
       new URL("../../site/snippets/migrations/0002_add_bio_to_users.sql", import.meta.url),
       "utf8",
@@ -272,15 +278,12 @@ describe("Migrations", () => {
   });
 
   test("code that doesn't declare a newer column keeps working, as the guide says", async () => {
-    const { db: binding, dispose } = await createTestDatabase(
-      new URL(
-        "../../site/snippets/getting-started/0001_create_users_and_posts.sql",
-        import.meta.url,
-      ),
-    );
+    const { db: binding, dispose } = await createTestDatabase(gettingStartedMigrations);
     await binding.prepare("ALTER TABLE users ADD COLUMN bio TEXT").run();
     await binding
-      .prepare("INSERT INTO users (id, email, bio) VALUES ('u1', 'a@example.com', 'hi')")
+      .prepare(
+        "INSERT INTO users (id, email, bio, created_at, updated_at) VALUES ('u1', 'a@example.com', 'hi', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')",
+      )
       .run();
     // The User of Getting started, deployed before the migration: no bio attribute.
     const db = connect(binding);

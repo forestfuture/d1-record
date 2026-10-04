@@ -41,7 +41,7 @@ export default defineConfig({
     ],
     sidebar: [
       {
-        text: "Introduction",
+        text: "Start here",
         items: [
           { text: "Getting started", link: "/guide/getting-started" },
           { text: "Coming from Rails", link: "/guide/coming-from-rails" },
@@ -49,24 +49,29 @@ export default defineConfig({
         ],
       },
       {
-        text: "Guides",
+        text: "How-to guides",
+        items: [{ text: "Generate models and migrations", link: "/guide/generators" }],
+      },
+      {
+        text: "Reference",
         items: [
-          { text: "Connecting", link: "/guide/connecting" },
           { text: "Models", link: "/guide/models" },
-          { text: "Migrations", link: "/guide/migrations" },
           { text: "Querying", link: "/guide/querying" },
           { text: "Saving and destroying", link: "/guide/persistence" },
           { text: "Validations", link: "/guide/validations" },
           { text: "Callbacks", link: "/guide/callbacks" },
           { text: "Associations", link: "/guide/associations" },
           { text: "Batches and bulk writes", link: "/guide/batches" },
+          { text: "Connecting", link: "/guide/connecting" },
+          { text: "Command line", link: "/guide/command-line" },
+          { text: "Errors", link: "/guide/errors" },
         ],
       },
       {
-        text: "Working with D1",
+        text: "Background",
         items: [
+          { text: "Migrations", link: "/guide/migrations" },
           { text: "D1's limits", link: "/guide/d1" },
-          { text: "Errors", link: "/guide/errors" },
         ],
       },
     ],

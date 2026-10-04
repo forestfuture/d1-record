@@ -1,83 +1,149 @@
 ---
-description: "Install d1-record, create D1 tables, declare Models and use them in a Worker, step by step."
+description: "From an empty Worker to two related Models, queried and saved, in about ten minutes: install d1-record, generate Models and their tables, add behaviour, and use them in a Worker."
 ---
 
 # Getting started
 
-A [Worker](https://developers.cloudflare.com/workers/) is a function that runs at Cloudflare's edge, and [D1](https://developers.cloudflare.com/d1/) is its SQLite database. d1-record sits between the two: you describe each table once as a **Model**, and your Worker reads and writes **records** instead of rows.
+A [Worker](https://developers.cloudflare.com/workers/) is a function that runs at Cloudflare's edge, and [D1](https://developers.cloudflare.com/d1/) is its SQLite database. d1-record sits between the two: each table becomes a **Model**, and your Worker reads and writes **records** instead of rows.
+
+In this tutorial you'll build the start of a small blog: users, and the posts they write. By the end, your Worker will list users with their posts, and sign up a user together with a first post.
 
 ::: warning Not on npm yet
 d1-record hasn't been published yet: the first release is coming. Its behavior is tested against real D1, but the API may still change before 1.0.
 :::
 
-## Install
+## Before you start
+
+You need:
+
+- **A Worker project** with [Wrangler](https://developers.cloudflare.com/workers/wrangler/), Cloudflare's command-line tool. `npm create cloudflare@latest` makes one.
+- **A D1 database bound as `DB`.** Create one with `npx wrangler d1 create my-app-db`, and add the snippet it prints to your Wrangler config:
+
+  ```jsonc [wrangler.jsonc]
+  {
+    "d1_databases": [
+      { "binding": "DB", "database_name": "my-app-db", "database_id": "<the id it printed>" },
+    ],
+  }
+  ```
+
+- **Node.js 22.13 or later**, for d1-record's command line.
+
+## 1. Install d1-record
 
 ```sh
 npm install @forestfuture/d1-record
 ```
 
-It's ESM-only, runs on the Workers runtime, and needs no Node.js compatibility flags.
+## 2. Generate the Models
 
-## 1. Create the tables
-
-D1 tables are created with SQL migrations. Create the database and a first migration with [Wrangler](https://developers.cloudflare.com/workers/wrangler/), Cloudflare's command-line tool:
+d1-record's generator writes a table's migration and its Model in one step, as Rails' `rails generate model` does. Generate users first, then posts, since each post belongs to a user:
 
 ```sh
-npx wrangler d1 create my-app-db
-npx wrangler d1 migrations create my-app-db create_users_and_posts
+npx d1-record g model User 'email:string!:unique' 'isActive:boolean!=true'
+npx d1-record g model Post user:references 'title:string!' publishedAt:datetime
 ```
 
-Then write the tables in the migration file it creates. Column names are snake_case:
+Each column is `name:type`. A `!` makes it required (`NOT NULL`), `=true` gives it a default, `:unique` adds a unique index, and `user:references` links each post to a user. (The quotes keep your shell from reading the `!`.)
 
-<<< @/snippets/getting-started/0001_create_users_and_posts.sql{sql} [migrations/0001_create_users_and_posts.sql]
+The generator prints what it wrote:
 
-Apply it with `npx wrangler d1 migrations apply my-app-db --local`, or `--remote` for the deployed database.
-
-## 2. Connect the database to your Worker
-
-`wrangler d1 create` prints a snippet for your Wrangler config. It gives your Worker a **binding** called `DB`: a handle to the database that arrives with every request, as `env.DB`.
-
-```jsonc [wrangler.jsonc]
-{
-  "d1_databases": [
-    { "binding": "DB", "database_name": "my-app-db", "database_id": "<the id it printed>" },
-  ],
-}
+```
+Wrote migrations/0001_create_users.sql
+Wrote src/models/user.ts
+Wrote src/db/schema.ts (1 table) from migrations/
+Wrote src/models/application-record.ts
+Next: npx wrangler d1 migrations apply my-app-db --local
 ```
 
-## 3. Declare your models
+Here's what each file is for:
 
-Each Model describes one table: its attributes (camelCase in your code, snake_case in the table), its associations to other Models, and the rules for saving it.
+| File                                                        | What it is                                                                   |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `migrations/0001_create_users.sql`, `0002_create_posts.sql` | The SQL that creates each table. Wrangler applies these, in order.           |
+| `src/db/schema.ts`                                          | Every table's columns, generated from the migrations. You never edit it.     |
+| `src/models/application-record.ts`                          | Your app's base class, `ApplicationRecord`, as in Rails. It's yours to edit. |
+| `src/models/user.ts`, `post.ts`                             | One Model per table.                                                         |
 
-<<< @/snippets/getting-started/models.ts{ts} [src/models.ts]
+The migration for posts shows what the generator wrote from its columns:
 
-A few things to notice:
+<<< @/snippets/getting-started/migrations/0002_create_posts.sql{sql} [migrations/0002_create_posts.sql]
 
-- The attributes are declared once, and TypeScript infers `user.email`, `user.isActive` and the rest from them.
-- The tables are named after the classes, as in Rails: `User` uses `users` and `Post` uses `posts`. A table named differently is set with `static tableName`.
-- The `id` is generated in code, so a new user has its key before it's saved. That's what lets a user and their posts be written together, atomically.
-- `User.posts` finds its foreign key by Rails' convention: `userId` on `Post`, from the class name `User`. `Post.author` is named `author`, not `user`, so it says which key it uses.
-- Associations are fields: `posts = hasMany(Post, …)`. The field's name is the association's, and TypeScript knows `user.posts()` and `post.author()` from it.
+Each record gets an `id` generated in code, so a new user has its key before it's saved. That's what lets a user and their posts be written together, atomically. `created_at` and `updated_at` are filled in for you.
 
-## 4. Use them in your Worker
+## 3. Create the tables
 
-Queries start from the Model, and use its binding during the request: there's nothing to connect. (`npx wrangler types` generates the `Env` type from your Wrangler config.)
+Apply the migrations to your local database:
 
-<<< @/snippets/getting-started/worker.ts{ts} [src/index.ts]
+```sh
+npx wrangler d1 migrations apply my-app-db --local
+```
 
-Nothing about the request is ever stored on the `User` class, so concurrent requests on one Worker never share a D1 Session. For a Session or per-request logging, see [Connecting](./connecting).
+Use `--remote` instead when you deploy.
 
-## 5. Write several things at once, or not at all
+## 4. Add behaviour to the Models
 
-D1 can't keep a transaction open while your code awaits, so there's no `transaction()` block. Instead, `batch([...])` sends a prepared set of writes that all succeed or all fail. `toSave()`, `toDestroy()` and the bulk writes' `to…` forms (`toUpdateAll`, `toDeleteAll`, …) prepare a write for the batch instead of running it:
+The generated `Post` already knows it belongs to a user, from `user:references`:
 
-<<< @/snippets/getting-started/batch.ts#batch{ts}
+<<< @/snippets/getting-started/src/models/post.ts{ts} [src/models/post.ts]
+
+The generated `User` is a single line:
+
+```ts [src/models/user.ts]
+import { ApplicationRecord } from "./application-record";
+
+export class User extends ApplicationRecord("users") {}
+```
+
+Its attributes come from the generated schema, so `user.email` and `user.isActive` are already there, typed. A Model only declares behaviour. Open `src/models/user.ts` and give it a user's posts, a way to find active users, and rules for saving:
+
+<<< @/snippets/getting-started/src/models/user.ts{ts} [src/models/user.ts]
+
+- `posts = hasMany(Post, …)` is an association: `user.posts()` finds the user's posts. `dependent: "destroy"` destroys them along with the user.
+- `static active = this.scope(…)` is a scope: `User.active()` finds active users.
+- `this.validates(…)` and `this.beforeSave(…)` run on every save. An invalid user isn't saved, and its errors say why.
+
+## 5. Use the Models in your Worker
+
+Queries start from the Model, as in Rails. Each Model uses the `DB` binding during the request, so there's nothing to connect:
+
+<<< @/snippets/getting-started/src/index.ts{ts} [src/index.ts]
+
+- `User.active().includes("posts")` loads the users, then all their posts in one more query, however many users there are.
+- `user.posts().build(…)` makes a post that's saved with its user, in one atomic batch.
+- `save()` resolves to `false` when validation fails, with the reasons in `user.errors`.
+
+## 6. Try it
+
+Start the Worker locally:
+
+```sh
+npx wrangler dev
+```
+
+Then, in another terminal, sign up a user, and list the users:
+
+```sh
+curl -X POST http://localhost:8787 -d '{"email":"Ada@Example.com"}'
+curl http://localhost:8787
+```
+
+The second request returns Ada, with her email lowercased by the `beforeSave` callback. Sign her up again, and the response is a `422` with `["Email has already been taken"]`.
+
+## 7. Write several things at once
+
+D1 can't keep a transaction open while your code awaits, so there's no `transaction()` block. Instead, `batch([...])` writes a prepared set of changes that all succeed or all fail. `toSave()`, `toDestroy()` and the bulk writes' `to…` forms prepare a change for the batch instead of running it:
+
+<<< @/snippets/getting-started/src/publish.ts#batch{ts}
 
 ## Next steps
 
-- [Models](./models): attributes, types, defaults and naming.
-- [Querying](./querying): Relations, conditions, scopes and preloading.
-- [Saving and destroying](./persistence): what each method returns, and when it throws.
-- [D1's limits](./d1): what's different from a database with interactive transactions.
+You've generated two Models, created their tables, added behaviour, and used them in a Worker.
 
-Every larger example on this site is type-checked against the library and runs against a real D1 in the test suite.
+- **[Generate models and migrations](./generators):** change a table, and every way to write columns.
+- **[Models](./models):** attributes, types, overrides and shared behaviour.
+- **[Querying](./querying):** conditions, ordering, scopes and preloading.
+- **[Saving and destroying](./persistence):** what each method returns, and when it throws.
+- **[Connecting](./connecting):** read replicas, logging, tests and several databases.
+
+Every larger example on this site is type-checked against d1-record and runs against a real D1 database in its test suite, including this tutorial.

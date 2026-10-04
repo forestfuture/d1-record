@@ -21,7 +21,7 @@ export async function examples(env: Env, since: Date, until: Date): Promise<unkn
   // #endregion where
 
   // #region comparisons
-  db.model(Post).where({ id: gte(100) }); // id >= 100
+  db.model(Post).where({ publishedAt: gte(since) }); // published_at >= since
   db.model(User).where({ createdAt: lt(since) }); // created_at < since
   db.model(User).where({ createdAt: between(since, until) }); // both ends included
   db.model(User).where({ createdAt: between(since, until, { excludeEnd: true }) });

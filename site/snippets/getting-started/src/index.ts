@@ -1,5 +1,4 @@
-// src/index.ts
-import { User } from "./models";
+import { User } from "./models/user";
 
 export default {
   async fetch(request: Request): Promise<Response> {
