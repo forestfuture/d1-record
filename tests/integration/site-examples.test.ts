@@ -1,6 +1,5 @@
-import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vite-plus/test";
-import { connect } from "../../src/index.ts";
+import { connect, withDatabase } from "../../src/index.ts";
 import {
   Article,
   Author,
@@ -20,7 +19,6 @@ import { runSchema } from "../../cli/schema/command.ts";
 import { Post, User } from "../../site/snippets/getting-started/models.ts";
 import worker from "../../site/snippets/getting-started/src/index.ts";
 import { publishDraftsAndRemove } from "../../site/snippets/getting-started/src/publish.ts";
-import { User as MigratedUser, writeBio } from "../../site/snippets/migrations/models.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 // Inside a Worker, a Model's binding comes from cloudflare:workers; here, Miniflare's D1 stands in.
@@ -126,7 +124,7 @@ describe("the guide's examples", () => {
   });
 
   test("Validations: the errors example has the five errors its comments show", async () => {
-    const account = await errorsExample(connect(binding));
+    const account = await withDatabase(connect(binding), () => errorsExample());
 
     expect(account.errors.fullMessages()).toEqual([
       "Email can't be blank",
@@ -153,8 +151,8 @@ describe("the guide's examples", () => {
 
   test("Associations: reading, creating through, and deleting through an association", async () => {
     const db = connect(binding);
-    const { author, profile, latest } = await readExample(db, "x1");
-    const comment = await createThroughExample(db, "x1");
+    const { author, profile, latest } = await withDatabase(db, () => readExample("x1"));
+    const comment = await withDatabase(db, () => createThroughExample("x1"));
 
     expect([author?.name, profile?.bio, latest?.title]).toEqual(["Mary", "Poet", "On Nothing"]);
     expect(comment.articleId).toBe("x1");
@@ -172,9 +170,9 @@ describe("the guide's examples", () => {
     const db = connect(binding);
     const editor = await db.model(Author).createOrThrow({ name: "Ed" });
 
-    const articles = await hasManyExample(db, "mary"); // builds an Untitled one, then deletes it
-    const author = await belongsToExample(db, "x1", editor);
-    const profile = await hasOneExample(db, "mary");
+    const articles = await withDatabase(db, () => hasManyExample("mary")); // builds an Untitled one, then deletes it
+    const author = await withDatabase(db, () => belongsToExample("x1", editor));
+    const profile = await withDatabase(db, () => hasOneExample("mary"));
 
     expect(articles.map((article) => article.title)).toEqual(["On Nothing"]);
     expect(author?.name).toBe("Mary");
@@ -185,9 +183,9 @@ describe("the guide's examples", () => {
   test("Associations: autosave writes the graph in one batch; set() links new and saved authors", async () => {
     const queries: string[] = [];
     const db = connect(binding, { onQuery: ({ sql }) => queries.push(sql) });
-    const ada = await autosaveExample(db);
+    const ada = await withDatabase(db, () => autosaveExample());
     const batched = queries.length;
-    const { draft, another, grace } = await writersExample(db, ada);
+    const { draft, another, grace } = await withDatabase(db, () => writersExample(ada));
 
     expect(batched).toBe(4); // the author, two articles and the profile (atomicity: autosave tests)
     expect(await db.model(Article).where({ authorId: ada.id }).pluck("title")).toEqual(
@@ -204,11 +202,12 @@ describe("the guide's examples", () => {
   });
 
   test("Associations: the preload takes 4 queries, and the loop none", async () => {
-    await autosaveExample(connect(binding));
+    await withDatabase(connect(binding), () => autosaveExample());
     const queries: string[] = [];
 
-    const authors = await preloadExample(
+    const authors = await withDatabase(
       connect(binding, { onQuery: ({ sql }) => queries.push(sql) }),
+      () => preloadExample(),
     );
 
     expect(authors.map((author) => author.name).sort()).toEqual(["Ada", "Mary"]);
@@ -220,9 +219,9 @@ describe("the guide's examples", () => {
   test("Batches: statements, many rows, an atomic batch, and records in a batch", async () => {
     const db = connect(binding);
 
-    const meta = await batches.statementsExample(db, "x1");
-    await batches.insertAllExample(db, "x1");
-    const graceId = await batches.batchExample(db);
+    const meta = await withDatabase(db, () => batches.statementsExample("x1"));
+    await withDatabase(db, () => batches.insertAllExample("x1"));
+    const graceId = await withDatabase(db, () => batches.batchExample());
 
     expect(meta.changes).toBe(1);
     expect(log).toHaveBeenCalledWith(1, meta.last_row_id); // the article's one comment deleted
@@ -240,7 +239,7 @@ describe("the guide's examples", () => {
     ).toBe("Ada");
     expect(await db.model(Article).where({ authorId: graceId }).pluck("title")).toEqual(["Hello"]);
 
-    const { savedAuthor } = await batches.recordsExample(db, "x1", graceId);
+    const { savedAuthor } = await withDatabase(db, () => batches.recordsExample("x1", graceId));
 
     expect(savedAuthor.isPersisted()).toBe(true);
     expect(
@@ -260,23 +259,8 @@ describe("the guide's examples", () => {
   });
 });
 
-// The Migrations guide: Getting started's tables, then a migration that adds a column.
-describe("Migrations", () => {
-  test("after 0002 adds users.bio, the Model's bio attribute reads and writes it", async () => {
-    const { db: binding, dispose } = await createTestDatabase(gettingStartedMigrations);
-    const migration = readFileSync(
-      new URL("../../site/snippets/migrations/0002_add_bio_to_users.sql", import.meta.url),
-      "utf8",
-    );
-    await binding.prepare(migration).run();
-
-    const db = connect(binding);
-    const user = await writeBio(db, "ada@example.com");
-
-    expect((await db.model(MigratedUser).find(user.id)).bio).toBe("Writes about D1");
-    await dispose();
-  });
-
+// Change a table: code deployed before a migration adds a column keeps working.
+describe("Change a table", () => {
   test("code that doesn't declare a newer column keeps working, as the guide says", async () => {
     const { db: binding, dispose } = await createTestDatabase(gettingStartedMigrations);
     await binding.prepare("ALTER TABLE users ADD COLUMN bio TEXT").run();

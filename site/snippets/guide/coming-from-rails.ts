@@ -1,9 +1,16 @@
-import { Model } from "@forestfuture/d1-record";
+import { ApplicationRecord } from "./models";
 
 // #region declare
-export class User extends Model({ id: "integer", email: { type: "string", null: false } }) {
+// Rails:
+//   class Product < ApplicationRecord
+//     scope :in_stock, -> { where(available: true) }
+//     validates :name, presence: true
+//   end
+export class Product extends ApplicationRecord("products", { available: "boolean" }) {
+  static inStock = this.scope((q) => q.where({ available: true }));
+
   static {
-    this.validates("email", { presence: true, uniqueness: true });
+    this.validates("name", { presence: true });
   }
 }
 // #endregion declare

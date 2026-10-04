@@ -1,4 +1,4 @@
-import { Model, type Database } from "@forestfuture/d1-record";
+import { Model } from "@forestfuture/d1-record";
 
 // #region validates
 export class Account extends Model({
@@ -42,9 +42,9 @@ export class Booking extends Model({
 }
 // #endregion custom
 
-export async function errorsExample(db: Database) {
+export async function errorsExample() {
   // #region errors
-  const account = db.model(Account).build({ email: "", handle: "a!" });
+  const account = Account.build({ email: "", handle: "a!" });
   await account.isValid(); // false
 
   account.errors.get("email"); // ["can't be blank"]

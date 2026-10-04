@@ -1,11 +1,4 @@
-import {
-  belongsTo,
-  type Database,
-  hasMany,
-  hasOne,
-  Model,
-  type HasMany,
-} from "@forestfuture/d1-record";
+import { belongsTo, hasMany, hasOne, Model, type HasMany } from "@forestfuture/d1-record";
 
 // #region declare
 export class Author extends Model({
@@ -54,9 +47,9 @@ export class BlogPost extends Model({
   createdAt: "datetime",
 }) {}
 
-export async function readExample(db: Database, articleId: string) {
+export async function readExample(articleId: string) {
   // #region read
-  const article = await db.model(Article).find(articleId);
+  const article = await Article.find(articleId);
   const author = await article.author(); // an Author, or null
   const profile = await author?.profile(); // a Profile, or null
   const latest = await author?.articles().first();
@@ -64,9 +57,9 @@ export async function readExample(db: Database, articleId: string) {
   return { author, profile, latest };
 }
 
-export async function autosaveExample(db: Database) {
+export async function autosaveExample() {
   // #region autosave
-  const ada = db.model(Author).build({ name: "Ada" });
+  const ada = Author.build({ name: "Ada" });
   ada.articles().build({ title: "Notes on the Analytical Engine" });
   ada.articles().build({ title: "Sketch of the Engine" });
   ada.profile.build({ bio: "Mathematician" });
@@ -75,33 +68,31 @@ export async function autosaveExample(db: Database) {
   return ada;
 }
 
-export async function createThroughExample(db: Database, articleId: string) {
-  const article = await db.model(Article).find(articleId);
+export async function createThroughExample(articleId: string) {
+  const article = await Article.find(articleId);
   // #region create-through
   const comment = await article.comments().create({ body: "Lovely." }); // articleId filled in
   // #endregion create-through
   return comment;
 }
 
-export async function writersExample(db: Database, ada: Author) {
+export async function writersExample(ada: Author) {
   // #region writers
-  const draft = db.model(Article).build({ title: "Untitled" });
+  const draft = Article.build({ title: "Untitled" });
   draft.author.set(ada); // sets draft.authorId, and ada is its loaded author
   await draft.save();
 
-  const grace = db.model(Author).build({ name: "Grace" });
-  const another = db.model(Article).build({ title: "COBOL" });
+  const grace = Author.build({ name: "Grace" });
+  const another = Article.build({ title: "COBOL" });
   another.author.set(grace); // a new author: saved first, when the article is
   await another.save();
   // #endregion writers
   return { draft, another, grace };
 }
 
-export async function preloadExample(db: Database) {
+export async function preloadExample() {
   // #region preload
-  const authors = await db
-    .model(Author)
-    .includes("profile", { articles: "comments" }) // 4 queries, however many authors
+  const authors = await Author.includes("profile", { articles: "comments" }) // 4 queries, however many authors
     .toArray();
 
   for (const each of authors) {
@@ -134,9 +125,9 @@ export class Category extends Model({
 }
 // #endregion self-referencing
 
-export async function belongsToExample(db: Database, articleId: string, editor: Author) {
+export async function belongsToExample(articleId: string, editor: Author) {
   // #region belongs-to
-  const article = await db.model(Article).find(articleId);
+  const article = await Article.find(articleId);
   const author = await article.author(); // an Author, or null
 
   article.author.set(editor); // points it at another author: written when the article is saved
@@ -145,9 +136,9 @@ export async function belongsToExample(db: Database, articleId: string, editor: 
   return author;
 }
 
-export async function hasManyExample(db: Database, authorId: string) {
+export async function hasManyExample(authorId: string) {
   // #region has-many
-  const author = await db.model(Author).find(authorId);
+  const author = await Author.find(authorId);
   const articles = await author.articles().toArray(); // a Relation of the author's articles
 
   author.articles().build({ title: "Untitled" }); // saved with the author, with its key
@@ -158,9 +149,9 @@ export async function hasManyExample(db: Database, authorId: string) {
   return articles;
 }
 
-export async function hasOneExample(db: Database, authorId: string) {
+export async function hasOneExample(authorId: string) {
   // #region has-one
-  const author = await db.model(Author).find(authorId);
+  const author = await Author.find(authorId);
   const profile = await author.profile(); // a Profile, or null
 
   if (profile === null) await author.profile.create({ bio: "Writer" }); // saved at once

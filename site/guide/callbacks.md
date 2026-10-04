@@ -64,7 +64,7 @@ Only `abort()` stops a save. Returning `false` from a callback does nothing, and
 
 **Not needed on D1:**
 
-- **`after_commit`, `after_rollback`** and their `after_*_commit` shortcuts. In Rails, a save runs inside a database transaction, and `after_save` runs before that transaction commits, so `after_commit` exists to wait until it has. Here, D1 has already committed a save's writes before any after-callback runs, so `afterSave`, `afterCreate`, `afterUpdate` and `afterDestroy` are already "after commit". In a [`db.batch`](./batches#records-in-a-batch), after-callbacks run once the whole batch is written. There's no rollback to hook into: when D1 refuses a write, nothing was written, and the save throws the [constraint error](./errors#constraint-errors).
+- **`after_commit`, `after_rollback`** and their `after_*_commit` shortcuts. In Rails, a save runs inside a database transaction, and `after_save` runs before that transaction commits, so `after_commit` exists to wait until it has. Here, D1 has already committed a save's writes before any after-callback runs, so `afterSave`, `afterCreate`, `afterUpdate` and `afterDestroy` are already "after commit". In a [batch](./batches#records-in-a-batch), after-callbacks run once the whole batch is written. There's no rollback to hook into: when D1 refuses a write, nothing was written, and the save throws the [constraint error](./errors#constraint-errors).
 
 **Not built yet**, since nothing in D1 prevents them. The code shows their likely shape, which may change when they're designed:
 

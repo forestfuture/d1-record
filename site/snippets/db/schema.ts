@@ -7,7 +7,19 @@ export const billingAccounts = {
   updatedBy: "string",
 } as const;
 
+/** products */
+export const products = {
+  id: { type: "string", null: false, default: () => crypto.randomUUID() },
+  name: { type: "string", null: false },
+  priceCents: { type: "integer", null: false, default: () => 0 },
+  available: { type: "integer", null: false, default: () => 1 },
+  internalNotes: "string",
+  createdAt: { type: "datetime", null: false },
+  updatedAt: { type: "datetime", null: false },
+} as const;
+
 /** Every table, by name, with its attributes and primary key. */
 export const tables = {
   billing_accounts: { attributes: billingAccounts, primaryKey: "id" },
+  products: { attributes: products, primaryKey: "id" },
 } as const;

@@ -14,39 +14,13 @@ npm install @forestfuture/d1-record
 
 A [Worker](https://developers.cloudflare.com/workers/) is a function that runs at Cloudflare's edge, and [D1](https://developers.cloudflare.com/d1/) is its SQLite database. d1-record sits between the two: you describe each table once as a **Model**, and your Worker reads and writes **records** instead of rows.
 
-### 1. Create the tables
+### 1. Bind a D1 database
 
-D1 tables are created with SQL migrations. Create the database and a first migration with [Wrangler](https://developers.cloudflare.com/workers/wrangler/), Cloudflare's command-line tool:
+Create a database with [Wrangler](https://developers.cloudflare.com/workers/wrangler/), Cloudflare's command-line tool, and add the snippet it prints to your Wrangler config. It gives your Worker a **binding** called `DB`:
 
 ```sh
 npx wrangler d1 create my-app-db
-npx wrangler d1 migrations create my-app-db create_users_and_posts
 ```
-
-Then write the tables in the migration file it creates (for example `migrations/0001_create_users_and_posts.sql`). Column names are snake_case:
-
-```sql
-CREATE TABLE users (
-  id TEXT PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
-  is_active INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT,
-  updated_at TEXT
-);
-
-CREATE TABLE posts (
-  id INTEGER PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users (id),
-  title TEXT NOT NULL,
-  published_at TEXT
-);
-```
-
-Apply it with `npx wrangler d1 migrations apply my-app-db --local` (or `--remote` for the deployed database).
-
-### 2. Connect the database to your Worker
-
-`wrangler d1 create` prints a snippet for your Wrangler config. It gives your Worker a **binding** called `DB`: a handle to the database that arrives with every request, as `env.DB`.
 
 ```jsonc
 // wrangler.jsonc
@@ -57,24 +31,30 @@ Apply it with `npx wrangler d1 migrations apply my-app-db --local` (or `--remote
 }
 ```
 
-### 3. Declare your models
+### 2. Generate your models
 
-Each Model describes one table: its attributes (camelCase in your code, snake_case in the table), its associations to other Models, and the rules for saving it.
+The generator writes each table's migration and its Model, as `rails generate model` does (it needs Node.js 22.13 or later):
+
+```sh
+npx d1-record g model User 'email:string!:unique' 'isActive:boolean!=true'
+npx d1-record g model Post user:references 'title:string!' publishedAt:datetime
+npx wrangler d1 migrations apply my-app-db --local
+```
+
+Along with the migrations, it writes `src/db/schema.ts` (every table's columns, generated from the migrations, like Rails' `schema.rb`) and your app's `ApplicationRecord`.
+
+### 3. Add behavior
+
+A Model's attributes come from the schema, so it declares only behavior: associations, scopes, validations and callbacks.
 
 ```ts
-// src/models.ts
-import { belongsTo, hasMany, Model } from "@forestfuture/d1-record";
+// src/models/user.ts
+import { hasMany } from "@forestfuture/d1-record";
+import { ApplicationRecord } from "./application-record";
+import { Post } from "./post";
 
-export class User extends Model({
-  id: { type: "string", null: false, default: () => crypto.randomUUID() },
-  email: { type: "string", null: false },
-  isActive: "boolean", // column: is_active
-  createdAt: "datetime", // set for you on create
-  updatedAt: "datetime", // set for you on every change
-}) {
-  static override binding = "DB"; // queries use env.DB, from your Wrangler config
-
-  posts = hasMany(Post, { dependent: "destroy" }); // foreign key: Post's userId
+export class User extends ApplicationRecord("users") {
+  posts = hasMany(Post, { dependent: "destroy" }); // posts.user_id points here
 
   static active = this.scope((q) => q.where({ isActive: true }));
 
@@ -85,17 +65,16 @@ export class User extends Model({
     });
   }
 }
+```
 
-export class Post extends Model({
-  id: { type: "integer", null: false },
-  userId: { type: "string", null: false },
-  title: { type: "string", null: false },
-  publishedAt: "datetime",
-}) {
-  static override binding = "DB";
+```ts
+// src/models/post.ts
+import { belongsTo } from "@forestfuture/d1-record";
+import { ApplicationRecord } from "./application-record";
+import { User } from "./user";
 
-  // Named author, not user, so the foreign key is given.
-  author = belongsTo(User, { foreignKey: "userId" });
+export class Post extends ApplicationRecord("posts") {
+  user = belongsTo(User);
 }
 ```
 
@@ -105,7 +84,7 @@ Queries start from the Model, and use its binding during the request: there's no
 
 ```ts
 // src/index.ts
-import { User } from "./models";
+import { User } from "./models/user";
 
 export default {
   async fetch(request: Request): Promise<Response> {
@@ -146,7 +125,7 @@ await batch([
 
 ## What's in it
 
-- **Models** declared once with `Model({...})`: typed attributes inferred from the declaration, camelCase attributes over snake_case columns, defaults (including app-generated keys), timestamps, JSON and dates converted both ways.
+- **Models** whose attributes come from your migrations (`class Post extends ApplicationRecord("posts")`), typed, with Rails-style generators; or declared with `Model({...})`: camelCase attributes over snake_case columns, defaults (including app-generated keys), timestamps, JSON and dates converted both ways.
 - **Queries**: `where`/`whereNot`/`or`/`merge`, comparisons (`gte`, `between`, …), ordering (`nulls: "last"`, `reorder`), pagination, `select`, `distinct`, `pluck`, `count`, `size`, `exists`, named scopes, and hand-written conditions only through the `sql` tagged template, so values are always bound.
 - **Persistence**: `save`/`create`/`update`/`destroy` with `…OrThrow` variants, validations (`presence`, `length`, `format`, `inclusion`, `numericality`, `uniqueness`), the full Rails callback lifecycle with `abort()`, dirty tracking (`changes`, `attributeWas`, `savedChangeTo`, …).
 - **Associations**: `belongsTo`, `hasMany`, `hasOne` with scopes, `dependent:` strategies, preloading with `includes` (one query per association, never N+1), caching until reload, autosave, and `build`/`create`/`set` through the association.

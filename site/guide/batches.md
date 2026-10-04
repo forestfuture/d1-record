@@ -1,5 +1,5 @@
 ---
-description: "Bulk writes (insert, insertAll, upsert, updateAll, deleteAll) and atomic db.batch of their to… forms and records' toSave()/toDestroy()."
+description: "Reference for bulk writes (insert, insertAll, upsert, updateAll, deleteAll) and atomic batch([...]) of their to… forms and records' toSave()/toDestroy()."
 ---
 
 # Batches and bulk writes
@@ -24,7 +24,7 @@ A Relation can write many rows at once, in a single SQL statement: `insert`, `in
 
 ## Atomic batches
 
-D1 can't keep a transaction open across `await`s, so there's no `transaction(async (tx) => …)` block. Instead, `db.batch([...])` sends a prepared list of writes that are all written, or none of them.
+D1 can't keep a transaction open across `await`s, so there's no `transaction(async (tx) => …)` block. Instead, `batch([...])` sends a prepared list of writes that are all written, or none of them. It runs on the database its entries were built on: the current one, for entries from a Model's statics and their records, or an explicit one's, as `db.batch([...])` does. Entries from two databases are refused (`IncompatibleRelation`).
 
 Each bulk write has a `to…` form that prepares it for a batch instead of running it: `toInsert`, `toInsertAll`, `toUpsert`, `toUpsertAll`, `toUpdateAll` and `toDeleteAll`. Each one returns a **statement**, sent only with its batch. This is the same pattern as records: `save()` runs, and `toSave()` hands the save to a batch.
 

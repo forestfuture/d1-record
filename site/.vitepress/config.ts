@@ -79,7 +79,8 @@ export default defineConfig({
       {
         text: "Background",
         items: [
-          { text: "Migrations", link: "/guide/migrations" },
+          { text: "Where a query's database comes from", link: "/guide/query-databases" },
+          { text: "The schema and ApplicationRecord", link: "/guide/schema" },
           { text: "D1's limits", link: "/guide/d1" },
         ],
       },
