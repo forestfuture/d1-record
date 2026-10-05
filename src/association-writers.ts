@@ -117,6 +117,8 @@ function buildOne(
 ): ModelBase {
   const { name, target, ownerAttribute, definition } = association;
   const key = owner[state].read(ownerAttribute);
+  // The foreign key is the owner's, written as a key (#94): one given with the attributes is
+  // ignored, as it always was, rather than cast and refused as an assigned value.
   const { [definition.foreignKey]: _given, ...rest } = attributes;
   const record = buildRecord(target, rest, owner[state].executor);
   record[state].writeKey(definition.foreignKey, key, name);

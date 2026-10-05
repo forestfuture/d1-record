@@ -33,7 +33,7 @@ The three lifecycle states of a **Record**: not yet written, backed by a row, or
 _Avoid_: Saved, deleted, frozen
 
 **Cast**:
-Reading a value given to an attribute (assigned, given to a bulk write, or used in a condition) as the attribute's type, accepting only what's unambiguous: `"false"` is `false` for a boolean, `"42"` is 42 for an integer. A value that can't be cast is **uncastable**: assigning one is an error, and a condition with one matches nothing.
+Reading a value given to an attribute as the attribute's type, by how it reaches the attribute (its use), accepting only what's unambiguous: `"false"` is `false` for a boolean, `"42"` is 42 for an integer. **Assigned** values (set, built, given to a bulk write or `permit`) are strict. **Condition** values also read a number as its digits for a string attribute. **Key** values (copied from another record through an association, or inherited from a Relation's conditions) are cast as condition values are. A value that can't be cast is **uncastable**: an assigned or key value is an error, and a condition with one matches nothing.
 _Avoid_: Coerce, convert (D1's storage form is conversion), parse
 
 **Filtered attribute**:
