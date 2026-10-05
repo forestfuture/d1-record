@@ -6,7 +6,7 @@ class Account extends Model({
   handle: "string",
   code: "string",
   plan: "string",
-  age: "integer",
+  age: "real", // onlyInteger is checked here: an integer attribute can't hold 30.5 (#81)
   score: "real",
   nickname: "string",
   isStaff: "boolean",
@@ -83,7 +83,7 @@ describe("validators", () => {
       "age greaterThanOrEqualTo: must be greater than or equal to 13",
     ]);
     expect(await errorsFor({ age: 30.5 })).toEqual(["age notAnInteger: must be an integer"]);
-    expect(await errorsFor({ age: "30" })).toEqual(["age notANumber: is not a number"]);
+    expect(await errorsFor({ age: null })).toEqual(["age notANumber: is not a number"]);
     expect(await errorsFor({ score: 0 })).toEqual(["score greaterThan: must be greater than 0"]);
     expect(await errorsFor({ score: 1.5 })).toEqual([
       "score lessThanOrEqualTo: must be less than or equal to 1",

@@ -14,6 +14,10 @@ class Sample extends Model({
   static tableName = "samples";
 }
 
+/** A value as the error shows it: JSON, with numbers as written (`NaN`, `Infinity`). */
+const shown = (value: unknown) =>
+  typeof value === "number" ? String(value) : JSON.stringify(value);
+
 /** Assigns a value no TypeScript type allows, as JSON, a form or a query string can (#81). */
 const untyped = (value: unknown) => value as never;
 
@@ -61,7 +65,7 @@ describe("values assigned to attributes are cast to the attribute's type (#81)",
       "%j is refused",
       (value: unknown) => {
         expect(() => samples().build({ enabled: untyped(value) })).toThrow(
-          new TypeError(`Sample: ${JSON.stringify(value)} isn't a boolean for "enabled"`),
+          new TypeError(`Sample: ${shown(value)} isn't a boolean for "enabled"`),
         );
       },
     );
@@ -89,5 +93,63 @@ describe("values assigned to attributes are cast to the attribute's type (#81)",
     test("null is still NULL", async () => {
       expect(await roundTrip("enabled", null)).toEqual([null, null]);
     });
+  });
+
+  describe("integer", () => {
+    test.each([
+      [42, 42],
+      [-7, -7],
+      [0, 0],
+      ["42", 42],
+      [" 42 ", 42],
+      ["-7", -7],
+      ["+3", 3],
+      [Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER],
+    ])("%j is %j", async (value, expected) => {
+      expect(await roundTrip("quantity", value)).toEqual([expected, expected]);
+    });
+
+    test.each([
+      [1.7],
+      ["12abc"],
+      ["1 OR 1=1"],
+      ["1e3"],
+      ["1.0"],
+      [""],
+      [" "],
+      [Number.NaN],
+      [Number.POSITIVE_INFINITY],
+      [Number.MAX_SAFE_INTEGER + 1],
+      [true],
+      [{}],
+    ])("%j is refused", (value: unknown) => {
+      expect(() => samples().build({ quantity: untyped(value) })).toThrow(
+        new TypeError(`Sample: ${shown(value)} isn't an integer for "quantity"`),
+      );
+    });
+  });
+
+  describe("real", () => {
+    test.each([
+      [0.5, 0.5],
+      [3, 3],
+      ["1.5", 1.5],
+      [" -2.25 ", -2.25],
+      ["-2e3", -2000],
+      [".5", 0.5],
+      ["5.", 5],
+      ["42", 42],
+    ])("%j is %j", async (value, expected) => {
+      expect(await roundTrip("ratio", value)).toEqual([expected, expected]);
+    });
+
+    test.each([["1.5x"], ["0x10"], [""], ["."], [Number.NaN], [Number.NEGATIVE_INFINITY], [false]])(
+      "%j is refused",
+      (value: unknown) => {
+        expect(() => samples().build({ ratio: untyped(value) })).toThrow(
+          new TypeError(`Sample: ${shown(value)} isn't a real for "ratio"`),
+        );
+      },
+    );
   });
 });
