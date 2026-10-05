@@ -7,7 +7,7 @@ import {
   expectTypeOf,
   test,
 } from "vite-plus/test";
-import { connect, Model, UnknownAttribute } from "../../src/index.ts";
+import { connect, Model, modelFor, UnknownAttribute } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
@@ -79,8 +79,20 @@ describe("Model.permit", () => {
 
   test("subclasses and an app's base class have it", () => {
     class Admin extends User {}
+    class Base extends Model.Base {}
+    const ApplicationRecord = modelFor(
+      { users: { attributes: { id: "integer", role: "string" }, primaryKey: "id" } } as const,
+      Base,
+    );
+    class Member extends ApplicationRecord("users") {}
 
     expect(Admin.permit({ role: "x", age: 3 }, "role")).toEqual({ role: "x" });
+    expect(Member.permit({ role: "x", id: 3 }, "role")).toEqual({ role: "x" });
+  });
+
+  test("a name that isn't an attribute is a compile error", () => {
+    // @ts-expect-error: "password" isn't an attribute of User
+    expect(() => User.permit({}, "password")).toThrow(UnknownAttribute);
   });
 
   test("reads FormData and URLSearchParams; a repeated key takes its last value, as in Rails", async () => {

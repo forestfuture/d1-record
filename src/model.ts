@@ -1,4 +1,3 @@
-import { permitted } from "./permit.ts";
 import { InvalidModel } from "./errors.ts";
 import type { Executor, QueryListener } from "./executor.ts";
 import {
@@ -9,6 +8,7 @@ import {
   type AttributeSpecs,
 } from "./metadata.ts";
 import { ancestors } from "./ancestors.ts";
+import { permitted } from "./permit.ts";
 import type { Errors } from "./errors-collection.ts";
 import { declare, seal } from "./declarations.ts";
 import {
@@ -144,6 +144,11 @@ declare const attributeTypes: unique symbol;
 /** An attribute's name on record type `R`. */
 type AttributeKey<R> = keyof AttributesOf<R> & string;
 
+/** What `permit` returns: the named attributes, each optional, as their types. */
+type Permitted<C extends ModelClass, K extends string> = Partial<
+  Pick<AttributesOf<InstanceType<C>>, K & keyof AttributesOf<InstanceType<C>>>
+>;
+
 /** `from`/`to` for the change checks: only matching when the value was, or became, this. */
 export interface ChangeOptions<V = unknown> {
   from?: V;
@@ -266,20 +271,21 @@ export class ModelBase {
     ): Promise<{ -readonly [I in keyof K]: AttributesOf<InstanceType<C>>[K[I]] }[]>;
   };
 
-  /** Declares a validation, e.g. `this.validates("email", { presence: true })` in `static {}`. */
   /**
-   * Only the named attributes of untrusted input (a JSON body), as Rails' `params.permit`:
+   * Only the named attributes of untrusted input (a JSON body, `FormData` or
+   * `URLSearchParams`), as Rails' `params.permit`:
    * `User.create(User.permit(await request.json(), "email", "name"))`. Every other key is
-   * dropped. Values are cast when they're assigned, so the result is typed as the attributes.
+   * dropped, and each value is cast as assigning it would be.
    */
   static permit<C extends ModelClass, K extends AttributeKey<InstanceType<C>>>(
     this: C,
     input: unknown,
     ...names: K[]
-  ): Partial<Pick<AttributesOf<InstanceType<C>>, K>> {
-    return permitted(this, input, names) as Partial<Pick<AttributesOf<InstanceType<C>>, K>>;
+  ): Permitted<C, K> {
+    return permitted(this, input, names) as Permitted<C, K>;
   }
 
+  /** Declares a validation, e.g. `this.validates("email", { presence: true })` in `static {}`. */
   static validates<C extends ModelClass>(
     this: C,
     attribute: keyof AttributesOf<InstanceType<C>> & string,
