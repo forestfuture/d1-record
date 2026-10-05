@@ -144,6 +144,40 @@ describe("values assigned to attributes are cast to the attribute's type (#81)",
     );
   });
 
+  describe("datetime", () => {
+    const at = (iso: string) => new Date(iso);
+
+    test.each([
+      [at("2026-01-02T03:04:05.678Z"), at("2026-01-02T03:04:05.678Z")],
+      ["2026-01-02", at("2026-01-02T00:00:00.000Z")],
+      ["2026-01-02T03:04:05Z", at("2026-01-02T03:04:05.000Z")],
+      ["2026-01-02T03:04:05.678Z", at("2026-01-02T03:04:05.678Z")],
+      ["2026-01-02T03:04Z", at("2026-01-02T03:04:00.000Z")],
+      ["2026-01-02T05:04:05+02:00", at("2026-01-02T03:04:05.000Z")],
+      ["2026-01-02 03:04:05-01:30", at("2026-01-02T04:34:05.000Z")],
+    ])("%j is %j", async (value, expected) => {
+      expect(await roundTrip("stamp", value)).toEqual([expected, expected]);
+    });
+
+    test.each([
+      [new Date(Number.NaN)],
+      ["2026-01-02T03:04:05"], // no offset: whose 3am?
+      ["2026-02-30"],
+      ["2026-13-01"],
+      ["02/01/2026"],
+      ["Jan 2, 2026"],
+      ["not a date"],
+      [""],
+      [1_767_225_600_000],
+      [true],
+    ])("%j is refused", (value: unknown) => {
+      const text = value instanceof Date ? "Invalid Date" : shown(value);
+      expect(() => samples().build({ stamp: untyped(value) })).toThrow(
+        new TypeError(`Sample: ${text} isn't a datetime for "stamp"`),
+      );
+    });
+  });
+
   describe("real", () => {
     test.each([
       [0.5, 0.5],

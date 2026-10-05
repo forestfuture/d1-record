@@ -13,7 +13,7 @@ const casts: Record<AttributeType, (value: unknown) => unknown> = {
   integer: castInteger,
   real: castReal,
   boolean: castBoolean,
-  datetime: (value) => value,
+  datetime: castDatetime,
   json: (value) => value,
 };
 
@@ -60,9 +60,34 @@ function castReal(value: unknown): unknown {
   return Number.isFinite(number) ? number : uncastable;
 }
 
+/** An ISO-8601 date: `2026-01-02`, read as midnight UTC. */
+const isoDate = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** An ISO-8601 date and time, with `Z` or an offset: a time without one is ambiguous. */
+const isoDateTime =
+  /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+/** A valid `Date`, or an ISO-8601 string (a date, or a date and time with its offset). */
+function castDatetime(value: unknown): unknown {
+  if (value instanceof Date) return isInvalidDate(value) ? uncastable : value;
+  if (typeof value !== "string") return uncastable;
+  if (isoDate.test(value)) {
+    const date = new Date(`${value}T00:00:00.000Z`);
+    // `Date` rolls 2026-02-30 over to March; a date that doesn't exist isn't one.
+    return !isInvalidDate(date) && date.toISOString().startsWith(value) ? date : uncastable;
+  }
+  if (!isoDateTime.test(value)) return uncastable;
+  const date = new Date(value.replace(" ", "T"));
+  return isInvalidDate(date) ? uncastable : date;
+}
+
+function isInvalidDate(value: unknown): boolean {
+  return value instanceof Date && Number.isNaN(value.getTime());
+}
+
 /** A value as it's shown in an error: JSON where it has one, and numbers as written. */
 function shown(value: unknown): string {
-  if (typeof value === "number") return String(value);
+  if (typeof value === "number" || isInvalidDate(value)) return String(value);
   try {
     return JSON.stringify(value) ?? String(value);
   } catch {
