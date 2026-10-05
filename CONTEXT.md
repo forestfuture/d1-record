@@ -32,6 +32,10 @@ _Avoid_: Row (outside the hydration boundary), object, instance
 The three lifecycle states of a **Record**: not yet written, backed by a row, or backed by a row that this instance deleted. A destroyed record is a read-only snapshot of the deleted row.
 _Avoid_: Saved, deleted, frozen
 
+**Cast**:
+Reading a value given to an attribute (assigned, given to a bulk write, or used in a condition) as the attribute's type, accepting only what's unambiguous: `"false"` is `false` for a boolean, `"42"` is 42 for an integer. A value that can't be cast is **uncastable**: assigning one is an error, and a condition with one matches nothing.
+_Avoid_: Coerce, convert (D1's storage form is conversion), parse
+
 **Snapshot**:
 A Record's attribute values as last loaded from or saved to D1. Changes are measured against it, and `reload()` replaces it.
 _Avoid_: Original, previous values, dirty state

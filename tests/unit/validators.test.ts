@@ -83,6 +83,8 @@ describe("validators", () => {
       "age greaterThanOrEqualTo: must be greater than or equal to 13",
     ]);
     expect(await errorsFor({ age: 30.5 })).toEqual(["age notAnInteger: must be an integer"]);
+    // A string never reaches numericality on a number attribute: it's cast, or refused, when
+    // it's assigned (#81). null is what's left that isn't a number.
     expect(await errorsFor({ age: null })).toEqual(["age notANumber: is not a number"]);
     expect(await errorsFor({ score: 0 })).toEqual(["score greaterThan: must be greater than 0"]);
     expect(await errorsFor({ score: 1.5 })).toEqual([
@@ -100,6 +102,8 @@ describe("validators", () => {
     expect(await errorsFor({ plan: null })).toEqual([
       "plan inclusion: is not included in the list",
     ]);
+    // A string never reaches numericality on a number attribute: it's cast, or refused, when
+    // it's assigned (#81). null is what's left that isn't a number.
     expect(await errorsFor({ age: null })).toEqual(["age notANumber: is not a number"]);
   });
 

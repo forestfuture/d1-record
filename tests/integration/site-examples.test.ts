@@ -21,6 +21,7 @@ import { join } from "node:path";
 import { runGenerate } from "../../cli/generate/command.ts";
 import { runSchema } from "../../cli/schema/command.ts";
 import { Post, User } from "../../site/snippets/getting-started/models.ts";
+import * as models from "../../site/snippets/guide/models.ts";
 import worker from "../../site/snippets/getting-started/src/index.ts";
 import { publishDraftsAndRemove } from "../../site/snippets/getting-started/src/publish.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
@@ -326,5 +327,27 @@ describe("Change a table", () => {
     expect(created.isPersisted()).toBe(true);
     expect(JSON.stringify(user)).not.toContain("bio");
     await dispose();
+  });
+});
+
+describe("Models: assigned values are cast", () => {
+  const body = (json: string) =>
+    new Request("https://example.com/", { method: "POST", body: json });
+  // Building and assigning send nothing, so no database is needed.
+  const user = () =>
+    connect({} as never)
+      .model(models.User)
+      .build({ email: "ada@example.com" });
+
+  test("the example's body is cast as its comments say", async () => {
+    const changed = await models.applyChanges(user(), body('{"isActive":"false","legacyId":"42"}'));
+
+    expect([changed.isActive, changed.legacyId]).toEqual([false, 42]);
+  });
+
+  test("and its other body throws the TypeError it shows", async () => {
+    await expect(models.applyChanges(user(), body('{"isActive":"no"}'))).rejects.toThrow(
+      new TypeError('User: "no" isn\'t a boolean for "isActive"'),
+    );
   });
 });
