@@ -302,6 +302,16 @@ describe("values assigned to attributes are cast to the attribute's type (#81)",
       expect(await samples().exists({ stamp: untyped("yesterday") })).toBe(false);
     });
 
+    // NOT of "matches nothing" is "matches everything", as in Rails 6.1+: excluding a record by
+    // an untrusted id that can't be cast excludes nothing.
+    test("whereNot with a value that can't be cast matches every row, NULLs included", async () => {
+      expect(
+        await samples()
+          .whereNot({ quantity: untyped("abc") })
+          .count(),
+      ).toBe(3);
+    });
+
     test("a list keeps the values that can be cast, and NULL", async () => {
       expect(
         await ids(
