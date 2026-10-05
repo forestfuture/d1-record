@@ -30,15 +30,22 @@ function castPermitted(model: ModelClass, name: string, value: unknown): unknown
 }
 
 /**
- * Each key of `input` and its value: an object's own keys only, so `__proto__` and inherited
- * keys never count, or a form's or query string's, where a repeated key takes its last value.
+ * Each key of `input` and its value: a plain object's own keys, so `__proto__` never counts,
+ * or a form's or query string's, where a repeated key takes its last value.
  */
 function givenValues(model: ModelClass, input: unknown): Map<string, unknown> {
   if (input instanceof FormData || input instanceof URLSearchParams) {
     return new Map<string, unknown>(input);
   }
-  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+  if (!isPlainObject(input)) {
     throw new TypeError(`${model.name}.permit() takes an object, FormData or URLSearchParams`);
   }
   return new Map(Object.entries(input));
+}
+
+/** An object literal or parsed JSON: not an array, a `Map`, a `Date` or a class's instance. */
+function isPlainObject(input: unknown): input is object {
+  if (typeof input !== "object" || input === null) return false;
+  const prototype: unknown = Object.getPrototypeOf(input);
+  return prototype === Object.prototype || prototype === null;
 }
