@@ -41,7 +41,7 @@ describe("Model.permit", () => {
 
     expect(User.permit(body, "email", "isActive")).toEqual({
       email: "ada@example.com",
-      isActive: "on",
+      isActive: true,
     });
   });
 
@@ -91,9 +91,9 @@ describe("Model.permit", () => {
 
     expect(User.permit(form, "email", "isActive")).toEqual({
       email: "ada@example.com",
-      isActive: "on",
+      isActive: true,
     });
-    expect(User.permit(query, "age")).toEqual({ age: "31" });
+    expect(User.permit(query, "age")).toEqual({ age: 31 });
 
     const user = await users().create(User.permit(form, "email", "isActive"));
     expect(user.isActive).toBe(true);
@@ -107,4 +107,32 @@ describe("Model.permit", () => {
       );
     },
   );
+
+  // Its type says the values are the attributes' types, so they are: reading the result before
+  // assigning it can't see "false" where TypeScript promises a boolean.
+  test("casts each value as assigning it would, so the result is what its type says", () => {
+    const permitted = User.permit(
+      JSON.parse('{"isActive":"false","age":" 30 "}'),
+      "isActive",
+      "age",
+    );
+
+    expect(permitted).toEqual({ isActive: false, age: 30 });
+    expect(permitted.isActive ? "grants" : "doesn't").toBe("doesn't");
+  });
+
+  test("a value that can't be cast is a TypeError, as when assigning it", () => {
+    expect(() => User.permit({ isActive: "no" }, "isActive")).toThrow(
+      new TypeError('User: "no" isn\'t a boolean for "isActive"'),
+    );
+  });
+
+  test("a file from a form is a TypeError: no attribute stores one", () => {
+    const form = new FormData();
+    form.append("email", new File(["x"], "x.txt"));
+
+    expect(() => User.permit(form, "email")).toThrow(
+      new TypeError('User: "email" is a file, and no attribute stores one'),
+    );
+  });
 });

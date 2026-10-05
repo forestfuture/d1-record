@@ -1,5 +1,5 @@
 ---
-description: "validates with presence, length, format, inclusion, numericality and uniqueness, their options, the errors collection, and custom validations."
+description: "validates with presence, length, format, inclusion, numericality and uniqueness, their options, the errors collection, and custom validations with errors.add."
 ---
 
 # Validations
@@ -50,3 +50,17 @@ Two requests can both check that an email is free, then both insert it. `uniquen
 For a rule the validators don't cover, add errors in a `beforeValidation` or `afterValidation` callback. A record with any errors is invalid:
 
 <<< @/snippets/guide/validations.ts#custom{ts}
+
+The callback can be async, so a rule can query D1 too.
+
+### Adding an error
+
+`record.errors.add(attribute, message, { type })` adds one error:
+
+- `attribute` is the attribute it belongs to, or `"base"` for the record as a whole. A `"base"` error reads without a prefix in `fullMessages()`.
+- `message` is the text after the attribute's name, so write it to follow "Ends at …".
+- `type` is optional and defaults to `"invalid"`. Give it a name of your own when code needs to tell this error apart from the others.
+
+<<< @/snippets/guide/validations.ts#add{ts}
+
+Each validation run (`isValid()`, `save()`, `saveOrThrow()`) starts by clearing `errors`, as in Rails. So an error added outside a callback is gone by the next save: add errors in a validation callback, where they're added on every run.

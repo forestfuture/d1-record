@@ -14,7 +14,7 @@ import {
   writersExample,
 } from "../../site/snippets/guide/associations.ts";
 import * as batches from "../../site/snippets/guide/batches.ts";
-import { Booking, errorsExample } from "../../site/snippets/guide/validations.ts";
+import { addExample, Booking, errorsExample } from "../../site/snippets/guide/validations.ts";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -193,6 +193,20 @@ describe("the guide's examples", () => {
 
     expect(await booking.isValid()).toBe(false);
     expect(booking.errors.fullMessages()).toEqual(["Ends at must be after the start"]);
+  });
+
+  test("Validations: errors added by hand read as the add example shows, and a validation run clears them", async () => {
+    const { booking, entries, messages, valid } = await withDatabase(connect(binding), () =>
+      addExample(),
+    );
+
+    expect(entries).toEqual([
+      { attribute: "endsAt", type: "afterStart", message: "must be after the start" },
+      { attribute: "base", type: "invalid", message: "The room is closed that day" },
+    ]);
+    expect(messages).toEqual(["Ends at must be after the start", "The room is closed that day"]);
+    expect(valid).toBe(true);
+    expect(booking.errors.isEmpty()).toBe(true);
   });
 
   test("Associations: reading, creating through, and deleting through an association", async () => {
