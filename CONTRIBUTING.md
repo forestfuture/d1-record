@@ -23,7 +23,7 @@ Every change goes through a pull request, maintainers' included:
 3. **Build it test-first**, one red → green slice per commit, on a branch named `<issue>-<slug>` (`79-contributing`).
 4. **Open the pull request** with `Closes #<issue>`. CI runs `vp check`, `vp test`, the package build and its checks, `vp run knip` and the docs build, and must pass to merge. On a first contribution, CI waits for a maintainer to approve the run.
 
-Pull requests are merged by rebasing, so each commit stays on `main`: make each one pass on its own, with a message saying what behavior it adds or changes. [`docs/agents/workflow.md`](docs/agents/workflow.md) has the process in full.
+Pull requests are merged by rebasing, so each commit stays on `main`: make each one pass on its own, with a message saying what behavior it adds or changes: a title of 50 characters or less, and the detail in the body ([commit messages](docs/agents/workflow.md#commit-messages)). [`docs/agents/workflow.md`](docs/agents/workflow.md) has the process in full.
 
 The rules that matter most:
 
@@ -33,7 +33,7 @@ The rules that matter most:
 - **Size limits mean splitting code.** `vp check` enforces complexity and function-length limits; split code that hits them rather than raising them.
 - **Rails is the precedent.** When a behavior is open, d1-record does what Rails' Active Record does, unless D1 or TypeScript gets in the way.
 
-The pre-commit hook runs `vp check --fix` on the staged files. Run `vp test` yourself before pushing.
+The pre-commit hook runs `vp check --fix` on the staged files, and the commit-msg hook checks the title's length. Run `vp test` yourself before pushing.
 
 ## Changesets
 
