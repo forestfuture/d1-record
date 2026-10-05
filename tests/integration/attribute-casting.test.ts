@@ -200,6 +200,17 @@ describe("values assigned to attributes are cast to the attribute's type (#81)",
         );
       },
     );
+
+    // A pattern that backtracks would take seconds on this, and a request body can hold it (ReDoS).
+    test("a long string that isn't a number is refused in linear time", () => {
+      for (const attribute of ["ratio", "quantity"] as const) {
+        const started = performance.now();
+        expect(() => samples().build({ [attribute]: untyped(`${"1".repeat(100_000)}x`) })).toThrow(
+          TypeError,
+        );
+        expect(performance.now() - started).toBeLessThan(100);
+      }
+    });
   });
 
   // Bulk writes have no record: they cast what they're given, as a record casts what it's assigned.

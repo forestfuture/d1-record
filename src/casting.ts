@@ -40,8 +40,12 @@ function castBoolean(value: unknown): unknown {
 /** A whole number, signed, with nothing else but spaces around it. */
 const integerText = /^\s*[+-]?\d+\s*$/;
 
-/** A decimal number, with an optional exponent (`1.5`, `-2e3`, `.5`), and spaces around it. */
-const realText = /^\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?\s*$/i;
+/**
+ * A decimal number, with an optional exponent (`1.5`, `-2e3`, `.5`), and spaces around it.
+ * Digits after the point only follow a point, so no run of digits can match two ways: an
+ * optional point between two runs of digits backtracks quadratically on a long string (ReDoS).
+ */
+const realText = /^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?\s*$/i;
 
 /** A number read from `text` when it matches `pattern`, else `uncastable`. */
 function numberFrom(value: unknown, pattern: RegExp): unknown {
