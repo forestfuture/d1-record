@@ -116,7 +116,7 @@ const prepared = new WeakSet<object>();
 export function prepareModel(model: ModelClass): void {
   verifyModel(model);
   if (prepared.has(model)) return;
-  for (const [name, definition] of Object.entries(associationsOf(model))) {
+  for (const [name, definition] of associationsOf(model)) {
     checkAssociation(model, name, definition);
     Object.defineProperty(model.prototype, name, accessorProperty(name, definition));
   }

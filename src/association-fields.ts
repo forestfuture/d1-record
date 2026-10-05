@@ -66,7 +66,7 @@ export function hasOne<C extends ModelClass>(
  * Each Model's associations, read once from a probe record's fields, with foreign keys given
  * or inferred. Module-level, but not request state (ADR-0003): derived only from the class.
  */
-const definitions = new WeakMap<object, Readonly<Record<string, AssociationDefinition>>>();
+const definitions = new WeakMap<object, ReadonlyMap<string, AssociationDefinition>>();
 
 /** One record of each Model, made once, to read its fields. Not request state (ADR-0003). */
 const probes = new WeakMap<object, ModelBase>();
@@ -88,8 +88,11 @@ export function declarationIn(value: unknown): AssociationDeclaration | undefine
     : undefined;
 }
 
-/** A Model's associations by name, in the order its fields declare them. */
-export function associationsOf(model: ModelClass): Readonly<Record<string, AssociationDefinition>> {
+/**
+ * A Model's associations by name, in the order its fields declare them. A Map, so a name every
+ * object inherits (`constructor`, from a URL's `?include=`) is never one (#84).
+ */
+export function associationsOf(model: ModelClass): ReadonlyMap<string, AssociationDefinition> {
   let found = definitions.get(model);
   if (found === undefined) {
     const probe = probeOf(model) as unknown as Record<string, unknown>;
@@ -98,7 +101,7 @@ export function associationsOf(model: ModelClass): Readonly<Record<string, Assoc
       const field = declarationIn(probe[name]);
       if (field !== undefined) declared[name] = field;
     }
-    found = withForeignKeys(declared, modelClassName(model));
+    found = new Map(Object.entries(withForeignKeys(declared, modelClassName(model))));
     definitions.set(model, found);
   }
   return found;
@@ -111,7 +114,7 @@ export function associationsOf(model: ModelClass): Readonly<Record<string, Assoc
  */
 export function newRecord<M extends ModelBase>(model: ModelClass<M>): M {
   const record = new model();
-  const names = Object.keys(associationsOf(model));
+  const names = [...associationsOf(model).keys()];
   for (let index = names.length - 1; index >= 0; index--) {
     delete (record as unknown as Record<string, unknown>)[names[index]!];
   }
