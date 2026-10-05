@@ -51,10 +51,11 @@ describe("Model.permit", () => {
 
   test("reads only the input's own keys, so __proto__ and inherited keys never get through", () => {
     const body = JSON.parse('{"__proto__":{"role":"admin"},"email":"ada@example.com"}');
-    const inherited = Object.create({ role: "admin" }) as object;
 
     expect(User.permit(body, "email", "role")).toEqual({ email: "ada@example.com" });
-    expect(User.permit(inherited, "role")).toEqual({});
+    expect(User.permit(Object.assign(Object.create(null), { role: "x" }), "role")).toEqual({
+      role: "x",
+    });
     expect(Object.getPrototypeOf(User.permit(body, "email"))).toBe(Object.prototype);
   });
 
@@ -99,14 +100,21 @@ describe("Model.permit", () => {
     expect(user.isActive).toBe(true);
   });
 
-  test.each([[null], [undefined], ["email=x"], [42], [["email"]]])(
-    "%j isn't input it can read: TypeError",
-    (input: unknown) => {
-      expect(() => User.permit(input, "email")).toThrow(
-        new TypeError("User.permit() takes an object, FormData or URLSearchParams"),
-      );
-    },
-  );
+  test.each([
+    [null],
+    [undefined],
+    ["email=x"],
+    [42],
+    [["email"]],
+    [new Map([["email", "x"]])],
+    [new Headers({ email: "x" })],
+    [new Date(0)],
+    [Object.create({ role: "admin" })], // its keys are inherited
+  ])("%j isn't input it can read: TypeError", (input: unknown) => {
+    expect(() => User.permit(input, "email")).toThrow(
+      new TypeError("User.permit() takes an object, FormData or URLSearchParams"),
+    );
+  });
 
   // Its type says the values are the attributes' types, so they are: reading the result before
   // assigning it can't see "false" where TypeScript promises a boolean.
