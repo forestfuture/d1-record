@@ -9,7 +9,7 @@ import {
 } from "./metadata.ts";
 import { ancestors } from "./ancestors.ts";
 import { permitted } from "./permit.ts";
-import { defaultFilterAttributes } from "./filtering.ts";
+import { defaultFilterAttributes, type FilterAttribute } from "./filtering.ts";
 import type { Errors } from "./errors-collection.ts";
 import { declare, seal } from "./declarations.ts";
 import {
@@ -183,7 +183,7 @@ export class ModelBase {
    * `filter_attributes`: an attribute whose snake_case name holds a string entry (in any
    * case), or matches a RegExp. Rails' defaults; replace them on the app's base class (#83).
    */
-  static filterAttributes: readonly (string | RegExp)[] = defaultFilterAttributes;
+  static filterAttributes: readonly FilterAttribute[] = defaultFilterAttributes;
 
   /**
    * Declares a scope, as Rails' `scope :active, -> { … }`: `static active = this.scope((q) =>

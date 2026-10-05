@@ -43,6 +43,7 @@ export {
   UnknownAttribute,
 } from "./errors.ts";
 export type { QueryEvent, QueryListener } from "./executor.ts";
+export type { FilterAttribute } from "./filtering.ts";
 export { Errors, type ValidationError } from "./errors-collection.ts";
 export { Model, type ScopeStatic } from "./model.ts";
 export { withDatabase } from "./current-database.ts";
