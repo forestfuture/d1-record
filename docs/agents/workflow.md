@@ -26,7 +26,22 @@ Follow the `tdd` skill, one vertical slice at a time:
 
 1. Write **one** failing test. Run it and confirm it fails for the expected reason (red).
 2. Write the least code that makes it pass (green).
-3. Run `vp check` (format, lint, types, complexity limits) and `vp test`. When a slice passes, **commit it** to `main` (repo convention), with a message saying what behavior was added.
+3. Run `vp check` (format, lint, types, complexity limits) and `vp test`. When a slice passes, **commit it** to `main` (repo convention), with a message saying what behavior was added (see [Commit messages](#commit-messages)).
+
+### Commit messages
+
+- **Title**: 50 characters or less (the `commit-msg` hook warns past 50 and rejects past 72). Imperative, capitalized, no trailing period, no `feat:`-style prefixes. End with the issue number: `(#82)`.
+- **Body**, after a blank line: what behavior changed and why, in a few short lines or bullets wrapped at 72. The detail goes here, not in the title.
+
+```text
+Tidy permit's docs, types and tests (#82)
+
+- validates gets its doc comment back
+- permit's comment mentions forms and query strings
+- One Permitted type replaces the variants
+- Tests: a misspelled name is a compile error, and
+  a modelFor base class has permit
+```
 
 Rules that matter here:
 
