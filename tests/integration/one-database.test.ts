@@ -7,6 +7,7 @@ import {
   IncompatibleRelation,
   Model,
   type QueryEvent,
+  type ScopeStatic,
   withDatabase,
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
@@ -24,6 +25,8 @@ class Post extends Model({
   static tableName = "posts";
   static override binding = "DB";
   static isPublished = this.scope((q) => q.where({ published: true }));
+  // A scope that starts again from the Model's statics: on the current database.
+  static everyPublished: ScopeStatic<[]> = this.scope(() => Post.where({ published: true }));
 
   author = belongsTo(User, { foreignKey: "userId" });
 }
@@ -159,6 +162,26 @@ describe("one database", () => {
       });
 
       expect((await connect(one).model(Post).find(41)).userId).toBe(5);
+    });
+  });
+
+  describe("the rest of the levels", () => {
+    test("a scope returning a static Relation works on a loaded record's association", async () => {
+      const titles = await withDatabase(connect(one), async () =>
+        (await User.find(1)).posts().everyPublished().pluck("title"),
+      );
+
+      expect(titles).toEqual(["Out"]);
+    });
+
+    test("an error names a binding's database as such", async () => {
+      const merged = Post.where({ published: true }).merge(connect(two).model(Post).where({}));
+
+      await expect(merged.toArray()).rejects.toThrow(
+        new IncompatibleRelation(
+          "merge() needs its relations on one database; these are on the DB binding's database and a connect() database",
+        ),
+      );
     });
   });
 });

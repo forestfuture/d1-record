@@ -79,10 +79,11 @@ function notAWorker(error: unknown): boolean {
 /** One Database per D1 binding, for queries outside `withDatabase`: it holds nothing per-request. */
 const defaults = new WeakMap<D1Database, Database>();
 
-function defaultDatabase(binding: D1Database): Database {
+function defaultDatabase(binding: D1Database, name: string): Database {
   let db = defaults.get(binding);
   if (db === undefined) {
     db = connect(binding);
+    db[databaseParts].executor.origin = `the ${name} binding's database`;
     defaults.set(binding, db);
   }
   return db;
@@ -122,7 +123,9 @@ async function databaseFor(name: string | undefined): Promise<Database> {
       `The binding ${name} isn't in this Worker's env; check d1_databases in your Wrangler config`,
     );
   }
-  return requested.find((db) => db[databaseParts].binding === binding) ?? defaultDatabase(binding);
+  return (
+    requested.find((db) => db[databaseParts].binding === binding) ?? defaultDatabase(binding, name)
+  );
 }
 
 /**
