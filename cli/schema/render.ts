@@ -92,7 +92,7 @@ ${entries}
  */
 export function renderBase(className: string, schemaImport: string, binding: string): string {
   return `import { Model, modelFor } from "@forestfuture/d1-record";
-import { tables } from "${schemaImport}";
+import { tables } from ${JSON.stringify(schemaImport)};
 
 /**
  * Methods, callbacks and scopes written here are shared by every Model, as in Rails'
@@ -100,7 +100,7 @@ import { tables } from "${schemaImport}";
  */
 class Base extends Model.Base {
   // The D1 binding Models query (Product.find(id)), from your Wrangler config's d1_databases.
-  static override binding = "${binding}";
+  static override binding = ${JSON.stringify(binding)};
 
   // A method every record has:
   // label() {
