@@ -1,4 +1,4 @@
-import { castAssigned } from "./casting.ts";
+import { castAssigned, castKey } from "./casting.ts";
 import type { Assignment } from "./compiler.ts";
 import { readValue, writeValue } from "./conversion.ts";
 import { Errors } from "./errors-collection.ts";
@@ -147,6 +147,16 @@ export class RecordState {
     this.#assigned.add(name);
   }
 
+  /**
+   * Writes a key copied from another record through `association`, cast as a condition's value
+   * is (#94): an integer key into a text foreign key becomes its digits.
+   */
+  writeKey(name: string, value: unknown, association: string): void {
+    this.#requireNotDestroyed("be changed");
+    this.#values[name] = castKey(this.#model, name, value, association);
+    this.#assigned.add(name);
+  }
+
   /** Assigns several attributes; unknown names throw `UnknownAttribute`. */
   assign(attributes: Record<string, unknown>): void {
     for (const [name, value] of Object.entries(attributes)) {
@@ -184,7 +194,7 @@ export class RecordState {
 
   /** Points this record at `value` through `attribute` (a foreign key), keeping it loaded. */
   pointAt(name: string, attribute: string, key: unknown, value: unknown): void {
-    this.write(attribute, key);
+    this.writeKey(attribute, key, name);
     // The key as the foreign key stores it (cast to its type), so the cache matches it.
     this.cacheAssociation(name, { attribute, key: this.#values[attribute], value });
   }

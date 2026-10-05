@@ -117,11 +117,9 @@ function buildOne(
 ): ModelBase {
   const { name, target, ownerAttribute, definition } = association;
   const key = owner[state].read(ownerAttribute);
-  const record = buildRecord(
-    target,
-    { ...attributes, [definition.foreignKey]: key },
-    owner[state].executor,
-  );
+  const { [definition.foreignKey]: _given, ...rest } = attributes;
+  const record = buildRecord(target, rest, owner[state].executor);
+  record[state].writeKey(definition.foreignKey, key, name);
   owner[state].cacheAssociation(name, { attribute: ownerAttribute, key, value: record });
   return record;
 }

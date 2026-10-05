@@ -1,4 +1,4 @@
-import { castValue, isInvalidDate, uncastable } from "./conversion.ts";
+import { castCondition, castValue, isInvalidDate, uncastable } from "./conversion.ts";
 import { FILTERED, isFiltered } from "./filtering.ts";
 import { attributeOf } from "./metadata.ts";
 import type { ModelClass } from "./model.ts";
@@ -32,12 +32,50 @@ function textOf(value: unknown): string {
 export function castAssigned(model: ModelClass, attribute: string, value: unknown): unknown {
   const { type } = attributeOf(model, attribute);
   const cast = castValue(type, value);
-  if (cast === uncastable) {
-    const article = /^[aeiou]/.test(type) ? "an" : "a";
-    const text = isFiltered(model, attribute) ? FILTERED : shown(value);
-    throw new TypeError(`${model.name}: ${text} isn't ${article} ${type} for "${attribute}"`);
-  }
+  if (cast === uncastable) throw uncastableError(model, attribute, value);
   return cast;
+}
+
+/**
+ * `value` cast to `attribute`'s type as a condition's is (#94): for a key copied from another
+ * record (an association's foreign key), or a value a record inherits from a condition, so a
+ * number becomes its digits for a string attribute. One that still can't be cast throws
+ * `TypeError`, naming the association it came through, if any.
+ */
+export function castKey(
+  model: ModelClass,
+  attribute: string,
+  value: unknown,
+  association?: string,
+): unknown {
+  const { type } = attributeOf(model, attribute);
+  const cast = castCondition(type, value);
+  if (cast === uncastable) throw uncastableError(model, attribute, value, association);
+  return cast;
+}
+
+/** The values a record built from a Relation inherits from its conditions, cast as keys are. */
+export function castInherited(
+  model: ModelClass,
+  inherited: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(inherited).map(([name, value]) => [name, castKey(model, name, value)]),
+  );
+}
+
+/** "Sample: "no" isn't a boolean for "enabled"", the value hidden for a filtered attribute. */
+function uncastableError(
+  model: ModelClass,
+  attribute: string,
+  value: unknown,
+  association?: string,
+): TypeError {
+  const { type } = attributeOf(model, attribute);
+  const article = /^[aeiou]/.test(type) ? "an" : "a";
+  const text = isFiltered(model, attribute) ? FILTERED : shown(value);
+  const from = association === undefined ? "" : `, the key of ${association}`;
+  return new TypeError(`${model.name}: ${text} isn't ${article} ${type} for "${attribute}"${from}`);
 }
 
 /** Attribute values given to a bulk write (`insert`, `updateAll`, …), each cast as it's assigned. */

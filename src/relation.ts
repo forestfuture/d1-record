@@ -1,6 +1,6 @@
 import { databaseNow, jointly } from "./executor.ts";
 import { shownKey } from "./filtering.ts";
-import { castGiven } from "./casting.ts";
+import { castGiven, castInherited } from "./casting.ts";
 import {
   compileColumns,
   compileCount,
@@ -341,7 +341,7 @@ export class Relation<M extends ModelBase, S = {}> {
   }
 
   #build(attributes: Partial<AttributesOf<M>>): M {
-    const inherited = inheritedAttributes(this.#query.conditions);
+    const inherited = castInherited(this.#model, inheritedAttributes(this.#query.conditions));
     return buildRecord(this.#model, { ...inherited, ...attributes }, this.#executor);
   }
 
@@ -428,7 +428,7 @@ export class Relation<M extends ModelBase, S = {}> {
   ): Statement {
     this.#requireSavedOwner();
     this.#collection?.invalidate();
-    const inherited = inheritedAttributes(this.#query.conditions);
+    const inherited = castInherited(this.#model, inheritedAttributes(this.#query.conditions));
     const withInherited = rows.map((row) => ({ ...inherited, ...row }));
     return insertStatement(this.#executor, this.#model, withInherited, { conflict, method });
   }
