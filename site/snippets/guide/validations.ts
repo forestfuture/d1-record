@@ -42,6 +42,25 @@ export class Booking extends Model({
 }
 // #endregion custom
 
+export async function addExample() {
+  const booking = Booking.build({
+    startsAt: new Date("2026-05-01T10:00:00Z"),
+    endsAt: new Date("2026-05-01T12:00:00Z"),
+  });
+  // #region add
+  booking.errors.add("endsAt", "must be after the start", { type: "afterStart" });
+  booking.errors.add("base", "The room is closed that day");
+
+  const entries = booking.errors.toArray();
+  // [{ attribute: "endsAt", type: "afterStart", message: "must be after the start" },
+  //  { attribute: "base", type: "invalid", message: "The room is closed that day" }]
+  const messages = booking.errors.fullMessages(); // ["Ends at must be after the start", "The room is closed that day"]
+
+  const valid = await booking.isValid(); // true: each validation run starts by clearing errors
+  // #endregion add
+  return { booking, entries, messages, valid };
+}
+
 export async function errorsExample() {
   // #region errors
   const account = Account.build({ email: "", handle: "a!" });
