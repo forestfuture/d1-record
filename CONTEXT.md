@@ -36,6 +36,10 @@ _Avoid_: Saved, deleted, frozen
 Reading a value given to an attribute (assigned, given to a bulk write, or used in a condition) as the attribute's type, accepting only what's unambiguous: `"false"` is `false` for a boolean, `"42"` is 42 for an integer. A value that can't be cast is **uncastable**: assigning one is an error, and a condition with one matches nothing.
 _Avoid_: Coerce, convert (D1's storage form is conversion), parse
 
+**Filtered attribute**:
+An attribute whose values listeners and errors show as `"[FILTERED]"` (passwords, tokens, keys, emails), named by the Model's `filterAttributes`. D1 still gets the real values.
+_Avoid_: Redacted, masked, sensitive field; and "filter" alone, which means a **Scope**'s conditions
+
 **Snapshot**:
 A Record's attribute values as last loaded from or saved to D1. Changes are measured against it, and `reload()` replaces it.
 _Avoid_: Original, previous values, dirty state
