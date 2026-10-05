@@ -10,6 +10,15 @@ class User extends Model({
   static tableName = "users";
 }
 
+// A secret as the primary key: sessions or API keys looked up by their token.
+class Session extends Model({
+  token: { type: "string", null: false, column: "id" },
+  label: { type: "string", null: false },
+}) {
+  static tableName = "api_keys";
+  static primaryKey = "token";
+}
+
 // What onQuery listeners see of a filtered attribute's values: "[FILTERED]", as in Rails' logs.
 // D1 still gets the real values (#83).
 describe("filterAttributes", () => {
@@ -24,7 +33,10 @@ describe("filterAttributes", () => {
   });
   afterAll(() => dispose());
   beforeEach(async () => {
-    await binding.prepare("DELETE FROM users").run();
+    await binding.batch([
+      binding.prepare("DELETE FROM users"),
+      binding.prepare("DELETE FROM api_keys"),
+    ]);
     events = [];
   });
 
@@ -87,6 +99,14 @@ describe("filterAttributes", () => {
       .toArray();
 
     expect(params()).toEqual([["ada@example.com"]]);
+  });
+
+  test("a filtered primary key is hidden when a record is updated or destroyed", async () => {
+    const session = await db().model(Session).create({ token: "s3cr3t", label: "a" });
+    await session.update({ label: "b" });
+    await session.destroy();
+
+    expect(params()).toEqual([["[FILTERED]", "a"], ["b", "[FILTERED]"], ["[FILTERED]"]]);
   });
 
   test("a cast error shows a filtered attribute's value as [FILTERED]", () => {

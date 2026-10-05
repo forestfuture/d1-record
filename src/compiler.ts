@@ -1,4 +1,4 @@
-import { FILTERED, Filtered, filterBound, isFiltered } from "./filtering.ts";
+import { type Bind, binderFor, FILTERED, Filtered, isFiltered } from "./filtering.ts";
 import { attributeOf, ignoresColumns, type AttributeDefinition } from "./metadata.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { Comparison, comparisonParts, type Operator } from "./comparisons.ts";
@@ -60,13 +60,10 @@ function compileCondition(
   }
   if (condition instanceof SafeSql) return `(${compileFragment(condition, model, params)})`;
   const parts = Object.entries(condition).map(([name, value]) => {
-    const start = params.length;
-    const sql =
-      value instanceof Comparison
-        ? compileComparison(attributeOf(model, name), value, params)
-        : compileEquality(attributeOf(model, name), value, params);
-    filterBound(params, start, model, name);
-    return sql;
+    const bind = binderFor(params, model, name);
+    return value instanceof Comparison
+      ? compileComparison(attributeOf(model, name), value, bind)
+      : compileEquality(attributeOf(model, name), value, bind);
   });
   return `(${parts.join(" AND ")})`;
 }
@@ -90,12 +87,13 @@ export function compileInsert(
   const definitions = assignments.map(([name]) => attributeOf(model, name));
   const columns = definitions.map(({ column }) => quoteIdentifier(column)).join(", ");
   const placeholders = assignments.map(() => "?").join(", ");
+  const params: unknown[] = [];
+  assignments.forEach(([name, value], index) =>
+    binderFor(params, model, name)(writeValue(definitions[index]!.type, value)),
+  );
   return {
     sql: `INSERT INTO ${table} (${columns}) VALUES (${placeholders}) RETURNING ${allColumns(model)}`,
-    params: assignments.map(([name, value], index) => {
-      const bound = writeValue(definitions[index]!.type, value);
-      return isFiltered(model, name) ? new Filtered(bound) : bound;
-    }),
+    params,
     model,
   };
 }
@@ -176,7 +174,7 @@ export function compileUpdate(
   const params: unknown[] = [];
   const sets = compileSets(model, assignments, params);
   const primaryKey = attributeOf(model, model.primaryKey);
-  params.push(storedKey);
+  binderFor(params, model, model.primaryKey)(storedKey);
   return {
     sql: `UPDATE ${quoteIdentifier(model.tableName)} SET ${sets} WHERE ${quoteIdentifier(primaryKey.column)} = ?`,
     params,
@@ -194,9 +192,7 @@ function compileSets(
   return changes
     .map(([name, value]) => {
       const { column, type } = attributeOf(model, name);
-      const start = params.length;
-      params.push(writeValue(type, value));
-      filterBound(params, start, model, name);
+      binderFor(params, model, name)(writeValue(type, value));
       return `${quoteIdentifier(column)} = ?`;
     })
     .join(", ");
@@ -239,9 +235,11 @@ export function compileDeleteAll(query: QueryDescription): CompiledSql {
 /** `DELETE … WHERE <primary key> = ?`, with the key as stored in D1. */
 export function compileDelete(model: ModelClass<ModelBase>, storedKey: unknown): CompiledSql {
   const { column } = attributeOf(model, model.primaryKey);
+  const params: unknown[] = [];
+  binderFor(params, model, model.primaryKey)(storedKey);
   return {
     sql: `DELETE FROM ${quoteIdentifier(model.tableName)} WHERE ${quoteIdentifier(column)} = ?`,
-    params: [storedKey],
+    params,
     model,
   };
 }
@@ -282,12 +280,12 @@ export function compileCount(query: QueryDescription, attribute?: string): Compi
 function compileComparison(
   attribute: AttributeDefinition,
   comparison: Comparison,
-  params: unknown[],
+  bind: Bind,
 ): string {
   const { operator, values } = comparison[comparisonParts];
   const cast = values.map((value) => castCondition(attribute.type, value));
   if (cast.includes(uncastable)) return NOTHING;
-  params.push(...cast.map((value) => writeValue(attribute.type, value)));
+  bind(...cast.map((value) => writeValue(attribute.type, value)));
   return COMPARISON_SQL[operator](quoteIdentifier(attribute.column));
 }
 
@@ -308,17 +306,13 @@ const COMPARISON_SQL: Record<Operator, (column: string) => string> = {
 };
 
 /** `attr = value`, with NULL and arrays (IN) handled the way the contract specifies. */
-function compileEquality(
-  attribute: AttributeDefinition,
-  value: unknown,
-  params: unknown[],
-): string {
+function compileEquality(attribute: AttributeDefinition, value: unknown, bind: Bind): string {
   const column = quoteIdentifier(attribute.column);
   if (value === null) return `${column} IS NULL`;
   if (!Array.isArray(value)) {
     const cast = castCondition(attribute.type, value);
     if (cast === uncastable) return NOTHING;
-    params.push(writeValue(attribute.type, cast));
+    bind(writeValue(attribute.type, cast));
     return `${column} = ?`;
   }
   const present = value
@@ -328,7 +322,7 @@ function compileEquality(
   const parts: string[] = [];
   if (present.length > 0) {
     // The whole list is one JSON value, so any length fits D1's 100 bound parameters.
-    params.push(JSON.stringify(present.map((item) => writeValue(attribute.type, item))));
+    bind(JSON.stringify(present.map((item) => writeValue(attribute.type, item))));
     parts.push(`${column} IN (SELECT value FROM json_each(?))`);
   }
   if (value.includes(null)) parts.push(`${column} IS NULL`);

@@ -47,17 +47,15 @@ export class Filtered {
   }
 }
 
-/** Marks the values bound since `start` as `attribute`'s, hidden if it's filtered. */
-export function filterBound(
-  params: unknown[],
-  start: number,
-  model: ModelClass,
-  attribute: string,
-): void {
-  if (!isFiltered(model, attribute)) return;
-  for (let index = start; index < params.length; index++) {
-    params[index] = new Filtered(params[index]);
-  }
+/** Binds values as one attribute's: hidden from listeners when the attribute is filtered. */
+export type Bind = (...values: unknown[]) => void;
+
+/** A `Bind` that appends to `params` as `attribute`'s values. */
+export function binderFor(params: unknown[], model: ModelClass, attribute: string): Bind {
+  const filtered = isFiltered(model, attribute);
+  return (...values) => {
+    for (const value of values) params.push(filtered ? new Filtered(value) : value);
+  };
 }
 
 /** The value D1 binds. */
