@@ -136,6 +136,36 @@ describe("filterAttributes", () => {
     );
   });
 
+  test("upsert and a limited updateAll are hidden too", async () => {
+    await db().model(User).upsert({ id: 1, email: "ada@example.com" }, { uniqueBy: "id" });
+    await db()
+      .model(User)
+      .where({ email: "ada@example.com" })
+      .limit(1)
+      .updateAll({ email: "x@example.com" });
+
+    // upsert binds its rows as one JSON value, as insertAll does.
+    expect(params()).toEqual([
+      [JSON.stringify([[1, "[FILTERED]"]])],
+      ["[FILTERED]", "[FILTERED]", 1],
+    ]);
+  });
+
+  test("a cast error from a bulk write hides a filtered value too", () => {
+    const error = new TypeError('User: [FILTERED] isn\'t a string for "email"');
+
+    expect(() =>
+      db()
+        .model(User)
+        .toInsert({ id: 1, email: 42 as never }),
+    ).toThrow(error);
+    expect(() =>
+      db()
+        .model(User)
+        .toUpdateAll({ email: 42 as never }),
+    ).toThrow(error);
+  });
+
   test("a cast error shows a filtered attribute's value as [FILTERED]", () => {
     expect(() =>
       db()
