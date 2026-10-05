@@ -61,27 +61,23 @@ To see a request's database time in the browser's developer tools, add it up and
 
 ## Keep secrets out of the logs
 
-Listeners see the values of passwords, tokens, keys and emails as `"[FILTERED]"`, as Rails' logs do: D1 still gets the real values. An attribute is filtered when its snake_case name contains one of `static filterAttributes`. That's Rails' default list on `Model.Base` (`passw`, `email`, `secret`, `token`, `_key`, `crypt`, `salt`, `certificate`, `otp`, `ssn`, `cvv`, `cvc`), so `passwordDigest`, `resetToken`, `apiKey` and `email` are filtered without any setup. A cast error shows a filtered value as `[FILTERED]` too.
+Listeners see the values of passwords, tokens, keys and emails as `"[FILTERED]"`, with no setup: D1 still gets the real values. [Models](./models#filtered-attributes) lists which attributes are filtered by default, and everywhere their values are hidden.
 
-Change the list on your app's base class, in `application-record.ts`. It replaces the defaults, so spread them in to add to them, or leave one out:
+### Add your own attributes
 
-```ts
-import { Model } from "@forestfuture/d1-record";
+Name them on your app's base class. Setting `filterAttributes` replaces the defaults, so spread them in:
 
-class Base extends Model.Base {
-  // Rails' defaults, plus an IBAN and a date of birth:
-  static override filterAttributes = [...Model.Base.filterAttributes, "iban", /^dateOfBirth$/];
-}
+<<< @/snippets/guide/filtering.ts#add{ts}
 
-class DebuggingBase extends Model.Base {
-  // Rails' defaults without "email", to see emails while debugging:
-  static override filterAttributes = Model.Base.filterAttributes.filter(
-    (entry) => entry !== "email",
-  );
-}
-```
+A string matches any attribute whose snake_case name contains it, so `"iban"` also covers `ibanNumber`. Use a RegExp to match one name exactly.
 
-A value inside an `sql` fragment has no attribute, so it's logged as given: keep secrets out of fragments, or leave `params` out of what you log. A primary key that's filtered (a session's token, say) is hidden in `RecordNotFound` messages too.
+### See a filtered attribute while debugging
+
+Leave it out of the list, in development only: `static override filterAttributes = Model.Base.filterAttributes.filter((entry) => entry !== "email")`.
+
+### Keep secrets out of `sql` fragments
+
+A value inside an `sql` fragment has no attribute, so it's logged as given. Compare secrets through a condition (`where({ token })`), which is filtered, or leave `params` out of what you log.
 
 ::: tip Compared with Rails
 Rails filters by its app-wide `filter_parameters`, against parameter and column names. d1-record keeps the list on the Model (`static filterAttributes`, inherited from your base class), and matches each entry against the attribute's snake_case name, so `"_key"` filters `apiKey`. A RegExp may match either form. It also hides filtered values in cast errors and in `RecordNotFound`, which Rails' filter doesn't cover.
