@@ -14,7 +14,7 @@ The plainest way is to destructure them:
 
 <<< @/snippets/guide/untrusted-input.ts#destructure{ts}
 
-Or let the Model pick them out with `permit`, as Rails' `params.permit` does. It keeps the attributes you name, drops every other key, and its result goes straight into `build`, `create` or `update`:
+Or let the Model pick them out with `permit`, as Rails' `params.permit` does. It keeps the attributes you name, drops every other key, and casts each value as assigning it would, so its result is what its type says. It goes straight into `build`, `create` or `update`:
 
 <<< @/snippets/guide/untrusted-input.ts#permit-json{ts}
 
@@ -22,7 +22,11 @@ Or let the Model pick them out with `permit`, as Rails' `params.permit` does. It
 
 <<< @/snippets/guide/untrusted-input.ts#permit-form{ts}
 
-`permit` only reads the input's own keys, so `__proto__` and other inherited keys never get through. A name that isn't an attribute throws `UnknownAttribute`, and input that isn't an object, a form or a query string throws `TypeError`.
+`permit` reads a plain object's own keys only, so `__proto__` never gets through. A name that isn't an attribute is a compile error, and throws `UnknownAttribute`. A value that can't be cast, a file from a form, and input that isn't a plain object, a form or a query string each throw `TypeError`.
+
+::: tip Beyond Rails
+Rails' `permit` filters keys, and keeps only scalar values. d1-record's knows the Model, so it also checks the names you give it, and casts each value to its attribute's type: `{"isAdmin": "false"}` gives `isAdmin: false`, never a truthy string that TypeScript calls a boolean.
+:::
 
 ## Or validate with a schema
 

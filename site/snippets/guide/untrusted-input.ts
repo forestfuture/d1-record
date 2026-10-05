@@ -48,7 +48,7 @@ export async function accept(request: Request): Promise<Response> {
   const { token } = await request.json<{ token: string }>();
   // {"token": null} would find an invitation that's already been accepted: its token is NULL.
   if (typeof token !== "string" || token === "") {
-    return new Response("That invitation isn't valid", { status: 400 });
+    return new Response("Send the invitation's token", { status: 400 });
   }
   const invitation = await Invitation.findBy({ token });
   if (invitation === null) return new Response("That invitation isn't valid", { status: 404 });
