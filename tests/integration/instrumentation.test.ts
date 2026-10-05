@@ -4,6 +4,8 @@ import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({ id: "integer", email: "string" }) {
   static tableName = "users";
+  // These tests read bound values, so nothing is filtered (#83).
+  static override filterAttributes = [];
 }
 
 class Missing extends Model({ id: "integer" }) {

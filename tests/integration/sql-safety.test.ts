@@ -8,6 +8,8 @@ class User extends Model({
   createdAt: "datetime",
 }) {
   static tableName = "users";
+  // These tests read bound values, so nothing is filtered (#83).
+  static override filterAttributes = [];
 }
 
 const injection = "' OR 1 = 1 --";

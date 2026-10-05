@@ -1,3 +1,4 @@
+import { boundValue, shownValue } from "./filtering.ts";
 import type { CompiledSql } from "./compiler.ts";
 import { translateConstraintError } from "./constraints.ts";
 import { NoDatabase } from "./errors.ts";
@@ -149,13 +150,19 @@ export class D1Executor implements Executor {
     { sql, params, model }: CompiledSql,
     outcome: Pick<QueryEvent, "durationMs" | "meta" | "error">,
   ): void {
-    const event: QueryEvent = { model: model.name, sql, params, ...outcome };
+    // A filtered attribute's values are "[FILTERED]" here; D1 got the real ones (#83).
+    const event: QueryEvent = {
+      model: model.name,
+      sql,
+      params: params.map(shownValue),
+      ...outcome,
+    };
     notify(this.#onQuery, event);
     notify(model.onQuery, event);
   }
 
   #prepare({ sql, params }: CompiledSql): D1PreparedStatement {
-    return this.#binding.prepare(sql).bind(...params);
+    return this.#binding.prepare(sql).bind(...params.map(boundValue));
   }
 }
 
