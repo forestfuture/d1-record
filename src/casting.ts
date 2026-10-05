@@ -76,14 +76,17 @@ const isoDateTime =
 function castDatetime(value: unknown): unknown {
   if (value instanceof Date) return isInvalidDate(value) ? uncastable : value;
   if (typeof value !== "string") return uncastable;
-  if (isoDate.test(value)) {
-    const date = new Date(`${value}T00:00:00.000Z`);
-    // `Date` rolls 2026-02-30 over to March; a date that doesn't exist isn't one.
-    return !isInvalidDate(date) && date.toISOString().startsWith(value) ? date : uncastable;
-  }
-  if (!isoDateTime.test(value)) return uncastable;
+  if (isoDate.test(value)) return dayOf(value) ?? uncastable;
+  // The day must exist too: `Date` rolls 2026-02-30T10:00Z over to 2 March.
+  if (!isoDateTime.test(value) || dayOf(value.slice(0, 10)) === undefined) return uncastable;
   const date = new Date(value.replace(" ", "T"));
   return isInvalidDate(date) ? uncastable : date;
+}
+
+/** Midnight UTC on `day` (`2026-01-02`), if that day exists. */
+function dayOf(day: string): Date | undefined {
+  const date = new Date(`${day}T00:00:00.000Z`);
+  return !isInvalidDate(date) && date.toISOString().startsWith(day) ? date : undefined;
 }
 
 function isInvalidDate(value: unknown): boolean {
