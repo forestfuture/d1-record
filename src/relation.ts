@@ -1,6 +1,6 @@
 import { databaseNow, jointly } from "./executor.ts";
 import { shownKey } from "./filtering.ts";
-import { castInherited } from "./casting.ts";
+import { castAs, castInherited, uncastable } from "./attribute-values.ts";
 import {
   compileColumns,
   compileCount,
@@ -110,16 +110,6 @@ function requireOrdered(type: AttributeType, name: string, method: string): void
 /** `{}` adds no condition at all (common when an object is built from optional filters). */
 function isEmptyConditions(conditions: object): boolean {
   return !(conditions instanceof SafeSql) && Object.keys(conditions).length === 0;
-}
-
-/** An id as the key attribute holds it, as Rails casts ids: `"01"` is `1` for an integer key. */
-function castKey(type: AttributeType, id: string | number): string | number {
-  if (type === "string") return String(id);
-  if ((type === "integer" || type === "real") && typeof id === "string" && id.trim() !== "") {
-    const number = Number(id);
-    if (!Number.isNaN(number)) return number;
-  }
-  return id;
 }
 
 /** `"desc"` or `{ direction: "desc", nulls: "last" }` for `attribute`, checked. */
@@ -341,7 +331,11 @@ export class Relation<M extends ModelBase, S = {}> {
   }
 
   #build(attributes: Partial<AttributesOf<M>>): M {
-    const inherited = castInherited(this.#model, inheritedAttributes(this.#query.conditions));
+    const inherited = castInherited(
+      this.#model,
+      inheritedAttributes(this.#query.conditions),
+      this.#collection?.link,
+    );
     return buildRecord(this.#model, { ...inherited, ...attributes }, this.#executor);
   }
 
@@ -428,7 +422,11 @@ export class Relation<M extends ModelBase, S = {}> {
   ): Statement {
     this.#requireSavedOwner();
     this.#collection?.invalidate();
-    const inherited = castInherited(this.#model, inheritedAttributes(this.#query.conditions));
+    const inherited = castInherited(
+      this.#model,
+      inheritedAttributes(this.#query.conditions),
+      this.#collection?.link,
+    );
     const withInherited = rows.map((row) => ({ ...inherited, ...row }));
     return insertStatement(this.#executor, this.#model, withInherited, { conflict, method });
   }
@@ -526,9 +524,17 @@ export class Relation<M extends ModelBase, S = {}> {
     if (args.length === 1 && (typeof only === "string" || typeof only === "number")) {
       return this.#findById(only);
     }
-    // Cast to the key's type, then each id once, as Rails does.
-    const { type } = attributeOf(this.#model, this.#model.primaryKey);
-    const ids = [...new Set(args.flat().map((id) => castKey(type, id)))];
+    // Cast to the key's type as a condition is, then each id once, as Rails does; one that
+    // can't be cast stays as given, matches nothing, and is reported missing.
+    const of = { model: this.#model, attribute: this.#model.primaryKey };
+    const ids = [
+      ...new Set(
+        args.flat().map((id) => {
+          const cast = castAs("condition", of, id);
+          return cast === uncastable ? id : (cast as string | number);
+        }),
+      ),
+    ];
     return ids.length === 0 ? [] : this.#findSome(ids);
   }
 
