@@ -76,7 +76,7 @@ class User extends Model({
   - `integer`: a safe integer, or a string that's wholly one (`" 42 "`, `"-7"`, `"+3"`). Not `1.7`, `"12abc"`, `"1e3"`, `""`, `NaN` or past `Number.MAX_SAFE_INTEGER`.
   - `real`: a finite number, or a string that's wholly a decimal number (`"1.5"`, `".5"`, `"-2e3"`).
   - `string`: a string only (not `5`, `true` or a `Date`).
-  - `datetime`: a valid `Date`, an ISO-8601 date (`"2026-01-02"`, midnight UTC), or a date and time with `Z` or an offset (`T` or a space between them). Not a time without an offset, a date that doesn't exist (`"2026-02-30"`), other formats or numbers (#73).
+  - `datetime`: a valid `Date`, an ISO-8601 date (`"2026-01-02"`, midnight UTC), or a date and time with `Z` or an `±HH:MM` offset (`T` or a space between them; `T` and `Z` uppercase). Not a time without an offset, a day that doesn't exist (`"2026-02-30"`, with or without a time), other formats or numbers (#73).
   - `json`: any value, unchanged.
   - Unlike Rails, which casts `"12abc"` to `12`, `1.7` to `1`, `5` to `"5"`, any other non-blank string to `true`, and `""` to `nil`: d1-record refuses each, so a value from JSON, a form or a query string is never read as something it isn't.
   - Values inside `sql` fragments aren't cast (they have no attribute), and values read from D1 aren't either.

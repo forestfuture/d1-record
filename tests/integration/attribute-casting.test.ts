@@ -163,6 +163,10 @@ describe("values assigned to attributes are cast to the attribute's type (#81)",
       [new Date(Number.NaN)],
       ["2026-01-02T03:04:05"], // no offset: whose 3am?
       ["2026-02-30"],
+      ["2026-02-30T10:00:00Z"], // Date would roll it over to 2 March
+      ["2026-02-29T10:00:00+02:00"],
+      ["2026-01-02T03:04:05+0530"], // offsets are ±HH:MM
+      ["2026-01-02t03:04:05z"],
       ["2026-13-01"],
       ["02/01/2026"],
       ["Jan 2, 2026"],
