@@ -107,6 +107,14 @@ export const tables = {
     expect(source).toContain("export const LogsRecord = modelFor(tables, Base);");
   });
 
+  // Both come from the project's config and paths, written into string literals (#85).
+  test("the binding and the schema's import path are written as escaped string literals", () => {
+    const source = renderBase("ApplicationRecord", '../db/a"b\\c', 'D"B');
+
+    expect(source).toContain('import { tables } from "../db/a\\"b\\\\c";');
+    expect(source).toContain('  static override binding = "D\\"B";');
+  });
+
   test("its shared method, scope and callback are there to uncomment, each saying what it does", () => {
     const source = renderBase("ApplicationRecord", "../db/schema", "DB");
 
