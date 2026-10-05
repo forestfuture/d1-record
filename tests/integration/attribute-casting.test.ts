@@ -129,6 +129,21 @@ describe("values assigned to attributes are cast to the attribute's type (#81)",
     });
   });
 
+  describe("string", () => {
+    test.each([["hello"], [""], [" spaced "], ["42"]])("%j is kept", async (value) => {
+      expect(await roundTrip("label", value)).toEqual([value, value]);
+    });
+
+    test.each([[5], [true], [{ a: 1 }], [["a"]], [new Date(0)]])(
+      "%j is refused",
+      (value: unknown) => {
+        expect(() => samples().build({ label: untyped(value) })).toThrow(
+          new TypeError(`Sample: ${shown(value)} isn't a string for "label"`),
+        );
+      },
+    );
+  });
+
   describe("real", () => {
     test.each([
       [0.5, 0.5],
