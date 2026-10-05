@@ -1,5 +1,11 @@
 import { NoSession, RecordNotSaved } from "./errors.ts";
-import { prepareDestroy, prepareSave, refusalError, type Claimed } from "./lifecycle.ts";
+import {
+  prepareDestroy,
+  prepareSave,
+  refusalError,
+  type Claimed,
+  pinClaimed,
+} from "./lifecycle.ts";
 import { RecordStatement, recordStatementParts } from "./record-statement.ts";
 import { state } from "./record-state.ts";
 import { runAfter, writeAll, type PreparedWrite } from "./unit-of-work.ts";
@@ -116,8 +122,9 @@ async function runBatch<const T extends readonly BatchEntry[]>(
       entry instanceof RecordStatement ? await recordEntry(entry, claimed) : statementEntry(entry),
     );
   }
+  const database = await pinClaimed(claimed, executor, "batch() needs statements and records");
   const writes = prepared.flatMap(({ writes }) => writes());
-  await writeAll(executor, writes);
+  await writeAll(database, writes);
   await runAfter(writes);
   return prepared.map(({ result }) => result()) as BatchResults<T>;
 }

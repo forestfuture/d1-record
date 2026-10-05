@@ -20,7 +20,7 @@ import {
   RecordNotSaved,
 } from "./errors.ts";
 import { clearErrors } from "./errors-collection.ts";
-import type { Executor } from "./executor.ts";
+import { type Executor, oneDatabase } from "./executor.ts";
 import {
   declared,
   type AfterCallbackKind,
@@ -195,10 +195,28 @@ async function validateAutosaves(record: ModelBase, claimed: Claimed): Promise<v
  * → afterCreate | afterUpdate → afterSave.
  */
 export async function saveLifecycle(record: ModelBase): Promise<Outcome> {
-  const plan = await prepareSave(record, new Set());
+  const claimed: Claimed = new Set();
+  const plan = await prepareSave(record, claimed);
   if (plan.status !== "ready") return plan;
-  await runPlan(record[state].executor, plan);
+  const database = await pinClaimed(claimed, record[state].executor, "save() needs its records");
+  await runPlan(database, plan);
   return { status: "saved" };
+}
+
+/**
+ * The one database a write's records share, each pinned to it, as a record keeps the database
+ * it was first written on (#93). Records on two databases throw `IncompatibleRelation`, before
+ * anything is written.
+ */
+export async function pinClaimed(
+  claimed: Claimed,
+  executor: Executor,
+  needs: string,
+): Promise<Executor> {
+  const handles = [...claimed].map((record) => record[state].executor);
+  const database = await oneDatabase([executor, ...handles], needs);
+  for (const record of claimed) record[state].belongTo(database);
+  return database;
 }
 
 /** Everything a save does before writing: validation and the before-callbacks. */
@@ -368,9 +386,11 @@ function saveWrite(record: ModelBase, isInsert: boolean): PreparedWrite {
  * → mark destroyed → afterDestroy. Every write, dependents' included, is one atomic batch.
  */
 export async function destroyLifecycle(record: ModelBase): Promise<DestroyOutcome> {
-  const plan = await prepareDestroy(record, new Set());
+  const claimed: Claimed = new Set();
+  const plan = await prepareDestroy(record, claimed);
   if (plan.status !== "ready") return plan;
-  await runPlan(record[state].executor, plan);
+  const database = await pinClaimed(claimed, record[state].executor, "destroy() needs its records");
+  await runPlan(database, plan);
   return { status: "destroyed" };
 }
 
