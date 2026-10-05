@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model } from "../../src/index.ts";
+import { between, connect, gte, Model, RecordNotFound } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class Sample extends Model({
@@ -237,6 +237,86 @@ describe("values assigned to attributes are cast to the attribute's type (#81)",
       expect(() => samples().toUpsert({ id: 1, enabled: untyped("no") })).toThrow(error);
       expect(() => samples().toUpdateAll({ enabled: untyped("no") })).toThrow(error);
       expect(await samples().count()).toBe(0);
+    });
+  });
+
+  // A condition's value is cast as an assigned one is; one that can't be cast matches nothing,
+  // as in Rails 6.1+, so it's never a NULL match or an error (#81).
+  describe("conditions", () => {
+    beforeEach(async () => {
+      await samples().insertAll([
+        { id: 1, quantity: 1, enabled: true, stamp: new Date("2026-01-02T00:00:00.000Z") },
+        { id: 2, quantity: 2, enabled: false, stamp: null },
+        { id: 3, quantity: null, enabled: null, stamp: null },
+      ]);
+    });
+    const ids = (relation: { pluck(name: "id"): Promise<number[]> }) => relation.pluck("id");
+
+    test("are cast to the attribute's type", async () => {
+      expect(await ids(samples().where({ quantity: untyped("2") }))).toEqual([2]);
+      expect(await ids(samples().where({ enabled: untyped("false") }))).toEqual([2]);
+      expect(await ids(samples().where({ stamp: untyped("2026-01-02") }))).toEqual([1]);
+      expect((await samples().findBy({ quantity: untyped(" 1 ") }))?.id).toBe(1);
+      expect(await samples().exists({ enabled: untyped("on") })).toBe(true);
+    });
+
+    test("a value that can't be cast matches nothing, not even NULL", async () => {
+      expect(
+        await samples()
+          .where({ quantity: untyped("abc") })
+          .count(),
+      ).toBe(0);
+      expect(
+        await samples()
+          .where({ enabled: untyped("no") })
+          .count(),
+      ).toBe(0);
+      expect(
+        await samples()
+          .where({ label: untyped(5) })
+          .count(),
+      ).toBe(0);
+      expect(await samples().findBy({ quantity: untyped("1 OR 1=1") })).toBeNull();
+      expect(await samples().exists({ stamp: untyped("yesterday") })).toBe(false);
+    });
+
+    test("a list keeps the values that can be cast, and NULL", async () => {
+      expect(
+        await ids(
+          samples()
+            .where({ quantity: untyped(["1", "x", 2]) })
+            .order({ id: "asc" }),
+        ),
+      ).toEqual([1, 2]);
+      expect(await ids(samples().where({ quantity: untyped(["x", null]) }))).toEqual([3]);
+      expect(
+        await samples()
+          .where({ quantity: untyped(["x"]) })
+          .count(),
+      ).toBe(0);
+    });
+
+    test("comparisons are cast, and match nothing when they can't be", async () => {
+      expect(await ids(samples().where({ quantity: gte(untyped("2")) }))).toEqual([2]);
+      expect(
+        await samples()
+          .where({ quantity: gte(untyped("two")) })
+          .count(),
+      ).toBe(0);
+      expect(
+        await samples()
+          .where({ quantity: between(untyped("1"), untyped("x")) })
+          .count(),
+      ).toBe(0);
+    });
+
+    test("find and findByOrThrow throw RecordNotFound for a value that can't be cast", async () => {
+      expect((await samples().find(untyped("2"))).id).toBe(2);
+      await expect(samples().find(untyped("abc"))).rejects.toThrow(RecordNotFound);
+      await expect(samples().find(untyped(["1", "abc"]))).rejects.toThrow(RecordNotFound);
+      await expect(samples().findByOrThrow({ quantity: untyped("abc") })).rejects.toThrow(
+        RecordNotFound,
+      );
     });
   });
 });
