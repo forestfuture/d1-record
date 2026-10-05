@@ -16,6 +16,22 @@ description: "See the SQL your Worker sends to D1: every query app-wide, one req
 
 There's no logger built in, so send these wherever you like. A listener never changes a query's outcome: one that throws is logged with `console.error`, and the query's result stands.
 
+## Keep secrets out of the logs
+
+Listeners see the values of passwords, tokens, keys and emails as `"[FILTERED]"`, as Rails' logs do: D1 still gets the real values. An attribute is filtered when its snake_case name contains one of `static filterAttributes`. That's Rails' default list on `Model.Base` (`passw`, `email`, `secret`, `token`, `_key`, `crypt`, `salt`, `certificate`, `otp`, `ssn`, `cvv`, `cvc`), so `passwordDigest`, `resetToken`, `apiKey` and `email` are filtered without any setup. A cast error shows a filtered value as `[FILTERED]` too.
+
+Change the list on your app's base class, in `application-record.ts`. It replaces the defaults, so spread them in to add to them, or leave one out:
+
+```ts
+import { Model } from "@forestfuture/d1-record";
+
+class Base extends Model.Base {
+  static override filterAttributes = [...Model.Base.filterAttributes, "iban", /^dateOfBirth$/];
+}
+```
+
+A value inside an `sql` fragment has no attribute, so it's logged as given: keep secrets out of fragments, or leave `params` out of what you log.
+
 There are two places to set it:
 
 |                           | Where                                                 | Knows the request? |
