@@ -81,4 +81,30 @@ describe("Model.permit", () => {
 
     expect(Admin.permit({ role: "x", age: 3 }, "role")).toEqual({ role: "x" });
   });
+
+  test("reads FormData and URLSearchParams; a repeated key takes its last value, as in Rails", async () => {
+    const form = new FormData();
+    form.append("email", "ada@example.com");
+    form.append("isActive", "on");
+    form.append("role", "admin");
+    const query = new URLSearchParams("age=30&age=31&role=admin");
+
+    expect(User.permit(form, "email", "isActive")).toEqual({
+      email: "ada@example.com",
+      isActive: "on",
+    });
+    expect(User.permit(query, "age")).toEqual({ age: "31" });
+
+    const user = await users().create(User.permit(form, "email", "isActive"));
+    expect(user.isActive).toBe(true);
+  });
+
+  test.each([[null], [undefined], ["email=x"], [42], [["email"]]])(
+    "%j isn't input it can read: TypeError",
+    (input: unknown) => {
+      expect(() => User.permit(input, "email")).toThrow(
+        new TypeError("User.permit() takes an object, FormData or URLSearchParams"),
+      );
+    },
+  );
 });
