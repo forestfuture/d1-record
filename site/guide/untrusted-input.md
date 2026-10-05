@@ -1,5 +1,5 @@
 ---
-description: "Take only the fields you mean to from a request (destructuring, Model.permit or a schema validator), what d1-record checks when values are assigned, and how a null from a request can match the wrong row."
+description: "Take only the fields you mean to from a request (destructuring, Model.permit or a schema validator), answer a value that can't be used with a 400, and keep a null from a request from matching the wrong row."
 ---
 
 # Handle untrusted input
@@ -22,7 +22,7 @@ Or let the Model pick them out with `permit`, as Rails' `params.permit` does. It
 
 <<< @/snippets/guide/untrusted-input.ts#permit-form{ts}
 
-`permit` reads a plain object's own keys only, so `__proto__` never gets through. The same holds wherever d1-record takes a name: a `constructor` or `__proto__` key in a body passed to `where`, or in `?include=` passed to `includes`, is an `UnknownAttribute` or `UnknownAssociation`, never one of JavaScript's own properties. A name that isn't an attribute is a compile error, and throws `UnknownAttribute`. A value that can't be cast, a file from a form, and input that isn't a plain object, a form or a query string each throw `TypeError`.
+`permit` reads only the input's own keys, and refuses a name that isn't an attribute; [Models](./models#picking-attributes-from-input-permit) has its full rules.
 
 ::: tip Beyond Rails
 Rails' `permit` filters keys, and keeps only scalar values. d1-record's knows the Model, so it also checks the names you give it, and casts each value to its attribute's type: `{"isAdmin": "false"}` gives `isAdmin: false`, never a truthy string that TypeScript calls a boolean.
@@ -40,11 +40,13 @@ const SignUp = z.object({ email: z.string(), handle: z.string().min(3) }); // ot
 const account = await Account.create(SignUp.parse(await request.json()));
 ```
 
-## Values are checked when they're assigned
+## Return a 400 for a value that can't be used
 
-Whichever way you take the fields, d1-record checks every value as it's assigned, or as it's given to `insert` or `updateAll`. It accepts only what's unambiguous for the attribute's type: `"false"` and `"off"` are `false` for a boolean, and `"42"` is `42` for an integer. Anything else, such as `"no"` for a boolean or `"12abc"` for an integer, throws `TypeError`. [Models](./models#assigned-values-are-cast) lists what each type accepts.
+Whichever way you take the fields, d1-record checks each value as it's assigned, and [casts](./models#assigned-values-are-cast) it to the attribute's type: `"false"` is `false` for a boolean, and `"42"` is `42` for an integer. A value that can't be cast, such as `"no"` for a boolean, throws `TypeError`, and so does `permit` given something that isn't an object, a form or a query string. Those mean the request is wrong, so answer with a 400, as you would for a body that isn't JSON:
 
-So `isActive=no` from a form can't save `true`, and an empty field can't silently become `null`. But a value that has the right type can still be one the user shouldn't send. Choosing the fields is still your job.
+<<< @/snippets/guide/untrusted-input.ts#bad-request{ts}
+
+A value of the right type can still be one the user shouldn't send, so choosing the fields stays your job, and so do [validations](./validations), which answer with a 422.
 
 ## Untrusted values in conditions
 

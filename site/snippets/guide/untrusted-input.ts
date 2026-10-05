@@ -43,6 +43,25 @@ export async function signUp(request: Request): Promise<Response> {
 }
 // #endregion permit-form
 
+// #region bad-request
+export async function updateAccount(account: Account, request: Request): Promise<Response> {
+  let changes;
+  try {
+    changes = Account.permit(await request.json(), "handle", "seats");
+  } catch (error) {
+    // Not JSON (SyntaxError), or a value that can't be cast (TypeError): the request is wrong.
+    if (error instanceof SyntaxError || error instanceof TypeError) {
+      return Response.json({ error: "That isn't a valid account" }, { status: 400 });
+    }
+    throw error;
+  }
+  if (!(await account.update(changes))) {
+    return Response.json({ errors: account.errors.fullMessages() }, { status: 422 });
+  }
+  return Response.json(account);
+}
+// #endregion bad-request
+
 // #region null-trap
 export async function accept(request: Request): Promise<Response> {
   const { token } = await request.json<{ token: string }>();
