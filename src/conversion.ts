@@ -46,6 +46,18 @@ export function castValue(type: AttributeType, value: unknown): unknown {
   return value === null ? null : converters[type].cast(value);
 }
 
+/**
+ * A condition's value as the attribute's type, or `uncastable`: as `castValue`, except that a
+ * finite number matches a string attribute as its decimal string (`7` → `"7"`), as `find` does
+ * for a text key and as Rails does, so a foreign key of another type still finds its target.
+ */
+export function castCondition(type: AttributeType, value: unknown): unknown {
+  if (type === "string" && typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  return castValue(type, value);
+}
+
 export function readValue(type: AttributeType, value: unknown): unknown {
   return value === null || value === undefined ? null : converters[type].read(value);
 }
