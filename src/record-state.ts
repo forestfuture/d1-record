@@ -135,8 +135,7 @@ export class RecordState {
 
   /** An attribute's value; `MissingAttribute` if it wasn't loaded (left out of `select`). */
   read(name: string): unknown {
-    // An unknown name is UnknownAttribute, even one every object inherits (`constructor`, #84).
-    this.#definition(name);
+    this.#requireAttribute(name);
     if (!Object.hasOwn(this.#values, name)) {
       throw new MissingAttribute(
         `${this.#model.name} record has no "${name}" loaded; it was left out of select(...)`,
@@ -392,6 +391,11 @@ export class RecordState {
     if (this.#lifecycle === "destroyed") {
       throw new RecordDestroyed(`${this.#model.name} record was destroyed; it can't ${action}`);
     }
+  }
+
+  /** An unknown name is UnknownAttribute, even one every object inherits (`constructor`, #84). */
+  #requireAttribute(name: string): void {
+    this.#definition(name);
   }
 
   #definition(name: string): AttributeDefinition {

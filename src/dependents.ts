@@ -28,7 +28,7 @@ export async function prepareDependents(
   claimed: Claimed,
 ): Promise<DependentsPlan> {
   const model = modelOf(owner);
-  const dependencies = Object.entries(associationsOf(model))
+  const dependencies = [...associationsOf(model)]
     .filter(([, definition]) => definition.dependent !== undefined)
     .map(([name]) => resolveAssociation(model, name));
   for (const association of dependencies) {

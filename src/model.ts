@@ -109,9 +109,7 @@ const relationMethods = [
 
 /** A Model's association by name; `UnknownAssociation` for any other name. */
 export function associationOf(model: ModelClass, name: string): AssociationDefinition {
-  const definitions = associationsOf(model);
-  // Own names only: `constructor` or `__proto__` (from a URL's ?include=) isn't one (#84).
-  const definition = Object.hasOwn(definitions, name) ? definitions[name] : undefined;
+  const definition = associationsOf(model).get(name);
   if (definition === undefined) {
     throw new UnknownAssociation(`${model.name} has no association "${name}"`);
   }
