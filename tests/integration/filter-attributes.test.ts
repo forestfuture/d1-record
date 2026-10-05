@@ -1,5 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, gte, Model, modelFor, type QueryEvent, sql } from "../../src/index.ts";
+import {
+  connect,
+  gte,
+  Model,
+  modelFor,
+  type QueryEvent,
+  RecordNotFound,
+  sql,
+} from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
@@ -107,6 +115,25 @@ describe("filterAttributes", () => {
     await session.destroy();
 
     expect(params()).toEqual([["[FILTERED]", "a"], ["b", "[FILTERED]"], ["[FILTERED]"]]);
+  });
+
+  test("RecordNotFound shows a filtered primary key as [FILTERED]", async () => {
+    const sessions = db().model(Session);
+    const session = await sessions.create({ token: "s3cr3t", label: "a" });
+    await binding.prepare("DELETE FROM api_keys").run();
+
+    await expect(sessions.find("guess")).rejects.toThrow(
+      new RecordNotFound("Session with token [FILTERED] not found"),
+    );
+    await expect(sessions.find(["guess", "other"])).rejects.toThrow(
+      new RecordNotFound(
+        "Couldn't find all Session records with 'token': ([FILTERED], [FILTERED]) " +
+          "(found 0 results, but was looking for 2)",
+      ),
+    );
+    await expect(session.reload()).rejects.toThrow(
+      new RecordNotFound("Session with token [FILTERED] not found"),
+    );
   });
 
   test("a cast error shows a filtered attribute's value as [FILTERED]", () => {

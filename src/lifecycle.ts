@@ -1,3 +1,4 @@
+import { shownKey } from "./filtering.ts";
 import { compileDelete, compileInsert, compileSelect, compileUpdate } from "./compiler.ts";
 import {
   autosavesOf,
@@ -414,7 +415,9 @@ export async function reloadRecord(record: ModelBase): Promise<void> {
   const query = { model, conditions: [{ [model.primaryKey]: key }], order: [], limit: 1 };
   const [row] = await executor.all(compileSelect(query));
   if (row === undefined) {
-    throw new RecordNotFound(`${model.name} with ${model.primaryKey} ${String(key)} not found`);
+    throw new RecordNotFound(
+      `${model.name} with ${model.primaryKey} ${shownKey(model, key)} not found`,
+    );
   }
   recordState.clearAssociations();
   recordState.loadRow(row);
