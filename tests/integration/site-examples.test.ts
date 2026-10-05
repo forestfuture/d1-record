@@ -195,18 +195,17 @@ describe("the guide's examples", () => {
     expect(booking.errors.fullMessages()).toEqual(["Ends at must be after the start"]);
   });
 
-  test("Validations: errors added by hand read as the add example shows, and a validation run clears them", async () => {
-    const { booking, entries, messages, valid } = await withDatabase(connect(binding), () =>
-      addExample(),
-    );
+  test("Validations: errors added in a callback read as the add example shows", async () => {
+    const booking = await withDatabase(connect(binding), () => addExample());
 
-    expect(entries).toEqual([
+    expect(booking.errors.toArray()).toEqual([
       { attribute: "endsAt", type: "afterStart", message: "must be after the start" },
-      { attribute: "base", type: "invalid", message: "The room is closed that day" },
+      { attribute: "base", type: "invalid", message: "The room is closed on Sundays" },
     ]);
-    expect(messages).toEqual(["Ends at must be after the start", "The room is closed that day"]);
-    expect(valid).toBe(true);
-    expect(booking.errors.isEmpty()).toBe(true);
+    expect(booking.errors.fullMessages()).toEqual([
+      "Ends at must be after the start",
+      "The room is closed on Sundays",
+    ]);
   });
 
   test("Associations: reading, creating through, and deleting through an association", async () => {

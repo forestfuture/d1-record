@@ -1,5 +1,5 @@
 ---
-description: "validates with presence, length, format, inclusion, numericality and uniqueness, their options, the errors collection, and custom validations with errors.add."
+description: "validates with presence, length, format, inclusion, numericality and uniqueness, their options, the errors collection, and adding errors with errors.add, and custom validations."
 ---
 
 # Validations
@@ -15,6 +15,24 @@ Validations are declared in a Model's `static {}` block with `this.validates(att
 <<< @/snippets/guide/validations.ts#errors{ts}
 
 Every validation runs, in the order declared, so one attribute can collect several errors. `fullMessages()` puts the attribute's name in front, humanized as Rails does: `createdAt` reads as "Created at". Errors on the record as a whole go on `"base"`, and read without a prefix.
+
+### Adding an error
+
+```ts
+record.errors.add(attribute, message, { type });
+```
+
+- `attribute`: the attribute the error belongs to, or `"base"` for the record as a whole.
+- `message`: the text that follows the attribute's name in `fullMessages()`, such as "must be after the start".
+- `type`: optional, and `"invalid"` when left out. Name the error here when code needs to tell it apart from the others.
+
+Add errors in a `beforeValidation` or `afterValidation` callback, as the `Booking` model in [Custom validations](#custom-validations) does. With a Sunday booking that ends when it starts, it collects both of its errors:
+
+<<< @/snippets/guide/validations.ts#add{ts}
+
+::: tip Compared with Rails
+Rails' `errors.add(:ends_at, :after_start)` takes a type and looks up its message with I18n. d1-record has no I18n yet, so the message is always yours to give, and the type is an option. When Rails is given a message instead, `errors.add(:base, "The room is closed on Sundays")`, that text is the type too. Here the type is still `"invalid"`. Rails' `message:` and `strict:` options and its procs aren't here.
+:::
 
 ## Validators
 
@@ -51,16 +69,4 @@ For a rule the validators don't cover, add errors in a `beforeValidation` or `af
 
 <<< @/snippets/guide/validations.ts#custom{ts}
 
-The callback can be async, so a rule can query D1 too.
-
-### Adding an error
-
-`record.errors.add(attribute, message, { type })` adds one error:
-
-- `attribute` is the attribute it belongs to, or `"base"` for the record as a whole. A `"base"` error reads without a prefix in `fullMessages()`.
-- `message` is the text after the attribute's name, so write it to follow "Ends at …".
-- `type` is optional and defaults to `"invalid"`. Give it a name of your own when code needs to tell this error apart from the others.
-
-<<< @/snippets/guide/validations.ts#add{ts}
-
-Each validation run (`isValid()`, `save()`, `saveOrThrow()`) starts by clearing `errors`, as in Rails. So an error added outside a callback is gone by the next save: add errors in a validation callback, where they're added on every run.
+[Adding an error](#adding-an-error) describes `errors.add`'s arguments. Each validation run (`isValid()`, `save()` or `saveOrThrow()`) starts by clearing `errors`, as in Rails, so an error added anywhere else is gone by the next save.

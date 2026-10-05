@@ -37,28 +37,26 @@ export class Booking extends Model({
       if (booking.endsAt <= booking.startsAt) {
         booking.errors.add("endsAt", "must be after the start", { type: "afterStart" });
       }
+      if (booking.startsAt.getUTCDay() === 0) {
+        booking.errors.add("base", "The room is closed on Sundays");
+      }
     });
   }
 }
 // #endregion custom
 
 export async function addExample() {
-  const booking = Booking.build({
-    startsAt: new Date("2026-05-01T10:00:00Z"),
-    endsAt: new Date("2026-05-01T12:00:00Z"),
-  });
   // #region add
-  booking.errors.add("endsAt", "must be after the start", { type: "afterStart" });
-  booking.errors.add("base", "The room is closed that day");
+  const sunday = new Date("2026-05-03T10:00:00Z");
+  const booking = Booking.build({ startsAt: sunday, endsAt: sunday });
+  await booking.isValid(); // false
 
-  const entries = booking.errors.toArray();
+  booking.errors.toArray();
   // [{ attribute: "endsAt", type: "afterStart", message: "must be after the start" },
-  //  { attribute: "base", type: "invalid", message: "The room is closed that day" }]
-  const messages = booking.errors.fullMessages(); // ["Ends at must be after the start", "The room is closed that day"]
-
-  const valid = await booking.isValid(); // true: each validation run starts by clearing errors
+  //  { attribute: "base", type: "invalid", message: "The room is closed on Sundays" }]
+  booking.errors.fullMessages(); // ["Ends at must be after the start", "The room is closed on Sundays"]
   // #endregion add
-  return { booking, entries, messages, valid };
+  return booking;
 }
 
 export async function errorsExample() {
