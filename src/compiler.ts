@@ -3,7 +3,7 @@ import type { ModelBase, ModelClass } from "./model.ts";
 import { Comparison, comparisonParts, type Operator } from "./comparisons.ts";
 import { Either, Negated, type Condition, type QueryDescription } from "./query.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
-import { castValue, uncastable, writeUntypedValue, writeValue } from "./conversion.ts";
+import { castCondition, uncastable, writeUntypedValue, writeValue } from "./conversion.ts";
 
 /** One SQL statement ready for D1, with the Model whose table it reads or writes. */
 export interface CompiledSql {
@@ -261,7 +261,7 @@ function compileComparison(
   params: unknown[],
 ): string {
   const { operator, values } = comparison[comparisonParts];
-  const cast = values.map((value) => castValue(attribute.type, value));
+  const cast = values.map((value) => castCondition(attribute.type, value));
   if (cast.includes(uncastable)) return NOTHING;
   params.push(...cast.map((value) => writeValue(attribute.type, value)));
   return COMPARISON_SQL[operator](quoteIdentifier(attribute.column));
@@ -292,14 +292,14 @@ function compileEquality(
   const column = quoteIdentifier(attribute.column);
   if (value === null) return `${column} IS NULL`;
   if (!Array.isArray(value)) {
-    const cast = castValue(attribute.type, value);
+    const cast = castCondition(attribute.type, value);
     if (cast === uncastable) return NOTHING;
     params.push(writeValue(attribute.type, cast));
     return `${column} = ?`;
   }
   const present = value
     .filter((item) => item !== null)
-    .map((item) => castValue(attribute.type, item))
+    .map((item) => castCondition(attribute.type, item))
     .filter((item) => item !== uncastable);
   const parts: string[] = [];
   if (present.length > 0) {

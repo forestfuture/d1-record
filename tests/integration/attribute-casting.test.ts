@@ -50,7 +50,10 @@ describe("values assigned to attributes are cast to the attribute's type (#81)",
   });
   afterAll(() => dispose());
   beforeEach(async () => {
-    await binding.prepare("DELETE FROM samples").run();
+    await binding.batch([
+      binding.prepare("DELETE FROM samples"),
+      binding.prepare("DELETE FROM api_keys"),
+    ]);
   });
 
   /** Saves `value` as the attribute, and what it reads as before saving and after reloading. */
@@ -314,7 +317,7 @@ describe("values assigned to attributes are cast to the attribute's type (#81)",
       ).toBe(0);
       expect(
         await samples()
-          .where({ label: untyped(5) })
+          .where({ label: untyped({ a: 1 }) })
           .count(),
       ).toBe(0);
       expect(await samples().findBy({ quantity: untyped("1 OR 1=1") })).toBeNull();
@@ -329,6 +332,24 @@ describe("values assigned to attributes are cast to the attribute's type (#81)",
           .whereNot({ quantity: untyped("abc") })
           .count(),
       ).toBe(3);
+    });
+
+    // A number can't be mistaken for anything else, so a condition reads it as its digits, as
+    // find() does for a text key, and as Rails does. Assigning one to a string is still refused.
+    test("a number matches a string attribute as its decimal string", async () => {
+      await samples().insert({ id: 4, label: "7" });
+
+      expect(await ids(samples().where({ label: untyped(7) }))).toEqual([4]);
+      expect(
+        await samples()
+          .where({ label: untyped(Number.NaN) })
+          .count(),
+      ).toBe(0);
+      expect(
+        await samples()
+          .where({ label: untyped(true) })
+          .count(),
+      ).toBe(0);
     });
 
     test("a list keeps the values that can be cast, and NULL", async () => {
@@ -382,5 +403,15 @@ describe("values assigned to attributes are cast to the attribute's type (#81)",
     expect(sample.quantity).toBe(7);
     expect(await sample.apiKey()).toBe(key);
     expect(events).toEqual([]);
+  });
+
+  test("an association loads through a foreign key of another type", async () => {
+    const db = connect(binding);
+    await db.model(ApiKey).insert({ id: "7", label: "deploy" });
+    await db.model(KeyedSample).insert({ id: 1, quantity: 7 });
+
+    const sample = await db.model(KeyedSample).find(1);
+
+    expect((await sample.apiKey())?.label).toBe("deploy");
   });
 });

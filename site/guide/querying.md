@@ -26,7 +26,7 @@ A query started from a Model runs on the current database: the request's, if it 
 - `whereNot` negates the whole condition. As in SQL, `whereNot({ role: "admin" })` also leaves out users whose role is NULL.
 - `or` combines two Relations of the same Model whose only difference is their conditions.
 - `where({})` adds nothing. An `undefined` value throws `TypeError`, since binding it would silently match nothing: leave the key out, or use `null`.
-- Values are [cast to the attribute's type](./models#assigned-values-are-cast), so `where({ quantity: "42" })` finds 42. A value that can't be cast (`"abc"` for an integer) matches nothing, never NULL: `findBy` resolves to `null`, and `find` throws `RecordNotFound`. In a list, values that can't be cast are left out. So `whereNot` with one excludes nothing: check an id from a request before excluding by it.
+- Values are [cast to the attribute's type](./models#assigned-values-are-cast), so `where({ quantity: "42" })` finds 42, and `where({ code: 7 })` finds the code `"7"`. A value that can't be cast (`"abc"` for an integer) matches nothing, never NULL: `findBy` resolves to `null`, and `find` throws `RecordNotFound`. In a list, values that can't be cast are left out. So `whereNot` with one excludes nothing: check an id from a request before excluding by it.
 
 ### Comparisons
 
