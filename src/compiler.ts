@@ -1,3 +1,4 @@
+import { castCondition, uncastable } from "./casting.ts";
 import { attributeOf, ignoresColumns, type AttributeDefinition } from "./metadata.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { Comparison, comparisonParts, type Operator } from "./comparisons.ts";
@@ -261,9 +262,14 @@ function compileComparison(
   params: unknown[],
 ): string {
   const { operator, values } = comparison[comparisonParts];
-  params.push(...values.map((value) => writeValue(attribute.type, value)));
+  const cast = values.map((value) => castCondition(attribute.type, value));
+  if (cast.includes(uncastable)) return NOTHING;
+  params.push(...cast.map((value) => writeValue(attribute.type, value)));
   return COMPARISON_SQL[operator](quoteIdentifier(attribute.column));
 }
+
+/** A condition that matches no row: an empty list, or a value that can't be cast (#81). */
+const NOTHING = "1 = 0";
 
 /** Each comparison's SQL for a quoted column; values are bound in order. */
 const COMPARISON_SQL: Record<Operator, (column: string) => string> = {
@@ -284,18 +290,23 @@ function compileEquality(
   const column = quoteIdentifier(attribute.column);
   if (value === null) return `${column} IS NULL`;
   if (!Array.isArray(value)) {
-    params.push(writeValue(attribute.type, value));
+    const cast = castCondition(attribute.type, value);
+    if (cast === uncastable) return NOTHING;
+    params.push(writeValue(attribute.type, cast));
     return `${column} = ?`;
   }
-  const present = value.filter((item) => item !== null);
+  const present = value
+    .filter((item) => item !== null)
+    .map((item) => castCondition(attribute.type, item))
+    .filter((item) => item !== uncastable);
   const parts: string[] = [];
   if (present.length > 0) {
     // The whole list is one JSON value, so any length fits D1's 100 bound parameters.
     params.push(JSON.stringify(present.map((item) => writeValue(attribute.type, item))));
     parts.push(`${column} IN (SELECT value FROM json_each(?))`);
   }
-  if (present.length < value.length) parts.push(`${column} IS NULL`);
-  return parts.length > 0 ? `(${parts.join(" OR ")})` : "1 = 0";
+  if (value.includes(null)) parts.push(`${column} IS NULL`);
+  return parts.length > 0 ? `(${parts.join(" OR ")})` : NOTHING;
 }
 
 function compileOrder({ model, order }: QueryDescription, params: unknown[]): string {

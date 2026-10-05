@@ -2,7 +2,7 @@ import { attributeOf, type AttributeType } from "./metadata.ts";
 import type { ModelClass } from "./model.ts";
 
 /** A value that can't be read as the attribute's type. */
-const uncastable = Symbol("uncastable");
+export const uncastable = Symbol("uncastable");
 
 /**
  * Each type's cast: the value as that type, or `uncastable`. Only what's unambiguous is
@@ -124,4 +124,12 @@ export function castGiven(
     name,
     castAssigned(model.name, name, attributeOf(model, name).type, value),
   ]);
+}
+
+/**
+ * A condition's value as the attribute's type, or `uncastable`: a condition with one matches
+ * nothing (as in Rails 6.1+), so a value from a URL is never an error or a NULL match.
+ */
+export function castCondition(type: AttributeType, value: unknown): unknown {
+  return value === null ? null : casts[type](value);
 }
