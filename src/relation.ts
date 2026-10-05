@@ -1,6 +1,6 @@
 import { databaseNow, jointly } from "./executor.ts";
 import { shownKey } from "./filtering.ts";
-import { castGiven, castInherited } from "./casting.ts";
+import { castInherited } from "./casting.ts";
 import {
   compileColumns,
   compileCount,
@@ -731,7 +731,7 @@ export class Relation<M extends ModelBase, S = {}> {
     if (assignments.length === 0) {
       throw new TypeError("updateAll() needs at least one attribute to change");
     }
-    return castGiven(this.#model, assignments);
+    return assignments;
   }
 
   /** The query a write statement targets; rows from `distinct()` have no identity to write to. */

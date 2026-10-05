@@ -77,11 +77,3 @@ function uncastableError(
   const from = association === undefined ? "" : `, the key of ${association}`;
   return new TypeError(`${model.name}: ${text} isn't ${article} ${type} for "${attribute}"${from}`);
 }
-
-/** Attribute values given to a bulk write (`insert`, `updateAll`, …), each cast as it's assigned. */
-export function castGiven(
-  model: ModelClass,
-  entries: readonly (readonly [string, unknown])[],
-): [string, unknown][] {
-  return entries.map(([name, value]) => [name, castAssigned(model, name, value)]);
-}
