@@ -39,7 +39,7 @@ export function linkRecords(owner: ModelBase, autosaves: readonly Autosave[]): v
     const { name, definition, ownerAttribute } = association;
     const value = owner[state].read(ownerAttribute);
     for (const record of records) {
-      record[state].write(definition.foreignKey, value);
+      record[state].writeKey(definition.foreignKey, value, name);
       if (definition.kind === "hasOne") {
         owner[state].cacheAssociation(name, {
           attribute: ownerAttribute,
