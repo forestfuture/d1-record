@@ -88,17 +88,15 @@ export async function examples(): Promise<unknown> {
   return { admins, recent, body, attributes };
 }
 
-/** Applies a JSON body's changes to `user`: the guide's casting example. */
-export async function applyChanges(user: User, request: Request): Promise<User> {
+/** The guide's casting example: values that arrive as text are cast as they're assigned. */
+export function castingExample(user: User): void {
   // #region casting
-  // A JSON body is typed by what you tell TypeScript, not by what arrived:
-  const changes = await request.json<{ isActive: boolean; legacyId: number }>();
-  // { "isActive": "false", "legacyId": "42" }
-  user.assign(changes);
+  // Values from JSON, a form or a query string often arrive as text:
+  user.assign(JSON.parse('{ "isActive": "false", "legacyId": " 42 " }'));
   console.log(user.isActive); // false, not the truthy string "false"
   console.log(user.legacyId); // 42
-  // Had it been { "isActive": "no" }:
+
+  user.assign(JSON.parse('{ "isActive": "no" }'));
   // TypeError: User: "no" isn't a boolean for "isActive"
   // #endregion casting
-  return user;
 }

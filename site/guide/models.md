@@ -1,5 +1,5 @@
 ---
-description: 'Reference for Models: ApplicationRecord("table") and overrides, declaring attributes yourself with Model({...}), table names, attributes and types, building records, timestamps, change tracking, SQL fragments and serialization.'
+description: 'Reference for Models: ApplicationRecord("table") and overrides, declaring attributes yourself with Model({...}), table names, attributes and types, casting assigned values, building records, permit, timestamps, change tracking, SQL fragments, serialization and filtered attributes.'
 ---
 
 # Models
@@ -76,20 +76,24 @@ An attribute is a type name, or `{ type, column?, null?, default? }`.
 
 As in SQLite, an attribute can be `null` unless it's declared `null: false`, and its TypeScript type includes `| null` to match.
 
+Store `json` attributes in a `TEXT` column, as [D1 recommends](https://developers.cloudflare.com/d1/sql-api/query-json/#types), and add `CHECK (json_valid(settings))` to have D1 reject anything that isn't valid JSON. A column declared `JSON` works too.
+
 ### Assigned values are cast
 
-TypeScript can't check a value that comes from JSON, a form or a query string, so d1-record casts every assigned value to its attribute's type, when it's assigned. That covers `build`, `create`, `assign`, `update`, setting a property, and the values given to `insert`, `upsert` and `updateAll`. Only what's unambiguous is accepted:
+TypeScript can't check a value that comes from JSON, a form or a query string, so d1-record casts every value to its attribute's type when it's assigned: in `build`, `create`, `assign`, `update`, a property setter and a default; in the values given to `insert`, `insertAll`, `upsert`, `upsertAll` and `updateAll`; and in [`permit`](#picking-attributes-from-input-permit). `null` is always NULL. Only what's unambiguous is accepted:
 
-| Type       | Accepts                                                                                               |
-| ---------- | ----------------------------------------------------------------------------------------------------- |
-| `boolean`  | `true`, `false`, `1`, `0`, `"1"`, `"0"`, and `"true"`, `"false"`, `"on"`, `"off"` in any case         |
-| `integer`  | a whole number, or a string that's wholly one: `"42"`, `" -7 "`                                       |
-| `real`     | a finite number, or a string that's wholly one: `"1.5"`, `"-2e3"`                                     |
-| `string`   | a string                                                                                              |
-| `datetime` | a `Date`, `"2026-01-02"` (midnight UTC), or a date and time with its offset: `"2026-01-02T09:30:00Z"` |
-| `json`     | any value                                                                                             |
+| Type       | Accepts                                                                                                                                |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `boolean`  | `true`, `false`, `1`, `0`, `"1"`, `"0"`, and `"true"`, `"false"`, `"on"`, `"off"` in any case                                          |
+| `integer`  | a safe integer, or a string that's wholly one, with an optional sign and spaces around it: `"42"`, `" -7 "`, `"+3"`                    |
+| `real`     | a finite number, or a string that's wholly one, with an optional sign, point and exponent: `"1.5"`, `".5"`, `"5."`, `"-2e3"`           |
+| `string`   | a string                                                                                                                               |
+| `datetime` | a valid `Date`; a date, `"2026-01-02"` (midnight UTC); or a date and time with `Z` or a `±HH:MM` offset: `"2026-01-02T09:30:00+02:00"` |
+| `json`     | any value                                                                                                                              |
 
-Anything else throws `TypeError`, naming the Model and the attribute, and the attribute keeps its value:
+Refused, among others: `""` for every type but `string`; `1.7`, `"12abc"`, `"1e3"` and integers past `Number.MAX_SAFE_INTEGER` for an `integer`; `NaN` and `Infinity`; a number, boolean or `Date` for a `string`; for a `datetime`, a time without an offset, a lowercase `t` or `z`, a day that doesn't exist (`"2026-02-30"`, with or without a time), other formats, and numbers.
+
+Anything else throws `TypeError` naming the Model and the attribute, and the attribute keeps its value. The error shows at most 60 characters of the value, and none of a [filtered attribute](#filtered-attributes)'s:
 
 <<< @/snippets/guide/models.ts#casting{ts}
 
@@ -98,8 +102,6 @@ Conditions are cast the same way, so `where({ quantity: "42" })` finds 42. A con
 ::: tip Beyond Rails
 Rails casts too, but leniently: `"12abc"` becomes `12`, `1.7` becomes `1`, any other text is `true`, and `""` is `nil`. d1-record refuses each, so `isAdmin=no` from a form can't save `true`, and an empty field can't silently become `null`.
 :::
-
-Store `json` attributes in a `TEXT` column, as [D1 recommends](https://developers.cloudflare.com/d1/sql-api/query-json/#types), and add `CHECK (json_valid(settings))` to have D1 reject anything that isn't valid JSON. A column declared `JSON` works too.
 
 ## Building records
 
@@ -114,6 +116,21 @@ Store `json` attributes in a `TEXT` column, as [D1 recommends](https://developer
 `assign(attrs)` sets several attributes without saving. `update(attrs)` is `assign` then `save`.
 
 Records also keep the database they were built or loaded through, for their later saves and association loads. A record made with `new User()` has none: build records with `User.build(…)`.
+
+### Picking attributes from input: `permit`
+
+`Model.permit(input, ...names)` keeps only the named attributes of untrusted input, as Rails' `params.permit`, and casts each value as assigning it would. Its result, `Partial<Pick<attributes, names>>`, goes straight into `build`, `create` or `update`. [Handle untrusted input](./untrusted-input) shows it in use.
+
+| Input             | Read                                                             |
+| ----------------- | ---------------------------------------------------------------- |
+| a plain object    | its own keys only, so `__proto__` and inherited keys never count |
+| `FormData`        | each field; a repeated key takes its last value                  |
+| `URLSearchParams` | each parameter; a repeated key takes its last value              |
+
+- **Keys it isn't given** are dropped, silently. A named attribute the input doesn't have is left out, and a `null` is kept.
+- **A name that isn't an attribute** is a compile error, and throws `UnknownAttribute`.
+- **`TypeError`** for a value that can't be cast, a file from a form (no attribute stores one), and input that's anything else: an array, a `Map`, `Headers`, a class instance, `null` or a string.
+- It's a static, so subclasses and your app's base class have it.
 
 ## Timestamps
 
@@ -141,6 +158,16 @@ Anything the query methods can't express is written as an `sql` tagged template,
 `toJSON()` gives the record's attributes with dates as ISO strings, so `Response.json(user)` just works. `attributes()` gives the same object with JavaScript values. Associations are never included, so a response never loads more than you asked for.
 
 <<< @/snippets/guide/models.ts#json{ts}
+
+## Filtered attributes
+
+`onQuery` listeners and error messages show a filtered attribute's values as `"[FILTERED]"`, as Rails' logs do. D1 still gets the real values. [Log queries](./logging#keep-secrets-out-of-the-logs) shows how to change the list.
+
+- **Which attributes:** `static filterAttributes`, a list of strings and RegExps, inherited from your app's base class. It starts as Rails' default list: `passw`, `email`, `secret`, `token`, `_key`, `crypt`, `salt`, `certificate`, `otp`, `ssn`, `cvv`, `cvc`. Setting it replaces the list; `[]` filters nothing.
+- **Matching:** a string matches when the attribute's snake_case name contains it, in any case: `passwordDigest` (`password_digest`) contains `passw`, and `apiKey` (`api_key`) contains `_key`. A RegExp matches the attribute or its snake_case name.
+- **Hidden in `QueryEvent.params`:** the values bound for the attribute in inserts (in a multi-row insert's JSON, its column in every row), updates, `updateAll`, conditions, lists and comparisons, and a filtered primary key in a record's `UPDATE` and `DELETE`.
+- **Hidden in errors:** a cast error's value, and a filtered primary key in `RecordNotFound`.
+- **Not hidden:** values inside `sql` fragments, which have no attribute; and `toJSON()` and `attributes()`, which are your data, not logs.
 
 ## Inheritance and shared behavior
 
