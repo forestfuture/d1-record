@@ -6,6 +6,10 @@ class Sample extends Model({
   id: { type: "integer", null: false },
   label: "string",
   quantity: "integer",
+  ratio: "real",
+  enabled: "boolean",
+  stamp: "datetime",
+  settings: "json",
 }) {
   static tableName = "samples";
 }
@@ -30,6 +34,8 @@ class Owner extends Model({
 // An integer foreign key (quantity) pointing at a text key.
 class Code extends Model({ id: { type: "string", null: false }, label: "string" }) {
   static tableName = "api_keys";
+
+  counted = hasMany(Counted, { foreignKey: "quantity" });
 }
 
 class Counted extends Model({ id: { type: "integer", null: false }, quantity: "integer" }) {
@@ -53,6 +59,7 @@ describe("values by their use", () => {
     await binding.batch([
       binding.prepare("DELETE FROM samples"),
       binding.prepare("DELETE FROM users"),
+      binding.prepare("DELETE FROM api_keys"),
     ]);
   });
 
@@ -126,6 +133,73 @@ describe("values by their use", () => {
 
       expect(owner!.loaded("notes").map((each) => each.id)).toEqual([1]);
       expect(note!.loaded("owner")?.id).toBe(9);
+    });
+  });
+
+  describe("through an association's own Relation", () => {
+    test("insert, upsert and insertAll inherit the owner's key as the foreign key holds it", async () => {
+      const owner = await db().model(Owner).create({ id: 9, email: "ada@example.com" });
+
+      await owner.notes().insert({ id: 1 });
+      await owner.notes().upsert({ id: 2 }, { uniqueBy: "id" });
+      await owner.notes().insertAll([{ id: 3 }]);
+
+      expect(await db().model(Note).order({ id: "asc" }).pluck("label")).toEqual(["9", "9", "9"]);
+    });
+
+    test("a key that can't be cast names the association", async () => {
+      const code = await db().model(Code).create({ id: "abc", label: "x" });
+
+      expect(() => code.counted().build({ id: 1 })).toThrow(
+        new TypeError('Counted: "abc" isn\'t an integer for "quantity", the key of counted'),
+      );
+    });
+  });
+
+  // Every type through the two uses #94 added: inherited from a condition, and a raw value in a
+  // bulk write, which the compiler casts itself.
+  describe("every type, by use", () => {
+    const at = new Date("2026-01-02T00:00:00.000Z");
+    const cases = [
+      ["label", 7, "7"],
+      ["quantity", " 5 ", 5],
+      ["ratio", "1.5", 1.5],
+      ["enabled", "on", true],
+      ["stamp", "2026-01-02", at],
+      ["settings", { theme: "dark" }, { theme: "dark" }],
+    ] as const;
+
+    test.each(cases)("%s inherits %j from a condition as %j", (attribute, given, expected) => {
+      const built = db()
+        .model(Sample)
+        .where({ [attribute]: given } as never)
+        .build({ id: 1 });
+
+      expect(built[attribute]).toEqual(expected);
+    });
+
+    test.each(cases.filter(([attribute]) => attribute !== "label"))(
+      "a bulk write casts %s's raw %j to %j itself",
+      async (attribute, given, expected) => {
+        await db()
+          .model(Sample)
+          .insert({ id: 1, [attribute]: given } as never);
+
+        expect((await db().model(Sample).find(1))[attribute]).toEqual(expected);
+      },
+    );
+
+    test("a bulk write refuses a value that can't be assigned, before sending anything", () => {
+      expect(() =>
+        db()
+          .model(Sample)
+          .toInsert({ id: 1, label: 7 as never }),
+      ).toThrow(new TypeError('Sample: 7 isn\'t a string for "label"'));
+      expect(() =>
+        db()
+          .model(Sample)
+          .toUpdateAll({ enabled: "no" as never }),
+      ).toThrow(TypeError);
     });
   });
 });
