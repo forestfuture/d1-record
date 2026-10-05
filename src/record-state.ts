@@ -135,7 +135,9 @@ export class RecordState {
 
   /** An attribute's value; `MissingAttribute` if it wasn't loaded (left out of `select`). */
   read(name: string): unknown {
-    if (!(name in this.#values)) {
+    // An unknown name is UnknownAttribute, even one every object inherits (`constructor`, #84).
+    this.#definition(name);
+    if (!Object.hasOwn(this.#values, name)) {
       throw new MissingAttribute(
         `${this.#model.name} record has no "${name}" loaded; it was left out of select(...)`,
       );
