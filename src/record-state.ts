@@ -1,3 +1,4 @@
+import { castAssigned } from "./casting.ts";
 import type { Assignment } from "./compiler.ts";
 import { readValue, writeValue } from "./conversion.ts";
 import { Errors } from "./errors-collection.ts";
@@ -149,7 +150,7 @@ export class RecordState {
   write(name: string, value: unknown): void {
     this.#requireNotDestroyed("be changed");
     requireDefined(this.#model, name, value);
-    this.#values[name] = value;
+    this.#values[name] = castAssigned(this.#model.name, name, this.#definition(name).type, value);
     this.#assigned.add(name);
   }
 
