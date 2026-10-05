@@ -53,7 +53,7 @@ export class Product extends ApplicationRecord("products", {
 }
 // #endregion generated
 
-export async function examples(): Promise<unknown> {
+export async function examples(request: Request): Promise<unknown> {
   // #region build
   const user = User.build({ email: "ada@example.com" });
   console.log(user.id); // already generated, before saving: "3b241101-e2bb-…"
@@ -65,6 +65,19 @@ export async function examples(): Promise<unknown> {
   user.changes(); // { email: [null, "ada@example.com"], role: [null, "admin"], … }
   await user.save();
   // #endregion build
+
+  // #region casting
+  // A JSON body is typed by what you tell TypeScript, not by what arrived:
+  const signUp = await request.json<{ isActive: boolean; legacyId: number }>();
+  // { "isActive": "false", "legacyId": "42" }
+  user.assign(signUp);
+  console.log(user.isActive); // false, not the truthy string "false"
+  console.log(user.legacyId); // 42
+
+  // { "isActive": "no" }
+  user.assign(await request.json<{ isActive: boolean }>());
+  // TypeError: User: "no" isn't a boolean for "isActive"
+  // #endregion casting
 
   // #region dirty
   user.email = "ada@lovelace.dev";
