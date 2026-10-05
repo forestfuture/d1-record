@@ -192,7 +192,8 @@ export class RecordState {
   /** Points this record at `value` through `attribute` (a foreign key), keeping it loaded. */
   pointAt(name: string, attribute: string, key: unknown, value: unknown): void {
     this.write(attribute, key);
-    this.cacheAssociation(name, { attribute, key, value });
+    // The key as the foreign key stores it (cast to its type), so the cache matches it.
+    this.cacheAssociation(name, { attribute, key: this.#values[attribute], value });
   }
 
   clearAssociation(name: string): void {

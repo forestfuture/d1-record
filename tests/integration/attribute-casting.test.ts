@@ -1,5 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { between, connect, gte, Model, RecordNotFound } from "../../src/index.ts";
+import {
+  belongsTo,
+  between,
+  connect,
+  gte,
+  Model,
+  type QueryEvent,
+  RecordNotFound,
+} from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class Sample extends Model({
@@ -12,6 +20,17 @@ class Sample extends Model({
   settings: "json",
 }) {
   static tableName = "samples";
+}
+
+class ApiKey extends Model({ id: { type: "string", null: false }, label: "string" }) {
+  static tableName = "api_keys";
+}
+
+// A foreign key whose type differs from the key it points at: an integer holding a text key.
+class KeyedSample extends Model({ id: { type: "integer", null: false }, quantity: "integer" }) {
+  static tableName = "samples";
+
+  apiKey = belongsTo(ApiKey, { foreignKey: "quantity" });
 }
 
 /** A value as the error shows it: JSON, with numbers as written (`NaN`, `Infinity`). */
@@ -350,5 +369,18 @@ describe("values assigned to attributes are cast to the attribute's type (#81)",
         RecordNotFound,
       );
     });
+  });
+
+  test("an association set through a foreign key of another type stays loaded", async () => {
+    const events: QueryEvent[] = [];
+    const db = connect(binding, { onQuery: (event) => events.push(event) });
+    const key = db.model(ApiKey).build({ id: "7", label: "deploy" });
+    const sample = db.model(KeyedSample).build({ id: 1 });
+
+    sample.apiKey.set(key);
+
+    expect(sample.quantity).toBe(7);
+    expect(await sample.apiKey()).toBe(key);
+    expect(events).toEqual([]);
   });
 });
