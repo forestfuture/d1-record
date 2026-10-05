@@ -83,6 +83,7 @@ export default defineConfig({
           { text: "Where a query's database comes from", link: "/guide/query-databases" },
           { text: "The schema and ApplicationRecord", link: "/guide/schema" },
           { text: "D1's limits", link: "/guide/d1" },
+          { text: "Security", link: "/guide/security" },
         ],
       },
     ],
