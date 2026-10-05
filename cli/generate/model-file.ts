@@ -1,3 +1,4 @@
+import { stringLiteral, stringLiteralPattern } from "../source.ts";
 import { moduleName } from "../schema/names.ts";
 
 /** A Model to write: its class, its table, and the `belongsTo`s its references suggest. */
@@ -36,7 +37,7 @@ export function modelSource(
 ): string {
   const imports: string[] = [];
   if (model.associations.length > 0) imports.push(`import { belongsTo } from "${library}";`);
-  imports.push(`import { ${model.base.className} } from "${model.base.importPath}";`);
+  imports.push(`import { ${model.base.className} } from ${stringLiteral(model.base.importPath)};`);
   if (separateFiles) {
     for (const { className } of model.associations) {
       imports.push(`import { ${className} } from "./${moduleName(className)}";`);
@@ -68,15 +69,19 @@ function importingBase(
   { className, importPath }: ModelToWrite["base"],
 ): { ok: true; source: string } | { ok: false; error: string } {
   const existing = new RegExp(
-    `^import \\{[^}]*\\b${className}\\b[^}]*\\} from "([^"]+)";$`,
+    `^import \\{[^}]*\\b${className}\\b[^}]*\\} from (${stringLiteralPattern});$`,
     "m",
   ).exec(source);
   if (existing === null) {
-    return { ok: true, source: `import { ${className} } from "${importPath}";\n${source}` };
+    return {
+      ok: true,
+      source: `import { ${className} } from ${stringLiteral(importPath)};\n${source}`,
+    };
   }
-  return existing[1] === importPath
+  const imported = JSON.parse(existing[1]!) as string;
+  return imported === importPath
     ? { ok: true, source }
-    : { ok: false, error: `it imports ${className} from ${existing[1]}, not ${importPath}` };
+    : { ok: false, error: `it imports ${className} from ${imported}, not ${importPath}` };
 }
 
 /** A models file with one more Model at its end (`--models src/models.ts`), or why it can't be. */

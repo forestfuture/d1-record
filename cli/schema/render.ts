@@ -1,3 +1,4 @@
+import { stringLiteral } from "../source.ts";
 import { createHash } from "node:crypto";
 import type { Default, Spec } from "./conventions.ts";
 import { isIdentifier } from "./names.ts";
@@ -92,7 +93,7 @@ ${entries}
  */
 export function renderBase(className: string, schemaImport: string, binding: string): string {
   return `import { Model, modelFor } from "@forestfuture/d1-record";
-import { tables } from ${JSON.stringify(schemaImport)};
+import { tables } from ${stringLiteral(schemaImport)};
 
 /**
  * Methods, callbacks and scopes written here are shared by every Model, as in Rails'
@@ -100,7 +101,7 @@ import { tables } from ${JSON.stringify(schemaImport)};
  */
 class Base extends Model.Base {
   // The D1 binding Models query (Product.find(id)), from your Wrangler config's d1_databases.
-  static override binding = ${JSON.stringify(binding)};
+  static override binding = ${stringLiteral(binding)};
 
   // A method every record has:
   // label() {

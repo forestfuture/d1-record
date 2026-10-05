@@ -243,6 +243,22 @@ export class LineItem extends ApplicationRecord("line_items") {}
 `);
   });
 
+  // The base class's import path comes from the project's paths, so it's written escaped (#85).
+  test("the base class's import path is an escaped string literal, and found again when appending", () => {
+    const quoted = {
+      ...model,
+      associations: [],
+      base: { className: "ApplicationRecord", importPath: './my"models\\record' },
+    };
+    const source = modelSource(quoted, { separateFiles: true });
+
+    expect(source).toContain('import { ApplicationRecord } from "./my\\"models\\\\record";');
+    expect(appendModel(source, { ...quoted, className: "Order", table: "orders" })).toEqual({
+      ok: true,
+      source: `${source}\nexport class Order extends ApplicationRecord("orders") {}\n`,
+    });
+  });
+
   test("appended to one models file, adding belongsTo to its import from the library", () => {
     const existing = `import { hasMany } from "@forestfuture/d1-record";
 import { ApplicationRecord } from "./models/application-record";
