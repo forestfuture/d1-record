@@ -10,8 +10,8 @@ const uncastable = Symbol("uncastable");
  */
 const casts: Record<AttributeType, (value: unknown) => unknown> = {
   string: (value) => value,
-  integer: (value) => value,
-  real: (value) => value,
+  integer: castInteger,
+  real: castReal,
   boolean: castBoolean,
   datetime: (value) => value,
   json: (value) => value,
@@ -36,8 +36,33 @@ function castBoolean(value: unknown): unknown {
   return booleans.has(key) ? booleans.get(key) : uncastable;
 }
 
-/** A value as it's shown in an error: JSON where it has one. */
+/** A whole number, signed, with nothing else but spaces around it. */
+const integerText = /^\s*[+-]?\d+\s*$/;
+
+/** A decimal number, with an optional exponent (`1.5`, `-2e3`, `.5`), and spaces around it. */
+const realText = /^\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?\s*$/i;
+
+/** A number read from `text` when it matches `pattern`, else `uncastable`. */
+function numberFrom(value: unknown, pattern: RegExp): unknown {
+  if (typeof value === "number") return value;
+  return typeof value === "string" && pattern.test(value) ? Number(value) : uncastable;
+}
+
+/** A safe integer, or a string that's wholly one: `1.7`, `"12abc"` and `"1e3"` aren't. */
+function castInteger(value: unknown): unknown {
+  const number = numberFrom(value, integerText);
+  return Number.isSafeInteger(number) ? number : uncastable;
+}
+
+/** A finite number, or a string that's wholly a decimal number. */
+function castReal(value: unknown): unknown {
+  const number = numberFrom(value, realText);
+  return Number.isFinite(number) ? number : uncastable;
+}
+
+/** A value as it's shown in an error: JSON where it has one, and numbers as written. */
 function shown(value: unknown): string {
+  if (typeof value === "number") return String(value);
   try {
     return JSON.stringify(value) ?? String(value);
   } catch {

@@ -94,6 +94,8 @@ describe("a schema generated from migrations", () => {
     const listing = db.model(Listing).build({ userId: user.id, name: "Desk", priceCents: 9900 });
     expectTypeOf<Listing["available"]>().toEqualTypeOf<number>();
     expectTypeOf<Listing["tagline"]>().toEqualTypeOf<string>();
+    // A new type drops the generated default (`true`, for a boolean): the column's applies (#81).
+    expect(listing.available).toBeNull();
 
     events.length = 0;
     await listing.save();

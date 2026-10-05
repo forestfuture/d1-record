@@ -102,6 +102,21 @@ function checked(
   return Object.fromEntries(Object.entries(override).filter(([, value]) => value !== undefined));
 }
 
+/**
+ * A generated spec with an override applied. A new type drops the generated default, which was
+ * written for the old type (#81): the column's own default applies on insert, unless the
+ * override gives one.
+ */
+function overridden(
+  spec: AttributeSpecs[string],
+  change: Partial<Exclude<AttributeOverride, AttributeType>>,
+): AttributeSpecs[string] {
+  const base = typeof spec === "string" ? { type: spec } : spec;
+  const retyped = change.type !== undefined && change.type !== base.type;
+  const { default: _generated, ...rest } = base;
+  return { ...(retyped ? rest : base), ...change };
+}
+
 /** A table's attribute specs with `overrides` applied; throws `InvalidModel` for a bad one. */
 function specsFor(
   name: string,
@@ -124,8 +139,7 @@ function specsFor(
   for (const [attribute, spec] of Object.entries(table.attributes)) {
     const change = changes.get(attribute);
     if (change === false) continue;
-    const base = typeof spec === "string" ? { type: spec } : spec;
-    specs[attribute] = change === undefined ? spec : { ...base, ...change };
+    specs[attribute] = change === undefined ? spec : overridden(spec, change);
   }
   return { specs, ignoring: [...changes.values()].includes(false) };
 }
