@@ -1,3 +1,5 @@
+import { castCondition } from "./conversion.ts";
+import { attributeOf } from "./metadata.ts";
 import { prepareModel } from "./associations.ts";
 import type { Executor } from "./executor.ts";
 import { associationOf, type ModelBase, type ModelClass } from "./model.ts";
@@ -34,12 +36,14 @@ async function preloadOne(
   association: ResolvedAssociation,
   executor: Executor,
 ): Promise<ModelBase[]> {
-  const { name, definition, ownerAttribute, targetAttribute } = association;
+  const { name, definition, ownerAttribute, target, targetAttribute } = association;
   const keys = records.map((record) => record[state].read(ownerAttribute));
   const targets = await loadByKeys(association, executor, keys);
   const byKey = groupBy(targets, targetAttribute);
+  // Looked up as the targets hold it: an integer key matches a text foreign key's digits (#94).
+  const { type } = attributeOf(target, targetAttribute);
   for (const [index, record] of records.entries()) {
-    const group = byKey.get(keys[index]) ?? [];
+    const group = byKey.get(castCondition(type, keys[index])) ?? [];
     const value = definition.kind === "hasMany" ? group : (group[0] ?? null);
     record[state].cacheAssociation(name, { attribute: ownerAttribute, key: keys[index], value });
   }
