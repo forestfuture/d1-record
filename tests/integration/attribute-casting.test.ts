@@ -70,6 +70,13 @@ describe("values assigned to attributes are cast to the attribute's type (#81)",
       },
     );
 
+    // The value comes from outside, so its error (often logged) shows only the start of it.
+    test("an error shows at most 60 characters of the value", () => {
+      expect(() => samples().build({ enabled: untyped("x".repeat(10_000)) })).toThrow(
+        new TypeError(`Sample: "${"x".repeat(59)}… isn't a boolean for "enabled"`),
+      );
+    });
+
     test("a setter casts as it assigns, and refuses without changing the attribute", () => {
       const sample = samples().build({ enabled: true });
 
