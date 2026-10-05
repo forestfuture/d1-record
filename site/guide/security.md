@@ -4,7 +4,7 @@ description: "What d1-record protects against and what's left to your app, the g
 
 # Security
 
-d1-record sits between requests and your database, so it is held to a high standard here. This page describes what it protects against, what it leaves to your app, which tests check each guarantee, how releases are built, and the security reviews it has had.
+d1-record sits between the requests your Worker receives and the database that holds your users' data: whatever a request sends can reach a query or a record through it. A mistake there is a mistake in every app that uses it. This page explains what d1-record protects against, what it leaves to your app, which tests check each guarantee, how releases are built, and the security reviews it has had.
 
 These are the project's own reviews, not an independent audit. Each says what it covered and what it didn't.
 
@@ -27,7 +27,7 @@ These are the project's own reviews, not an independent audit. Each says what it
 
 ## Guarantees, and the tests that check them
 
-Every guarantee is tested against a real D1 database (through Miniflare), and CI runs the tests on every change.
+The library's guarantees are tested against a real D1 database (through Miniflare), and CI's by a test that reads its workflows. CI runs every test on every change.
 
 | Guarantee                                                                      | Tests                                                                                                                  |
 | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
@@ -41,13 +41,15 @@ Every guarantee is tested against a real D1 database (through Miniflare), and CI
 
 ## Supply chain
 
-- **No runtime dependencies.** Installing `@forestfuture/d1-record` installs only d1-record's own code.
-- **Releases are built by CI.** The npm package is built and published by the repository's release workflow, never from a laptop. The first release sets up npm's trusted publishing and provenance, so each version can be traced to the commit and workflow that built it.
-- **CI is pinned.** Every third-party GitHub Action is pinned to a commit, not a tag that could be moved, and a test fails if one isn't.
-- **Release jobs run no install scripts.** The jobs that decide, build, version and publish a release install dependencies without running their install scripts and without a shared cache.
-- **Dependencies are watched.** Dependabot proposes updates weekly, a week after each release, and `pnpm audit` is part of each security review.
+- **No runtime dependencies.** Installing `@forestfuture/d1-record` installs only d1-record's own code, so no other package's compromise can reach your Worker through it.
+- **Releases are built by CI.** The npm package is built and published by the repository's release workflow, never from a laptop, so what's on npm is what's in the repository. The first release sets up npm's trusted publishing and provenance, so each version can be traced to the commit and workflow that built it.
+- **CI is pinned.** Every third-party GitHub Action is pinned to a commit, not a tag that could be moved, because a moved tag would run someone else's code in the job that publishes. A test fails if one isn't.
+- **Release jobs run no install scripts.** The jobs that decide, build, version and publish a release install dependencies without running their install scripts and without a shared cache, so a compromised development dependency can't change what's built or published.
+- **Dependencies are watched.** Dependabot proposes updates weekly, waiting a week after each release, since a compromised release is usually caught within days. `pnpm audit` is part of each security review.
 
 ## Review log
+
+Each security review adds an entry here: what it covered, how, what it found, and what it didn't cover.
 
 ### 2026-10-04: the library, its command line, and CI
 
