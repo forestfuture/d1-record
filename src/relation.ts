@@ -1,3 +1,4 @@
+import { castGiven } from "./casting.ts";
 import {
   compileColumns,
   compileCount,
@@ -719,7 +720,7 @@ export class Relation<M extends ModelBase, S = {}> {
     if (assignments.length === 0) {
       throw new TypeError("updateAll() needs at least one attribute to change");
     }
-    return assignments;
+    return castGiven(this.#model, assignments);
   }
 
   /** The query a write statement targets; rows from `distinct()` have no identity to write to. */

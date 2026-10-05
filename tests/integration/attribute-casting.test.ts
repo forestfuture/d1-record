@@ -201,4 +201,42 @@ describe("values assigned to attributes are cast to the attribute's type (#81)",
       },
     );
   });
+
+  // Bulk writes have no record: they cast what they're given, as a record casts what it's assigned.
+  describe("bulk writes", () => {
+    const enabled = async () =>
+      (await samples().order({ id: "asc" }).pluck("enabled")) as unknown[];
+
+    test("insert, insertAll, upsert and upsertAll cast each value", async () => {
+      await samples().insert({ id: 1, enabled: untyped("false") });
+      await samples().insertAll([{ id: 2, enabled: untyped("on") }]);
+      await samples().upsert({ id: 1, enabled: untyped("1") }, { uniqueBy: "id" });
+      await samples().upsertAll([{ id: 3, enabled: untyped("0") }], { uniqueBy: "id" });
+
+      expect(await enabled()).toEqual([true, true, false]);
+    });
+
+    test("updateAll casts each change", async () => {
+      await samples().insertAll([
+        { id: 1, enabled: true },
+        { id: 2, enabled: true },
+      ]);
+
+      expect(
+        await samples().updateAll({ enabled: untyped("false"), quantity: untyped(" 3 ") }),
+      ).toBe(2);
+      expect(await samples().pluck("quantity")).toEqual([3, 3]);
+      expect(await enabled()).toEqual([false, false]);
+    });
+
+    test("a value that can't be cast is a TypeError, and nothing is written", async () => {
+      const error = new TypeError(`Sample: "no" isn't a boolean for "enabled"`);
+
+      await expect(samples().insert({ id: 1, enabled: untyped("no") })).rejects.toThrow(error);
+      expect(() => samples().toInsertAll([{ id: 1, enabled: untyped("no") }])).toThrow(error);
+      expect(() => samples().toUpsert({ id: 1, enabled: untyped("no") })).toThrow(error);
+      expect(() => samples().toUpdateAll({ enabled: untyped("no") })).toThrow(error);
+      expect(await samples().count()).toBe(0);
+    });
+  });
 });
