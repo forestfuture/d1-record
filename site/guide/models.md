@@ -25,7 +25,7 @@ The second argument changes how attributes are read and written, never the table
 | `{ type?, null?, default? }` | Replaces those parts of the generated attribute; `null: false` makes it non-null in TypeScript       |
 | `false`                      | Ignores the column: it's never typed, read or written, and queries name their columns instead of `*` |
 
-The column can't change, an attribute can't be added, and the primary key can't be ignored: each is an `InvalidModel`, even past a cast. A `default` isn't type-checked against the attribute's type yet ([#74](https://github.com/forestfuture/d1-record/issues/74)). An ignored `NOT NULL` column without a default makes inserts fail, so give it a default in a migration first.
+The column can't change, an attribute can't be added, and the primary key can't be ignored: each is an `InvalidModel`, even past a cast. Changing an attribute's `type` drops its generated default, which was for the old type, so the column's own default applies unless you give one. A `default` isn't type-checked against the attribute's type yet ([#74](https://github.com/forestfuture/d1-record/issues/74)), but one that returns a value the type can't cast throws `TypeError` when a record is built. An ignored `NOT NULL` column without a default makes inserts fail, so give it a default in a migration first.
 
 ## Declaring attributes yourself
 
@@ -75,6 +75,29 @@ An attribute is a type name, or `{ type, column?, null?, default? }`.
 | `json`     | any value  | `TEXT`, as JSON       |
 
 As in SQLite, an attribute can be `null` unless it's declared `null: false`, and its TypeScript type includes `| null` to match.
+
+### Assigned values are cast
+
+TypeScript can't check a value that comes from JSON, a form or a query string, so d1-record casts every assigned value to its attribute's type, when it's assigned. That covers `build`, `create`, `assign`, `update`, setting a property, and the values given to `insert`, `upsert` and `updateAll`. Only what's unambiguous is accepted:
+
+| Type       | Accepts                                                                                               |
+| ---------- | ----------------------------------------------------------------------------------------------------- |
+| `boolean`  | `true`, `false`, `1`, `0`, `"1"`, `"0"`, and `"true"`, `"false"`, `"on"`, `"off"` in any case         |
+| `integer`  | a whole number, or a string that's wholly one: `"42"`, `" -7 "`                                       |
+| `real`     | a finite number, or a string that's wholly one: `"1.5"`, `"-2e3"`                                     |
+| `string`   | a string                                                                                              |
+| `datetime` | a `Date`, `"2026-01-02"` (midnight UTC), or a date and time with its offset: `"2026-01-02T09:30:00Z"` |
+| `json`     | any value                                                                                             |
+
+Anything else throws `TypeError`, naming the Model and the attribute, and the attribute keeps its value:
+
+<<< @/snippets/guide/models.ts#casting{ts}
+
+Conditions are cast the same way, so `where({ quantity: "42" })` finds 42. A condition value that can't be cast matches nothing, so `find("abc")` on an integer key throws `RecordNotFound`. See [Querying](./querying#conditions).
+
+::: tip Beyond Rails
+Rails casts too, but leniently: `"12abc"` becomes `12`, `1.7` becomes `1`, any other text is `true`, and `""` is `nil`. d1-record refuses each, so `isAdmin=no` from a form can't save `true`, and an empty field can't silently become `null`.
+:::
 
 Store `json` attributes in a `TEXT` column, as [D1 recommends](https://developers.cloudflare.com/d1/sql-api/query-json/#types), and add `CHECK (json_valid(settings))` to have D1 reject anything that isn't valid JSON. A column declared `JSON` works too.
 
