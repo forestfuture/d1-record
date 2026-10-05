@@ -4,12 +4,15 @@ import { describe, expect, test } from "vite-plus/test";
 
 const github = new URL("../../.github/", import.meta.url).pathname;
 
-/** Every workflow and composite action file under `.github/`. */
-function workflowFiles(): string[] {
+/** The workflows (`.github/workflows/`) and composite actions (`.github/actions/`). */
+function workflowAndActionFiles(): string[] {
   return readdirSync(github, { recursive: true, encoding: "utf8" })
-    .filter((path) => /\.ya?ml$/.test(path) && !path.startsWith("ISSUE_TEMPLATE"))
+    .filter((path) => /^(?:workflows|actions)\/.*\.ya?ml$/.test(path))
     .map((path) => join(github, path));
 }
+
+const workflows = () =>
+  workflowAndActionFiles().filter((file) => file.startsWith(join(github, "workflows")));
 
 /** `uses:` references to other repositories' actions (a local `./` action is ours). */
 function thirdPartyActions(file: string): string[] {
@@ -21,7 +24,7 @@ function thirdPartyActions(file: string): string[] {
 // A tag can be moved to other code; a commit SHA can't (#80). Dependabot keeps the pins current.
 describe("CI's third-party actions", () => {
   test("are pinned to a full commit SHA", () => {
-    const unpinned = workflowFiles().flatMap((file) =>
+    const unpinned = workflowAndActionFiles().flatMap((file) =>
       thirdPartyActions(file)
         .filter((reference) => !/@[0-9a-f]{40}$/.test(reference))
         .map((reference) => `${file.slice(github.length)}: ${reference}`),
@@ -30,31 +33,64 @@ describe("CI's third-party actions", () => {
     expect(unpinned).toEqual([]);
   });
 
-  test("are found in every workflow", () => {
-    expect(workflowFiles().flatMap(thirdPartyActions).length).toBeGreaterThan(0);
+  test("are found, so the pin check isn't passing on nothing", () => {
+    expect(workflowAndActionFiles().flatMap(thirdPartyActions).length).toBeGreaterThan(0);
   });
 });
 
-/** Each job in a workflow file, as its name and its text (jobs are the two-space-indented keys). */
-function jobsOf(file: string): [string, string][] {
+/** A workflow's own settings (before `jobs:`), and each job as its name and text. */
+function partsOf(file: string): { settings: string; jobs: [string, string][] } {
   const text = readFileSync(file, "utf8");
-  const body = text.slice(text.indexOf("\njobs:\n"));
-  return body
+  const start = text.indexOf("\njobs:\n");
+  const jobs = text
+    .slice(start)
     .split(/^(?=  [\w-]+:\s*$)/m)
     .slice(1)
-    .map((job) => [job.trim().split(":")[0]!, job]);
+    .map((job): [string, string] => [job.trim().split(":")[0]!, job]);
+  return { settings: text.slice(0, start), jobs };
 }
 
-describe("CI jobs that can write to the repository or publish", () => {
-  test("install dependencies without their install scripts or the shared cache", () => {
-    const writing = workflowFiles()
-      .filter((file) => file.includes("/workflows/"))
-      .flatMap(jobsOf)
-      .filter(([, job]) => /^\s+(?:contents|id-token|pull-requests): write/m.test(job));
+/** Any write permission: one scope (`contents: write`), or all of them (`write-all`). */
+const writes = /^\s*(?:permissions:\s*write-all|[\w-]+:\s*write)\b/m;
 
-    expect(writing.map(([name]) => name)).toEqual(["release-version", "release-publish"]);
-    for (const [name, job] of writing) {
-      expect(job, name).toMatch(/holds-write-token: true/);
+describe("CI's permissions", () => {
+  test("are read-only for a whole workflow; a job that needs to write says so itself", () => {
+    const widened = workflows().filter((file) => {
+      const { settings } = partsOf(file);
+      return !/^permissions:\n {2}contents: read$(?!\n )/m.test(settings) || writes.test(settings);
+    });
+
+    expect(widened.map((file) => file.slice(github.length))).toEqual([]);
+  });
+});
+
+// A release job decides, builds, versions or publishes what users install, so it runs no dependency's
+// install scripts and doesn't restore the shared cache (#80), with or without a write token.
+describe("CI's release jobs, and every job that can write", () => {
+  const jobs = () => workflows().flatMap((file) => partsOf(file).jobs);
+
+  test("are the release jobs", () => {
+    const writing = jobs().filter(([, job]) => writes.test(job));
+
+    expect(writing.length).toBeGreaterThan(0);
+    expect(writing.every(([name]) => name.startsWith("release-"))).toBe(true);
+  });
+
+  test("install dependencies without their install scripts or the shared cache", () => {
+    const release = jobs().filter(
+      ([name, job]) => name.startsWith("release-") && /setup-vp/.test(job),
+    );
+
+    expect(release.map(([name]) => name)).toEqual([
+      "release-mode",
+      "release-version",
+      "release-pack",
+      "release-publish",
+    ]);
+    for (const [name, job] of release) {
+      expect(job, name).toMatch(
+        /uses: \.\/\.github\/actions\/setup-vp\n\s+with:\n\s+release: true/,
+      );
     }
   });
 });

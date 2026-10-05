@@ -26,6 +26,19 @@ jobs:
       # The tarball holds exactly the library, its docs for agents (llms-full.txt, SKILL.md) and metadata.
       - run: vp run check:package
 
+  # Packs the library as release-pack does (#80): dependencies installed without their install
+  # scripts or the shared cache. A release that couldn't be built that way fails here first.
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-vp
+        with:
+          release: true
+      - run: pnpm pack --out "$RUNNER_TEMP/d1-record.tgz"
+
   docs:
     # Deploys the documentation site to docs.forestfuture.dev/d1-record (site/wrangler.jsonc),
     # only from main and only once the checks above have passed.
@@ -69,6 +82,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-vp
+        with:
+          release: true
       # "version" while changesets are waiting, "publish" once package.json has a version npm
       # doesn't, and "none" otherwise (most pushes).
       - id: select-mode
@@ -93,7 +108,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-vp
         with:
-          holds-write-token: true
+          release: true
       - uses: changesets/action/version@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
           # Changesets can't run the Oxfmt inside Vite+, so `vp fmt` formats CHANGELOG.md after it,
@@ -116,6 +131,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-vp
+        with:
+          release: true
       # Packing runs the package's `prepack` script: it builds dist/ (attw and publint included) and
       # the docs site, whose llms-full.txt ships in the package. A broken docs build blocks a release.
       - id: pack
@@ -138,7 +155,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-vp
         with:
-          holds-write-token: true
+          release: true
       # Only for the first release, before npm allows a trusted publisher; then delete the secret.
       # The token reaches this step alone, not the install or the publish's other steps.
       - run: |
