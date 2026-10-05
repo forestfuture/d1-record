@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 import {
   connect,
+  type FilterAttribute,
   gte,
   Model,
   modelFor,
@@ -180,7 +181,7 @@ describe("filterAttributes", () => {
   });
 
   describe("which attributes are filtered", () => {
-    const named = (filterAttributes: readonly (string | RegExp)[]) =>
+    const named = (filterAttributes: readonly FilterAttribute[]) =>
       class extends Model({
         id: { type: "integer", null: false },
         passwordDigest: "string",

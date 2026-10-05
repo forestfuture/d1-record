@@ -5,10 +5,16 @@ import { underscore } from "./naming.ts";
 export const FILTERED = "[FILTERED]";
 
 /**
+ * An entry of `filterAttributes`: a string the attribute's snake_case name contains (in any
+ * case), or a RegExp the attribute or its snake_case name matches.
+ */
+export type FilterAttribute = string | RegExp;
+
+/**
  * Rails' default `filter_parameters` for a new app: an attribute whose snake_case name holds
  * one of these, in any case, is filtered (`passwordDigest`, `apiKey`, `resetToken`, `email`).
  */
-export const defaultFilterAttributes: readonly (string | RegExp)[] = [
+export const defaultFilterAttributes: readonly FilterAttribute[] = [
   "passw",
   "email",
   "secret",
@@ -28,7 +34,7 @@ export const defaultFilterAttributes: readonly (string | RegExp)[] = [
  * entry (in any case), or a RegExp entry matches the attribute or its snake_case name.
  */
 export function isFiltered(model: ModelClass, attribute: string): boolean {
-  const name = underscore(attribute).toLowerCase();
+  const name = underscore(attribute); // already lowercase
   return model.filterAttributes.some((entry) =>
     typeof entry === "string"
       ? name.includes(entry.toLowerCase())
