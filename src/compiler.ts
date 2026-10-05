@@ -1,5 +1,11 @@
+import { castAssigned } from "./casting.ts";
 import { type Bind, binderFor, FILTERED, Filtered, isFiltered } from "./filtering.ts";
-import { attributeOf, ignoresColumns, type AttributeDefinition } from "./metadata.ts";
+import {
+  attributeOf,
+  ignoresColumns,
+  type AttributeDefinition,
+  type AttributeType,
+} from "./metadata.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { Comparison, comparisonParts, type Operator } from "./comparisons.ts";
 import { Either, Negated, type Condition, type QueryDescription } from "./query.ts";
@@ -68,6 +74,20 @@ function compileCondition(
   return `(${parts.join(" AND ")})`;
 }
 
+/**
+ * A value written to `name`, as D1 stores it: cast as an assigned value is (#81, #94), whoever
+ * gave it, so no caller has to cast first. Casting is idempotent, so a record's values, already
+ * cast when assigned, pass through unchanged.
+ */
+function storedValue(
+  model: ModelClass<ModelBase>,
+  name: string,
+  type: AttributeType,
+  value: unknown,
+): unknown {
+  return writeValue(type, castAssigned(model, name, value));
+}
+
 /** An attribute and the value to write to it. */
 export type Assignment = readonly [attribute: string, value: unknown];
 
@@ -89,7 +109,7 @@ export function compileInsert(
   const placeholders = assignments.map(() => "?").join(", ");
   const params: unknown[] = [];
   assignments.forEach(([name, value], index) =>
-    binderFor(params, model, name)(writeValue(definitions[index]!.type, value)),
+    binderFor(params, model, name)(storedValue(model, name, definitions[index]!.type, value)),
   );
   return {
     sql: `INSERT INTO ${table} (${columns}) VALUES (${placeholders}) RETURNING ${allColumns(model)}`,
@@ -118,7 +138,7 @@ export function compileInsertRows(
   const columns = definitions.map(({ column }) => quoteIdentifier(column)).join(", ");
   const values = definitions.map((_, index) => `value ->> '$[${index}]'`).join(", ");
   const written = rows.map((row) =>
-    row.map((value, index) => writeValue(definitions[index]!.type, value)),
+    row.map((value, index) => storedValue(model, names[index]!, definitions[index]!.type, value)),
   );
   const json = filteredRows(model, names, written);
   // `WHERE true` keeps SQLite from reading ON CONFLICT as part of the SELECT.
@@ -192,7 +212,7 @@ function compileSets(
   return changes
     .map(([name, value]) => {
       const { column, type } = attributeOf(model, name);
-      binderFor(params, model, name)(writeValue(type, value));
+      binderFor(params, model, name)(storedValue(model, name, type, value));
       return `${quoteIdentifier(column)} = ?`;
     })
     .join(", ");
