@@ -394,5 +394,5 @@ await db.model(Post).updateAll(sql`${column("views")} = ${column("views")} + ${1
 Everything extends `D1RecordError`:
 
 - **Lifecycle:** `RecordNotFound`, `RecordInvalid` (`.record`), `RecordNotSaved`, `RecordNotDestroyed`, `RecordDestroyed`, `CallbackAbort` (from `abort()`), `AbortAfterPersistence` (`.callback`, `.reason`)
-- **Usage:** `UnknownAssociation`, `InvalidModel` (a problem in a Model's declaration, detected the first time it's used), `UnknownAttribute`, `MissingAttribute`, `IncompatibleRelation`, `IrreversibleOrder`, `DeleteRestriction`, `AssociationNotLoaded`, `NoDatabase`, `NoSession`
+- **Usage:** `UnknownAssociation`, `InvalidModel` (a problem in a Model's declaration, detected the first time it's used), `UnknownAttribute`, `MissingAttribute`, `IncompatibleRelation`, `IrreversibleOrder`, `DeleteRestriction`, `AssociationNotLoaded`, `NoDatabase`, `NoSession` Names are looked up as a Model's own: a name every object inherits (`constructor`, `__proto__`, `toString`, `hasOwnProperty`), from a URL's `?include=` say, is an `UnknownAttribute` or `UnknownAssociation` like any other unknown name (#84).
 - **Constraints:** `ConstraintViolation`, with subclasses `RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation` and `CheckViolation`
