@@ -1,9 +1,19 @@
 name: Set up Vite+
 description: Installs Vite+ (the version pinned in pnpm-workspace.yaml), Node (.node-version) and pnpm, then runs `vp install`. Check out the repository first.
+inputs:
+  holds-write-token:
+    description: >
+      "true" for a job that can write to the repository or publish (#80): dependencies install
+      without running their install scripts, and without the shared dependency cache.
+    default: "false"
 runs:
   using: composite
   steps:
     - uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
       with:
         node-version-file: .node-version
-        cache: true
+        cache: ${{ inputs.holds-write-token != 'true' }}
+        run-install: ${{ inputs.holds-write-token != 'true' }}
+    - if: inputs.holds-write-token == 'true'
+      shell: bash
+      run: vp install --frozen-lockfile --ignore-scripts
