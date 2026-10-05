@@ -1,4 +1,5 @@
 import { castValue, isInvalidDate, uncastable } from "./conversion.ts";
+import { FILTERED, isFiltered } from "./filtering.ts";
 import { attributeOf } from "./metadata.ts";
 import type { ModelClass } from "./model.ts";
 
@@ -25,16 +26,16 @@ function textOf(value: unknown): string {
 
 /**
  * `value` cast to `attribute`'s type, for assigning: what records, `insert` and `updateAll`
- * store (#81). A value that can't be cast throws `TypeError` naming the Model and attribute.
+ * store (#81). A value that can't be cast throws `TypeError` naming the Model and attribute,
+ * and showing the value unless the attribute is filtered (#83).
  */
 export function castAssigned(model: ModelClass, attribute: string, value: unknown): unknown {
   const { type } = attributeOf(model, attribute);
   const cast = castValue(type, value);
   if (cast === uncastable) {
     const article = /^[aeiou]/.test(type) ? "an" : "a";
-    throw new TypeError(
-      `${model.name}: ${shown(value)} isn't ${article} ${type} for "${attribute}"`,
-    );
+    const text = isFiltered(model, attribute) ? FILTERED : shown(value);
+    throw new TypeError(`${model.name}: ${text} isn't ${article} ${type} for "${attribute}"`);
   }
   return cast;
 }
