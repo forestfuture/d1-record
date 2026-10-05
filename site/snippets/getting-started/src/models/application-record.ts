@@ -22,6 +22,10 @@ class Base extends Model.Base {
   // static override onQuery: QueryListener = ({ model, sql, durationMs }) =>
   //   console.log(`${model} ${durationMs.toFixed(1)}ms ${sql}`);
 
+  // Values of attributes named like these show as "[FILTERED]" to onQuery and in errors. These
+  // are Rails' defaults (passwords, tokens, keys, emails…); add yours, or leave one out:
+  // static override filterAttributes = [...Model.Base.filterAttributes, "iban"];
+
   static {
     // A callback that runs for every Model, before each Model's own:
     // this.beforeSave((record) => {
