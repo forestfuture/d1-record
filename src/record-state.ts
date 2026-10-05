@@ -1,4 +1,4 @@
-import { castAssigned, castKey } from "./casting.ts";
+import { castAs } from "./attribute-values.ts";
 import type { Assignment } from "./compiler.ts";
 import { readValue, writeValue } from "./conversion.ts";
 import { Errors } from "./errors-collection.ts";
@@ -141,10 +141,8 @@ export class RecordState {
    * (use `null` for that); a destroyed record is read-only.
    */
   write(name: string, value: unknown): void {
-    this.#requireNotDestroyed("be changed");
-    requireDefined(this.#model, name, value);
-    this.#values[name] = castAssigned(this.#model, name, value);
-    this.#assigned.add(name);
+    this.#requireWritable(name, value);
+    this.#store(name, castAs("assigned", { model: this.#model, attribute: name }, value));
   }
 
   /**
@@ -152,8 +150,19 @@ export class RecordState {
    * is (#94): an integer key into a text foreign key becomes its digits.
    */
   writeKey(name: string, value: unknown, association: string): void {
+    this.#requireWritable(name, value);
+    this.#store(name, castAs("key", { model: this.#model, attribute: name, association }, value));
+  }
+
+  /** A destroyed record is read-only, and `undefined` would silently store NULL. */
+  #requireWritable(name: string, value: unknown): void {
     this.#requireNotDestroyed("be changed");
-    this.#values[name] = castKey(this.#model, name, value, association);
+    requireDefined(this.#model, name, value);
+  }
+
+  /** Stores an attribute's already-cast value, as assigned. */
+  #store(name: string, value: unknown): void {
+    this.#values[name] = value;
     this.#assigned.add(name);
   }
 

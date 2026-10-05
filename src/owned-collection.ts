@@ -30,6 +30,8 @@ export interface OwnedCollection {
    * without a deleting `dependent:`; undefined when it deletes.
    */
   readonly nullifies: string | undefined;
+  /** Its foreign key and association, which a key that can't be cast names (#94). */
+  readonly link: { attribute: string; association: string };
   /** Its form in a narrowed Relation. */
   narrowed(): OwnedCollection;
 }
@@ -72,6 +74,7 @@ function withKey(
     unsavedCount: () => built().filter((record) => record[state].isNew).length,
     refusal: undefined,
     nullifies: association.deletesOnDeleteAll ? undefined : definition.foreignKey,
+    link: { attribute: definition.foreignKey, association: name },
     narrowed: () => narrowedOf(collection),
   };
   return collection;
@@ -88,6 +91,7 @@ function withoutKey(owner: ModelBase, association: ResolvedAssociation): OwnedCo
     unsavedCount: () => 0,
     refusal: association.refusalFor(owner),
     nullifies: definition.foreignKey,
+    link: { attribute: definition.foreignKey, association: name },
     narrowed: () => narrowedOf(collection),
   };
   return collection;
@@ -103,6 +107,7 @@ function narrowedOf(collection: OwnedCollection): OwnedCollection {
     unsavedCount: () => 0,
     refusal: collection.refusal,
     nullifies: undefined,
+    link: collection.link,
     narrowed: () => narrowed,
   };
   return narrowed;

@@ -1,4 +1,4 @@
-import { castAssigned } from "./casting.ts";
+import { castAs } from "./attribute-values.ts";
 import { attributeOf } from "./metadata.ts";
 import type { ModelClass } from "./model.ts";
 
@@ -26,7 +26,7 @@ function castPermitted(model: ModelClass, name: string, value: unknown): unknown
   if (value instanceof Blob) {
     throw new TypeError(`${model.name}: "${name}" is a file, and no attribute stores one`);
   }
-  return castAssigned(model, name, value);
+  return castAs("assigned", { model, attribute: name }, value);
 }
 
 /**

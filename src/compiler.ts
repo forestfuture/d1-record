@@ -1,16 +1,10 @@
-import { castAssigned } from "./casting.ts";
-import { type Bind, binderFor, FILTERED, Filtered, isFiltered } from "./filtering.ts";
-import {
-  attributeOf,
-  ignoresColumns,
-  type AttributeDefinition,
-  type AttributeType,
-} from "./metadata.ts";
+import { bindAs, storedAs, storedRows, uncastable, type ValueOf } from "./attribute-values.ts";
+import { attributeOf, ignoresColumns } from "./metadata.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { Comparison, comparisonParts, type Operator } from "./comparisons.ts";
 import { Either, Negated, type Condition, type QueryDescription } from "./query.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
-import { castCondition, uncastable, writeUntypedValue, writeValue } from "./conversion.ts";
+import { writeUntypedValue } from "./conversion.ts";
 
 /** One SQL statement ready for D1, with the Model whose table it reads or writes. */
 export interface CompiledSql {
@@ -65,27 +59,13 @@ function compileCondition(
     return `(NOT ${compileCondition(condition.condition, model, params)})`;
   }
   if (condition instanceof SafeSql) return `(${compileFragment(condition, model, params)})`;
-  const parts = Object.entries(condition).map(([name, value]) => {
-    const bind = binderFor(params, model, name);
+  const parts = Object.entries(condition).map(([attribute, value]) => {
+    const of = { model, attribute };
     return value instanceof Comparison
-      ? compileComparison(attributeOf(model, name), value, bind)
-      : compileEquality(attributeOf(model, name), value, bind);
+      ? compileComparison(of, value, params)
+      : compileEquality(of, value, params);
   });
   return `(${parts.join(" AND ")})`;
-}
-
-/**
- * A value written to `name`, as D1 stores it: cast as an assigned value is (#81, #94), whoever
- * gave it, so no caller has to cast first. Casting is idempotent, so a record's values, already
- * cast when assigned, pass through unchanged.
- */
-function storedValue(
-  model: ModelClass<ModelBase>,
-  name: string,
-  type: AttributeType,
-  value: unknown,
-): unknown {
-  return writeValue(type, castAssigned(model, name, value));
 }
 
 /** An attribute and the value to write to it. */
@@ -108,9 +88,10 @@ export function compileInsert(
   const columns = definitions.map(({ column }) => quoteIdentifier(column)).join(", ");
   const placeholders = assignments.map(() => "?").join(", ");
   const params: unknown[] = [];
-  assignments.forEach(([name, value], index) =>
-    binderFor(params, model, name)(storedValue(model, name, definitions[index]!.type, value)),
-  );
+  for (const [attribute, value] of assignments) {
+    const of = { model, attribute };
+    bindAs(params, of, storedAs("assigned", of, value));
+  }
   return {
     sql: `INSERT INTO ${table} (${columns}) VALUES (${placeholders}) RETURNING ${allColumns(model)}`,
     params,
@@ -137,28 +118,12 @@ export function compileInsertRows(
   const definitions = names.map((name) => attributeOf(model, name));
   const columns = definitions.map(({ column }) => quoteIdentifier(column)).join(", ");
   const values = definitions.map((_, index) => `value ->> '$[${index}]'`).join(", ");
-  const written = rows.map((row) =>
-    row.map((value, index) => storedValue(model, names[index]!, definitions[index]!.type, value)),
-  );
-  const json = filteredRows(model, names, written);
+  const json = storedRows(model, names, rows);
   // `WHERE true` keeps SQLite from reading ON CONFLICT as part of the SELECT.
   const sql =
     `INSERT INTO ${quoteIdentifier(model.tableName)} (${columns}) ` +
     `SELECT ${values} FROM json_each(?) WHERE true${compileConflict(model, names, conflict)}`;
   return { sql, params: [json], model };
-}
-
-/** The rows as one JSON value; listeners see filtered attributes' values as "[FILTERED]". */
-function filteredRows(
-  model: ModelClass<ModelBase>,
-  names: readonly string[],
-  rows: readonly (readonly unknown[])[],
-): unknown {
-  const json = JSON.stringify(rows);
-  const filtered = names.map((name) => isFiltered(model, name));
-  if (!filtered.includes(true)) return json;
-  const shown = rows.map((row) => row.map((value, index) => (filtered[index] ? FILTERED : value)));
-  return new Filtered(json, JSON.stringify(shown));
 }
 
 /**
@@ -194,7 +159,7 @@ export function compileUpdate(
   const params: unknown[] = [];
   const sets = compileSets(model, assignments, params);
   const primaryKey = attributeOf(model, model.primaryKey);
-  binderFor(params, model, model.primaryKey)(storedKey);
+  bindAs(params, { model, attribute: model.primaryKey }, storedKey);
   return {
     sql: `UPDATE ${quoteIdentifier(model.tableName)} SET ${sets} WHERE ${quoteIdentifier(primaryKey.column)} = ?`,
     params,
@@ -211,9 +176,9 @@ function compileSets(
   if (changes instanceof SafeSql) return compileFragment(changes, model, params);
   return changes
     .map(([name, value]) => {
-      const { column, type } = attributeOf(model, name);
-      binderFor(params, model, name)(storedValue(model, name, type, value));
-      return `${quoteIdentifier(column)} = ?`;
+      const of = { model, attribute: name };
+      bindAs(params, of, storedAs("assigned", of, value));
+      return `${quoteIdentifier(attributeOf(model, name).column)} = ?`;
     })
     .join(", ");
 }
@@ -256,7 +221,7 @@ export function compileDeleteAll(query: QueryDescription): CompiledSql {
 export function compileDelete(model: ModelClass<ModelBase>, storedKey: unknown): CompiledSql {
   const { column } = attributeOf(model, model.primaryKey);
   const params: unknown[] = [];
-  binderFor(params, model, model.primaryKey)(storedKey);
+  bindAs(params, { model, attribute: model.primaryKey }, storedKey);
   return {
     sql: `DELETE FROM ${quoteIdentifier(model.tableName)} WHERE ${quoteIdentifier(column)} = ?`,
     params,
@@ -297,16 +262,12 @@ export function compileCount(query: QueryDescription, attribute?: string): Compi
 }
 
 /** `attr >= ?`, `attr BETWEEN ? AND ?`, …, with the values converted like the attribute's. */
-function compileComparison(
-  attribute: AttributeDefinition,
-  comparison: Comparison,
-  bind: Bind,
-): string {
+function compileComparison(of: ValueOf, comparison: Comparison, params: unknown[]): string {
   const { operator, values } = comparison[comparisonParts];
-  const cast = values.map((value) => castCondition(attribute.type, value));
-  if (cast.includes(uncastable)) return NOTHING;
-  bind(...cast.map((value) => writeValue(attribute.type, value)));
-  return COMPARISON_SQL[operator](quoteIdentifier(attribute.column));
+  const stored = values.map((value) => storedAs("condition", of, value));
+  if (stored.includes(uncastable)) return NOTHING;
+  bindAs(params, of, ...stored);
+  return COMPARISON_SQL[operator](quoteIdentifier(attributeOf(of.model, of.attribute).column));
 }
 
 /**
@@ -326,23 +287,23 @@ const COMPARISON_SQL: Record<Operator, (column: string) => string> = {
 };
 
 /** `attr = value`, with NULL and arrays (IN) handled the way the contract specifies. */
-function compileEquality(attribute: AttributeDefinition, value: unknown, bind: Bind): string {
-  const column = quoteIdentifier(attribute.column);
+function compileEquality(of: ValueOf, value: unknown, params: unknown[]): string {
+  const column = quoteIdentifier(attributeOf(of.model, of.attribute).column);
   if (value === null) return `${column} IS NULL`;
   if (!Array.isArray(value)) {
-    const cast = castCondition(attribute.type, value);
-    if (cast === uncastable) return NOTHING;
-    bind(writeValue(attribute.type, cast));
+    const stored = storedAs("condition", of, value);
+    if (stored === uncastable) return NOTHING;
+    bindAs(params, of, stored);
     return `${column} = ?`;
   }
   const present = value
     .filter((item) => item !== null)
-    .map((item) => castCondition(attribute.type, item))
+    .map((item) => storedAs("condition", of, item))
     .filter((item) => item !== uncastable);
   const parts: string[] = [];
   if (present.length > 0) {
     // The whole list is one JSON value, so any length fits D1's 100 bound parameters.
-    bind(JSON.stringify(present.map((item) => writeValue(attribute.type, item))));
+    bindAs(params, of, JSON.stringify(present));
     parts.push(`${column} IN (SELECT value FROM json_each(?))`);
   }
   if (value.includes(null)) parts.push(`${column} IS NULL`);

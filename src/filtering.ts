@@ -58,17 +58,6 @@ export function shownKey(model: ModelClass, key: unknown): string {
   return isFiltered(model, model.primaryKey) ? FILTERED : String(key);
 }
 
-/** Binds values as one attribute's: hidden from listeners when the attribute is filtered. */
-export type Bind = (...values: unknown[]) => void;
-
-/** A `Bind` that appends to `params` as `attribute`'s values. */
-export function binderFor(params: unknown[], model: ModelClass, attribute: string): Bind {
-  const filtered = isFiltered(model, attribute);
-  return (...values) => {
-    for (const value of values) params.push(filtered ? new Filtered(value) : value);
-  };
-}
-
 /** The value D1 binds. */
 export function boundValue(param: unknown): unknown {
   return param instanceof Filtered ? param.value : param;
