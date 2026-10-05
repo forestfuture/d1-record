@@ -115,4 +115,17 @@ describe("values by their use", () => {
       );
     });
   });
+
+  describe("preloading across key types", () => {
+    test("includes finds the records an integer key and a text foreign key link", async () => {
+      await db().model(Owner).insert({ id: 9, email: "ada@example.com" });
+      await db().model(Note).insert({ id: 1, label: "9" });
+
+      const [owner] = await db().model(Owner).includes("notes").toArray();
+      const [note] = await db().model(Note).includes("owner").toArray();
+
+      expect(owner!.loaded("notes").map((each) => each.id)).toEqual([1]);
+      expect(note!.loaded("owner")?.id).toBe(9);
+    });
+  });
 });
