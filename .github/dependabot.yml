@@ -1,0 +1,26 @@
+# Keeps CI's actions (pinned to commit SHAs, #80) and the development dependencies current.
+# Updates wait a week after a release (pnpm's minimumReleaseAge works the same way), so a compromised
+# release is usually caught before it gets here.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directories:
+      - /
+      - /.github/actions/*
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      development:
+        dependency-type: development
