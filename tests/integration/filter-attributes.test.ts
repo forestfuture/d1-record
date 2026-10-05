@@ -89,6 +89,19 @@ describe("filterAttributes", () => {
     expect(params()).toEqual([["ada@example.com"]]);
   });
 
+  test("a cast error shows a filtered attribute's value as [FILTERED]", () => {
+    expect(() =>
+      db()
+        .model(User)
+        .build({ email: 42 as never }),
+    ).toThrow(new TypeError('User: [FILTERED] isn\'t a string for "email"'));
+    expect(() =>
+      db()
+        .model(User)
+        .build({ role: 42 as never }),
+    ).toThrow(new TypeError('User: 42 isn\'t a string for "role"'));
+  });
+
   describe("which attributes are filtered", () => {
     const named = (filterAttributes: readonly (string | RegExp)[]) =>
       class extends Model({
