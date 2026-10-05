@@ -1,4 +1,5 @@
-import type { AttributeType } from "./metadata.ts";
+import { attributeOf, type AttributeType } from "./metadata.ts";
+import type { ModelClass } from "./model.ts";
 
 /** A value that can't be read as the attribute's type. */
 const uncastable = Symbol("uncastable");
@@ -112,4 +113,15 @@ export function castAssigned(
     throw new TypeError(`${model}: ${shown(value)} isn't ${article} ${type} for "${attribute}"`);
   }
   return cast;
+}
+
+/** Attribute values given to a bulk write (`insert`, `updateAll`, …), each cast as it's assigned. */
+export function castGiven(
+  model: ModelClass,
+  entries: readonly (readonly [string, unknown])[],
+): [string, unknown][] {
+  return entries.map(([name, value]) => [
+    name,
+    castAssigned(model.name, name, attributeOf(model, name).type, value),
+  ]);
 }

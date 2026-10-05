@@ -5,6 +5,7 @@ import {
   type CompiledSql,
   type Conflict,
 } from "./compiler.ts";
+import { castGiven } from "./casting.ts";
 import type { Executor } from "./executor.ts";
 import { attributeOf, evaluateDefaults, requireDefined } from "./metadata.ts";
 import type { ModelClass } from "./model.ts";
@@ -48,7 +49,8 @@ function insertAssignments(model: ModelClass, attributes: Record<string, unknown
   for (const name of Object.keys(attributes)) attributeOf(model, name);
   const values = [...Object.entries(attributes), ...evaluateDefaults(model, attributes)];
   for (const [name, value] of values) requireDefined(model, name, value);
-  return [...values, ...timestampsFor(model, "insert", values)];
+  const cast = castGiven(model, values);
+  return [...cast, ...timestampsFor(model, "insert", cast)];
 }
 
 /**
