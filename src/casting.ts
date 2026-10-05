@@ -9,7 +9,7 @@ const uncastable = Symbol("uncastable");
  * isn't (#81). Never called with null.
  */
 const casts: Record<AttributeType, (value: unknown) => unknown> = {
-  string: (value) => value,
+  string: (value) => (typeof value === "string" ? value : uncastable),
   integer: castInteger,
   real: castReal,
   boolean: castBoolean,
