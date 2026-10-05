@@ -1,3 +1,4 @@
+import { jointly, oneDatabase } from "./executor.ts";
 import { shownKey } from "./filtering.ts";
 import { castGiven } from "./casting.ts";
 import {
@@ -250,7 +251,7 @@ export class Relation<M extends ModelBase, S = {}> {
    */
   or(other: Relation<M, S>): Scoped<M, S> {
     this.#requireSameModel(other, "or");
-    return this.#describing(either(this.#query, other.#query));
+    return this.#joining(other, "or()").#describing(either(this.#query, other.#query));
   }
 
   /**
@@ -260,7 +261,7 @@ export class Relation<M extends ModelBase, S = {}> {
    */
   merge(other: Relation<M, S>): Scoped<M, S> {
     this.#requireSameModel(other, "merge");
-    return this.#describing(merged(this.#query, other.#query));
+    return this.#joining(other, "merge()").#describing(merged(this.#query, other.#query));
   }
 
   /**
@@ -684,15 +685,23 @@ export class Relation<M extends ModelBase, S = {}> {
     return this.#collection?.loaded() as M[] | undefined;
   }
 
+  /** This Relation on its and `other`'s databases, which must be one when it runs (#93). */
+  #joining(other: Relation<M, S>, method: string): Relation<M, S> {
+    const executor = jointly(this.#executor, other.#executor, `${method} needs its relations`);
+    if (executor === this.#executor) return this;
+    const Class = this.constructor as new (...args: RelationArgs<M>) => Relation<M, S>;
+    return new Class({
+      executor,
+      model: this.#model,
+      query: this.#query,
+      collection: this.#collection,
+    });
+  }
+
   #requireSameModel(other: Relation<M, S>, method: string): void {
     if (other.#model !== this.#model) {
       throw new IncompatibleRelation(
         `${method}() needs relations of the same Model, not ${this.#model.name} and ${other.#model.name}`,
-      );
-    }
-    if (other.#executor !== this.#executor) {
-      throw new IncompatibleRelation(
-        `${method}() needs relations on the same Database; these come from two connect() calls`,
       );
     }
   }
@@ -747,13 +756,8 @@ export class Relation<M extends ModelBase, S = {}> {
         `${model} scope "${name}" must return a Relation of ${model}, e.g. (q) => q.where(...)`,
       );
     }
-    // Otherwise the query would silently run on another connection.
-    if (result.#executor !== this.#executor) {
-      throw new TypeError(
-        `${this.#model.name} scope "${name}" must return a Relation on the same Database it was called on`,
-      );
-    }
-    return result as Relation<M>;
+    // Its database and this one's must be one when it runs (#93), as for merge and or.
+    return result.#joining(this, `${this.#model.name} scope "${name}"`) as Relation<M>;
   }
 
   /**
@@ -799,7 +803,7 @@ export class Relation<M extends ModelBase, S = {}> {
         : query.select;
     const rows = await this.#all(compileSelect(query, compileColumns(this.#model, loaded)));
     // Bound to the database the query used, which they keep, even past a request's withDatabase.
-    const executor = await this.#executor.resolved();
+    const executor = await oneDatabase([this.#executor], "a query needs its relations");
     const records = rows.map((row) => hydrate(this.#model, row, executor));
     if (query.includes !== undefined) await preload(records, query.includes, executor);
     return records;

@@ -1,9 +1,9 @@
-import { IncompatibleRelation, NoSession, RecordNotSaved } from "./errors.ts";
+import { NoSession, RecordNotSaved } from "./errors.ts";
 import { prepareDestroy, prepareSave, refusalError, type Claimed } from "./lifecycle.ts";
 import { RecordStatement, recordStatementParts } from "./record-statement.ts";
 import { state } from "./record-state.ts";
 import { runAfter, writeAll, type PreparedWrite } from "./unit-of-work.ts";
-import { D1Executor, type Executor, type QueryListener } from "./executor.ts";
+import { D1Executor, type Executor, type QueryListener, oneDatabase } from "./executor.ts";
 import { prepareModel } from "./associations.ts";
 import type { ModelBase, ModelClass, ScopesOf } from "./model.ts";
 import type { Scoped } from "./relation.ts";
@@ -92,11 +92,7 @@ export class Database {
 
   /** A batch entry must be on this Database: built on it, or on the current one when it's this. */
   async #requireOwn(entry: BatchEntry): Promise<void> {
-    if ((await executorOf(entry).resolved()) !== this.#executor) {
-      throw new IncompatibleRelation(
-        "batch() needs statements and records of this Database; one comes from another connect() call",
-      );
-    }
+    await oneDatabase([this.#executor, executorOf(entry)], "batch() needs statements and records");
   }
 }
 
@@ -134,17 +130,11 @@ async function runBatch<const T extends readonly BatchEntry[]>(
 export async function batch<const T extends readonly BatchEntry[]>(
   entries: T,
 ): Promise<BatchResults<T>> {
-  // The databases they're on now: entries from a Model's statics and from db.model(…) can be one.
-  const executors = new Set(
-    await Promise.all(entries.map((entry) => executorOf(entry).resolved())),
-  );
-  if (executors.size > 1) {
-    throw new IncompatibleRelation(
-      "batch() needs statements and records of one database; these come from more than one",
-    );
-  }
-  const [executor] = executors;
-  return executor === undefined ? ([] as BatchResults<T>) : runBatch(executor, entries);
+  // The database they're on now: entries from a Model's statics and from db.model(…) can be one.
+  const [first, ...rest] = entries.map(executorOf);
+  if (first === undefined) return [] as BatchResults<T>;
+  const executor = await oneDatabase([first, ...rest], "batch() needs statements and records");
+  return runBatch(executor, entries);
 }
 
 /** What `db.batch` accepts: statements, and records' save or destroy. */
