@@ -1,3 +1,4 @@
+import { oneDatabase } from "./executor.ts";
 import { castAssigned } from "./casting.ts";
 import type { Assignment } from "./compiler.ts";
 import { readValue, writeValue } from "./conversion.ts";
@@ -96,7 +97,9 @@ export class RecordState {
    * destroyed on, which it keeps from then on, as a loaded record keeps the one it came from.
    */
   async bindToResolved(): Promise<void> {
-    if (this.#executor !== undefined) this.#executor = await this.#executor.resolved();
+    if (this.#executor !== undefined) {
+      this.#executor = await oneDatabase([this.#executor], "a record needs its relations");
+    }
   }
 
   /** The record's Database; `NoDatabase` for a record constructed directly (`new User()`). */

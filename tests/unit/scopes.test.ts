@@ -94,7 +94,8 @@ describe("scope rules", () => {
 });
 
 describe("relations stay on their Database", () => {
-  test("a scope that returns a Relation on another Database is rejected", () => {
+  // Checked when the query runs (#93): a scope may return a Relation on the current database.
+  test("a scope that returns a Relation on another Database is rejected when it runs", async () => {
     const otherDb = connect({} as never);
     class Wanderer extends Model({ id: "integer" }) {
       static tableName = "users";
@@ -104,16 +105,21 @@ describe("relations stay on their Database", () => {
       );
     }
 
-    expect(() => db.model(Wanderer).elsewhere()).toThrow(TypeError);
-    expect(() => db.model(Wanderer).elsewhere()).toThrow(/same Database/);
+    const elsewhere = db.model(Wanderer).elsewhere() as unknown as Relation<Wanderer>;
+    await expect(elsewhere.toArray()).rejects.toThrow(IncompatibleRelation);
+    await expect(elsewhere.toArray()).rejects.toThrow(
+      /Wanderer scope "elsewhere" needs its relations on one database/,
+    );
   });
 
-  test("or() and merge() reject a Relation from another Database", () => {
+  test("or() and merge() reject a Relation from another Database when they run", async () => {
     const here = db.model(User);
     const there = connect({} as never).model(User);
 
-    expect(() => here.or(there)).toThrow(IncompatibleRelation);
-    expect(() => here.merge(there)).toThrow(/same Database/);
+    await expect(here.or(there).toArray()).rejects.toThrow(IncompatibleRelation);
+    await expect(here.merge(there).toArray()).rejects.toThrow(
+      /merge\(\) needs its relations on one database/,
+    );
   });
 });
 
