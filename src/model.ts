@@ -1,3 +1,4 @@
+import { permitted } from "./permit.ts";
 import { InvalidModel } from "./errors.ts";
 import type { Executor, QueryListener } from "./executor.ts";
 import {
@@ -266,6 +267,19 @@ export class ModelBase {
   };
 
   /** Declares a validation, e.g. `this.validates("email", { presence: true })` in `static {}`. */
+  /**
+   * Only the named attributes of untrusted input (a JSON body), as Rails' `params.permit`:
+   * `User.create(User.permit(await request.json(), "email", "name"))`. Every other key is
+   * dropped. Values are cast when they're assigned, so the result is typed as the attributes.
+   */
+  static permit<C extends ModelClass, K extends AttributeKey<InstanceType<C>>>(
+    this: C,
+    input: unknown,
+    ...names: K[]
+  ): Partial<Pick<AttributesOf<InstanceType<C>>, K>> {
+    return permitted(this, input, names) as Partial<Pick<AttributesOf<InstanceType<C>>, K>>;
+  }
+
   static validates<C extends ModelClass>(
     this: C,
     attribute: keyof AttributesOf<InstanceType<C>> & string,
