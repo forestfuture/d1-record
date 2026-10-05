@@ -38,7 +38,15 @@ class User extends Model({
   static tableName = "users";
   static override binding = "DB";
 
-  posts = hasMany(Post, { foreignKey: "userId" });
+  posts = hasMany(Post, { foreignKey: "userId", dependent: "destroy" });
+
+  // Counts before-callbacks, to show a refused save runs none.
+  static beforeSaves = 0;
+  static {
+    this.beforeSave(() => {
+      User.beforeSaves++;
+    });
+  }
 }
 
 // One database per query, write and record, whichever level it came from (#93, ADR-0012).
@@ -182,6 +190,77 @@ describe("one database", () => {
           "merge() needs its relations on one database; these are on the DB binding's database and a connect() database",
         ),
       );
+    });
+  });
+
+  describe("review fixes", () => {
+    test("a save refused for two databases runs no callbacks", async () => {
+      const post = connect(one).model(Post).build({ id: 42, title: "Orphan" });
+      post.author.set(connect(two).model(User).build({ id: 6, email: "f@example.com" }));
+      User.beforeSaves = 0;
+
+      await expect(post.save()).rejects.toThrow(IncompatibleRelation);
+      expect(User.beforeSaves).toBe(0);
+    });
+
+    test("a destroy's dependents are destroyed on the request's database", async () => {
+      const seen: QueryEvent[] = [];
+      await withDatabase(connect(one, { onQuery: (event) => seen.push(event) }), async () => {
+        await (await User.find(1)).destroy();
+      });
+
+      expect(seen.map((event) => event.sql.split(" ").slice(0, 3).join(" "))).toEqual([
+        "SELECT * FROM",
+        "SELECT * FROM",
+        'DELETE FROM "posts"',
+        'DELETE FROM "posts"',
+        'DELETE FROM "users"',
+      ]);
+      expect(await one.prepare("SELECT count(*) AS n FROM posts").first("n")).toBe(0);
+    });
+
+    test("a record built on a combined Relation is saved on, and keeps, its one database", async () => {
+      const seen: QueryEvent[] = [];
+      let post!: Post;
+      await withDatabase(connect(one, { onQuery: (event) => seen.push(event) }), async () => {
+        const user = await User.find(1);
+        post = user.posts().merge(Post.isPublished()).build({ id: 43, title: "New" });
+        await post.save();
+      });
+
+      seen.length = 0;
+      await post.update({ title: "Changed" });
+      expect(seen).toHaveLength(1);
+    });
+
+    test("an error names the request's database as such", async () => {
+      const user = await User.find(1); // through the binding
+      const merged = await withDatabase(connect(one), async () =>
+        user
+          .posts()
+          .merge(Post.isPublished())
+          .toArray()
+          .catch((error: unknown) => error),
+      );
+
+      expect(merged).toEqual(
+        new IncompatibleRelation(
+          "merge() needs its relations on one database; these are on the DB binding's database and the request's database",
+        ),
+      );
+    });
+
+    test("db.batch() names itself, and a static outside withDatabase is on the binding's database", async () => {
+      const db = connect(one);
+
+      await expect(db.batch([Post.where({ id: 10 }).toDeleteAll()])).rejects.toThrow(
+        new IncompatibleRelation(
+          "db.batch() needs its statements and records on one database; these are on a connect() database and the DB binding's database",
+        ),
+      );
+      expect(
+        await withDatabase(db, () => db.batch([Post.where({ id: 10 }).toDeleteAll()])),
+      ).toHaveLength(1);
     });
   });
 });

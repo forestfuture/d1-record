@@ -20,7 +20,7 @@ import {
   RecordNotSaved,
 } from "./errors.ts";
 import { clearErrors } from "./errors-collection.ts";
-import { type Executor, oneDatabase } from "./executor.ts";
+import { type D1Executor, type Executor, oneDatabase } from "./executor.ts";
 import {
   declared,
   type AfterCallbackKind,
@@ -195,28 +195,60 @@ async function validateAutosaves(record: ModelBase, claimed: Claimed): Promise<v
  * → afterCreate | afterUpdate → afterSave.
  */
 export async function saveLifecycle(record: ModelBase): Promise<Outcome> {
+  const database = await pinBefore(recordsSaving(record), "save() needs its records");
   const claimed: Claimed = new Set();
   const plan = await prepareSave(record, claimed);
   if (plan.status !== "ready") return plan;
-  const database = await pinClaimed(claimed, record[state].executor, "save() needs its records");
+  await pinClaimed(claimed, database, "save() needs its records");
   await runPlan(database, plan);
   return { status: "saved" };
 }
 
 /**
- * The one database a write's records share, each pinned to it, as a record keeps the database
- * it was first written on (#93). Records on two databases throw `IncompatibleRelation`, before
- * anything is written.
+ * The records saving `record` would write: it, the new records it points at through belongsTo,
+ * and the new records built through its associations, at every level. Found without running
+ * any validation or callback, so a save can be checked before anything runs (#93).
+ */
+export function recordsSaving(record: ModelBase): ModelBase[] {
+  const found = new Set<ModelBase>();
+  const visit = (each: ModelBase): void => {
+    if (found.has(each)) return;
+    found.add(each);
+    for (const { record: target } of belongsToAutosavesOf(each)) {
+      if (target[state].isNew) visit(target);
+    }
+    for (const { records } of autosavesOf(each, found)) records.forEach(visit);
+  };
+  visit(record);
+  return [...found];
+}
+
+/**
+ * The one database `records` (and `handles`, a batch's statements) share, each record pinned to
+ * it before anything runs (#93): two databases throw `IncompatibleRelation`, with no validation,
+ * callback or write run. A record keeps the database it was first written on.
+ */
+export async function pinBefore(
+  records: readonly ModelBase[],
+  needs: string,
+  handles: readonly Executor[] = [],
+): Promise<D1Executor> {
+  const all = [...handles, ...records.map((record) => record[state].executor)];
+  const database = await oneDatabase(all as [Executor, ...Executor[]], needs);
+  for (const record of records) record[state].belongTo(database);
+  return database;
+}
+
+/**
+ * The records a write prepared, pinned to its database too: any a callback added on the way,
+ * from another database, still throws `IncompatibleRelation` before anything is written.
  */
 export async function pinClaimed(
   claimed: Claimed,
-  executor: Executor,
+  database: D1Executor,
   needs: string,
-): Promise<Executor> {
-  const handles = [...claimed].map((record) => record[state].executor);
-  const database = await oneDatabase([executor, ...handles], needs);
-  for (const record of claimed) record[state].belongTo(database);
-  return database;
+): Promise<void> {
+  await pinBefore([...claimed], needs, [database]);
 }
 
 /** Everything a save does before writing: validation and the before-callbacks. */
@@ -224,7 +256,6 @@ export async function prepareSave(record: ModelBase, claimed: Claimed): Promise<
   if (claimed.has(record)) return { status: "ready", stages: [] };
   const recordState = record[state];
   recordState.requireLive("be saved");
-  await recordState.bindToResolved();
   const validity = await validation(record, claimed);
   if (validity === "invalid") return { status: "invalid" };
   if (validity === "aborted") return aborted(record);
@@ -386,10 +417,11 @@ function saveWrite(record: ModelBase, isInsert: boolean): PreparedWrite {
  * → mark destroyed → afterDestroy. Every write, dependents' included, is one atomic batch.
  */
 export async function destroyLifecycle(record: ModelBase): Promise<DestroyOutcome> {
+  const database = await pinBefore([record], "destroy() needs its records");
   const claimed: Claimed = new Set();
   const plan = await prepareDestroy(record, claimed);
   if (plan.status !== "ready") return plan;
-  const database = await pinClaimed(claimed, record[state].executor, "destroy() needs its records");
+  await pinClaimed(claimed, database, "destroy() needs its records");
   await runPlan(database, plan);
   return { status: "destroyed" };
 }
@@ -400,7 +432,6 @@ export async function prepareDestroy(record: ModelBase, claimed: Claimed): Promi
   claimed.add(record);
   const recordState = record[state];
   recordState.requireLive("be destroyed");
-  await recordState.bindToResolved();
   recordState.abortReason = undefined;
   if (!(await runAbortableCallbacks(record, "beforeDestroy"))) return aborted(record);
   const dependents = recordState.isNew
