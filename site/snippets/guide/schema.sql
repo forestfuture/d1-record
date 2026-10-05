@@ -40,3 +40,10 @@ CREATE TABLE bookings (
   starts_at TEXT NOT NULL,
   ends_at TEXT NOT NULL
 );
+
+CREATE TABLE invitations (
+  id INTEGER PRIMARY KEY,
+  email TEXT NOT NULL,
+  token TEXT, -- NULL once the invitation is accepted
+  accepted_at TEXT
+);

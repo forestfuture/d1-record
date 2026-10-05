@@ -22,6 +22,7 @@ import { runGenerate } from "../../cli/generate/command.ts";
 import { runSchema } from "../../cli/schema/command.ts";
 import { Post, User } from "../../site/snippets/getting-started/models.ts";
 import * as models from "../../site/snippets/guide/models.ts";
+import * as untrusted from "../../site/snippets/guide/untrusted-input.ts";
 import worker from "../../site/snippets/getting-started/src/index.ts";
 import { publishDraftsAndRemove } from "../../site/snippets/getting-started/src/publish.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
@@ -349,5 +350,73 @@ describe("Models: assigned values are cast", () => {
     await expect(models.applyChanges(user(), body('{"isActive":"no"}'))).rejects.toThrow(
       new TypeError('User: "no" isn\'t a boolean for "isActive"'),
     );
+  });
+});
+
+// Handle untrusted input: each example keeps out what it says it does.
+describe("Handle untrusted input", () => {
+  let binding: TestDatabase;
+  let dispose: () => Promise<void>;
+  const schema = new URL("../../site/snippets/guide/schema.sql", import.meta.url);
+  const json = (body: unknown) =>
+    new Request("https://example.com/", { method: "POST", body: JSON.stringify(body) });
+  const run = <T>(fn: () => Promise<T>) => withDatabase(connect(binding), fn);
+
+  beforeAll(async () => {
+    ({ db: binding, dispose } = await createTestDatabase(schema));
+  });
+  afterAll(() => dispose());
+  beforeEach(async () => {
+    await binding.batch([
+      binding.prepare("DELETE FROM accounts"),
+      binding.prepare("DELETE FROM invitations"),
+      binding.prepare(
+        "INSERT INTO invitations (id, email, token, accepted_at) VALUES (1, 'ada@example.com', NULL, '2026-01-01T00:00:00.000Z'), (2, 'grace@example.com', 'k3y', NULL)",
+      ),
+    ]);
+  });
+
+  test("destructuring takes only the fields it names", async () => {
+    const account = await run(() =>
+      untrusted.signUpFromJson(json({ email: "ada@example.com", handle: "ada", plan: "pro" })),
+    );
+
+    expect([account.email, account.handle, account.plan]).toEqual(["ada@example.com", "ada", null]);
+  });
+
+  test("permit lets a body change only plan and seats, cast when assigned", async () => {
+    const account = await run(async () => {
+      const created = await untrusted.Account.create({ email: "ada@example.com", handle: "ada" });
+      return untrusted.changePlan(
+        created,
+        json({ plan: "pro", seats: "5", email: "evil@example.com" }),
+      );
+    });
+
+    expect([account.plan, account.seats, account.email]).toEqual(["pro", 5, "ada@example.com"]);
+  });
+
+  test("permit reads a form, and drops what it doesn't name", async () => {
+    const form = new FormData();
+    form.append("email", "grace@example.com");
+    form.append("handle", "grace");
+    form.append("plan", "enterprise");
+
+    const response = await run(() =>
+      untrusted.signUp(new Request("https://example.com/", { method: "POST", body: form })),
+    );
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ handle: "grace", plan: null });
+  });
+
+  test("an untrusted null never reaches the query, so an accepted invitation stays accepted", async () => {
+    for (const token of [null, [null], ""]) {
+      expect((await run(() => untrusted.accept(json({ token })))).status).toBe(400);
+    }
+    expect((await run(() => untrusted.accept(json({ token: "nope" })))).status).toBe(404);
+
+    const accepted = await run(() => untrusted.accept(json({ token: "k3y" })));
+    expect(await accepted.text()).toBe("Welcome, grace@example.com");
   });
 });
