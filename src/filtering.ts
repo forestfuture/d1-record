@@ -47,6 +47,11 @@ export class Filtered {
   }
 }
 
+/** A primary key as an error shows it: "[FILTERED]" when the key is a filtered attribute. */
+export function shownKey(model: ModelClass, key: unknown): string {
+  return isFiltered(model, model.primaryKey) ? FILTERED : String(key);
+}
+
 /** Binds values as one attribute's: hidden from listeners when the attribute is filtered. */
 export type Bind = (...values: unknown[]) => void;
 

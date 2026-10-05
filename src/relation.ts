@@ -1,3 +1,4 @@
+import { shownKey } from "./filtering.ts";
 import { castGiven } from "./casting.ts";
 import {
   compileColumns,
@@ -534,7 +535,7 @@ export class Relation<M extends ModelBase, S = {}> {
     const record = await this.#findOne({ [this.#model.primaryKey]: id });
     if (record === null) {
       throw new RecordNotFound(
-        `${this.#model.name} with ${this.#model.primaryKey} ${id} not found`,
+        `${this.#model.name} with ${this.#model.primaryKey} ${shownKey(this.#model, id)} not found`,
       );
     }
     return record;
@@ -546,7 +547,8 @@ export class Relation<M extends ModelBase, S = {}> {
     const records = await this.#load(query);
     if (records.length < ids.length) {
       throw new RecordNotFound(
-        `Couldn't find all ${name} records with '${primaryKey}': (${ids.join(", ")}) ` +
+        `Couldn't find all ${name} records with '${primaryKey}': ` +
+          `(${ids.map((id) => shownKey(this.#model, id)).join(", ")}) ` +
           `(found ${records.length} results, but was looking for ${ids.length})`,
       );
     }
