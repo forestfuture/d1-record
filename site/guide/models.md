@@ -97,7 +97,7 @@ Anything else throws `TypeError` naming the Model and the attribute, and the att
 
 <<< @/snippets/guide/models.ts#casting{ts}
 
-Conditions are cast the same way, so `where({ quantity: "42" })` finds 42. A condition value that can't be cast matches nothing, so `find("abc")` on an integer key throws `RecordNotFound`. See [Querying](./querying#conditions).
+Conditions are cast the same way, so `where({ quantity: "42" })` finds 42. A condition value that can't be cast matches nothing, so `find("abc")` on an integer key throws `RecordNotFound`. See [Querying](./querying#conditions). A condition also reads a number as its digits for a `string` attribute, and a record built from that Relation (`where({ label: 7 }).build()`) starts with what the condition matched, `"7"`. A key copied from another record through an association is cast the same way, so an integer key written into a text foreign key becomes its digits.
 
 ::: tip Beyond Rails
 Rails casts too, but leniently: `"12abc"` becomes `12`, `1.7` becomes `1`, any other text is `true`, and `""` is `nil`. d1-record refuses each, so `isAdmin=no` from a form can't save `true`, and an empty field can't silently become `null`.
