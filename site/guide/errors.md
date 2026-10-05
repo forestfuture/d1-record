@@ -35,6 +35,8 @@ These mean the code needs to change, rather than that something happened at runt
 | `NoDatabase`           | using a record made with `new` rather than `build`                              |
 | `NoSession`            | `db.bookmark()` on a Database opened without a session                          |
 
+A name from a request, such as `?include=` or a JSON key, can only ever be one of the Model's own attributes or associations. Names that every JavaScript object has, such as `constructor` and `__proto__`, are unknown names like any other, so check names from a request, and treat these errors as a bad request (400).
+
 ### When Relations are incompatible
 
 `IncompatibleRelation` means you've combined things that can't produce a correct query or write:

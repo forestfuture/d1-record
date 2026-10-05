@@ -22,7 +22,7 @@ Or let the Model pick them out with `permit`, as Rails' `params.permit` does. It
 
 <<< @/snippets/guide/untrusted-input.ts#permit-form{ts}
 
-`permit` reads a plain object's own keys only, so `__proto__` never gets through. A name that isn't an attribute is a compile error, and throws `UnknownAttribute`. A value that can't be cast, a file from a form, and input that isn't a plain object, a form or a query string each throw `TypeError`.
+`permit` reads a plain object's own keys only, so `__proto__` never gets through. The same holds wherever d1-record takes a name: a `constructor` or `__proto__` key in a body passed to `where`, or in `?include=` passed to `includes`, is an `UnknownAttribute` or `UnknownAssociation`, never one of JavaScript's own properties. A name that isn't an attribute is a compile error, and throws `UnknownAttribute`. A value that can't be cast, a file from a form, and input that isn't a plain object, a form or a query string each throw `TypeError`.
 
 ::: tip Beyond Rails
 Rails' `permit` filters keys, and keeps only scalar values. d1-record's knows the Model, so it also checks the names you give it, and casts each value to its attribute's type: `{"isAdmin": "false"}` gives `isAdmin: false`, never a truthy string that TypeScript calls a boolean.
