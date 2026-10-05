@@ -16,22 +16,6 @@ description: "See the SQL your Worker sends to D1: every query app-wide, one req
 
 There's no logger built in, so send these wherever you like. A listener never changes a query's outcome: one that throws is logged with `console.error`, and the query's result stands.
 
-## Keep secrets out of the logs
-
-Listeners see the values of passwords, tokens, keys and emails as `"[FILTERED]"`, as Rails' logs do: D1 still gets the real values. An attribute is filtered when its snake_case name contains one of `static filterAttributes`. That's Rails' default list on `Model.Base` (`passw`, `email`, `secret`, `token`, `_key`, `crypt`, `salt`, `certificate`, `otp`, `ssn`, `cvv`, `cvc`), so `passwordDigest`, `resetToken`, `apiKey` and `email` are filtered without any setup. A cast error shows a filtered value as `[FILTERED]` too.
-
-Change the list on your app's base class, in `application-record.ts`. It replaces the defaults, so spread them in to add to them, or leave one out:
-
-```ts
-import { Model } from "@forestfuture/d1-record";
-
-class Base extends Model.Base {
-  static override filterAttributes = [...Model.Base.filterAttributes, "iban", /^dateOfBirth$/];
-}
-```
-
-A value inside an `sql` fragment has no attribute, so it's logged as given: keep secrets out of fragments, or leave `params` out of what you log.
-
 There are two places to set it:
 
 |                           | Where                                                 | Knows the request? |
@@ -74,3 +58,31 @@ The app-wide listener has no `env` of its own, so it reads the variable from `cl
 To see a request's database time in the browser's developer tools, add it up and send it as a `Server-Timing` header:
 
 <<< @/snippets/guide/connecting.ts#server-timing{ts}
+
+## Keep secrets out of the logs
+
+Listeners see the values of passwords, tokens, keys and emails as `"[FILTERED]"`, as Rails' logs do: D1 still gets the real values. An attribute is filtered when its snake_case name contains one of `static filterAttributes`. That's Rails' default list on `Model.Base` (`passw`, `email`, `secret`, `token`, `_key`, `crypt`, `salt`, `certificate`, `otp`, `ssn`, `cvv`, `cvc`), so `passwordDigest`, `resetToken`, `apiKey` and `email` are filtered without any setup. A cast error shows a filtered value as `[FILTERED]` too.
+
+Change the list on your app's base class, in `application-record.ts`. It replaces the defaults, so spread them in to add to them, or leave one out:
+
+```ts
+import { Model } from "@forestfuture/d1-record";
+
+class Base extends Model.Base {
+  // Rails' defaults, plus an IBAN and a date of birth:
+  static override filterAttributes = [...Model.Base.filterAttributes, "iban", /^dateOfBirth$/];
+}
+
+class DebuggingBase extends Model.Base {
+  // Rails' defaults without "email", to see emails while debugging:
+  static override filterAttributes = Model.Base.filterAttributes.filter(
+    (entry) => entry !== "email",
+  );
+}
+```
+
+A value inside an `sql` fragment has no attribute, so it's logged as given: keep secrets out of fragments, or leave `params` out of what you log. A primary key that's filtered (a session's token, say) is hidden in `RecordNotFound` messages too.
+
+::: tip Compared with Rails
+Rails filters by its app-wide `filter_parameters`, against parameter and column names. d1-record keeps the list on the Model (`static filterAttributes`, inherited from your base class), and matches each entry against the attribute's snake_case name, so `"_key"` filters `apiKey`. A RegExp may match either form. It also hides filtered values in cast errors and in `RecordNotFound`, which Rails' filter doesn't cover.
+:::
