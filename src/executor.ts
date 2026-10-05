@@ -77,7 +77,7 @@ export interface Executor {
 export class D1Executor implements Executor {
   readonly #binding: D1Database | D1DatabaseSession;
   readonly #onQuery: QueryListener | undefined;
-  /** Where this database came from, as errors name it: a binding's, or a `connect()`'s. */
+  /** @internal Where this database came from, as errors name it: a binding's, or a `connect()`'s. */
   origin = "a connect() database";
 
   /** `binding` is the D1 binding itself, or one D1 Session every query goes through. */
