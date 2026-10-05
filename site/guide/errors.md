@@ -41,8 +41,8 @@ A name from a request, such as `?include=` or a JSON key, can only ever be one o
 
 `IncompatibleRelation` means you've combined things that can't produce a correct query or write:
 
-- **`or()` or `merge()`** with a Relation of another Model, or from another Database. `or()` also needs both sides to have the same `select`, order, `limit`, `offset`, `distinct` and `includes`, since only their conditions can be combined.
-- **`batch([...])` or `db.batch([...])`** with statements or records from two databases. A batch runs on one connection.
+- **`or()`, `merge()` or a scope** with a Relation of another Model, or one that resolves to another database when it runs. `or()` also needs both sides to have the same `select`, order, `limit`, `offset`, `distinct` and `includes`, since only their conditions can be combined.
+- **`batch([...])`, `db.batch([...])`, `save()` or `destroy()`** with statements or records from two databases, such as a `belongsTo` target built on another `connect()`. A write runs on one database. The message names where each database came from.
 - **`includes`** with `select(...).distinct()`. Preloading needs the keys, and adding them would undo the `distinct`.
 - **Preloading an association scope** that uses `limit`, `offset` or `distinct`. One preload query serves every owner, so the limit would apply to all of their records together.
 - **`updateAll` or `deleteAll`** after `distinct()`: they reject with it, and `toUpdateAll`/`toDeleteAll` throw it.
