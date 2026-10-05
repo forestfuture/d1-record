@@ -38,8 +38,8 @@ Most apps only ever use the second. The first exists for what belongs to a reque
 
 ## What follows from it
 
-- **Records remember.** A record keeps the database it was loaded through, or first saved through, so `post.save()` and `post.user()` use it later, even after `withDatabase` has returned.
-- **A batch has one database.** `batch([...])` runs on the database its entries were built on, and refuses entries from two.
+- **Records remember.** A record keeps the database it was loaded through, or first saved through, and so do the records saved with it (autosaved records, a `belongsTo` target), so `post.save()` and `post.user()` use it later, even after `withDatabase` has returned.
+- **One query or write, one database.** `merge`, `or`, scopes, batches and saves each run on one database. What counts is the database each side resolves to when it runs, so inside `withDatabase` a loaded record's `user.posts()` merges with `Post.published()`. Two databases are refused with `IncompatibleRelation`, before anything is written.
 - **Errors say where the database should come from.** A query outside a Worker with no `withDatabase`, a Model with no binding, or a query at a module's top level (where Workers allow no I/O) each throws `NoDatabase`, saying what to do.
 
 For the options themselves, see [Connecting](./connecting).
