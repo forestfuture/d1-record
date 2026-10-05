@@ -1,3 +1,4 @@
+import { FILTERED, Filtered, filterBound, isFiltered } from "./filtering.ts";
 import { attributeOf, ignoresColumns, type AttributeDefinition } from "./metadata.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { Comparison, comparisonParts, type Operator } from "./comparisons.ts";
@@ -58,11 +59,15 @@ function compileCondition(
     return `(NOT ${compileCondition(condition.condition, model, params)})`;
   }
   if (condition instanceof SafeSql) return `(${compileFragment(condition, model, params)})`;
-  const parts = Object.entries(condition).map(([name, value]) =>
-    value instanceof Comparison
-      ? compileComparison(attributeOf(model, name), value, params)
-      : compileEquality(attributeOf(model, name), value, params),
-  );
+  const parts = Object.entries(condition).map(([name, value]) => {
+    const start = params.length;
+    const sql =
+      value instanceof Comparison
+        ? compileComparison(attributeOf(model, name), value, params)
+        : compileEquality(attributeOf(model, name), value, params);
+    filterBound(params, start, model, name);
+    return sql;
+  });
   return `(${parts.join(" AND ")})`;
 }
 
@@ -87,7 +92,10 @@ export function compileInsert(
   const placeholders = assignments.map(() => "?").join(", ");
   return {
     sql: `INSERT INTO ${table} (${columns}) VALUES (${placeholders}) RETURNING ${allColumns(model)}`,
-    params: assignments.map(([, value], index) => writeValue(definitions[index]!.type, value)),
+    params: assignments.map(([name, value], index) => {
+      const bound = writeValue(definitions[index]!.type, value);
+      return isFiltered(model, name) ? new Filtered(bound) : bound;
+    }),
     model,
   };
 }
@@ -111,14 +119,28 @@ export function compileInsertRows(
   const definitions = names.map((name) => attributeOf(model, name));
   const columns = definitions.map(({ column }) => quoteIdentifier(column)).join(", ");
   const values = definitions.map((_, index) => `value ->> '$[${index}]'`).join(", ");
-  const json = JSON.stringify(
-    rows.map((row) => row.map((value, index) => writeValue(definitions[index]!.type, value))),
+  const written = rows.map((row) =>
+    row.map((value, index) => writeValue(definitions[index]!.type, value)),
   );
+  const json = filteredRows(model, names, written);
   // `WHERE true` keeps SQLite from reading ON CONFLICT as part of the SELECT.
   const sql =
     `INSERT INTO ${quoteIdentifier(model.tableName)} (${columns}) ` +
     `SELECT ${values} FROM json_each(?) WHERE true${compileConflict(model, names, conflict)}`;
   return { sql, params: [json], model };
+}
+
+/** The rows as one JSON value; listeners see filtered attributes' values as "[FILTERED]". */
+function filteredRows(
+  model: ModelClass<ModelBase>,
+  names: readonly string[],
+  rows: readonly (readonly unknown[])[],
+): unknown {
+  const json = JSON.stringify(rows);
+  const filtered = names.map((name) => isFiltered(model, name));
+  if (!filtered.includes(true)) return json;
+  const shown = rows.map((row) => row.map((value, index) => (filtered[index] ? FILTERED : value)));
+  return new Filtered(json, JSON.stringify(shown));
 }
 
 /**
@@ -172,7 +194,9 @@ function compileSets(
   return changes
     .map(([name, value]) => {
       const { column, type } = attributeOf(model, name);
+      const start = params.length;
       params.push(writeValue(type, value));
+      filterBound(params, start, model, name);
       return `${quoteIdentifier(column)} = ?`;
     })
     .join(", ");
