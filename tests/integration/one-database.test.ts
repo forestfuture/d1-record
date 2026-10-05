@@ -1,10 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import {
+  batch,
   belongsTo,
   connect,
   hasMany,
   IncompatibleRelation,
   Model,
+  type QueryEvent,
   withDatabase,
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
@@ -95,6 +97,68 @@ describe("one database", () => {
           "merge() needs its relations on one database; these are on a connect() database and another",
         ),
       );
+    });
+  });
+
+  describe("every record a write touches keeps the database it ran on", () => {
+    test("records autosaved with a statics-built owner stay on the request's database", async () => {
+      const seen: QueryEvent[] = [];
+      const request = connect(one, { onQuery: (event) => seen.push(event) });
+      let post!: Post;
+      await withDatabase(request, async () => {
+        const user = User.build({ id: 2, email: "grace@example.com" });
+        post = user.posts().build({ id: 20, title: "Draft" });
+        await user.save();
+      });
+
+      seen.length = 0;
+      await post.update({ title: "Changed" });
+
+      expect(seen.map((event) => event.sql.split(" ")[0])).toEqual(["UPDATE"]);
+    });
+
+    test("so do records autosaved in a batch", async () => {
+      const seen: QueryEvent[] = [];
+      let post!: Post;
+      await withDatabase(connect(one, { onQuery: (event) => seen.push(event) }), async () => {
+        const user = User.build({ id: 3, email: "linus@example.com" });
+        post = user.posts().build({ id: 30, title: "Draft" });
+        await batch([user.toSave()]);
+      });
+
+      seen.length = 0;
+      await post.update({ title: "Changed" });
+
+      expect(seen).toHaveLength(1);
+    });
+  });
+
+  describe("a save is one database", () => {
+    test("a belongsTo target on another database is refused before anything is written", async () => {
+      const post = connect(one).model(Post).build({ id: 40, title: "Orphan" });
+      post.author.set(connect(two).model(User).build({ id: 4, email: "c@example.com" }));
+
+      await expect(post.save()).rejects.toThrow(
+        new IncompatibleRelation(
+          "save() needs its records on one database; these are on a connect() database and another",
+        ),
+      );
+      for (const db of [one, two]) {
+        expect(await db.prepare("SELECT count(*) AS n FROM users WHERE id = 4").first("n")).toBe(0);
+        expect(await db.prepare("SELECT count(*) AS n FROM posts WHERE id = 40").first("n")).toBe(
+          0,
+        );
+      }
+    });
+
+    test("a statics-built target saves with an owner on the same database", async () => {
+      await withDatabase(connect(one), async () => {
+        const post = Post.build({ id: 41, title: "Hello" });
+        post.author.set(User.build({ id: 5, email: "e@example.com" }));
+        expect(await post.save()).toBe(true);
+      });
+
+      expect((await connect(one).model(Post).find(41)).userId).toBe(5);
     });
   });
 });
