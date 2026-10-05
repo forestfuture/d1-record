@@ -4,7 +4,12 @@
 // AsyncLocalStorage, and a binding's Database holds no per-request state.
 import { connect, databaseParts, type Database } from "./database.ts";
 import { NoDatabase } from "./errors.ts";
-import { CurrentExecutor, type Executor } from "./executor.ts";
+import {
+  CurrentExecutor,
+  type D1Executor,
+  describeDatabasesWith,
+  type Executor,
+} from "./executor.ts";
 import { prepareModel } from "./associations.ts";
 import type { ModelClass, ScopesOf } from "./model.ts";
 import type { Scoped } from "./relation.ts";
@@ -76,6 +81,18 @@ function notAWorker(error: unknown): boolean {
   );
 }
 
+/** Each binding's own database, by its binding's name, for errors to name. */
+const bindingNames = new WeakMap<D1Executor, string>();
+
+// Errors name each database (#93): the request's (from withDatabase), a binding's, or connect()'s.
+describeDatabasesWith((database) => {
+  if (requests?.getStore()?.some((db) => db[databaseParts].executor === database)) {
+    return "the request's database";
+  }
+  const name = bindingNames.get(database);
+  return name === undefined ? "a connect() database" : `the ${name} binding's database`;
+});
+
 /** One Database per D1 binding, for queries outside `withDatabase`: it holds nothing per-request. */
 const defaults = new WeakMap<D1Database, Database>();
 
@@ -83,7 +100,7 @@ function defaultDatabase(binding: D1Database, name: string): Database {
   let db = defaults.get(binding);
   if (db === undefined) {
     db = connect(binding);
-    db[databaseParts].executor.origin = `the ${name} binding's database`;
+    bindingNames.set(db[databaseParts].executor, name);
     defaults.set(binding, db);
   }
   return db;

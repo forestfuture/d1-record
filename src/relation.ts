@@ -1,4 +1,4 @@
-import { jointly, oneDatabase } from "./executor.ts";
+import { databaseNow, jointly } from "./executor.ts";
 import { shownKey } from "./filtering.ts";
 import { castGiven } from "./casting.ts";
 import {
@@ -803,7 +803,7 @@ export class Relation<M extends ModelBase, S = {}> {
         : query.select;
     const rows = await this.#all(compileSelect(query, compileColumns(this.#model, loaded)));
     // Bound to the database the query used, which they keep, even past a request's withDatabase.
-    const executor = await oneDatabase([this.#executor], "a query needs its relations");
+    const executor = await databaseNow(this.#executor);
     const records = rows.map((row) => hydrate(this.#model, row, executor));
     if (query.includes !== undefined) await preload(records, query.includes, executor);
     return records;

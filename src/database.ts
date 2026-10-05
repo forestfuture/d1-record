@@ -5,11 +5,13 @@ import {
   refusalError,
   type Claimed,
   pinClaimed,
+  pinBefore,
+  recordsSaving,
 } from "./lifecycle.ts";
 import { RecordStatement, recordStatementParts } from "./record-statement.ts";
 import { state } from "./record-state.ts";
 import { runAfter, writeAll, type PreparedWrite } from "./unit-of-work.ts";
-import { D1Executor, type Executor, type QueryListener, oneDatabase } from "./executor.ts";
+import { D1Executor, type Executor, type QueryListener } from "./executor.ts";
 import { prepareModel } from "./associations.ts";
 import type { ModelBase, ModelClass, ScopesOf } from "./model.ts";
 import type { Scoped } from "./relation.ts";
@@ -92,13 +94,8 @@ export class Database {
    * awaits.
    */
   async batch<const T extends readonly BatchEntry[]>(entries: T): Promise<BatchResults<T>> {
-    for (const entry of entries) await this.#requireOwn(entry);
-    return runBatch(this.#executor, entries);
-  }
-
-  /** A batch entry must be on this Database: built on it, or on the current one when it's this. */
-  async #requireOwn(entry: BatchEntry): Promise<void> {
-    await oneDatabase([this.#executor, executorOf(entry)], "batch() needs statements and records");
+    // Every entry on this Database: built on it, or on the current one when it's this.
+    return runBatch(entries, "db.batch() needs its statements and records", [this.#executor]);
   }
 }
 
@@ -109,11 +106,27 @@ function executorOf(entry: BatchEntry): Executor {
     : entry[statementParts].executor;
 }
 
-/** A batch's steps, on `executor`: before-callbacks, one atomic write, then after-callbacks. */
+/** The records a batch entry writes: a save's whole autosave graph, or a destroy's record. */
+function recordsOf(entry: BatchEntry): ModelBase[] {
+  if (!(entry instanceof RecordStatement)) return [];
+  const { record, kind } = entry[recordStatementParts];
+  return kind === "save" ? recordsSaving(record) : [record];
+}
+
+/**
+ * A batch's steps: its one database found and every record pinned to it, before anything runs
+ * (#93); then before-callbacks, one atomic write, then after-callbacks.
+ */
 async function runBatch<const T extends readonly BatchEntry[]>(
-  executor: Executor,
   entries: T,
+  needs: string,
+  handles: readonly Executor[] = [],
 ): Promise<BatchResults<T>> {
+  const statements = entries.filter((entry) => !(entry instanceof RecordStatement));
+  const all = [...handles, ...statements.map(executorOf)];
+  const records = entries.flatMap(recordsOf);
+  if (all.length === 0 && records.length === 0) return [] as BatchResults<T>;
+  const database = await pinBefore(records, needs, all);
   // Each record is written once, even if listed twice or already saved by its owner.
   const claimed: Claimed = new Set();
   const prepared: PreparedEntry[] = [];
@@ -122,7 +135,7 @@ async function runBatch<const T extends readonly BatchEntry[]>(
       entry instanceof RecordStatement ? await recordEntry(entry, claimed) : statementEntry(entry),
     );
   }
-  const database = await pinClaimed(claimed, executor, "batch() needs statements and records");
+  await pinClaimed(claimed, database, needs);
   const writes = prepared.flatMap(({ writes }) => writes());
   await writeAll(database, writes);
   await runAfter(writes);
@@ -138,10 +151,7 @@ export async function batch<const T extends readonly BatchEntry[]>(
   entries: T,
 ): Promise<BatchResults<T>> {
   // The database they're on now: entries from a Model's statics and from db.model(…) can be one.
-  const [first, ...rest] = entries.map(executorOf);
-  if (first === undefined) return [] as BatchResults<T>;
-  const executor = await oneDatabase([first, ...rest], "batch() needs statements and records");
-  return runBatch(executor, entries);
+  return runBatch(entries, "batch() needs its statements and records");
 }
 
 /** What `db.batch` accepts: statements, and records' save or destroy. */

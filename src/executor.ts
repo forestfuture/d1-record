@@ -77,8 +77,6 @@ export interface Executor {
 export class D1Executor implements Executor {
   readonly #binding: D1Database | D1DatabaseSession;
   readonly #onQuery: QueryListener | undefined;
-  /** @internal Where this database came from, as errors name it: a binding's, or a `connect()`'s. */
-  origin = "a connect() database";
 
   /** `binding` is the D1 binding itself, or one D1 Session every query goes through. */
   constructor(binding: D1Database | D1DatabaseSession, onQuery?: QueryListener) {
@@ -174,79 +172,9 @@ export class D1Executor implements Executor {
   }
 }
 
-/**
- * The current database's Executor (#77): finds the D1Executor to use each time a statement runs,
- * the request's or the binding's, so a Relation built from a Model's statics can be built anywhere.
- */
-export class CurrentExecutor implements Executor {
-  readonly #find: () => Promise<D1Executor>;
-
-  constructor(find: () => Promise<D1Executor>) {
-    this.#find = find;
-  }
-
-  [resolve](): Promise<D1Executor> {
-    return this.#find();
-  }
-
-  async all(query: CompiledSql): Promise<Record<string, unknown>[]> {
-    return (await this.#find()).all(query);
-  }
-
-  async run(query: CompiledSql): Promise<D1Meta> {
-    return (await this.#find()).run(query);
-  }
-
-  async batch(statements: readonly CompiledSql[]): Promise<D1Result<Record<string, unknown>>[]> {
-    return (await this.#find()).batch(statements);
-  }
-
-  async write(statements: readonly CompiledSql[]): Promise<D1Result<Record<string, unknown>>[]> {
-    return (await this.#find()).write(statements);
-  }
-}
-
-/**
- * The one database these handles resolve to now: their D1Executor. Two databases throw
- * `IncompatibleRelation` (#93): "`needs` on one database", naming where each came from. Every
- * check of "the same database" (merge, or, scopes, batches, saves) and every pin goes here.
- */
-export async function oneDatabase(
-  handles: readonly [Executor, ...Executor[]],
-  needs: string,
-): Promise<D1Executor> {
-  const databases = [...new Set(await Promise.all(handles.map((handle) => handle[resolve]())))];
-  const [first, second] = databases as [D1Executor, D1Executor | undefined];
-  if (second !== undefined) {
-    const other = second.origin === first.origin ? "another" : second.origin;
-    throw new IncompatibleRelation(
-      `${needs} on one database; these are on ${first.origin} and ${other}`,
-    );
-  }
-  return first;
-}
-
-/**
- * Handles combined into one (`merge`, `or`, a scope's result): checked when a statement runs, since
- * a level-1 binding can only be found then. The same handle twice is just that handle.
- */
-export function jointly(a: Executor, b: Executor, needs: string): Executor {
-  return a === b ? a : new JointExecutor([a, b], needs);
-}
-
-/** Several handles that must be one database, found each time a statement runs. */
-class JointExecutor implements Executor {
-  readonly #handles: readonly [Executor, ...Executor[]];
-  readonly #needs: string;
-
-  constructor(handles: readonly [Executor, ...Executor[]], needs: string) {
-    this.#handles = handles;
-    this.#needs = needs;
-  }
-
-  [resolve](): Promise<D1Executor> {
-    return oneDatabase(this.#handles, this.#needs);
-  }
+/** An Executor that finds its D1Executor when a statement runs, and sends the statement there. */
+abstract class ForwardingExecutor implements Executor {
+  abstract [resolve](): Promise<D1Executor>;
 
   async all(query: CompiledSql): Promise<Record<string, unknown>[]> {
     return (await this[resolve]()).all(query);
@@ -262,5 +190,79 @@ class JointExecutor implements Executor {
 
   async write(statements: readonly CompiledSql[]): Promise<D1Result<Record<string, unknown>>[]> {
     return (await this[resolve]()).write(statements);
+  }
+}
+
+/**
+ * The current database's Executor (#77): finds the D1Executor to use each time a statement runs,
+ * the request's or the binding's, so a Relation built from a Model's statics can be built anywhere.
+ */
+export class CurrentExecutor extends ForwardingExecutor {
+  readonly #find: () => Promise<D1Executor>;
+
+  constructor(find: () => Promise<D1Executor>) {
+    super();
+    this.#find = find;
+  }
+
+  [resolve](): Promise<D1Executor> {
+    return this.#find();
+  }
+}
+
+/** How errors name a database: "the request's database", "the DB binding's database", … */
+let describe: (database: D1Executor) => string = () => "a connect() database";
+
+/** @internal Sets how errors name a database; the current database's module knows (#93). */
+export function describeDatabasesWith(describer: (database: D1Executor) => string): void {
+  describe = describer;
+}
+
+/** The D1Executor `handle` sends to now. */
+export function databaseNow(handle: Executor): Promise<D1Executor> {
+  return handle[resolve]();
+}
+
+/**
+ * The one database these handles resolve to now: their D1Executor. Two databases throw
+ * `IncompatibleRelation` (#93): "`needs` on one database", naming where each came from. Every
+ * check of "the same database" (merge, or, scopes, batches, saves) and every pin goes here.
+ */
+export async function oneDatabase(
+  handles: readonly [Executor, ...Executor[]],
+  needs: string,
+): Promise<D1Executor> {
+  const databases = [...new Set(await Promise.all(handles.map((handle) => handle[resolve]())))];
+  const [first, second] = databases as [D1Executor, D1Executor | undefined];
+  if (second !== undefined) {
+    const [one, two] = [describe(first), describe(second)];
+    throw new IncompatibleRelation(
+      `${needs} on one database; these are on ${one} and ${one === two ? "another" : two}`,
+    );
+  }
+  return first;
+}
+
+/**
+ * Handles combined into one (`merge`, `or`, a scope's result): checked when a statement runs, since
+ * a level-1 binding can only be found then. The same handle twice is just that handle.
+ */
+export function jointly(a: Executor, b: Executor, needs: string): Executor {
+  return a === b ? a : new JointExecutor([a, b], needs);
+}
+
+/** Several handles that must be one database, found each time a statement runs. */
+class JointExecutor extends ForwardingExecutor {
+  readonly #handles: readonly [Executor, ...Executor[]];
+  readonly #needs: string;
+
+  constructor(handles: readonly [Executor, ...Executor[]], needs: string) {
+    super();
+    this.#handles = handles;
+    this.#needs = needs;
+  }
+
+  [resolve](): Promise<D1Executor> {
+    return oneDatabase(this.#handles, this.#needs);
   }
 }
