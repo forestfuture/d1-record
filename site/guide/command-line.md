@@ -4,13 +4,23 @@ description: "Reference for d1-record's command line: d1-record schema and its o
 
 # Command line
 
-d1-record’s command line generates `src/db/schema.ts` from your migrations, and writes new migrations and Models. It needs **Node.js 22.13 or later** (it uses Node’s built-in SQLite), and runs as `npx d1-record …` from your project’s folder, where your Wrangler config is. `npx d1-record --help` prints a summary.
+The command line generates `src/db/schema.ts` from your migrations, and writes new migrations and Models. Run it from the folder with your Wrangler config:
 
-For step-by-step use, see [Generators](./generators).
+```sh
+npx d1-record --help
+```
+
+It needs Node.js 22.13 or later, for Node’s built-in SQLite. [Generators](./generators) shows it step by step.
 
 ## `d1-record schema`
 
-Applies your migrations, in order, to an in-memory SQLite database, reads each table’s columns, and writes them as `src/db/schema.ts`.
+Generate the schema file from your migrations:
+
+```sh
+npx d1-record schema
+```
+
+It applies your migrations, in order, to an in-memory SQLite database, and writes each table’s columns to `src/db/schema.ts`.
 
 | Option               |                                                                                                    |
 | -------------------- | -------------------------------------------------------------------------------------------------- |
@@ -40,13 +50,13 @@ The schema file plays the part of Rails’ `schema.rb`, and each base class is n
 - Two bindings whose names would give the same base class (`DB` and `db`).
 - A migration SQLite rejects: the error names the file, and the last good schema is kept.
 
-::: tip Coming from Drizzle or Prisma?
+::: warning Coming from Drizzle or Prisma?
 Their schemas often live at `src/db/schema.ts` or `src/db/schema/`. Write d1-record’s somewhere else, with `--out src/db/d1-record.ts`, and, if `application-record.ts` already exists, point its `import { tables }` at it (a new one is written importing the right file).
 :::
 
-## Conventions
+## Mapping columns to attributes
 
-How each column becomes an attribute, highest priority first:
+Each column becomes an attribute by the first of these that applies:
 
 1. **An override in the Model:** `ApplicationRecord("products", { available: "boolean" })`.
 2. **The column’s declared type:**
@@ -75,7 +85,7 @@ Also:
 - **Foreign keys** take the referenced column’s type. They don’t create associations, which are behavior you declare.
 - **Left out:** SQLite’s own tables, Cloudflare’s (`_cf_…`), the migrations table, and virtual tables.
 
-**Notes it prints**, when the schema is written:
+**Notes it prints** when the schema is written:
 
 - an `INTEGER` read as a `boolean` from its name;
 - for migrations written by Drizzle or Prisma (recognized by their config files or the lines they write): a note naming the tool, then one for each column worth checking, such as an `INTEGER` named `…_at` that may hold a Unix timestamp, a `TEXT` named like JSON without a `json_valid` check, or, for Prisma, each `datetime`;
@@ -149,4 +159,4 @@ Then the generator writes the files, regenerates the schema, and prints the next
 
 ## Exit codes
 
-`0` when everything went well. `1` when anything was refused or failed, or with `--check`, when the schema is out of date. Messages go to standard output, and say what to do.
+Every command exits with `0` on success, and `1` when anything was refused or failed, or, with `--check`, when the schema is out of date. Messages go to standard output, and say what to do next.

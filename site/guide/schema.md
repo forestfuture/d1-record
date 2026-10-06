@@ -18,7 +18,7 @@ TypeScript needs to know a Model’s attributes before your code runs, to type `
 
 That file is to d1-record what `db/schema.rb` is to Rails: a document of every table, regenerated after each migration, never edited by hand, and committed, so each schema change shows up as a readable diff next to its migration. Each table names the migration that last changed it. In CI, `d1-record schema --check` catches a schema someone forgot to regenerate.
 
-Columns become attributes by convention, as Rails’ do: the column’s declared type first (`INTEGER` is an `integer`, `DATETIME` a `datetime`), then, for plain `TEXT` and `INTEGER` columns, its name (`created_at` is a `datetime`). The [Command line](./command-line#conventions) reference lists every rule. When a column’s type isn’t what your app means (JSON in a plain `TEXT` column, say), an override in the Model says so, without touching the table.
+Columns become attributes by convention, as Rails’ do: the column’s declared type first (`INTEGER` is an `integer`, `DATETIME` a `datetime`), then, for plain `TEXT` and `INTEGER` columns, its name (`created_at` is a `datetime`). The [Command line](./command-line#mapping-columns-to-attributes) reference lists every rule. When a column’s type isn’t what your app means (JSON in a plain `TEXT` column, say), an override in the Model says so, without touching the table.
 
 ## Why `ApplicationRecord("table")`
 
