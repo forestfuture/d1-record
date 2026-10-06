@@ -66,20 +66,35 @@ function dedent(text: string): string {
   return lines.map((line) => line.slice(indent)).join("\n");
 }
 
+/** Code without its line comments and quoted strings, so only real uses of a name count. */
+function codeOnly(code: string): string {
+  return code.replace(/"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|\/\/.*$/gm, "");
+}
+
+/** Where an import is shown from: the app's base class, its schema, or its models. */
+function shownSource(source: string): string {
+  if (!/^["']\./.test(source)) return source;
+  if (/\/schema["']$/.test(source)) return source;
+  if (/\/application-record["']$/.test(source)) return '"./application-record"';
+  return '"./models"';
+}
+
 /**
  * An example as shown: the snippet file's imports that the region uses, then the region. So
  * every example says where its names come from, and both come from the type-checked file.
  * The snippets' own model files (any relative import) are shown as the app's: `./models`. The
- * generated schema (`../db/schema`) is shown as written, since an app imports it from there.
+ * generated schema (`../db/schema`) and the app's base class (`./application-record`) are
+ * shown where an app imports them from.
  */
 export function exampleBlock(file: string, region: string): string | undefined {
   const code = readFileSync(file, "utf8").replaceAll("\r\n", "\n");
   const body = regionOf(code, region);
   if (body === undefined) return undefined;
-  const used = (name: string) => new RegExp(`\\b${bindingOf(name)}\\b`).test(body);
+  const uses = codeOnly(body);
+  const used = (name: string) => new RegExp(`\\b${bindingOf(name)}\\b`).test(uses);
   const bySource = new Map<string, string[]>();
   for (const { source, names } of importsOf(code)) {
-    const shown = /^["']\./.test(source) && !/\/schema["']$/.test(source) ? '"./models"' : source;
+    const shown = shownSource(source);
     bySource.set(shown, [...(bySource.get(shown) ?? []), ...names.filter(used)]);
   }
   const imports = [...bySource]

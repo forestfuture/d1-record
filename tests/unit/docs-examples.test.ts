@@ -13,6 +13,8 @@ describe("the guide's example blocks", () => {
 import { User } from "../shared/users";
 import { Tag } from "./tags";
 import { tables } from "../db/schema";
+import { ApplicationRecord } from "./application-record";
+import { column } from "./columns";
 
 // #region declare
 export class Post extends Model({ id: "integer" }) {
@@ -20,6 +22,15 @@ export class Post extends Model({ id: "integer" }) {
   tags = hasMany(Tag);
 }
 // #endregion declare
+
+// #region commented
+// the Post model's column
+export const label = "a Post";
+// #endregion commented
+
+// #region base
+export class Comment extends ApplicationRecord("comments") {}
+// #endregion base
 
 // #region schema
 export const shown = tables;
@@ -49,6 +60,18 @@ export class Post extends Model({ id: "integer" }) {
   author = belongsTo(User);
   tags = hasMany(Tag);
 }`);
+  });
+
+  test("ignore names that only appear in comments or strings", () => {
+    expect(exampleBlock(file, "commented")).toBe(`// the Post model's column
+export const label = "a Post";`);
+  });
+
+  test("show the app's base class from ./application-record", () => {
+    expect(exampleBlock(file, "base"))
+      .toBe(`import { ApplicationRecord } from "./application-record";
+
+export class Comment extends ApplicationRecord("comments") {}`);
   });
 
   test("are dedented, and have no imports when their code uses none", () => {
