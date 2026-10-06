@@ -1,11 +1,17 @@
 import { watch } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
-import { apply, combined, type Plan } from "../plan.ts";
+import { apply, combined, printing, written, type Plan, type Step } from "../plan.ts";
 import { importPath, shown, type Print, type ProjectOptions } from "./project.ts";
 import { fingerprintIn, fingerprintOf, renderBase, renderSchema } from "./render.ts";
 import { layoutNote, migrationTool, originNotes } from "./origin.ts";
 import { schemaOf, type GeneratedTable } from "./schema.ts";
 import { readProject, type DatabaseSnapshot, type ProjectSnapshot } from "./snapshot.ts";
+
+/** The tables a database's migrations make, and the notes their columns raise. */
+export interface SchemaTables {
+  tables: GeneratedTable[];
+  notes: string[];
+}
 
 export interface SchemaOptions extends ProjectOptions {
   /** The project's folder; the current one by default. */
@@ -18,28 +24,28 @@ export interface SchemaOptions extends ProjectOptions {
 function failed(errors: readonly string[], cwd: string, db: DatabaseSnapshot): Plan {
   const out = shown(cwd, db.target.out);
   const kept = db.schema === undefined ? `Wrote nothing to ${out}` : `Kept ${out} as it was`;
-  return { files: [], lines: [...errors, kept], code: 1 };
+  return printing([...errors, kept], 1);
 }
 
-/** Whether the file on disk was generated from these tables (its fingerprint, not its format). */
-function checked(cwd: string, db: DatabaseSnapshot, tables: readonly GeneratedTable[]): Plan {
+/** `--check`: whether the file on disk was generated from these tables (its fingerprint, not its format). */
+function checkPlan(cwd: string, db: DatabaseSnapshot, tables: readonly GeneratedTable[]): Plan {
   const out = shown(cwd, db.target.out);
   const current = db.schema !== undefined && fingerprintIn(db.schema) === fingerprintOf(tables);
   const line = current ? `${out} is up to date` : `${out} is out of date: run \`d1-record schema\``;
-  return { files: [], lines: [line], code: current ? 0 : 1 };
+  return printing([line], current ? 0 : 1);
 }
 
 /** The app's base class for the database (`ApplicationRecord`), when it's missing; never over it. */
-function baseWrites(cwd: string, db: DatabaseSnapshot): Plan {
+function baseWrites(cwd: string, db: DatabaseSnapshot): Step[] {
   const { target } = db;
-  if (db.base) return { files: [], lines: [], code: 0 };
+  if (db.hasBase) return [];
   const { path, className } = target.base;
   const source = renderBase(
     className,
     importPath(dirname(path), target.out),
     target.database.binding,
   );
-  return { files: [{ path, source }], lines: [`Wrote ${shown(cwd, path)}`], code: 0 };
+  return [written({ path, source }, `Wrote ${shown(cwd, path)}`)];
 }
 
 /**
@@ -67,11 +73,7 @@ export function schemaRefusal(cwd: string, db: DatabaseSnapshot): string | undef
  * What writing a database's schema takes, once its tables are known: the schema file (unless
  * it's unchanged), the base class when it's missing, and the notes.
  */
-export function schemaWrites(
-  cwd: string,
-  db: DatabaseSnapshot,
-  result: { tables: GeneratedTable[]; notes: string[] },
-): Plan {
+export function schemaWrites(cwd: string, db: DatabaseSnapshot, result: SchemaTables): Plan {
   const { target } = db;
   const out = shown(cwd, target.out);
   const source = `${shown(cwd, target.migrationsDir)}/`;
@@ -80,21 +82,18 @@ export function schemaWrites(
   // Notes come with a file that's written, so watching or generating again doesn't repeat them;
   // the hint for migrations it can't see comes every time, since nothing else would show them.
   const notes = db.nestedMigrations ? [layoutNote(cwd, target)] : [];
-  const plan: Plan = { files: [], lines: [], code: 0 };
-  if (rendered === db.schema) plan.lines.push(`${out} is up to date (${count})`);
+  const steps: Step[] = [];
+  if (rendered === db.schema) steps.push({ line: `${out} is up to date (${count})` });
   else {
-    plan.files.push({ path: target.out, source: rendered });
-    plan.lines.push(`Wrote ${out} (${count}) from ${source}`);
-    const tool = migrationTool(db.toolFiles, db.migrations ?? []);
+    steps.push(
+      written({ path: target.out, source: rendered }, `Wrote ${out} (${count}) from ${source}`),
+    );
+    const tool = migrationTool(db.toolsFound, db.migrations ?? []);
     notes.unshift(...result.notes, ...originNotes(tool, result.tables));
   }
   // Whenever it's missing, not only with a new schema: a Model imports it either way.
-  const base = baseWrites(cwd, db);
-  return combined([
-    plan,
-    base,
-    { files: [], lines: notes.map((note) => `Note: ${note}`), code: 0 },
-  ]);
+  steps.push(...baseWrites(cwd, db), ...notes.map((note) => ({ line: `Note: ${note}` })));
+  return { steps, code: 0 };
 }
 
 /** One database's schema, generated (or, with `check`, checked). */
@@ -107,7 +106,7 @@ function planDatabase(cwd: string, db: DatabaseSnapshot, check: boolean): Plan {
   const migrationsTable = db.target.database.migrationsTable;
   const result = schemaOf(db.migrations, { migrationsTable });
   if (!result.ok) return failed(result.errors, cwd, db);
-  return check ? checked(cwd, db, result.tables) : schemaWrites(cwd, db, result);
+  return check ? checkPlan(cwd, db, result.tables) : schemaWrites(cwd, db, result);
 }
 
 /** What `d1-record schema` writes and prints for a project (or, with `check`, only prints). */
@@ -125,7 +124,7 @@ export function runSchema(options: SchemaOptions, print: Print): number {
     print(project);
     return 1;
   }
-  return apply(planSchema(project, options.check === true), print);
+  return apply(planSchema(project, options.check === true), project.cwd, print);
 }
 
 /**

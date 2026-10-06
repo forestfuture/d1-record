@@ -50,16 +50,16 @@ export function toolsWithFiles(projectDir: string): Tool[] {
 }
 
 /**
- * The tool that wrote a project's migrations, if one is recognised: by its files (`toolFiles`,
+ * The tool that wrote a project's migrations, if one is recognised: by its files (`toolsFound`,
  * from `toolsWithFiles`), or its marker in a migration.
  */
 export function migrationTool(
-  toolFiles: readonly Tool[],
+  toolsFound: readonly Tool[],
   migrations: readonly Migration[],
 ): Tool | undefined {
   return tools.find(
     (tool) =>
-      toolFiles.includes(tool) ||
+      toolsFound.includes(tool) ||
       migrations.some((migration) => signs[tool].marker.test(migration.sql)),
   );
 }

@@ -1,15 +1,15 @@
 import { dirname, join, relative, resolve } from "node:path";
-import { apply, type FileToWrite, type Plan } from "../plan.ts";
-import { schemaRefusal, schemaWrites } from "../schema/command.ts";
+import { apply, printed, printing, written, type FileToWrite, type Plan } from "../plan.ts";
+import { schemaRefusal, schemaWrites, type SchemaTables } from "../schema/command.ts";
 import {
   defaultModels,
+  oneModelsFile,
   importPath,
   shown,
   slashed,
   type Print,
-  type Target,
 } from "../schema/project.ts";
-import { schemaOf, type GeneratedTable, type Migration } from "../schema/schema.ts";
+import { byName, schemaOf, type GeneratedTable, type Migration } from "../schema/schema.ts";
 import { readProject, type DatabaseSnapshot, type ProjectSnapshot } from "../schema/snapshot.ts";
 import { parseColumns, type ColumnArg } from "./columns.ts";
 import { migrationFileName, migrationFor, type KeyType } from "./migration.ts";
@@ -38,41 +38,42 @@ export interface GenerateOptions {
   out?: string;
 }
 
-/** The tables a set of migrations makes, and the notes their columns raise. */
-type SchemaTables = { tables: GeneratedTable[]; notes: string[] };
-
 /** What's being generated, once the database and the columns are known. */
 interface Request {
   project: ProjectSnapshot;
   db: DatabaseSnapshot;
-  target: Target;
   options: GenerateOptions;
   columns: readonly ColumnArg[];
   /** The Model's class, for `g model`. */
   className?: string;
 }
 
-/** Everything a generator writes, once it's all been checked; or why nothing will be. */
-type Checked =
-  | {
-      ok: true;
-      request: Request;
-      migration: FileToWrite;
-      model?: FileToWrite;
-      schema: SchemaTables;
-      notes: string[];
-    }
-  | Refusal;
+/** Everything a generator writes, once it's all been checked. */
+interface Checked {
+  /** The database, with the new migration among its migrations. */
+  db: DatabaseSnapshot;
+  migration: FileToWrite;
+  model?: FileToWrite;
+  schema: SchemaTables;
+  notes: string[];
+}
+
+/** A refusal: these errors, then "Wrote nothing". */
+function refused(...errors: string[]): Plan {
+  return printing([...errors, "Wrote nothing"], 1);
+}
 
 /**
- * Why nothing was written. `wroteNothing` is false for a problem with the project itself (its
- * config, or a database to choose), where "Wrote nothing" would say nothing useful.
+ * A refusal for a problem with the project itself (its config, or a database to choose), where
+ * "Wrote nothing" would say nothing useful.
  */
-type Refusal = { ok: false; errors: string[]; wroteNothing: boolean };
+function unusable(error: string): Plan {
+  return printing([error], 1);
+}
 
-/** Refuses with these errors, after which the command prints "Wrote nothing". */
-function refused(...errors: string[]): Refusal {
-  return { ok: false, errors, wroteNothing: true };
+/** Whether a step's result is a refusal, rather than what it checked. */
+function isPlan(value: object): value is Plan {
+  return "steps" in value;
 }
 
 /** `"A"`, `"A or B"`, `"A, B or C"`. */
@@ -97,7 +98,8 @@ function databaseFor(
 }
 
 /** Wrangler only applies migrations its `migrations_pattern` matches, so refuse any other file. */
-function patternRefusal({ project, target }: Request, path: string): string | undefined {
+function patternRefusal({ project, db }: Request, path: string): string | undefined {
+  const { target } = db;
   const pattern = target.database.migrationsPattern;
   const relativePath = slashed(relative(target.configDir, path));
   if (
@@ -125,15 +127,16 @@ function keyTypes(tables: readonly GeneratedTable[]): Map<string, KeyType> {
 /** Where `g model` writes a Model: its own file, or the one file Models are appended to. */
 function modelPathOf(cwd: string, options: GenerateOptions, className: string): string {
   const models = options.models ?? defaultModels;
-  return resolve(cwd, models, models.endsWith(".ts") ? "" : modelFileName(className));
+  return resolve(cwd, models, oneModelsFile(models) ? "" : modelFileName(className));
 }
 
 /** The Model `g model` writes, and where (its own file, or appended to one); or why it can't. */
-function modelFile(request: Request): FileToWrite | Refusal {
-  const { project, target, options, columns } = request;
+function modelFile(request: Request): FileToWrite | Plan {
+  const { project, db, options, columns } = request;
   const { cwd } = project;
+  const { target } = db;
   const className = request.className!;
-  const separateFiles = !(options.models ?? defaultModels).endsWith(".ts");
+  const separateFiles = !oneModelsFile(options.models ?? defaultModels);
   const path = modelPathOf(cwd, options, className);
   const model: ModelToWrite = {
     className,
@@ -172,10 +175,9 @@ function referenceNotes(
 function checkedMigration(
   request: Request,
   existing: readonly Migration[],
-):
-  | { ok: true; migration: FileToWrite; after: Migration[]; schema: SchemaTables; notes: string[] }
-  | Refusal {
-  const { target, options, columns } = request;
+): { migration: FileToWrite; after: Migration[]; schema: SchemaTables; notes: string[] } | Plan {
+  const { db, options, columns } = request;
+  const { target } = db;
   const migrationsTable = target.database.migrationsTable;
   const current = schemaOf(existing, { migrationsTable });
   if (!current.ok) return refused(...current.errors);
@@ -188,27 +190,27 @@ function checkedMigration(
   );
   const result = migrationFor(stem, columns, keys, options);
   if (!result.ok) return refused(result.error);
-  const after = [...existing, { name, sql: result.sql }];
+  // In the order Wrangler applies them, which a migration with no number may change.
+  const after = [...existing, { name, sql: result.sql }].sort((a, b) => byName(a.name, b.name));
   const checked = schemaOf(after, { migrationsTable });
   if (!checked.ok) return refused(...checked.errors);
   const migration = { path: join(target.migrationsDir, name), source: result.sql };
-  return { ok: true, migration, after, schema: checked, notes: referenceNotes(columns, keys) };
+  return { migration, after, schema: checked, notes: referenceNotes(columns, keys) };
 }
 
 /** The request: the database, the columns and the names, each checked. */
 function requestFor(
   project: ProjectSnapshot,
   options: GenerateOptions,
-): (Request & { notes: string[] }) | Refusal {
+): (Request & { notes: string[] }) | Plan {
   const db = databaseFor(project, options);
-  if (typeof db === "string") return { ok: false, errors: [db], wroteNothing: false };
+  if (typeof db === "string") return unusable(db);
   // Checked first, so a generator never plans a migration whose schema it then can't write.
   const refusal = schemaRefusal(project.cwd, db);
   if (refusal !== undefined) return refused(refusal);
   const parsed = parseColumns(options.columns);
   if (!parsed.ok) return refused(...parsed.errors);
-  const { target } = db;
-  const request = { project, db, target, options, columns: parsed.columns, notes: [] as string[] };
+  const request = { project, db, options, columns: parsed.columns, notes: [] as string[] };
   if (options.kind === "migration") {
     const error = migrationNameError(options.name);
     return error === undefined ? request : refused(error);
@@ -220,21 +222,19 @@ function requestFor(
 }
 
 /** Checks everything a generator would write, before anything is written. */
-function checkedFor(project: ProjectSnapshot, options: GenerateOptions): Checked {
+function checkedFor(project: ProjectSnapshot, options: GenerateOptions): Checked | Plan {
   const request = requestFor(project, options);
-  if ("ok" in request) return request;
-  const existing = request.db.migrations ?? [];
+  if (isPlan(request)) return request;
   const model = request.className === undefined ? undefined : modelFile(request);
-  if (model !== undefined && "ok" in model) return model;
-  const checked = checkedMigration(request, existing);
-  if (!checked.ok) return checked;
+  if (model !== undefined && isPlan(model)) return model;
+  const checked = checkedMigration(request, request.db.migrations ?? []);
+  if (isPlan(checked)) return checked;
   const refusal = patternRefusal(request, checked.migration.path);
-  if (refusal !== undefined) return { ok: false, errors: [refusal], wroteNothing: false };
-  const notes = [...request.notes, ...checked.notes];
-  // The schema is planned from the migrations as they'll be, the new one included.
-  request.db = { ...request.db, migrations: checked.after };
+  if (refusal !== undefined) return unusable(refusal);
   const { migration, schema } = checked;
-  return { ok: true, request, migration, model, schema, notes };
+  // The schema is planned from the migrations as they'll be, the new one included.
+  const db = { ...request.db, migrations: checked.after };
+  return { db, migration, model, schema, notes: [...request.notes, ...checked.notes] };
 }
 
 /**
@@ -243,22 +243,18 @@ function checkedFor(project: ProjectSnapshot, options: GenerateOptions): Checked
  */
 export function planGenerate(project: ProjectSnapshot, options: GenerateOptions): Plan {
   const checked = checkedFor(project, options);
-  if (!checked.ok) {
-    const lines = checked.wroteNothing ? [...checked.errors, "Wrote nothing"] : checked.errors;
-    return { files: [], lines, code: 1 };
-  }
-  const { request, migration, model, notes } = checked;
+  if (isPlan(checked)) return checked;
+  const { db, migration, model, notes } = checked;
   const { cwd } = project;
   const own = model === undefined ? [migration] : [migration, model];
-  const schema = schemaWrites(cwd, request.db, checked.schema);
-  const database = request.target.database.databaseName ?? request.target.database.binding;
+  const schema = schemaWrites(cwd, db, checked.schema);
+  const database = db.target.database.databaseName ?? db.target.database.binding;
   return {
-    files: [...own, ...schema.files],
-    lines: [
-      ...own.map((file) => `Wrote ${shown(cwd, file.path)}`),
-      ...schema.lines,
-      ...notes.map((note) => `Note: ${note}`),
-      `Next: npx wrangler d1 migrations apply ${database} --local`,
+    steps: [
+      ...own.map((file) => written(file, `Wrote ${shown(cwd, file.path)}`)),
+      ...schema.steps,
+      ...notes.map((note) => printed(`Note: ${note}`)),
+      printed(`Next: npx wrangler d1 migrations apply ${database} --local`),
     ],
     code: 0,
   };
@@ -278,5 +274,5 @@ export function runGenerate(options: GenerateOptions, print: Print): number {
     print(project);
     return 1;
   }
-  return apply(planGenerate(project, options), print);
+  return apply(planGenerate(project, options), cwd, print);
 }

@@ -46,10 +46,15 @@ function baseFor(modelsDir: string, binding: string, several: boolean): Target["
 /** Where Models and their base class go without `--models`. */
 export const defaultModels = "src/models";
 
+/** Whether `--models` names one file all Models go in (`src/models.ts`), not a folder. */
+export function oneModelsFile(models: string): boolean {
+  return models.endsWith(".ts");
+}
+
 /** The folder Models and their base class live in: `--models`, or `src/models`. */
 function modelsDirOf(cwd: string, models = defaultModels): string {
   const path = resolve(cwd, models);
-  return path.endsWith(".ts") ? dirname(path) : path;
+  return oneModelsFile(models) ? dirname(path) : path;
 }
 
 /** Bindings whose base classes would be the same (`DB` and `db` → `DbRecord`), as an error. */
