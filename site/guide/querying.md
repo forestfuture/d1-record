@@ -4,94 +4,123 @@ description: "Reference for querying: a Model's statics, Relations, where and co
 
 # Querying
 
-A query is a **Relation**: a description of which records you want. Every method that narrows, orders or pages a query returns a new Relation, and nothing is sent to D1 until you ask for results.
+A query is a **Relation**. Each method that narrows, orders or pages it returns a new Relation, and nothing runs until you ask for results:
 
 <<< @/snippets/guide/querying.ts#relation{ts}
 
-Relations aren’t promises: they have no `then`, so an `async` function that returns one never runs it by accident. Ask for results with a terminal method such as `toArray()`, `first()` or `count()`.
+::: warning TIP
+Relations have no `then`, so an `async` function that returns one never runs it by accident. Ask for results with a method such as `toArray()`, `first()` or `count()`.
+:::
 
 ## Starting a query
 
-Every Relation method is also a static of every Model, as in Rails: `User.where(…)`, `User.find(id)`, `User.order(…)`, `User.count()`, `User.create(…)`, and the rest, typed for the class you call it on (on a subclass, its records are the subclass). `User.all()` is the Relation itself, and a Model’s scopes are statics too (`User.active()`).
+Every Relation method is also a static of every Model, as in Rails: `User.where(…)`, `User.find(id)`, `User.count()`, `User.create(…)`. `User.all()` is the Relation itself, and scopes are statics too: `User.active()`.
 
-A query started from a Model runs on the current database: the request’s, if it was opened with `withDatabase`, or else the Model’s binding. `db.model(User)` starts the same Relation on an explicit database instead. See [Connections](./connecting).
+A query runs on the current database: the request’s, if it was opened with `withDatabase`, or the Model’s binding. To use another, start from `db.model(User)`. See [Connections](./connecting).
 
-## Conditions
+## Adding conditions
 
-`where` takes an object of attributes, all of which must match:
+Pass `where` an object of attributes that must all match:
 
 <<< @/snippets/guide/querying.ts#where{ts}
 
-- `null` matches NULL (`IS NULL`), and an array matches any of its values. The whole list is bound as one value, so it can be any length without reaching D1’s limit of 100 bound parameters.
+- `null` matches NULL, and an array matches any of its values. The list is bound as one value, so it can be any length.
 - `whereNot` negates the whole condition. As in SQL, `whereNot({ role: "admin" })` also leaves out users whose role is NULL.
-- `or` combines two Relations of the same Model whose only difference is their conditions.
-- `where({})` adds nothing. An `undefined` value throws `TypeError`, since binding it would silently match nothing: leave the key out, or use `null`.
-- Values are [cast to the attribute’s type](./models#assigned-values-are-cast), so `where({ quantity: "42" })` finds 42, and `where({ code: 7 })` finds the code `"7"`. A value that can’t be cast (`"abc"` for an integer) matches nothing, never NULL: `findBy` resolves to `null`, and `find` throws `RecordNotFound`. In a list, values that can’t be cast are left out. So `whereNot` with one excludes nothing: check an id from a request before excluding by it.
+- `or` combines two Relations of the same Model that differ only in their conditions.
+- `undefined` throws `TypeError`. Leave the key out, or use `null`.
 
-### Comparisons
+Values are [cast to the attribute’s type](./models#casting-assigned-values), so `where({ quantity: "42" })` finds 42. A value that can’t be cast matches nothing: `findBy` resolves to `null`, and `find` throws `RecordNotFound`.
 
-Ranges and comparisons are small helpers you pass as a value:
+::: warning TIP
+In a list, values that can’t be cast are left out. So `whereNot({ id: "abc" })` on an integer key excludes nothing.
+:::
+
+### Comparing values
+
+Pass a comparison helper as a value:
 
 <<< @/snippets/guide/querying.ts#comparisons{ts}
 
-`gt`, `gte`, `lt`, `lte` and `between` work on number, string and datetime attributes, and their values are converted like the attribute’s own, so dates compare by time. `between` includes both ends, like Rails’ `start..end`, and `{ excludeEnd: true }` is `start...end`.
+`gt`, `gte`, `lt`, `lte` and `between` work on number, string and datetime attributes, and dates compare by time. `between` includes both ends, like Rails’ `start..end`. Pass `{ excludeEnd: true }` for `start...end`.
 
-### SQL fragments
+### Writing SQL fragments
 
-Anything else is an `sql` tagged template. Values are always bound. Fragments are SQL, so they name columns, and `column()` looks one up from its attribute:
+For anything else, write an `sql` tagged template. Values are always bound, and `column()` looks up an attribute’s column:
 
 <<< @/snippets/guide/querying.ts#sql{ts}
 
 ## Ordering and paging
 
+Sort by each key in turn with `order`, and page with `limit` and `offset`:
+
 <<< @/snippets/guide/querying.ts#order{ts}
 
-`order` sorts by each key in turn, and calling it again adds more keys. NULLs sort first in ascending order, as SQLite sorts them, unless you place them with `nulls`. `reorder` replaces the order so far, and `reorder()` removes it.
+Calling `order` again adds more keys. `reorder` replaces the order so far, and `reorder()` removes it.
+
+::: warning TIP
+NULLs sort first in ascending order, as in SQLite. Place them with `nulls: "first"` or `nulls: "last"`.
+:::
 
 ## Getting results
 
+Run a query with one of these methods:
+
 <<< @/snippets/guide/querying.ts#terminal{ts}
 
-- `find` takes an id and throws `RecordNotFound` if it’s missing. Given several ids, it resolves to an array in the ids’ order, from one query, and throws if any are missing.
+- `find` throws `RecordNotFound` if the id is missing. Given several ids, it returns them in order, from one query, and throws if any are missing.
 - `findBy` resolves to `null` when nothing matches, and `findByOrThrow` throws `RecordNotFound`.
-- `first` and `last` sort by the primary key unless the Relation has an order, and `last` reverses that order. It can’t reverse an `sql` fragment, so it throws `IrreversibleOrder` there.
-- `count()` always agrees with the number of records `toArray()` would return, even with `limit`, `offset` or `distinct`.
-- `size()`, `isEmpty()` and `hasAny()` are Rails’ `size`, `empty?` and `any?`. On a loaded association they answer without a query.
+- `first` and `last` sort by the primary key unless the Relation has an order, and `last` reverses that order. An `sql` fragment can’t be reversed, so `last` throws `IrreversibleOrder` there.
+- `count()` always agrees with what `toArray()` returns, even with `limit`, `offset` or `distinct`.
+- `size()`, `isEmpty()` and `hasAny()` are Rails’ `size`, `empty?` and `any?`. On a loaded association, they answer without a query.
 
-## Partial records
+## Selecting attributes
 
-`select` loads only some attributes. The primary key is always loaded too, so partial records can still be saved:
+Load only some attributes with `select`. The primary key is always loaded too, so the records can still be saved:
 
 <<< @/snippets/guide/querying.ts#select{ts}
 
-Reading an attribute that wasn’t loaded throws `MissingAttribute`, including from a validator or callback. Saving a partial record writes only what changed, and never fills in what wasn’t loaded. `reload()` loads the whole row.
+- Reading an attribute that wasn’t loaded throws `MissingAttribute`, including from a validator or callback.
+- Saving a partial record writes only what changed. `reload()` loads the whole row.
+- After `distinct()`, the primary key isn’t added, since it would make every row distinct, so those records can’t be saved.
 
-After `distinct()` the primary key isn’t added, since it would make every row distinct, so those records can’t be saved.
+## Matching nothing
 
-## Nothing at all
-
-`none()` is a Relation that matches nothing without asking D1: `toArray()` is `[]`, `count()` is `0`, `first()` is `null`, and chaining more onto it keeps it empty.
+`none()` matches nothing without asking D1. Chaining more onto it keeps it empty:
 
 <<< @/snippets/guide/querying.ts#none{ts}
 
-## Scopes
+## Defining scopes
 
-Scopes are named, reusable parts of a query, declared one static each, as Rails’ `scope :active, -> { … }`. A scope receives the current Relation, plus any arguments, and returns a narrower one:
+A scope is a named, reusable part of a query, like Rails’ `scope :active, -> { … }`. Declare one as a static that receives the Relation, plus any arguments, and returns a narrower one:
 
 <<< @/snippets/guide/models.ts#declare{ts}
 
+Call it as a static, or on any Relation of the Model:
+
 <<< @/snippets/guide/models.ts#scopes{ts}
 
-- **Called anywhere:** as a static (`User.active()`), or on any Relation of the Model (`User.where(…).active()`), chaining with everything else. A wrong argument type or an unknown scope is a compile error.
-- **Evaluated when called:** a scope’s arguments, and anything it computes such as `new Date()`, are evaluated when you call it, not when the class is defined. Calling a scope never queries on its own.
-- **Inherited** down any chain of classes, as statics are, including scopes on your app’s base class ([Shared behavior](./shared-behavior)). A subclass can replace one with `static override active = this.scope(…)`.
-- **Names:** a scope can’t reuse a Relation method’s name (`where`, `count`) or a Model static’s (`validates`, `scope`, `all`).
-- **Inside a scope**, `q` has every Relation method but not the Model’s other scopes; share logic between scopes with a plain function. A scope whose body names its own class needs its type written out: `static roots: ScopeStatic<[]> = this.scope(…)`.
+- A scope’s arguments, and anything it computes such as `new Date()`, are evaluated when you call it.
+- Scopes are inherited, including those on your app’s base class ([Shared behavior](./shared-behavior)). A subclass can replace one with `static override active = this.scope(…)`.
+- A scope can’t reuse a Relation method’s name (`where`, `count`) or a Model static’s (`validates`, `scope`, `all`).
+- Inside a scope, `q` has every Relation method but not the Model’s other scopes. Share logic between scopes with a plain function.
 
-## Combining Relations
+::: warning TIP
+A scope whose body names its own class needs its type written out: `static roots: ScopeStatic<[]> = this.scope(…)`.
+:::
 
-`merge(other)` combines two Relations of the same Model: their conditions are joined with AND, and anything the argument sets (order, limit, select, …) replaces the receiver’s. Unlike Rails, orders are replaced rather than added together.
+## Merging Relations
+
+Combine two Relations of the same Model with `merge`. Their conditions are joined with AND, and anything the argument sets, such as an order, limit or select, replaces the receiver’s:
+
+```ts
+const recent = User.order({ createdAt: "desc" }).limit(10);
+const admins = await User.where({ role: "admin" }).merge(recent).toArray();
+```
+
+::: tip Compared with Rails
+Rails adds the argument’s order to the receiver’s. d1-record replaces it.
+:::
 
 ## Preloading associations
 
-`includes` loads associations for every record in one query each, never one per record. See [Associations](./associations#preloading).
+`includes` loads associations for every record, with one query per association. See [Associations](./associations#preloading-associations).
