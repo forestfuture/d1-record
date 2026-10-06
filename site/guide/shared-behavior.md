@@ -4,11 +4,15 @@ description: "Write methods, callbacks, and scopes once, on your app's base clas
 
 # Shared behavior
 
-Every Model extends your app’s `ApplicationRecord`, so what you write on its base class, `Base` in `src/models/application-record.ts`, every Model has. `d1-record schema` writes that file with commented-out examples to start from.
+Every Model extends your app’s `ApplicationRecord`, so whatever you write on its base class, every Model has.
+
+## Sharing methods, callbacks, and scopes
+
+Write them on `Base`, in `src/models/application-record.ts`:
 
 <<< @/snippets/guide/models.ts#shared{ts}
 
-What `Base` can declare, and how each one is shared:
+Each is shared like this:
 
 | On `Base`                                | Every Model                                            |
 | ---------------------------------------- | ------------------------------------------------------ |
@@ -20,16 +24,20 @@ What `Base` can declare, and how each one is shared:
 
 A Model can replace a shared method or scope by declaring one of the same name.
 
-## What `Base` can see
+::: warning TIP
+`d1-record schema` writes `application-record.ts` with commented-out examples to start from.
+:::
 
-Inside `Base`, `this` is a record of any Model. It has every record method (`save()`, `attributes()`, `changes()`, …) but no attributes, since those differ from table to table:
+## Writing for every table
+
+Inside `Base`, `this` is a record of any Model. It has every record method, such as `save()` and `attributes()`, but no attributes, since those differ from table to table:
 
 - Read attributes through `this.attributes()`, as `label()` does above.
 - Write shared scopes with `sql` fragments, since they run on each Model’s own table: `static newest = this.scope((q) => q.order(sql\`created_at DESC\`))`.
-- Validations name attributes (`this.validates("email", …)`), so they belong on each Model. Put shared checks in a callback instead.
+- Validations name attributes, so they belong on each Model. Put shared checks in a callback instead.
 
-`Base` has no table of its own: `db.model(Base)` throws `InvalidModel`. And once a Model has been used, its `Base` is sealed along with it, so request code can’t add callbacks to every Model.
+`Base` has no table of its own, so `db.model(Base)` throws `InvalidModel`. Once a Model has been used, its `Base` is sealed with it, so request code can’t add callbacks to every Model.
 
-## Several databases
+## Sharing across databases
 
-Each database has its own base class (`DbRecord`, `LogsRecord`), in its own file. To share behavior across all of them, write it in one class extending `Model.Base`, and extend that class in each base class file. See [Multiple databases](./several-databases).
+Each database has its own base class, such as `DbRecord` and `LogsRecord`. To share behavior across all of them, write it in one class extending `Model.Base`, and extend that class in each base class’s file. See [Multiple databases](./several-databases).

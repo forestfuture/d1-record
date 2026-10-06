@@ -221,7 +221,7 @@ Associations are never included, so a response never loads more than you asked f
 
 ## Filtering attributes
 
-`onQuery` listeners and error messages show a filtered attribute’s values as `"[FILTERED]"`. D1 still gets the real values. [Logging](./logging#keep-secrets-out-of-the-logs) shows how to change the list.
+`onQuery` listeners and error messages show a filtered attribute’s values as `"[FILTERED]"`. D1 still gets the real values. [Logging](./logging#keeping-secrets-out-of-the-logs) shows how to change the list.
 
 - **Which attributes:** `static filterAttributes`, a list of strings and RegExps, inherited from your app’s base class. By default, it’s `passw`, `email`, `secret`, `token`, `_key`, `crypt`, `salt`, `certificate`, `otp`, `ssn`, `cvv`, `cvc`. Setting it replaces the list; `[]` filters nothing.
 - **Matching:** a string matches when the attribute’s snake_case name contains it, in any case: `passwordDigest` (`password_digest`) contains `passw`, and `apiKey` (`api_key`) contains `_key`. A RegExp matches the attribute or its snake_case name.
