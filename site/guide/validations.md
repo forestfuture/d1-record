@@ -69,4 +69,4 @@ For a rule the validators don’t cover, add errors in a `beforeValidation` or `
 
 <<< @/snippets/guide/validations.ts#custom{ts}
 
-[Adding an error](#adding-an-error) describes `errors.add`‘s arguments. Each validation run (`isValid()`, `save()` or `saveOrThrow()`) starts by clearing `errors`, as in Rails, so an error added anywhere else is gone by the next save.
+[Adding an error](#adding-an-error) describes `errors.add`’s arguments. Each validation run (`isValid()`, `save()` or `saveOrThrow()`) starts by clearing `errors`, as in Rails, so an error added anywhere else is gone by the next save.
