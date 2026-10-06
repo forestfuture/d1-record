@@ -6,12 +6,13 @@ The guide reads like Laravel's documentation: friendly, direct, and quick to sca
 
 - **Open with what the reader does, or what the feature does,** in one sentence. No preamble about why, and no "This page covers…".
 - **Assume a competent developer.** Show what to do. Leave out what not to do, and warnings about obvious misuse.
-- **Headings name the task or feature, with a gerund:** "Permitting fields", "Logging queries".
+- **Page titles are nouns** ("Validations", "Logging", "Untrusted input"), as Laravel's are; the sidebar uses the same words.
+- **Section headings name the task, with a gerund:** "Permitting fields", "Defining scopes".
 - **Introduce each example with one sentence ending in a colon,** then show it.
 - **Keep examples short.** One idea per line: name an intermediate value rather than nesting calls.
 - **Write to "you", in plain words.** Short sentences, one idea each.
 - **Present options as refinements:** "By default, …", "If you want …, …".
-- **Put side facts in a warning box** (`::: warning`, shown in amber) rather than in the main flow. Differences from Rails go in their own `::: tip Beyond Rails` (or `Compared with Rails`) box.
+- **Put side facts in an amber box titled TIP** (`::: warning TIP`) rather than in the main flow. A real warning gets a `::: warning` box with its own title ("Uniqueness isn't a guarantee"). Differences from Rails go in their own `::: tip Beyond Rails` (or `Compared with Rails`) box.
 - **Explain why only when a default would surprise.** The library's internals stay out of the guide.
 - **Cut** hedges, restatements, "Note that", sentences chained with colons, and summaries of what was just shown.
 
@@ -36,6 +37,6 @@ After:
 > const account = await Account.create(permitted);
 > ```
 >
-> ::: warning
+> ::: warning TIP
 > `permit` can also read `FormData` or `URLSearchParams`.
 > :::
