@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, statSync, watch, writeFileSync } from "node:fs";
+import { existsSync, watch } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
+import { apply, combined, type Plan } from "../plan.ts";
 import {
   importPath,
-  migrationsOf,
   shown,
   targetsOf,
   type Print,
@@ -10,8 +10,14 @@ import {
   type Target,
 } from "./project.ts";
 import { fingerprintIn, fingerprintOf, renderBase, renderSchema } from "./render.ts";
-import { layoutNote, migrationTool, originNotes } from "./origin.ts";
-import { schemaOf } from "./schema.ts";
+import { layoutNote, migrationTool, originNotes, toolsWithFiles } from "./origin.ts";
+import { schemaOf, type GeneratedTable } from "./schema.ts";
+import {
+  databaseSnapshot,
+  readProject,
+  type DatabaseSnapshot,
+  type ProjectSnapshot,
+} from "./snapshot.ts";
 
 export interface SchemaOptions extends ProjectOptions {
   /** The project's folder; the current one by default. */
@@ -20,100 +26,116 @@ export interface SchemaOptions extends ProjectOptions {
   check?: boolean;
 }
 
-/** Reports a schema that couldn't be generated; the last good file stays as it was. */
-function failed(errors: readonly string[], target: Target, out: string, print: Print): number {
-  for (const error of errors) print(error);
-  print(existsSync(target.out) ? `Kept ${out} as it was` : `Wrote nothing to ${out}`);
-  return 1;
+/** A schema that couldn't be generated: the errors, and that the last good file stays as it was. */
+function failed(errors: readonly string[], cwd: string, db: DatabaseSnapshot): Plan {
+  const out = shown(cwd, db.target.out);
+  const kept = db.schema === undefined ? `Wrote nothing to ${out}` : `Kept ${out} as it was`;
+  return { files: [], lines: [...errors, kept], code: 1 };
 }
 
-/** Whether the file on disk was generated from this schema (its fingerprint, not its format). */
-function checked(
-  existing: string | undefined,
-  fingerprint: string,
-  out: string,
-  print: Print,
-): number {
-  const current = existing !== undefined && fingerprintIn(existing) === fingerprint;
-  print(current ? `${out} is up to date` : `${out} is out of date: run \`d1-record schema\``);
-  return current ? 0 : 1;
+/** Whether the file on disk was generated from these tables (its fingerprint, not its format). */
+function checked(cwd: string, db: DatabaseSnapshot, tables: readonly GeneratedTable[]): Plan {
+  const out = shown(cwd, db.target.out);
+  const current = db.schema !== undefined && fingerprintIn(db.schema) === fingerprintOf(tables);
+  const line = current ? `${out} is up to date` : `${out} is out of date: run \`d1-record schema\``;
+  return { files: [], lines: [line], code: current ? 0 : 1 };
 }
 
-/** Writes a generated schema, making its folder if needed. */
-function written(rendered: string, target: Target): void {
-  mkdirSync(dirname(target.out), { recursive: true });
-  writeFileSync(target.out, rendered);
-}
-
-/** Writes the app's base class for the database (`ApplicationRecord`) when it's missing; never over it. */
-function writeBase(cwd: string, target: Target, print: Print): void {
+/** The app's base class for the database (`ApplicationRecord`), when it's missing; never over it. */
+function baseWrites(cwd: string, db: DatabaseSnapshot): Plan {
+  const { target } = db;
+  if (db.base) return { files: [], lines: [], code: 0 };
   const { path, className } = target.base;
-  if (existsSync(path)) return;
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(
-    path,
-    renderBase(className, importPath(dirname(path), target.out), target.database.binding),
+  const source = renderBase(
+    className,
+    importPath(dirname(path), target.out),
+    target.database.binding,
   );
-  print(`Wrote ${shown(cwd, path)}`);
+  return { files: [{ path, source }], lines: [`Wrote ${shown(cwd, path)}`], code: 0 };
 }
 
-/** Generates (or, with `check`, checks) one database's schema; 0 when it went well. */
 /**
  * Why the schema can't be written where it's going, if it can't: a file d1-record didn't write
  * (a Drizzle schema, say) is never replaced, and a file next to a folder of the same name would
  * take over that folder's imports (`@/db/schema` finds `schema.ts` before `schema/index.ts`).
  */
-export function schemaRefusal(cwd: string, target: Target): string | undefined {
-  const out = shown(cwd, target.out);
-  const folder = target.out.replace(/\.ts$/, "");
+export function schemaRefusal(cwd: string, db: DatabaseSnapshot): string | undefined {
+  const out = shown(cwd, db.target.out);
+  const folder = db.target.out.replace(/\.ts$/, "");
   const suggestion = "choose another file with --out, such as --out src/db/d1-record.ts";
-  if (existsSync(folder) && statSync(folder).isDirectory()) {
+  if (db.schemaFolder) {
     return (
       `${out} would take over imports of the folder ${shown(cwd, folder)}/ (an import of ` +
       `${basename(folder)} finds the file first), so it isn't written; ${suggestion}`
     );
   }
-  if (existsSync(target.out) && fingerprintIn(readFileSync(target.out, "utf8")) === undefined) {
+  if (db.schema !== undefined && fingerprintIn(db.schema) === undefined) {
     return `${out} wasn't written by d1-record schema (it has no "Generated by" header), so it's left as it is; ${suggestion}`;
   }
   return undefined;
 }
 
-/** Why a schema can't be generated before reading the migrations: none, or nowhere to write it. */
-function unready(cwd: string, target: Target, check: boolean): string | undefined {
-  if (!existsSync(target.migrationsDir)) {
-    return `No migrations folder at ${shown(cwd, target.migrationsDir)}/`;
-  }
-  return check ? undefined : schemaRefusal(cwd, target);
-}
-
-export function generateSchema(cwd: string, target: Target, check: boolean, print: Print): number {
+/**
+ * What writing a database's schema takes, once its tables are known: the schema file (unless
+ * it's unchanged), the base class when it's missing, and the notes.
+ */
+export function schemaWrites(
+  cwd: string,
+  db: DatabaseSnapshot,
+  result: { tables: GeneratedTable[]; notes: string[] },
+): Plan {
+  const { target } = db;
   const out = shown(cwd, target.out);
   const source = `${shown(cwd, target.migrationsDir)}/`;
-  const problem = unready(cwd, target, check);
-  if (problem !== undefined) return failed([problem], target, out, print);
-  const migrations = migrationsOf(target);
-  const result = schemaOf(migrations, { migrationsTable: target.database.migrationsTable });
-  if (!result.ok) return failed(result.errors, target, out, print);
-  const existing = existsSync(target.out) ? readFileSync(target.out, "utf8") : undefined;
-  if (check) return checked(existing, fingerprintOf(result.tables), out, print);
   const rendered = renderSchema(result.tables, source);
   const count = `${result.tables.length} table${result.tables.length === 1 ? "" : "s"}`;
   // Notes come with a file that's written, so watching or generating again doesn't repeat them;
   // the hint for migrations it can't see comes every time, since nothing else would show them.
-  const layout = layoutNote(cwd, target);
-  const notes = layout === undefined ? [] : [layout];
-  if (rendered === existing) print(`${out} is up to date (${count})`);
+  const notes = db.nestedMigrations ? [layoutNote(cwd, target)] : [];
+  const plan: Plan = { files: [], lines: [], code: 0 };
+  if (rendered === db.schema) plan.lines.push(`${out} is up to date (${count})`);
   else {
-    written(rendered, target);
-    print(`Wrote ${out} (${count}) from ${source}`);
-    const tool = migrationTool(target.configDir, migrations);
+    plan.files.push({ path: target.out, source: rendered });
+    plan.lines.push(`Wrote ${out} (${count}) from ${source}`);
+    const tool = migrationTool(db.toolFiles, db.migrations ?? []);
     notes.unshift(...result.notes, ...originNotes(tool, result.tables));
   }
   // Whenever it's missing, not only with a new schema: a Model imports it either way.
-  writeBase(cwd, target, print);
-  for (const note of notes) print(`Note: ${note}`);
-  return 0;
+  const base = baseWrites(cwd, db);
+  return combined([
+    plan,
+    base,
+    { files: [], lines: notes.map((note) => `Note: ${note}`), code: 0 },
+  ]);
+}
+
+/** One database's schema, generated (or, with `check`, checked). */
+function planDatabase(cwd: string, db: DatabaseSnapshot, check: boolean): Plan {
+  if (db.migrations === undefined) {
+    return failed([`No migrations folder at ${shown(cwd, db.target.migrationsDir)}/`], cwd, db);
+  }
+  const refusal = check ? undefined : schemaRefusal(cwd, db);
+  if (refusal !== undefined) return failed([refusal], cwd, db);
+  const migrationsTable = db.target.database.migrationsTable;
+  const result = schemaOf(db.migrations, { migrationsTable });
+  if (!result.ok) return failed(result.errors, cwd, db);
+  return check ? checked(cwd, db, result.tables) : schemaWrites(cwd, db, result);
+}
+
+/** One database's schema, read from disk and written. Generate's until it plans too (#95). */
+export function generateSchema(cwd: string, target: Target, check: boolean, print: Print): number {
+  const db = databaseSnapshot(target, toolsWithFiles(target.configDir));
+  return apply(planDatabase(cwd, db, check), print);
+}
+
+/** Why a target's schema can't be written. Generate's until it plans too (#95). */
+export function targetRefusal(cwd: string, target: Target): string | undefined {
+  return schemaRefusal(cwd, databaseSnapshot(target, []));
+}
+
+/** What `d1-record schema` writes and prints for a project (or, with `check`, only prints). */
+export function planSchema(project: ProjectSnapshot, check: boolean): Plan {
+  return combined(project.databases.map((db) => planDatabase(project.cwd, db, check)));
 }
 
 /**
@@ -121,15 +143,12 @@ export function generateSchema(cwd: string, target: Target, check: boolean, prin
  * Returns the exit code: 0, or 1 when anything failed or, with `check`, is out of date.
  */
 export function runSchema(options: SchemaOptions, print: Print): number {
-  const cwd = resolve(options.cwd ?? process.cwd());
-  const targets = targetsOf(cwd, options);
-  if (typeof targets === "string") {
-    print(targets);
+  const project = readProject(resolve(options.cwd ?? process.cwd()), options);
+  if (typeof project === "string") {
+    print(project);
     return 1;
   }
-  return Math.max(
-    ...targets.map((target) => generateSchema(cwd, target, options.check === true, print)),
-  );
+  return apply(planSchema(project, options.check === true), print);
 }
 
 /**

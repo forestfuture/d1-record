@@ -9,7 +9,7 @@ import type { GeneratedTable, Migration } from "./schema.ts";
 
 const tools = ["Drizzle", "Prisma"] as const;
 
-type Tool = (typeof tools)[number];
+export type Tool = (typeof tools)[number];
 
 /** Each tool's files in a project, and the marker it writes into its SQL. */
 const signs: Record<Tool, { files: readonly string[]; marker: RegExp }> = {
@@ -41,39 +41,51 @@ function searchedFolders(projectDir: string): string[] {
   return folders;
 }
 
+/** The tools whose files are in the project or above it (`drizzle.config.ts`, `prisma/schema.prisma`). */
+export function toolsWithFiles(projectDir: string): Tool[] {
+  const folders = searchedFolders(projectDir);
+  return tools.filter((tool) =>
+    folders.some((folder) => signs[tool].files.some((file) => existsSync(join(folder, file)))),
+  );
+}
+
 /**
- * The tool that wrote a project's migrations, if one is recognised: by its files in the project
- * or above it (`drizzle.config.ts`, `prisma/schema.prisma`), or its marker in a migration.
+ * The tool that wrote a project's migrations, if one is recognised: by its files (`toolFiles`,
+ * from `toolsWithFiles`), or its marker in a migration.
  */
 export function migrationTool(
-  projectDir: string,
+  toolFiles: readonly Tool[],
   migrations: readonly Migration[],
 ): Tool | undefined {
-  const folders = searchedFolders(projectDir);
   return tools.find(
     (tool) =>
-      folders.some((folder) => signs[tool].files.some((file) => existsSync(join(folder, file)))) ||
+      toolFiles.includes(tool) ||
       migrations.some((migration) => signs[tool].marker.test(migration.sql)),
   );
 }
 
 /**
- * Wrangler's hint for migrations in folders (`migrations/0000_init/migration.sql`, as Drizzle
- * writes them) when the config has no `migrations_pattern` to find them.
+ * Whether a database's migrations are in folders (`migrations/0000_init/migration.sql`, as
+ * Drizzle writes them) with no `migrations_pattern` in the config to find them.
  */
-export function layoutNote(cwd: string, target: Target): string | undefined {
+export function hasNestedMigrations(target: Target): boolean {
   const dir = target.migrationsDir;
-  if (target.database.migrationsPattern !== undefined || !existsSync(dir)) return undefined;
+  if (target.database.migrationsPattern !== undefined || !existsSync(dir)) return false;
   const entries = readdirSync(dir, { withFileTypes: true });
-  if (entries.some((entry) => entry.isFile() && entry.name.endsWith(".sql"))) return undefined;
-  const nested = entries.some(
+  if (entries.some((entry) => entry.isFile() && entry.name.endsWith(".sql"))) return false;
+  return entries.some(
     (entry) => entry.isDirectory() && existsSync(join(dir, entry.name, "migration.sql")),
   );
+}
+
+/** Wrangler's hint for migrations in folders, when `hasNestedMigrations` found them. */
+export function layoutNote(cwd: string, target: Target): string {
+  const dir = target.migrationsDir;
   const pattern = `${shown(target.configDir, dir)}/*/migration.sql`;
-  return nested
-    ? `${shown(cwd, dir)}/ has its migrations in folders, as Drizzle writes them; set ` +
-        `migrations_pattern to "${pattern}" in your Wrangler config, so Wrangler and d1-record read them`
-    : undefined;
+  return (
+    `${shown(cwd, dir)}/ has its migrations in folders, as Drizzle writes them; set ` +
+    `migrations_pattern to "${pattern}" in your Wrangler config, so Wrangler and d1-record read them`
+  );
 }
 
 /** The columns worth checking, in a schema from `tool`'s migrations. */

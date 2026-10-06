@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
-import { migrationTool, originNotes } from "../../cli/schema/origin.ts";
-import { schemaOf } from "../../cli/schema/schema.ts";
+import { migrationTool, originNotes, toolsWithFiles, type Tool } from "../../cli/schema/origin.ts";
+import { schemaOf, type Migration } from "../../cli/schema/schema.ts";
 
 /** A throwaway project folder with these files. */
 function projectWith(...files: string[]): string {
@@ -15,13 +15,18 @@ function projectWith(...files: string[]): string {
   return dir;
 }
 
+/** The tool recognised for a project folder and its migrations, as `d1-record schema` reads them. */
+function recognised(dir: string, migrations: readonly Migration[]): Tool | undefined {
+  return migrationTool(toolsWithFiles(dir), migrations);
+}
+
 const plain = [{ name: "0001_init.sql", sql: "CREATE TABLE users (id TEXT PRIMARY KEY);" }];
 
 describe("recognising another tool's migrations", () => {
   test("Drizzle, by its config file or the statement breakpoints it writes", () => {
-    expect(migrationTool(projectWith("drizzle.config.ts"), plain)).toBe("Drizzle");
+    expect(recognised(projectWith("drizzle.config.ts"), plain)).toBe("Drizzle");
     expect(
-      migrationTool(projectWith(), [
+      recognised(projectWith(), [
         {
           name: "0000_init.sql",
           sql: "CREATE TABLE a (id INTEGER PRIMARY KEY);\n--> statement-breakpoint\nCREATE TABLE b (id INTEGER PRIMARY KEY);",
@@ -31,10 +36,10 @@ describe("recognising another tool's migrations", () => {
   });
 
   test("Prisma, by its schema or config file, or the step comments it writes", () => {
-    expect(migrationTool(projectWith("prisma/schema.prisma"), plain)).toBe("Prisma");
-    expect(migrationTool(projectWith("prisma.config.ts"), plain)).toBe("Prisma");
+    expect(recognised(projectWith("prisma/schema.prisma"), plain)).toBe("Prisma");
+    expect(recognised(projectWith("prisma.config.ts"), plain)).toBe("Prisma");
     expect(
-      migrationTool(projectWith(), [
+      recognised(projectWith(), [
         {
           name: "0001_init.sql",
           sql: '-- CreateTable\nCREATE TABLE "User" ("id" TEXT NOT NULL PRIMARY KEY);',
@@ -44,21 +49,21 @@ describe("recognising another tool's migrations", () => {
   });
 
   test("a config with any of Drizzle's extensions, or Prisma's schema at the root, counts", () => {
-    expect(migrationTool(projectWith("drizzle.config.mts"), plain)).toBe("Drizzle");
-    expect(migrationTool(projectWith("drizzle.config.cts"), plain)).toBe("Drizzle");
-    expect(migrationTool(projectWith("schema.prisma"), plain)).toBe("Prisma");
+    expect(recognised(projectWith("drizzle.config.mts"), plain)).toBe("Drizzle");
+    expect(recognised(projectWith("drizzle.config.cts"), plain)).toBe("Drizzle");
+    expect(recognised(projectWith("schema.prisma"), plain)).toBe("Prisma");
   });
 
   test("in a monorepo, a config above the project counts, up to the repository's root", () => {
     const repo = projectWith(".git/HEAD", "drizzle.config.ts", "apps/api/wrangler.jsonc");
     const outside = projectWith("drizzle.config.ts", "apps/api/wrangler.jsonc");
 
-    expect(migrationTool(join(repo, "apps/api"), plain)).toBe("Drizzle");
-    expect(migrationTool(join(outside, "apps/api"), plain)).toBeUndefined();
+    expect(recognised(join(repo, "apps/api"), plain)).toBe("Drizzle");
+    expect(recognised(join(outside, "apps/api"), plain)).toBeUndefined();
   });
 
   test("Wrangler's own migrations aren't another tool's", () => {
-    expect(migrationTool(projectWith("wrangler.jsonc"), plain)).toBeUndefined();
+    expect(recognised(projectWith("wrangler.jsonc"), plain)).toBeUndefined();
   });
 });
 
