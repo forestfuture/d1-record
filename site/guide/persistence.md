@@ -15,7 +15,7 @@ Save a record with `save`. It validates the record, runs its callbacks, and reso
 A new record is inserted, and a persisted one updates only the attributes that changed. `save` resolves to `false` for one of two reasons:
 
 - **Validation failed.** The reasons are in `record.errors`.
-- **A callback aborted** with [`abort()`](./callbacks#stopping-a-save-with-abort). The reason is in `record.abortReason`.
+- **A callback aborted** with [`abort()`](./callbacks#stopping-a-save). The reason is in `record.abortReason`.
 
 `create(attrs)` builds and saves a record, and resolves to it whether it saved or not. Check `isPersisted()` or `errors`. `update(attrs)` assigns, then saves.
 
