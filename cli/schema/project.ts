@@ -43,8 +43,11 @@ function baseFor(modelsDir: string, binding: string, several: boolean): Target["
   return { path: join(modelsDir, `${moduleName(className)}.ts`), className };
 }
 
+/** Where Models and their base class go without `--models`. */
+export const defaultModels = "src/models";
+
 /** The folder Models and their base class live in: `--models`, or `src/models`. */
-function modelsDirOf(cwd: string, models = "src/models"): string {
+function modelsDirOf(cwd: string, models = defaultModels): string {
   const path = resolve(cwd, models);
   return path.endsWith(".ts") ? dirname(path) : path;
 }
