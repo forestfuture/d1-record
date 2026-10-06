@@ -4,7 +4,7 @@ description: "How a query finds its D1 database (a Model's binding, the request'
 
 # Database resolution
 
-In Rails, `Product.find(id)` just works: the model knows its database. d1-record keeps that, `Product.find(id)` works, but a Worker isn’t a Rails server, and the difference shapes how a query finds its database.
+`Product.find(id)` works with no setup, because a Model knows its D1 binding. But a Worker isn’t a long-running server, and that shapes how a query finds its database.
 
 ## One isolate, many requests
 
@@ -17,7 +17,7 @@ Rails doesn’t keep its connection on the class either: each thread checks one 
 
 ## Three ways to find a database
 
-So a query finds its database one of three ways, in this order:
+A query finds its database in one of three ways, in this order:
 
 1. **The request’s database.** Inside `withDatabase(connect(env.DB, { session, onQuery }), fn)`, everything `fn` awaits uses that database, kept in the request’s `AsyncLocalStorage`, never on a class. It’s matched to Models by binding, so a request can open several.
 2. **The Model’s binding.** Outside `withDatabase`, a Model uses the D1 binding its base class names (`static binding = "DB"`), read from `cloudflare:workers`. The binding is the same object for every request, and the database made for it holds nothing per request (no Session, no listener), so sharing it is safe. This is what makes `Product.find(id)` work with no setup.

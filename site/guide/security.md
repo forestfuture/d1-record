@@ -4,7 +4,7 @@ description: "What d1-record protects against and what's left to your app, the g
 
 # Security
 
-d1-record sits between the requests your Worker receives and the database that holds your users’ data: whatever a request sends can reach a query or a record through it. A mistake there is a mistake in every app that uses it. This page explains what d1-record protects against, what it leaves to your app, which tests check each guarantee, how releases are built, and the security reviews it has had.
+Whatever a request sends can reach a query or a record through d1-record, so a mistake in it is a mistake in every app that uses it. Here’s what it protects against, what it leaves to your app, the tests that check each guarantee, how releases are built, and the security reviews it has had.
 
 These are the project’s own reviews, not an independent audit. Each says what it covered and what it didn’t.
 
@@ -13,13 +13,13 @@ These are the project’s own reviews, not an independent audit. Each says what 
 - **SQL injection.** Every value is bound as a parameter, never written into SQL text. Identifiers come only from a Model’s declared attributes, and are quoted. Raw SQL is only possible through the `sql` tagged template, which binds every value it’s given.
 - **Values that aren’t what TypeScript says.** A value from JSON, a form, or a query string is cast to its attribute’s type when it’s assigned or used in a condition, and anything ambiguous is refused: `"false"` can’t save `true`. See [Models](./models#casting-assigned-values).
 - **Prototype pollution and inherited names.** Attributes and associations are looked up only by the Model’s own names, so `__proto__`, `constructor`, and other names every object has are unknown names, and `Object.prototype` is never written to.
-- **Secrets in logs and errors.** Values of attributes named like passwords, tokens, keys, and emails are hidden from `onQuery` listeners and from error messages. See [Logging](./logging#keep-secrets-out-of-the-logs).
+- **Secrets in logs and errors.** Values of attributes named like passwords, tokens, keys, and emails are hidden from `onQuery` listeners and from error messages. See [Logging](./logging#keeping-secrets-out-of-the-logs).
 - **One request’s data reaching another.** Nothing about a request (a D1 Session, a listener) is ever stored on a Model class. See [Database resolution](./query-databases).
 - **Denial of service through parsing.** The patterns that read numbers and dates are linear, so a long value can’t use up a Worker’s CPU time.
 
 ## What’s left to your app
 
-- **Choosing which fields a request may set.** Never pass a whole body to a Model: use `permit`, destructuring, or a schema. See [Untrusted input](./untrusted-input).
+- **Choosing which fields a request may set,** with `permit`, destructuring, or a schema. See [Untrusted input](./untrusted-input).
 - **An untrusted `null` in a condition.** `findBy({ token: null })` matches rows whose token is NULL. Check a value’s type before querying with it.
 - **Authorization.** Whether this user may read or change this record is your app’s decision.
 - **Formats and ranges.** Casting checks types, not meaning: use [validations](./validations).
