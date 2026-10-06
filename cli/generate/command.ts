@@ -1,7 +1,14 @@
 import { dirname, join, relative, resolve } from "node:path";
 import { apply, type FileToWrite, type Plan } from "../plan.ts";
 import { schemaRefusal, schemaWrites } from "../schema/command.ts";
-import { importPath, shown, slashed, type Print, type Target } from "../schema/project.ts";
+import {
+  defaultModels,
+  importPath,
+  shown,
+  slashed,
+  type Print,
+  type Target,
+} from "../schema/project.ts";
 import { schemaOf, type GeneratedTable, type Migration } from "../schema/schema.ts";
 import { readProject, type DatabaseSnapshot, type ProjectSnapshot } from "../schema/snapshot.ts";
 import { parseColumns, type ColumnArg } from "./columns.ts";
@@ -117,7 +124,7 @@ function keyTypes(tables: readonly GeneratedTable[]): Map<string, KeyType> {
 
 /** Where `g model` writes a Model: its own file, or the one file Models are appended to. */
 function modelPathOf(cwd: string, options: GenerateOptions, className: string): string {
-  const models = options.models ?? "src/models";
+  const models = options.models ?? defaultModels;
   return resolve(cwd, models, models.endsWith(".ts") ? "" : modelFileName(className));
 }
 
@@ -126,7 +133,7 @@ function modelFile(request: Request): FileToWrite | Refusal {
   const { project, target, options, columns } = request;
   const { cwd } = project;
   const className = request.className!;
-  const separateFiles = !(options.models ?? "src/models").endsWith(".ts");
+  const separateFiles = !(options.models ?? defaultModels).endsWith(".ts");
   const path = modelPathOf(cwd, options, className);
   const model: ModelToWrite = {
     className,
