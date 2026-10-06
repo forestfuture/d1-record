@@ -1,3 +1,4 @@
+import { prepareModel } from "./associations.ts";
 import { InvalidModel } from "./errors.ts";
 import type { Executor } from "./executor.ts";
 import { ancestors } from "./ancestors.ts";
@@ -95,6 +96,8 @@ export function relationFor<C extends ModelClass>(
   executor: Executor,
   model: C,
 ): Scoped<InstanceType<C>, ScopesOf<C>> {
+  // Every query starts here, so the Model is made ready here, however it was reached.
+  prepareModel(model);
   const Class = relationClassFor(model) as unknown as new (
     ...args: RelationArgs<InstanceType<C>>
   ) => Scoped<InstanceType<C>, ScopesOf<C>>;

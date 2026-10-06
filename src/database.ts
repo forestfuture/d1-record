@@ -12,7 +12,6 @@ import { RecordStatement, recordStatementParts } from "./record-statement.ts";
 import { state } from "./record-state.ts";
 import { runAfter, writeAll, type PreparedWrite } from "./unit-of-work.ts";
 import { D1Executor, type Executor, type QueryListener } from "./executor.ts";
-import { prepareModel } from "./associations.ts";
 import type { ModelBase, ModelClass, ScopesOf } from "./model.ts";
 import type { Scoped } from "./relation.ts";
 import { relationFor } from "./scoped-relation.ts";
@@ -71,7 +70,6 @@ export class Database {
 
   /** A request-bound Relation over the Model's records, with its scopes as methods. */
   model<C extends ModelClass<ModelBase>>(model: C): Scoped<InstanceType<C>, ScopesOf<C>> {
-    prepareModel(model);
     return relationFor(this.#executor, model);
   }
 

@@ -10,7 +10,6 @@ import {
   describeDatabasesWith,
   type Executor,
 } from "./executor.ts";
-import { prepareModel } from "./associations.ts";
 import type { ModelClass, ScopesOf } from "./model.ts";
 import type { Scoped } from "./relation.ts";
 import { relationFor } from "./scoped-relation.ts";
@@ -165,6 +164,5 @@ function currentExecutor(name: string | undefined): Executor {
 export function currentRelation<C extends ModelClass>(
   model: C,
 ): Scoped<InstanceType<C>, ScopesOf<C>> {
-  prepareModel(model);
   return relationFor(currentExecutor(model.binding), model);
 }

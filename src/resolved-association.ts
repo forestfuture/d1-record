@@ -64,8 +64,6 @@ export class ResolvedAssociation {
 
   /** The target's records, with the association's scope applied. */
   all(executor: Executor): Scoped<ModelBase> {
-    // Checked on every use, so replacing the target's associations after first use still throws.
-    prepareModel(this.target);
     const relation = relationFor(executor, this.target) as Scoped<ModelBase>;
     const { scope } = this.definition;
     if (scope === undefined) return relation;
