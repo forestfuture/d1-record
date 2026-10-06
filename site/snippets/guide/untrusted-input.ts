@@ -15,64 +15,42 @@ export class Invitation extends Model({
   acceptedAt: "datetime",
 }) {}
 
-// #region destructure
-export async function signUpFromJson(request: Request): Promise<Account> {
-  // Name each field you take. The type argument is a claim, not a check: the values are
-  // checked when they're assigned.
-  const { email, handle } = await request.json<{ email: string; handle: string }>();
-  return Account.create({ email, handle });
-}
-// #endregion destructure
-
-// #region permit-json
-export async function changePlan(account: Account, request: Request): Promise<Account> {
-  // Only plan and seats can change here, whatever else the body holds.
-  await account.update(Account.permit(await request.json(), "plan", "seats"));
+export async function signUp(request: Request): Promise<Account> {
+  // #region permit
+  const permitted = Account.permit(await request.json(), "email", "handle");
+  const account = await Account.create(permitted);
+  // #endregion permit
   return account;
 }
-// #endregion permit-json
-
-// #region permit-form
-export async function signUp(request: Request): Promise<Response> {
-  const form = await request.formData();
-  const account = Account.build(Account.permit(form, "email", "handle"));
-  if (!(await account.save())) {
-    return Response.json({ errors: account.errors.fullMessages() }, { status: 422 });
-  }
-  return Response.json(account, { status: 201 });
-}
-// #endregion permit-form
 
 // #region bad-request
 export async function updateAccount(account: Account, request: Request): Promise<Response> {
-  let changes;
+  let permitted;
   try {
-    changes = Account.permit(await request.json(), "handle", "seats");
+    permitted = Account.permit(await request.json(), "handle", "seats");
   } catch (error) {
-    // Not JSON (SyntaxError), or a value that can't be cast (TypeError): the request is wrong.
     if (error instanceof SyntaxError || error instanceof TypeError) {
-      return Response.json({ error: "That isn't a valid account" }, { status: 400 });
+      return new Response("Bad request", { status: 400 });
     }
     throw error;
   }
-  if (!(await account.update(changes))) {
-    return Response.json({ errors: account.errors.fullMessages() }, { status: 422 });
-  }
+
+  await account.update(permitted);
   return Response.json(account);
 }
 // #endregion bad-request
 
-// #region null-trap
+// #region null-check
 export async function accept(request: Request): Promise<Response> {
   const { token } = await request.json<{ token: string }>();
-  // {"token": null} would find an invitation that's already been accepted: its token is NULL.
   if (typeof token !== "string" || token === "") {
     return new Response("Send the invitation's token", { status: 400 });
   }
+
   const invitation = await Invitation.findBy({ token });
-  if (invitation === null) return new Response("That invitation isn't valid", { status: 404 });
+  if (invitation === null) return new Response("No such invitation", { status: 404 });
 
   await invitation.update({ token: null, acceptedAt: new Date() });
   return new Response(`Welcome, ${invitation.email}`);
 }
-// #endregion null-trap
+// #endregion null-check

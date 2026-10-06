@@ -384,38 +384,12 @@ describe("Handle untrusted input", () => {
     ]);
   });
 
-  test("destructuring takes only the fields it names", async () => {
+  test("permit keeps the fields it names, and the record saves them", async () => {
     const account = await run(() =>
-      untrusted.signUpFromJson(json({ email: "ada@example.com", handle: "ada", plan: "pro" })),
+      untrusted.signUp(json({ email: "ada@example.com", handle: "ada", plan: "pro" })),
     );
 
     expect([account.email, account.handle, account.plan]).toEqual(["ada@example.com", "ada", null]);
-  });
-
-  test("permit lets a body change only plan and seats, cast when assigned", async () => {
-    const account = await run(async () => {
-      const created = await untrusted.Account.create({ email: "ada@example.com", handle: "ada" });
-      return untrusted.changePlan(
-        created,
-        json({ plan: "pro", seats: "5", email: "evil@example.com" }),
-      );
-    });
-
-    expect([account.plan, account.seats, account.email]).toEqual(["pro", 5, "ada@example.com"]);
-  });
-
-  test("permit reads a form, and drops what it doesn't name", async () => {
-    const form = new FormData();
-    form.append("email", "grace@example.com");
-    form.append("handle", "grace");
-    form.append("plan", "enterprise");
-
-    const response = await run(() =>
-      untrusted.signUp(new Request("https://example.com/", { method: "POST", body: form })),
-    );
-
-    expect(response.status).toBe(201);
-    expect(await response.json()).toMatchObject({ handle: "grace", plan: null });
   });
 
   test("a value that can't be used, or a body that isn't JSON, is a 400; a valid one saves", async () => {
