@@ -14,7 +14,7 @@ Relations have no `then`, so an `async` function that returns one never runs it 
 
 ## Starting a query
 
-Every Relation method is also a static of every Model, as in Rails: `User.where(…)`, `User.find(id)`, `User.count()`, `User.create(…)`. `User.all()` is the Relation itself, and scopes are statics too: `User.active()`.
+Every Relation method is also a static of every Model: `User.where(…)`, `User.find(id)`, `User.count()`, `User.create(…)`. `User.all()` is the Relation itself, and scopes are statics too: `User.active()`.
 
 A query runs on the current database: the request’s, if it was opened with `withDatabase`, or the Model’s binding. To use another, start from `db.model(User)`. See [Connections](./connecting).
 
@@ -41,7 +41,7 @@ Pass a comparison helper as a value:
 
 <<< @/snippets/guide/querying.ts#comparisons{ts}
 
-`gt`, `gte`, `lt`, `lte`, and `between` work on number, string, and datetime attributes, and dates compare by time. `between` includes both ends, like Rails’ `start..end`. Pass `{ excludeEnd: true }` for `start...end`.
+`gt`, `gte`, `lt`, `lte`, and `between` work on number, string, and datetime attributes, and dates compare by time. `between` includes both ends. Pass `{ excludeEnd: true }` to leave out the end.
 
 ### Writing SQL fragments
 
@@ -71,7 +71,11 @@ Run a query with one of these methods:
 - `findBy` resolves to `null` when nothing matches, and `findByOrThrow` throws `RecordNotFound`.
 - `first` and `last` sort by the primary key unless the Relation has an order, and `last` reverses that order. An `sql` fragment can’t be reversed, so `last` throws `IrreversibleOrder` there.
 - `count()` always agrees with what `toArray()` returns, even with `limit`, `offset`, or `distinct`.
-- `size()`, `isEmpty()`, and `hasAny()` are Rails’ `size`, `empty?`, and `any?`. On a loaded association, they answer without a query.
+- `size()`, `isEmpty()`, and `hasAny()` count records, or check for any. On a loaded association, they answer without a query.
+
+::: warning Compared with Rails
+`size()`, `isEmpty()`, and `hasAny()` are Rails’ `size`, `empty?`, and `any?`.
+:::
 
 ## Selecting attributes
 
@@ -91,7 +95,7 @@ Load only some attributes with `select`. The primary key is always loaded too, s
 
 ## Defining scopes
 
-A scope is a named, reusable part of a query, like Rails’ `scope :active, -> { … }`. Declare one as a static that receives the Relation, plus any arguments, and returns a narrower one:
+A scope is a named, reusable part of a query. Declare one as a static that receives the Relation, plus any arguments, and returns a narrower one:
 
 <<< @/snippets/guide/models.ts#declare{ts}
 
@@ -117,7 +121,7 @@ const recent = User.order({ createdAt: "desc" }).limit(10);
 const admins = await User.where({ role: "admin" }).merge(recent).toArray();
 ```
 
-::: tip Compared with Rails
+::: warning Compared with Rails
 Rails adds the argument’s order to the receiver’s. d1-record replaces it.
 :::
 

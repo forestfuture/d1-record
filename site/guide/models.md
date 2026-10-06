@@ -46,7 +46,7 @@ An attribute is a type name, or `{ type, column?, null?, default? }`. `Applicati
 
 ## Naming tables
 
-A Model declared with `Model({...})` takes its table name from its class, as Rails does: snake_case, pluralized.
+A Model declared with `Model({...})` takes its table name from its class: snake_case, pluralized.
 
 | Class      | Table        |
 | ---------- | ------------ |
@@ -67,7 +67,7 @@ export class Account extends Model({ id: "string" }) {
 A subclass shares its parent’s table. An anonymous class, such as `export default class extends Model(...)`, must set `static tableName`.
 
 ::: warning TIP
-The rules are Rails’ English ones, quirks included: `Human` becomes `humen` and `Leaf` becomes `leafs`. There’s no way to add your own rules, so set `tableName` instead.
+Pluralization follows English rules, quirks included: `Human` becomes `humen` and `Leaf` becomes `leafs`. There’s no way to add your own rules, so set `tableName` instead.
 :::
 
 ::: details Bundlers and class names
@@ -76,7 +76,7 @@ Wrangler keeps class names by default, even when minifying. If a bundler renames
 
 ## Mapping columns
 
-Attributes are camelCase, and map to snake_case columns by Rails’ `underscore` rule:
+Attributes are camelCase, and map to snake_case columns:
 
 | Attribute           | Column                |
 | ------------------- | --------------------- |
@@ -137,7 +137,7 @@ Conditions are cast the same way, so `where({ quantity: "42" })` finds 42. A con
 - A condition reads a number as its digits for a `string` attribute, and a record built from that Relation starts with what it matched: `where({ label: 7 }).build()` has the label `"7"`.
 - A key copied from another record through an association is cast too, so an integer key written into a text foreign key becomes its digits.
 
-::: tip Beyond Rails
+::: warning Beyond Rails
 Rails casts leniently: `"12abc"` becomes `12`, `1.7` becomes `1`, any other text is `true`, and `""` is `nil`. d1-record refuses each, so `isAdmin=no` from a form can’t save `true`, and an empty field can’t silently become `null`.
 :::
 
@@ -186,7 +186,7 @@ Declare `createdAt` and `updatedAt` as `datetime` attributes, and they’re mana
 
 ## Tracking changes
 
-Records know what’s changed since they were loaded or last saved, as in Rails:
+Records know what’s changed since they were loaded or last saved:
 
 <<< @/snippets/guide/models.ts#dirty{ts}
 
@@ -221,13 +221,17 @@ Associations are never included, so a response never loads more than you asked f
 
 ## Filtering attributes
 
-`onQuery` listeners and error messages show a filtered attribute’s values as `"[FILTERED]"`, as Rails’ logs do. D1 still gets the real values. [Logging](./logging#keep-secrets-out-of-the-logs) shows how to change the list.
+`onQuery` listeners and error messages show a filtered attribute’s values as `"[FILTERED]"`. D1 still gets the real values. [Logging](./logging#keep-secrets-out-of-the-logs) shows how to change the list.
 
-- **Which attributes:** `static filterAttributes`, a list of strings and RegExps, inherited from your app’s base class. It starts as Rails’ default list: `passw`, `email`, `secret`, `token`, `_key`, `crypt`, `salt`, `certificate`, `otp`, `ssn`, `cvv`, `cvc`. Setting it replaces the list; `[]` filters nothing.
+- **Which attributes:** `static filterAttributes`, a list of strings and RegExps, inherited from your app’s base class. By default, it’s `passw`, `email`, `secret`, `token`, `_key`, `crypt`, `salt`, `certificate`, `otp`, `ssn`, `cvv`, `cvc`. Setting it replaces the list; `[]` filters nothing.
 - **Matching:** a string matches when the attribute’s snake_case name contains it, in any case: `passwordDigest` (`password_digest`) contains `passw`, and `apiKey` (`api_key`) contains `_key`. A RegExp matches the attribute or its snake_case name.
 - **Hidden in `QueryEvent.params`:** the values bound for the attribute in inserts (in a multi-row insert’s JSON, its column in every row), updates, `updateAll`, conditions, lists and comparisons, and a filtered primary key in a record’s `UPDATE` and `DELETE`.
 - **Hidden in errors:** a cast error’s value, and a filtered primary key in `RecordNotFound`.
 - **Not hidden:** values inside `sql` fragments, which have no attribute; and `toJSON()` and `attributes()`, which are your data, not logs.
+
+::: warning Compared with Rails
+The default list is Rails’ own `filter_parameters` list, and the filtered values read as they do in Rails’ logs.
+:::
 
 ## Sharing behavior
 

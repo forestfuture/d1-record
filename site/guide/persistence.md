@@ -4,7 +4,7 @@ description: "save, create, update, and destroy, their OrThrow variants, what ea
 
 # Persistence
 
-Records are saved, updated, and destroyed with `save`, `create`, `update`, and `destroy`, as in Rails.
+Records are saved, updated, and destroyed with `save`, `create`, `update`, and `destroy`.
 
 ## Saving records
 
@@ -21,7 +21,7 @@ A new record is inserted, and a persisted one updates only the attributes that c
 
 ## Throwing on failure
 
-When a failure is exceptional, use the `OrThrow` version of each method, like Rails’ `save!` and `create!`:
+When a failure is exceptional, use the `OrThrow` version of each method:
 
 <<< @/snippets/guide/persistence.ts#or-throw{ts}
 
@@ -30,6 +30,10 @@ Instead of returning `false`, they throw:
 - `RecordInvalid` when validation failed, with the record on `error.record`.
 - `RecordNotSaved` when a callback aborted a save, with the abort’s reason as its message.
 - `RecordNotDestroyed` from `destroyOrThrow()`, when a callback aborted the destroy or a `restrictWithError` association refused it.
+
+::: warning Compared with Rails
+The `OrThrow` methods are Rails’ `save!`, `create!`, `update!`, and `destroy!`.
+:::
 
 ### What each method returns
 

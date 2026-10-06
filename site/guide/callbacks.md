@@ -43,7 +43,7 @@ Destroying runs `beforeDestroy`, the associations’ `dependent:` strategies, th
 
 Callbacks of one kind run in the order declared. A subclass runs its parent’s callbacks, then its own.
 
-- **After-callbacks** run after a successful save, which isn’t always a write: saving a record with no changes runs every callback but sends nothing, as in Rails.
+- **After-callbacks** run after a successful save, which isn’t always a write: saving a record with no changes runs every callback but sends nothing.
 - A **before-callback that changes an attribute** makes the record dirty, and the change is written.
 - An **after-callback that changes an attribute** leaves the record dirty. Nothing is written again automatically.
 - **Nothing is rolled back** once the write has succeeded. A save’s writes go to D1 as one atomic batch, and D1 has committed them before any after-callback runs, so there’s nothing held open to undo. An error thrown by an after-callback propagates to the caller, but the record stays saved.

@@ -50,7 +50,7 @@ The generator writes these files:
 | ----------------------------------------------------------- | -------------------------------------------------------------------- |
 | `migrations/0001_create_users.sql`, `0002_create_posts.sql` | The SQL that creates each table                                      |
 | `src/db/schema.ts`                                          | Every table’s columns, generated from the migrations. Don’t edit it. |
-| `src/models/application-record.ts`                          | Your app’s base class, as in Rails. It’s yours to edit.              |
+| `src/models/application-record.ts`                          | Your app’s base class. It’s yours to edit.                           |
 | `src/models/user.ts`, `post.ts`                             | One Model per table                                                  |
 
 Here’s the migration for posts:
@@ -95,7 +95,7 @@ Give it posts, a scope for active users, and rules for saving:
 
 ## Using the Models
 
-Queries start from the Model, as in Rails. Each Model uses the `DB` binding, so there’s nothing to connect:
+Queries start from the Model. Each Model uses the `DB` binding, so there’s nothing to connect:
 
 <<< @/snippets/getting-started/src/index.ts{ts} [src/index.ts]
 

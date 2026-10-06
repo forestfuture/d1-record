@@ -25,9 +25,13 @@ Applies your migrations, in order, to an in-memory SQLite database, reads each t
 
 **What it writes:**
 
-- **The schema file:** each table’s attributes, as a document like Rails’ `schema.rb`, with a header naming the migrations and a fingerprint of the schema. `--check` compares fingerprints, so formatting the file doesn’t make it stale.
+- **The schema file:** each table’s attributes, as a document, with a header naming the migrations and a fingerprint of the schema. `--check` compares fingerprints, so formatting the file doesn’t make it stale.
 - **The base class**, `application-record.ts`, when it’s missing: `ApplicationRecord = modelFor(tables, Base)`, with the binding set on `Base`. It’s never written over, so it’s yours to edit.
-- **With several databases:** one schema file per binding (`src/db/DB.ts`, `src/db/LOGS.ts`), and one base class each, named as Rails names them (`DB` → `DbRecord`, `LOGS` → `LogsRecord`).
+- **With several databases:** one schema file per binding (`src/db/DB.ts`, `src/db/LOGS.ts`), and one base class each, named after it (`DB` → `DbRecord`, `LOGS` → `LogsRecord`).
+
+::: warning Compared with Rails
+The schema file plays the part of Rails’ `schema.rb`, and each base class is named as Rails names a second database’s.
+:::
 
 **What it refuses**, writing nothing:
 
@@ -60,7 +64,7 @@ How each column becomes an attribute, highest priority first:
    | `BLOB`                                              | An error: not supported yet                                    |
    | anything else                                       | `string`                                                       |
 
-3. **The column’s name**, only for a column declared exactly `TEXT` or `INTEGER`, as in Rails: `…_at` `TEXT` is a `datetime`, and `is_…` or `has_…` `INTEGER` is a `boolean` (with a note, since it’s a guess).
+3. **The column’s name**, only for a column declared exactly `TEXT` or `INTEGER`: `…_at` `TEXT` is a `datetime`, and `is_…` or `has_…` `INTEGER` is a `boolean` (with a note, since it’s a guess).
 
 Also:
 
@@ -109,12 +113,12 @@ npx d1-record g migration <Name> [columns] [options]
 | `json`                 | `TEXT CHECK (json_valid(column))`                                                           |
 | `references`           | `<name>_id`, typed like the referenced table’s key, `REFERENCES <plural> (id)`, and indexed |
 
-- **`!`** makes the column `NOT NULL`. A `references` column is `NOT NULL` in a new table, and can be `NULL` when added to an existing one, as in Rails.
+- **`!`** makes the column `NOT NULL`. A `references` column is `NOT NULL` in a new table, and can be `NULL` when added to an existing one.
 - **`=value`** is a literal default, for `string`, `integer`, `real`, and `boolean` columns (`=draft`, `=0`, `=1.5`, `=true`).
-- **`:unique`** adds a unique index, and **`:index`** an index, named as Rails names them (`index_products_on_sku`).
+- **`:unique`** adds a unique index, and **`:index`** an index, named like `index_products_on_sku`.
 - **Names** can be written `priceCents` or `price_cents`; columns are always snake_case. Names SQLite reserves (`order`, `group`) are quoted.
 
-::: tip Beyond Rails
+::: warning Beyond Rails
 `=value` is d1-record’s own addition: Rails’ generators can’t give a column a default.
 :::
 
