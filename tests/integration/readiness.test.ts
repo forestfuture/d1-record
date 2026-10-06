@@ -37,7 +37,7 @@ class Pointing extends Model({ id: { type: "integer", null: false }, postId: "in
 
 // A Model is made ready (verified, its associations' accessors installed, its declarations
 // sealed) the first time anything uses it, however it's reached: a query, a preload or an
-// association (candidate 3 of the 2026-10-05 architecture review).
+// association (ADR-0008, "Ready at first use, wherever that is").
 describe("a Model is ready however it's first reached", () => {
   let binding: TestDatabase;
   let dispose: () => Promise<void>;

@@ -1,3 +1,4 @@
+import { ignoresColumns } from "./metadata.ts";
 import { InvalidModel } from "./errors.ts";
 import { associationsOf } from "./association-fields.ts";
 import { belongsToAccessor, hasOneAccessor } from "./association-writers.ts";
@@ -113,9 +114,11 @@ const prepared = new WeakSet<object>();
  * installs their accessors. Module-level, but not request state (ADR-0003): derived only from
  * the class.
  */
-export function prepareModel(model: ModelClass): void {
+export function readyModel(model: ModelClass): void {
   verifyModel(model);
   if (prepared.has(model)) return;
+  // Derived facts, settled once here: whether its queries name their columns.
+  ignoresColumns(model);
   for (const [name, definition] of associationsOf(model)) {
     checkAssociation(model, name, definition);
     Object.defineProperty(model.prototype, name, accessorProperty(name, definition));
