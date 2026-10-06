@@ -16,11 +16,11 @@ export interface DatabaseSnapshot {
   /** Whether a folder has the schema file's name, less `.ts` (`src/db/schema/`). */
   schemaFolder: boolean;
   /** Whether the app's base class file exists. */
-  base: boolean;
+  hasBase: boolean;
   /** Whether its migrations are in folders, with no `migrations_pattern` to find them. */
   nestedMigrations: boolean;
   /** The tools (Drizzle, Prisma) whose files are in the project or above it. */
-  toolFiles: Tool[];
+  toolsFound: Tool[];
 }
 
 /** A project: its databases, and any other files a command asked for, by path. */
@@ -37,16 +37,16 @@ function contents(path: string): string | undefined {
 }
 
 /** What's on disk for one database. */
-function databaseSnapshot(target: Target, toolFiles: Tool[]): DatabaseSnapshot {
+function databaseSnapshot(target: Target, toolsFound: Tool[]): DatabaseSnapshot {
   const folder = target.out.replace(/\.ts$/, "");
   return {
     target,
     migrations: existsSync(target.migrationsDir) ? migrationsOf(target) : undefined,
     schema: contents(target.out),
     schemaFolder: existsSync(folder) && statSync(folder).isDirectory(),
-    base: existsSync(target.base.path),
+    hasBase: existsSync(target.base.path),
     nestedMigrations: hasNestedMigrations(target),
-    toolFiles,
+    toolsFound,
   };
 }
 
@@ -61,14 +61,14 @@ export function readProject(
 ): ProjectSnapshot | string {
   const targets = targetsOf(cwd, options);
   if (typeof targets === "string") return targets;
-  const toolFiles = targets.length === 0 ? [] : toolsWithFiles(targets[0]!.configDir);
+  const toolsFound = targets.length === 0 ? [] : toolsWithFiles(targets[0]!.configDir);
   const read = files.flatMap((path) => {
     const text = contents(path);
     return text === undefined ? [] : [[path, text] as const];
   });
   return {
     cwd,
-    databases: targets.map((target) => databaseSnapshot(target, toolFiles)),
+    databases: targets.map((target) => databaseSnapshot(target, toolsFound)),
     files: new Map(read),
   };
 }

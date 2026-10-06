@@ -58,6 +58,19 @@ async function modelsIn(cwd: string, path: string) {
 const read = (cwd: string, path: string) => readFileSync(join(cwd, path), "utf8");
 
 describe("d1-record g model", () => {
+  test("refuses to write one file twice, such as a schema --out naming the new Model", () => {
+    const cwd = project({ "migrations/.keep": "" });
+
+    const { code, output } = generate(cwd, ["model", "Product"], { out: "src/models/product.ts" });
+
+    expect(code).toBe(1);
+    expect(output).toBe(
+      "src/models/product.ts would be written twice; choose another --out or name\nWrote nothing",
+    );
+    expect(existsSync(join(cwd, "src/models/product.ts"))).toBe(false);
+    expect(readdirSync(join(cwd, "migrations"))).toEqual([".keep"]);
+  });
+
   test("writes a migration and a Model, regenerates the schema, and says what's next", () => {
     const cwd = project();
 
