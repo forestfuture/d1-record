@@ -1,7 +1,7 @@
-import { existsSync, watch } from "node:fs";
+import { watch } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { apply, combined, type Plan } from "../plan.ts";
-import { importPath, shown, targetsOf, type Print, type ProjectOptions } from "./project.ts";
+import { importPath, shown, type Print, type ProjectOptions } from "./project.ts";
 import { fingerprintIn, fingerprintOf, renderBase, renderSchema } from "./render.ts";
 import { layoutNote, migrationTool, originNotes } from "./origin.ts";
 import { schemaOf, type GeneratedTable } from "./schema.ts";
@@ -134,17 +134,16 @@ export function runSchema(options: SchemaOptions, print: Print): number {
  */
 export function watchSchema(options: SchemaOptions, print: Print): () => void {
   runSchema(options, print);
-  const cwd = resolve(options.cwd ?? process.cwd());
-  const targets = targetsOf(cwd, options);
-  if (typeof targets === "string") return () => {};
+  const project = readProject(resolve(options.cwd ?? process.cwd()), options);
+  if (typeof project === "string") return () => {};
   let pending: ReturnType<typeof setTimeout> | undefined;
   const regenerate = () => {
     clearTimeout(pending);
     pending = setTimeout(() => runSchema(options, print), 50);
   };
-  const watchers = targets
-    .filter((target) => existsSync(target.migrationsDir))
-    .map((target) => watch(target.migrationsDir, { recursive: true }, regenerate));
+  const watchers = project.databases
+    .filter((db) => db.migrations !== undefined)
+    .map((db) => watch(db.target.migrationsDir, { recursive: true }, regenerate));
   return () => {
     clearTimeout(pending);
     for (const watcher of watchers) watcher.close();
