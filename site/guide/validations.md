@@ -1,40 +1,31 @@
 ---
-description: "validates with presence, length, format, inclusion, numericality, and uniqueness, their options, the errors collection, and adding errors with errors.add, and custom validations."
+description: "validates with presence, length, format, inclusion, numericality, and uniqueness, their options, the errors collection, and adding errors with errors.add in a callback."
 ---
 
 # Validations
 
-Validations are declared in a Model’s `static {}` block with `this.validates(attribute, rules)`. The attribute name is typed against the Model, so a misspelled attribute is a compile error, and so is the record the `if` option receives.
+Validations check a record before it’s saved. An invalid record isn’t saved, and its `errors` say why.
+
+## Declaring validations
+
+Declare validations in a Model’s `static {}` block with `this.validates`:
 
 <<< @/snippets/guide/validations.ts#validates{ts}
 
-`save()` validates first, and returns `false` when a record is invalid. You can also check with `await record.isValid()`, the only way to run validations directly. It’s async, since `uniqueness` asks D1.
+Attribute names are typed, so a misspelled attribute is a compile error.
 
-## The errors collection
-
-<<< @/snippets/guide/validations.ts#errors{ts}
-
-Every validation runs, in the order declared, so one attribute can collect several errors. `fullMessages()` puts the attribute’s name in front, humanized: `createdAt` reads as “Created at”. Errors on the record as a whole go on `"base"`, and read without a prefix.
-
-### Adding an error
+`save()` validates first, and resolves to `false` when a record is invalid. To validate without saving, call `isValid()`:
 
 ```ts
-record.errors.add(attribute, message, { type });
+const account = Account.build(permitted);
+const valid = await account.isValid();
 ```
 
-- `attribute`: the attribute the error belongs to, or `"base"` for the record as a whole.
-- `message`: the text that follows the attribute’s name in `fullMessages()`, such as “must be after the start”.
-- `type`: optional, and `"invalid"` when left out. Name the error here when code needs to tell it apart from the others.
-
-Add errors in a `beforeValidation` or `afterValidation` callback, as the `Booking` model in [Custom validations](#custom-validations) does. With a Sunday booking that ends when it starts, it collects both of its errors:
-
-<<< @/snippets/guide/validations.ts#add{ts}
-
-::: warning Compared with Rails
-Rails’ `errors.add(:ends_at, :after_start)` takes a type and looks up its message with I18n. d1-record has no I18n yet, so the message is always yours to give, and the type is an option. When Rails is given a message instead, `errors.add(:base, "The room is closed on Sundays")`, that text is the type too. Here the type is still `"invalid"`. Rails’ `message:` and `strict:` options and its procs aren’t here.
+::: warning TIP
+`isValid()` is async, since `uniqueness` asks D1.
 :::
 
-## Validators
+## Available validators
 
 | Rule           | Options                                                                                      | Error type                                     |
 | -------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------- |
@@ -45,28 +36,44 @@ Rails’ `errors.add(:ends_at, :after_start)` takes a type and looks up its mess
 | `numericality` | `{ onlyInteger, greaterThan, greaterThanOrEqualTo, lessThan, lessThanOrEqualTo }`, or `true` | `notANumber`, `notAnInteger`, `greaterThan`, … |
 | `uniqueness`   | `{ scope: [...], caseSensitive }`, or `true`                                                 | `taken`                                        |
 
-Within one `validates` call, the rules run in that order. Every rule also accepts:
+Every validation runs, in the order declared, so one attribute can collect several errors. Every rule also accepts these options:
 
-- `allowNull`: skip the rule when the value is `null`. Without it, `null` fails `presence`, `format`, `inclusion`, and `numericality`, counts as length 0, and is never taken.
-- `message`: replaces the default messages from that call.
-- `if: (record) => boolean`: only validate when it returns `true`.
+- **`allowNull`** skips the rule when the value is `null`. Otherwise `null` fails `presence`, `format`, `inclusion`, and `numericality`, counts as length 0, and is never taken.
+- **`message`** replaces the default messages from that call.
+- **`if: (record) => boolean`** validates only when it returns `true`.
 
-The default messages are in English (“can’t be blank”, “is too short (minimum is 3 characters)”, “has already been taken”, …).
+The default messages are in English: “can’t be blank”, “is too short (minimum is 3 characters)”, “has already been taken”, and so on.
 
-A few details that differ from what you might expect:
+### Validator details
 
-- `presence` fails a string that’s only whitespace. For a boolean, use `inclusion: [true, false]`, since `false` is a value.
-- `numericality` only accepts real numbers: a numeric string such as `"12"` is `notANumber`, so convert form input first.
-- `uniqueness` leaves the record itself out when updating, and never treats `null` as taken, matching SQLite’s UNIQUE. `caseSensitive: false` compares with SQLite’s `lower()`, which only lowercases ASCII letters.
+- **`presence`** fails a string that’s only whitespace. For a boolean, use `inclusion: [true, false]`, since `false` is a value.
+- **`numericality`** only accepts numbers, so a numeric string such as `"12"` is `notANumber`.
+- **`uniqueness`** leaves the record itself out when updating, and never treats `null` as taken, as SQLite’s UNIQUE does. `caseSensitive: false` compares with SQLite’s `lower()`, which only lowercases ASCII letters.
 
 ::: warning Uniqueness isn’t a guarantee
-Two requests can both check that an email is free, then both insert it. `uniqueness` gives a friendly error early, but only a UNIQUE index in the table prevents duplicates. Declare both. When the index catches a duplicate, the save throws [`RecordNotUnique`](./errors#constraint-errors).
+Two requests can both check that an email is free, then both insert it. `uniqueness` gives a friendly error early, but only a UNIQUE index in the table prevents duplicates, so declare both. When the index catches a duplicate, the save throws [`RecordNotUnique`](./errors#constraint-errors).
 :::
 
-## Custom validations
+## Reading errors
+
+A record’s `errors` hold each failed rule:
+
+<<< @/snippets/guide/validations.ts#errors{ts}
+
+`fullMessages()` puts the attribute’s name in front, so `createdAt` reads as “Created at”. Errors on the record as a whole go on `"base"`, and read without a prefix.
+
+## Adding errors
 
 For a rule the validators don’t cover, add errors in a `beforeValidation` or `afterValidation` callback. A record with any errors is invalid:
 
 <<< @/snippets/guide/validations.ts#custom{ts}
 
-[Adding an error](#adding-an-error) describes `errors.add`’s arguments. Each validation run (`isValid()`, `save()`, or `saveOrThrow()`) starts by clearing `errors`, so an error added anywhere else is gone by the next save.
+`errors.add` takes the attribute, or `"base"`, then the message that follows the attribute’s name. Pass a `type` when code needs to tell the error apart from others. It defaults to `"invalid"`:
+
+<<< @/snippets/guide/validations.ts#add{ts}
+
+Each validation run, from `isValid()`, `save()`, or `saveOrThrow()`, starts by clearing `errors`. So an error added outside a validation callback is gone by the next save.
+
+::: warning Compared with Rails
+Rails’ `errors.add(:ends_at, :after_start)` takes a type and looks up its message with I18n. d1-record has no I18n yet, so the message is always yours to give, and the type is an option. When Rails is given a message instead, that text is the type too; here the type is still `"invalid"`. Rails’ `message:` and `strict:` options and its procs aren’t here.
+:::
