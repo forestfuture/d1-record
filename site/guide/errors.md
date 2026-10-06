@@ -7,8 +7,10 @@ description: "Every error d1-record throws: lifecycle, usage, and constraint err
 Every error d1-record throws extends `D1RecordError`, so one check separates them from anything else:
 
 ```ts
+import { D1RecordError } from "@forestfuture/d1-record";
+
 if (error instanceof D1RecordError) {
-  // one of d1-record’s own
+  // one of d1-record's own
 }
 ```
 

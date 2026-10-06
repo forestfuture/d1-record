@@ -78,7 +78,13 @@ A string matches any attribute whose snake_case name contains it, so `"iban"` al
 To see one while debugging, leave it out of the list in development:
 
 ```ts
-static override filterAttributes = Model.Base.filterAttributes.filter((entry) => entry !== "email");
+import { Model } from "@forestfuture/d1-record";
+
+class Base extends Model.Base {
+  static override filterAttributes = Model.Base.filterAttributes.filter(
+    (entry) => entry !== "email",
+  );
+}
 ```
 
 ### Filtering `sql` fragments

@@ -52,6 +52,8 @@ D1 has committed a save’s writes before any after-callback runs. An error thro
 Throw `abort(reason)` from a before-callback to stop a save or destroy:
 
 ```ts
+import { abort } from "@forestfuture/d1-record";
+
 this.beforeSave((order) => {
   if (order.suspended) throw abort("Orders can't change while suspended");
 });
