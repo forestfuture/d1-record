@@ -2,7 +2,7 @@
 description: "Permit only the fields you want from a request, return a 400 for values that can't be used, and check request values before you query with them."
 ---
 
-# Handle untrusted input
+# Untrusted input
 
 A request can send any fields it likes. Pick the ones you want before they reach a Model.
 
@@ -16,10 +16,10 @@ Only permit the fields you want from a request:
 `permit` can also read `FormData` or `URLSearchParams`.
 :::
 
-Permitted values are cast to their attribute's types, so `"42"` becomes `42` for an integer. [Models](./models#assigned-values-are-cast) lists what each type accepts.
+Permitted values are cast to their attribute’s types, so `"42"` becomes `42` for an integer. [Models](./models#assigned-values-are-cast) lists what each type accepts.
 
 ::: tip Beyond Rails
-Rails' `params.permit` only filters keys. d1-record's also casts each value, and checks that each name is an attribute.
+Rails’ `params.permit` only filters keys. d1-record’s also casts each value, and checks that each name is an attribute.
 :::
 
 ## Using a schema library
@@ -37,7 +37,7 @@ const account = await Account.create(fields);
 
 ## Returning a 400
 
-A value that can't be cast throws a `TypeError`, and a body that isn't JSON throws a `SyntaxError`. Return a 400 for either:
+A value that can’t be cast throws a `TypeError`, and a body that isn’t JSON throws a `SyntaxError`. Return a 400 for either:
 
 <<< @/snippets/guide/untrusted-input.ts#bad-request{ts}
 
@@ -48,5 +48,5 @@ Check that a value is a string before you query with it. JSON can send `null`, a
 <<< @/snippets/guide/untrusted-input.ts#null-check{ts}
 
 ::: warning TIP
-A value that can't be cast matches nothing, so `whereNot({ id: "abc" })` excludes nothing.
+A value that can’t be cast matches nothing, so `whereNot({ id: "abc" })` excludes nothing.
 :::

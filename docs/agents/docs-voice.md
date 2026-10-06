@@ -14,6 +14,7 @@ The guide reads like Laravel's documentation: friendly, direct, and quick to sca
 - **Present options as refinements:** "By default, …", "If you want …, …".
 - **Put side facts in an amber box titled TIP** (`::: warning TIP`) rather than in the main flow. A real warning gets a `::: warning` box with its own title ("Uniqueness isn't a guarantee"). Differences from Rails go in their own `::: tip Beyond Rails` (or `Compared with Rails`) box.
 - **Explain why only when a default would surprise.** The library's internals stay out of the guide.
+- **Use smart quotes and apostrophes in prose** (“ ” ‘ ’), never straight ones (" '), in the guide, the README and the sidebar. Code, inline code, URLs and front matter keep straight quotes, since there they're syntax.
 - **Cut** hedges, restatements, "Note that", sentences chained with colons, and summaries of what was just shown.
 
 ## Before and after
