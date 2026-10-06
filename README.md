@@ -2,7 +2,7 @@
 
 A Rails-inspired Active Record for [Cloudflare Workers](https://developers.cloudflare.com/workers/) and [D1](https://developers.cloudflare.com/d1/).
 
-Models with validations, callbacks, associations and change tracking; lazy, composable queries; and a predictable save lifecycle, built for the Worker runtime and honest about what D1 can and can’t do.
+Models with validations, callbacks, associations, and change tracking; lazy, composable queries; and a predictable save lifecycle, built for the Worker runtime and honest about what D1 can and can’t do.
 
 > **Status: pre-release (0.x).** The API is tested against real D1, but it may still change before 1.0.
 
@@ -45,7 +45,7 @@ Along with the migrations, it writes `src/db/schema.ts` (every table’s columns
 
 ### 3. Add behavior
 
-A Model’s attributes come from the schema, so it declares only behavior: associations, scopes, validations and callbacks.
+A Model’s attributes come from the schema, so it declares only behavior: associations, scopes, validations, and callbacks.
 
 ```ts
 // src/models/user.ts
@@ -114,7 +114,7 @@ export default {
 
 ### 5. Write several things at once, or not at all
 
-D1 can’t keep a transaction open while your code awaits, so there’s no `transaction()` block. Instead, `batch([...])` sends a prepared set of writes that all succeed or all fail. `toSave()`, `toDestroy()` and the bulk writes’ `to…` forms (`toUpdateAll`, `toDeleteAll`, …) prepare a write for the batch instead of running it:
+D1 can’t keep a transaction open while your code awaits, so there’s no `transaction()` block. Instead, `batch([...])` sends a prepared set of writes that all succeed or all fail. `toSave()`, `toDestroy()`, and the bulk writes’ `to…` forms (`toUpdateAll`, `toDeleteAll`, …) prepare a write for the batch instead of running it:
 
 ```ts
 await batch([
@@ -125,14 +125,14 @@ await batch([
 
 ## What’s in it
 
-- **Models** whose attributes come from your migrations (`class Post extends ApplicationRecord("posts")`), typed, with Rails-style generators; or declared with `Model({...})`: camelCase attributes over snake_case columns, defaults (including app-generated keys), timestamps, JSON and dates converted both ways.
+- **Models** whose attributes come from your migrations (`class Post extends ApplicationRecord("posts")`), typed, with Rails-style generators; or declared with `Model({...})`: camelCase attributes over snake_case columns, defaults (including app-generated keys), timestamps, JSON, and dates converted both ways.
 - **Queries**: `where`/`whereNot`/`or`/`merge`, comparisons (`gte`, `between`, …), ordering (`nulls: "last"`, `reorder`), pagination, `select`, `distinct`, `pluck`, `count`, `size`, `exists`, named scopes, and hand-written conditions only through the `sql` tagged template, so values are always bound.
 - **Persistence**: `save`/`create`/`update`/`destroy` with `…OrThrow` variants, validations (`presence`, `length`, `format`, `inclusion`, `numericality`, `uniqueness`), the full Rails callback lifecycle with `abort()`, dirty tracking (`changes`, `attributeWas`, `savedChangeTo`, …).
 - **Associations**: `belongsTo`, `hasMany`, `hasOne` with scopes, `dependent:` strategies, preloading with `includes` (one query per association, never N+1), caching until reload, autosave, and `build`/`create`/`set` through the association.
 - **Queries from the Model**, as in Rails: `User.find(id)`, `User.where(…)`, `User.active()`, on the Model’s binding with no setup.
 - **Bulk writes**: `insert`, `insertAll`, `upsert`, `updateAll`, `deleteAll`, and `batch([...])` mixing those with records’ `toSave()`/`toDestroy()`.
 - **Read replicas**: a request opened with `withDatabase(connect(env.DB, { session }), …)` sends every query through one D1 Session, so it reads its own writes; `db.bookmark()` carries that to the next request.
-- **Observability**: `connect(env.DB, { onQuery })` sees every statement with its SQL, bound values, timing and D1’s `meta`.
+- **Observability**: `connect(env.DB, { onQuery })` sees every statement with its SQL, bound values, timing, and D1’s `meta`.
 
 ## Honest about D1
 
@@ -141,7 +141,7 @@ d1-record follows Rails wherever D1 allows, and says so where it can’t:
 - **No interactive transactions.** D1 can’t hold a transaction open across `await`s, so there’s no `transaction(async tx => …)`. Instead, `batch([...])` writes a prepared set of statements and records atomically, and a record with `dependent: "destroy"` or new associated records is written in one batch when its keys are known in advance.
 - **Keys generated in code are first-class.** With a `default: () => crypto.randomUUID()`, records can be linked and saved together atomically before D1 has seen them.
 - **D1’s limits are handled for you.** Lists of any length bind as one value (`json_each`), so the 100-bound-parameter limit never bites; preloads take one query per association.
-- **Constraint errors become typed errors** (`RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation`, `CheckViolation`) naming the table, columns and attributes.
+- **Constraint errors become typed errors** (`RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation`, `CheckViolation`) naming the table, columns, and attributes.
 - **No request state on Model classes.** A query uses the Model’s binding, the same object for every request, or a database opened for its request with `withDatabase`, so concurrent requests on one isolate never share a Session or listener.
 
 ## Coming from Rails
@@ -150,7 +150,7 @@ Most of it will feel familiar. The main difference is naming: attributes are cam
 
 ## How it compares
 
-Query builders such as [Drizzle](https://orm.drizzle.team) and [Kysely](https://kysely.dev) are SQL-first: you write queries against a typed schema, and rows come back as plain objects. d1-record is an Active Record: rows come back as records that know how to validate, save, destroy and load their associations, with the conventions of Ruby on Rails. Its value is a coherent, rigorously tested lifecycle rather than advanced type inference. If you know Rails, you already know most of it.
+Query builders such as [Drizzle](https://orm.drizzle.team) and [Kysely](https://kysely.dev) are SQL-first: you write queries against a typed schema, and rows come back as plain objects. d1-record is an Active Record: rows come back as records that know how to validate, save, destroy, and load their associations, with the conventions of Ruby on Rails. Its value is a coherent, rigorously tested lifecycle rather than advanced type inference. If you know Rails, you already know most of it.
 
 ## Versioning
 

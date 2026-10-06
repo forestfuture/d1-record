@@ -1,15 +1,15 @@
 ---
-description: "Reference for querying: a Model's statics, Relations, where and comparisons, sql fragments, ordering and paging, find/findBy/first/count, partial records, none(), merge, scopes and preloading."
+description: "Reference for querying: a Model's statics, Relations, where and comparisons, sql fragments, ordering and paging, find/findBy/first/count, partial records, none(), merge, scopes, and preloading."
 ---
 
 # Querying
 
-A query is a **Relation**. Each method that narrows, orders or pages it returns a new Relation, and nothing runs until you ask for results:
+A query is a **Relation**. Each method that narrows, orders, or pages it returns a new Relation, and nothing runs until you ask for results:
 
 <<< @/snippets/guide/querying.ts#relation{ts}
 
 ::: warning TIP
-Relations have no `then`, so an `async` function that returns one never runs it by accident. Ask for results with a method such as `toArray()`, `first()` or `count()`.
+Relations have no `then`, so an `async` function that returns one never runs it by accident. Ask for results with a method such as `toArray()`, `first()`, or `count()`.
 :::
 
 ## Starting a query
@@ -41,7 +41,7 @@ Pass a comparison helper as a value:
 
 <<< @/snippets/guide/querying.ts#comparisons{ts}
 
-`gt`, `gte`, `lt`, `lte` and `between` work on number, string and datetime attributes, and dates compare by time. `between` includes both ends, like Rails’ `start..end`. Pass `{ excludeEnd: true }` for `start...end`.
+`gt`, `gte`, `lt`, `lte`, and `between` work on number, string, and datetime attributes, and dates compare by time. `between` includes both ends, like Rails’ `start..end`. Pass `{ excludeEnd: true }` for `start...end`.
 
 ### Writing SQL fragments
 
@@ -70,8 +70,8 @@ Run a query with one of these methods:
 - `find` throws `RecordNotFound` if the id is missing. Given several ids, it returns them in order, from one query, and throws if any are missing.
 - `findBy` resolves to `null` when nothing matches, and `findByOrThrow` throws `RecordNotFound`.
 - `first` and `last` sort by the primary key unless the Relation has an order, and `last` reverses that order. An `sql` fragment can’t be reversed, so `last` throws `IrreversibleOrder` there.
-- `count()` always agrees with what `toArray()` returns, even with `limit`, `offset` or `distinct`.
-- `size()`, `isEmpty()` and `hasAny()` are Rails’ `size`, `empty?` and `any?`. On a loaded association, they answer without a query.
+- `count()` always agrees with what `toArray()` returns, even with `limit`, `offset`, or `distinct`.
+- `size()`, `isEmpty()`, and `hasAny()` are Rails’ `size`, `empty?`, and `any?`. On a loaded association, they answer without a query.
 
 ## Selecting attributes
 
@@ -110,7 +110,7 @@ A scope whose body names its own class needs its type written out: `static roots
 
 ## Merging Relations
 
-Combine two Relations of the same Model with `merge`. Their conditions are joined with AND, and anything the argument sets, such as an order, limit or select, replaces the receiver’s:
+Combine two Relations of the same Model with `merge`. Their conditions are joined with AND, and anything the argument sets, such as an order, limit, or select, replaces the receiver’s:
 
 ```ts
 const recent = User.order({ createdAt: "desc" }).limit(10);

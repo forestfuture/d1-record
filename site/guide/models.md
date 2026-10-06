@@ -1,5 +1,5 @@
 ---
-description: 'Reference for Models: ApplicationRecord("table") and overrides, declaring attributes yourself with Model({...}), table names, attributes and types, casting assigned values, building records, permit, timestamps, change tracking, SQL fragments, serialization and filtered attributes.'
+description: 'Reference for Models: ApplicationRecord("table") and overrides, declaring attributes yourself with Model({...}), table names, attributes and types, casting assigned values, building records, permit, timestamps, change tracking, SQL fragments, serialization, and filtered attributes.'
 ---
 
 # Models
@@ -12,7 +12,7 @@ Extend your app’s `ApplicationRecord`, naming the table:
 
 <<< @/snippets/guide/models.ts#generated{ts}
 
-The table’s attributes, primary key and types come from `src/db/schema.ts`, which [`d1-record schema`](./command-line#d1-record-schema) generates. A table that isn’t in the schema is a compile error.
+The table’s attributes, primary key, and types come from `src/db/schema.ts`, which [`d1-record schema`](./command-line#d1-record-schema) generates. A table that isn’t in the schema is a compile error.
 
 ::: warning TIP
 The table is an argument, rather than inferred from the class name, so a Model keeps working when a bundler renames its class.
@@ -24,13 +24,13 @@ Subclasses share the table: setting another `tableName` throws `InvalidModel`. Y
 
 The second argument changes how attributes are read and written. It’s keyed by attribute name, so an unknown name is a compile error:
 
-| Override                     | Does                                                                                                 |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `"boolean"` (a type name)    | Reads and writes the attribute as that type                                                          |
-| `{ type?, null?, default? }` | Replaces those parts of the generated attribute; `null: false` makes it non-null in TypeScript       |
-| `false`                      | Ignores the column: it’s never typed, read or written, and queries name their columns instead of `*` |
+| Override                     | Does                                                                                                  |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `"boolean"` (a type name)    | Reads and writes the attribute as that type                                                           |
+| `{ type?, null?, default? }` | Replaces those parts of the generated attribute; `null: false` makes it non-null in TypeScript        |
+| `false`                      | Ignores the column: it’s never typed, read, or written, and queries name their columns instead of `*` |
 
-An override can’t change a column, add an attribute or ignore the primary key: each throws `InvalidModel`.
+An override can’t change a column, add an attribute, or ignore the primary key: each throws `InvalidModel`.
 
 - **Changing a `type`** drops the generated default, so the column’s own default applies unless you give one.
 - **A `default`** isn’t type-checked yet ([#74](https://github.com/forestfuture/d1-record/issues/74)). One that returns a value the type can’t cast throws `TypeError` when a record is built.
@@ -86,7 +86,7 @@ Attributes are camelCase, and map to snake_case columns by Rails’ `underscore`
 | `userID`            | `user_id`             |
 | `sha256Hash`        | `sha256_hash`         |
 
-To map an attribute to a column with another name, give it `{ column: "..." }`. Conditions, ordering and association keys always name attributes; only SQL fragments name columns.
+To map an attribute to a column with another name, give it `{ column: "..." }`. Conditions, ordering, and association keys always name attributes; only SQL fragments name columns.
 
 ## Attribute types
 
@@ -107,17 +107,17 @@ Store `json` attributes in a `TEXT` column, as [D1 recommends](https://developer
 
 ## Casting assigned values
 
-Every value is cast to its attribute’s type when it’s assigned, so text from JSON, a form or a query string becomes the right type:
+Every value is cast to its attribute’s type when it’s assigned, so text from JSON, a form, or a query string becomes the right type:
 
 <<< @/snippets/guide/models.ts#casting{ts}
 
-Values are cast wherever they’re assigned: `build`, `create`, `assign`, `update`, a property setter, a default, [`permit`](#permitting-fields), and the values given to `insert`, `insertAll`, `upsert`, `upsertAll` and `updateAll`. `null` is always NULL. Only unambiguous values are accepted:
+Values are cast wherever they’re assigned: `build`, `create`, `assign`, `update`, a property setter, a default, [`permit`](#permitting-fields), and the values given to `insert`, `insertAll`, `upsert`, `upsertAll`, and `updateAll`. `null` is always NULL. Only unambiguous values are accepted:
 
 | Type       | Accepts                                                                                                                                |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `boolean`  | `true`, `false`, `1`, `0`, `"1"`, `"0"`, and `"true"`, `"false"`, `"on"`, `"off"` in any case                                          |
 | `integer`  | a safe integer, or a string that’s wholly one, with an optional sign and spaces around it: `"42"`, `" -7 "`, `"+3"`                    |
-| `real`     | a finite number, or a string that’s wholly one, with an optional sign, point and exponent: `"1.5"`, `".5"`, `"5."`, `"-2e3"`           |
+| `real`     | a finite number, or a string that’s wholly one, with an optional sign, point, and exponent: `"1.5"`, `".5"`, `"5."`, `"-2e3"`          |
 | `string`   | a string                                                                                                                               |
 | `datetime` | a valid `Date`; a date, `"2026-01-02"` (midnight UTC); or a date and time with `Z` or a `±HH:MM` offset: `"2026-01-02T09:30:00+02:00"` |
 | `json`     | any value                                                                                                                              |
@@ -127,7 +127,7 @@ Anything else throws `TypeError` naming the Model and the attribute, and the att
 - `""` for every type but `string`.
 - `1.7`, `"12abc"`, `"1e3"`, and integers past `Number.MAX_SAFE_INTEGER`, for an `integer`.
 - `NaN` and `Infinity`.
-- A number, boolean or `Date` for a `string`.
+- A number, boolean, or `Date` for a `string`.
 - For a `datetime`: a time without an offset, a lowercase `t` or `z`, a day that doesn’t exist (`"2026-02-30"`), other formats, and numbers.
 
 ### Casting conditions and keys
@@ -159,7 +159,7 @@ A record keeps the database it was built or loaded through, for its later saves 
 
 ### Permitting fields
 
-Keep only the attributes you name from untrusted input with `permit`. It casts each value as assigning would, and its result goes straight into `build`, `create` or `update`:
+Keep only the attributes you name from untrusted input with `permit`. It casts each value as assigning would, and its result goes straight into `build`, `create`, or `update`:
 
 ```ts
 const permitted = Account.permit(await request.json(), "email", "handle");
@@ -176,7 +176,7 @@ It reads three kinds of input:
 
 - **Keys you don’t name** are dropped. A named attribute the input doesn’t have is left out, and a `null` is kept.
 - **A name that isn’t an attribute** is a compile error, and throws `UnknownAttribute`.
-- **`TypeError`** is thrown for a value that can’t be cast, a file from a form, and any other input: an array, a `Map`, `Headers`, a class instance, `null` or a string.
+- **`TypeError`** is thrown for a value that can’t be cast, a file from a form, and any other input: an array, a `Map`, `Headers`, a class instance, `null`, or a string.
 
 [Untrusted input](./untrusted-input) shows `permit` in a Worker.
 
@@ -190,9 +190,9 @@ Records know what’s changed since they were loaded or last saved, as in Rails:
 
 <<< @/snippets/guide/models.ts#dirty{ts}
 
-- `isChanged()`, `changed()`, `changedAttributes()` and `changes()` describe the unsaved changes.
-- `attributeWas`, `isAttributeChanged` and `willSaveChangeTo` look at one attribute’s unsaved change. Use them in before-callbacks.
-- `savedChanges()`, `savedChangeTo`, `hasSavedChangeTo` and `attributeBeforeLastSave` look at the last save. Use them in after-callbacks, where the record is already clean.
+- `isChanged()`, `changed()`, `changedAttributes()`, and `changes()` describe the unsaved changes.
+- `attributeWas`, `isAttributeChanged`, and `willSaveChangeTo` look at one attribute’s unsaved change. Use them in before-callbacks.
+- `savedChanges()`, `savedChangeTo`, `hasSavedChangeTo`, and `attributeBeforeLastSave` look at the last save. Use them in after-callbacks, where the record is already clean.
 - `restoreAttributes()` undoes unsaved changes, to every attribute or the ones you name.
 
 An update writes only the attributes that changed, and a save with nothing changed sends nothing.
@@ -231,9 +231,9 @@ Associations are never included, so a response never loads more than you asked f
 
 ## Sharing behavior
 
-A subclass, such as `class Admin extends User`, inherits a copy of its parent’s attributes, validations, callbacks, scopes and associations. Declaring more on the child never changes the parent. Single-table inheritance isn’t supported.
+A subclass, such as `class Admin extends User`, inherits a copy of its parent’s attributes, validations, callbacks, scopes, and associations. Declaring more on the child never changes the parent. Single-table inheritance isn’t supported.
 
-To share methods, callbacks and scopes across every Model, write them on your app’s base class. See [Shared behavior](./shared-behavior).
+To share methods, callbacks, and scopes across every Model, write them on your app’s base class. See [Shared behavior](./shared-behavior).
 
 ## Checking declarations
 

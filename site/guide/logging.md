@@ -61,7 +61,7 @@ To see a request’s database time in the browser’s developer tools, add it up
 
 ## Keep secrets out of the logs
 
-Listeners see the values of passwords, tokens, keys and emails as `"[FILTERED]"`, with no setup: D1 still gets the real values. [Models](./models#filtering-attributes) lists which attributes are filtered by default, and everywhere their values are hidden.
+Listeners see the values of passwords, tokens, keys, and emails as `"[FILTERED]"`, with no setup: D1 still gets the real values. [Models](./models#filtering-attributes) lists which attributes are filtered by default, and everywhere their values are hidden.
 
 ### Add your own attributes
 

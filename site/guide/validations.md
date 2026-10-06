@@ -1,5 +1,5 @@
 ---
-description: "validates with presence, length, format, inclusion, numericality and uniqueness, their options, the errors collection, and adding errors with errors.add, and custom validations."
+description: "validates with presence, length, format, inclusion, numericality, and uniqueness, their options, the errors collection, and adding errors with errors.add, and custom validations."
 ---
 
 # Validations
@@ -47,7 +47,7 @@ Rails’ `errors.add(:ends_at, :after_start)` takes a type and looks up its mess
 
 Within one `validates` call, the rules run in that order. Every rule also accepts:
 
-- `allowNull`: skip the rule when the value is `null`. Without it, `null` fails `presence`, `format`, `inclusion` and `numericality`, counts as length 0, and is never taken.
+- `allowNull`: skip the rule when the value is `null`. Without it, `null` fails `presence`, `format`, `inclusion`, and `numericality`, counts as length 0, and is never taken.
 - `message`: replaces the default messages from that call.
 - `if: (record) => boolean`: only validate when it returns `true`.
 
@@ -69,4 +69,4 @@ For a rule the validators don’t cover, add errors in a `beforeValidation` or `
 
 <<< @/snippets/guide/validations.ts#custom{ts}
 
-[Adding an error](#adding-an-error) describes `errors.add`’s arguments. Each validation run (`isValid()`, `save()` or `saveOrThrow()`) starts by clearing `errors`, as in Rails, so an error added anywhere else is gone by the next save.
+[Adding an error](#adding-an-error) describes `errors.add`’s arguments. Each validation run (`isValid()`, `save()`, or `saveOrThrow()`) starts by clearing `errors`, as in Rails, so an error added anywhere else is gone by the next save.

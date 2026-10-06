@@ -4,7 +4,7 @@ description: "Use d1-record with a D1 database that Drizzle or Prisma manages, o
 
 # Existing databases
 
-d1-record reads a database’s tables from its migrations. If your database already has them (from Drizzle, Prisma or Wrangler), point d1-record at them. If it doesn’t, start from a snapshot of the database’s schema.
+d1-record reads a database’s tables from its migrations. If your database already has them (from Drizzle, Prisma, or Wrangler), point d1-record at them. If it doesn’t, start from a snapshot of the database’s schema.
 
 ## Coming from Drizzle
 

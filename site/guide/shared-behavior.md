@@ -1,5 +1,5 @@
 ---
-description: "Write methods, callbacks and scopes once, on your app's base class, and every Model has them, as with Rails' ApplicationRecord."
+description: "Write methods, callbacks, and scopes once, on your app's base class, and every Model has them, as with Rails' ApplicationRecord."
 ---
 
 # Shared behavior

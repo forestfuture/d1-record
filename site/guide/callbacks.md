@@ -58,17 +58,17 @@ Throw `abort(reason)` from a before-callback to stop a save or destroy:
 
 Only `abort()` stops a save. Returning `false` from a callback does nothing, and any other error propagates as it is.
 
-`abort()` works in `beforeValidation`, `afterValidation`, `beforeSave`, `beforeCreate`, `beforeUpdate` and `beforeDestroy`. In an after-callback it’s too late: the write has happened, so it becomes an `AbortAfterPersistence` error naming the callback.
+`abort()` works in `beforeValidation`, `afterValidation`, `beforeSave`, `beforeCreate`, `beforeUpdate`, and `beforeDestroy`. In an after-callback it’s too late: the write has happened, so it becomes an `AbortAfterPersistence` error naming the callback.
 
 ## Rails callbacks d1-record doesn’t have
 
 **Not needed on D1:**
 
-- **`after_commit`, `after_rollback`** and their `after_*_commit` shortcuts. In Rails, a save runs inside a database transaction, and `after_save` runs before that transaction commits, so `after_commit` exists to wait until it has. Here, D1 has already committed a save’s writes before any after-callback runs, so `afterSave`, `afterCreate`, `afterUpdate` and `afterDestroy` are already “after commit”. In a [batch](./batches#records-in-a-batch), after-callbacks run once the whole batch is written. There’s no rollback to hook into: when D1 refuses a write, nothing was written, and the save throws the [constraint error](./errors#constraint-errors).
+- **`after_commit`, `after_rollback`** and their `after_*_commit` shortcuts. In Rails, a save runs inside a database transaction, and `after_save` runs before that transaction commits, so `after_commit` exists to wait until it has. Here, D1 has already committed a save’s writes before any after-callback runs, so `afterSave`, `afterCreate`, `afterUpdate`, and `afterDestroy` are already “after commit”. In a [batch](./batches#records-in-a-batch), after-callbacks run once the whole batch is written. There’s no rollback to hook into: when D1 refuses a write, nothing was written, and the save throws the [constraint error](./errors#constraint-errors).
 
 **Not built yet**, since nothing in D1 prevents them. The code shows their likely shape, which may change when they’re designed:
 
-- **Around callbacks** ([#48](https://github.com/forestfuture/d1-record/issues/48)): `this.aroundSave(async (record, proceed) => { …; await proceed(); … })`, and `aroundCreate`, `aroundUpdate` and `aroundDestroy`.
+- **Around callbacks** ([#48](https://github.com/forestfuture/d1-record/issues/48)): `this.aroundSave(async (record, proceed) => { …; await proceed(); … })`, and `aroundCreate`, `aroundUpdate`, and `aroundDestroy`.
 - **`afterInitialize` and `afterFind`** ([#49](https://github.com/forestfuture/d1-record/issues/49)): for every record built or loaded, and every record loaded.
 - **`record.touch()` and `afterTouch`** ([#50](https://github.com/forestfuture/d1-record/issues/50)): sets `updatedAt` without a full save.
 - **`on: "create"` / `on: "update"`** ([#51](https://github.com/forestfuture/d1-record/issues/51)): `this.validates("password", { presence: true, on: "create" })`. Until then, use `if: (record) => record.isNewRecord()` on a validation, or check `isNewRecord()` inside a callback.

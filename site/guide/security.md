@@ -11,15 +11,15 @@ These are the project’s own reviews, not an independent audit. Each says what 
 ## What d1-record protects against
 
 - **SQL injection.** Every value is bound as a parameter, never written into SQL text. Identifiers come only from a Model’s declared attributes, and are quoted. Raw SQL is only possible through the `sql` tagged template, which binds every value it’s given.
-- **Values that aren’t what TypeScript says.** A value from JSON, a form or a query string is cast to its attribute’s type when it’s assigned or used in a condition, and anything ambiguous is refused: `"false"` can’t save `true`. See [Models](./models#casting-assigned-values).
-- **Prototype pollution and inherited names.** Attributes and associations are looked up only by the Model’s own names, so `__proto__`, `constructor` and other names every object has are unknown names, and `Object.prototype` is never written to.
-- **Secrets in logs and errors.** Values of attributes named like passwords, tokens, keys and emails are hidden from `onQuery` listeners and from error messages. See [Logging](./logging#keep-secrets-out-of-the-logs).
+- **Values that aren’t what TypeScript says.** A value from JSON, a form, or a query string is cast to its attribute’s type when it’s assigned or used in a condition, and anything ambiguous is refused: `"false"` can’t save `true`. See [Models](./models#casting-assigned-values).
+- **Prototype pollution and inherited names.** Attributes and associations are looked up only by the Model’s own names, so `__proto__`, `constructor`, and other names every object has are unknown names, and `Object.prototype` is never written to.
+- **Secrets in logs and errors.** Values of attributes named like passwords, tokens, keys, and emails are hidden from `onQuery` listeners and from error messages. See [Logging](./logging#keep-secrets-out-of-the-logs).
 - **One request’s data reaching another.** Nothing about a request (a D1 Session, a listener) is ever stored on a Model class. See [Database resolution](./query-databases).
 - **Denial of service through parsing.** The patterns that read numbers and dates are linear, so a long value can’t use up a Worker’s CPU time.
 
 ## What’s left to your app
 
-- **Choosing which fields a request may set.** Never pass a whole body to a Model: use `permit`, destructuring or a schema. See [Untrusted input](./untrusted-input).
+- **Choosing which fields a request may set.** Never pass a whole body to a Model: use `permit`, destructuring, or a schema. See [Untrusted input](./untrusted-input).
 - **An untrusted `null` in a condition.** `findBy({ token: null })` matches rows whose token is NULL. Check a value’s type before querying with it.
 - **Authorization.** Whether this user may read or change this record is your app’s decision.
 - **Formats and ranges.** Casting checks types, not meaning: use [validations](./validations).
@@ -44,7 +44,7 @@ The library’s guarantees are tested against a real D1 database (through Minifl
 - **No runtime dependencies.** Installing `@forestfuture/d1-record` installs only d1-record’s own code, so no other package’s compromise can reach your Worker through it.
 - **Releases are built by CI.** The npm package is built and published by the repository’s release workflow, never from a laptop, so what’s on npm is what’s in the repository. The first release sets up npm’s trusted publishing and provenance, so each version can be traced to the commit and workflow that built it.
 - **CI is pinned.** Every third-party GitHub Action is pinned to a commit, not a tag that could be moved, because a moved tag would run someone else’s code in the job that publishes. A test fails if one isn’t.
-- **Release jobs run no install scripts.** The jobs that decide, build, version and publish a release install dependencies without running their install scripts and without a shared cache, so a compromised development dependency can’t change what’s built or published.
+- **Release jobs run no install scripts.** The jobs that decide, build, version, and publish a release install dependencies without running their install scripts and without a shared cache, so a compromised development dependency can’t change what’s built or published.
 - **Dependencies are watched.** Dependabot proposes updates weekly, waiting a week after each release, since a compromised release is usually caught within days. `pnpm audit` is part of each security review.
 
 ## Review log

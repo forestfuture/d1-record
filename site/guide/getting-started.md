@@ -122,9 +122,9 @@ The list includes Ada, with her email lowercased by `beforeSave`. Sign her up ag
 
 ## Next steps
 
-- **[Models](./models):** attributes, types and overrides.
-- **[Querying](./querying):** conditions, ordering, scopes and preloading.
+- **[Models](./models):** attributes, types, and overrides.
+- **[Querying](./querying):** conditions, ordering, scopes, and preloading.
 - **[Persistence](./persistence):** saving and destroying records.
-- **[Associations](./associations):** `hasMany`, `belongsTo` and `hasOne`.
+- **[Associations](./associations):** `hasMany`, `belongsTo`, and `hasOne`.
 - **[Generators](./generators):** every way to write columns.
 - **[Bulk writes and batches](./batches):** writing several changes at once.
