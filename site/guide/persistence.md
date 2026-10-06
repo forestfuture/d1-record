@@ -2,11 +2,11 @@
 description: "save, create, update and destroy, their OrThrow variants, what each returns or throws, lifecycle state and reload."
 ---
 
-# Saving and destroying
+# Persistence
 
 ## Saving
 
-`save()` validates the record, runs its callbacks and writes it: an INSERT for a new record, or an UPDATE of just the changed attributes for a persisted one. It resolves to `true`, or `false` when the record wasn't saved, for one of two reasons:
+`save()` validates the record, runs its callbacks and writes it: an INSERT for a new record, or an UPDATE of just the changed attributes for a persisted one. It resolves to `true`, or `false` when the record wasn’t saved, for one of two reasons:
 
 - **Validation failed.** The reasons are in `record.errors`.
 - **A callback aborted** with [`abort()`](./callbacks#stopping-a-save-with-abort). The reason is in `record.abortReason`, and `errors` is left alone.
@@ -17,10 +17,10 @@ description: "save, create, update and destroy, their OrThrow variants, what eac
 
 ## Or throw
 
-Each has an `OrThrow` version for when a failure is exceptional (Rails' `save!`, `create!`, …). Instead of returning `false`, it throws:
+Each has an `OrThrow` version for when a failure is exceptional (Rails’ `save!`, `create!`, …). Instead of returning `false`, it throws:
 
 - `RecordInvalid` when validation failed, with the record on `error.record`.
-- `RecordNotSaved` when a callback aborted a save, with the abort's reason as its message.
+- `RecordNotSaved` when a callback aborted a save, with the abort’s reason as its message.
 - `RecordNotDestroyed` from `destroyOrThrow()`, when a callback aborted the destroy or a `restrictWithError` association refused it.
 
 <<< @/snippets/guide/persistence.ts#or-throw{ts}
@@ -39,17 +39,17 @@ Each has an `OrThrow` version for when a failure is exceptional (Rails' `save!`,
 | `findBy(conds)`                          | record or `null`                      | none                                                  |
 | `findByOrThrow(conds)`                   | record                                | `RecordNotFound`                                      |
 
-`false` only ever means "validation failed" or "a callback aborted". The domain errors in the table are d1-record's own. Everything else throws too, from both kinds of method:
+`false` only ever means “validation failed” or “a callback aborted”. The domain errors in the table are d1-record’s own. Everything else throws too, from both kinds of method:
 
 - **Constraint errors** such as `RecordNotUnique` are thrown whichever method you call, since the database refused the write. See [Errors](./errors#constraint-errors).
 - An error thrown by a callback, other than `abort()`, propagates unchanged, even from an after-callback once the record is saved.
-- D1's own operational errors always propagate.
+- D1’s own operational errors always propagate.
 
 ## Destroying
 
 <<< @/snippets/guide/persistence.ts#destroy{ts}
 
-`destroy()` runs the destroy callbacks and the associations' [`dependent:` strategies](./associations#dependent-records), then deletes the row. A record is marked destroyed only once the DELETE succeeds. After that its attributes stay readable, but setting one, or calling `save`, `update`, `destroy` or `reload`, throws `RecordDestroyed`.
+`destroy()` runs the destroy callbacks and the associations’ [`dependent:` strategies](./associations#dependent-records), then deletes the row. A record is marked destroyed only once the DELETE succeeds. After that its attributes stay readable, but setting one, or calling `save`, `update`, `destroy` or `reload`, throws `RecordDestroyed`.
 
 If the row was already gone (another request deleted it), `save` and `destroy` still succeed.
 

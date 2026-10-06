@@ -2,7 +2,7 @@
 
 A Rails-inspired Active Record for [Cloudflare Workers](https://developers.cloudflare.com/workers/) and [D1](https://developers.cloudflare.com/d1/).
 
-Models with validations, callbacks, associations and change tracking; lazy, composable queries; and a predictable save lifecycle, built for the Worker runtime and honest about what D1 can and can't do.
+Models with validations, callbacks, associations and change tracking; lazy, composable queries; and a predictable save lifecycle, built for the Worker runtime and honest about what D1 can and can’t do.
 
 > **Status: pre-release (0.x).** The API is tested against real D1, but it may still change before 1.0.
 
@@ -12,11 +12,11 @@ npm install @forestfuture/d1-record
 
 ## A quick look
 
-A [Worker](https://developers.cloudflare.com/workers/) is a function that runs at Cloudflare's edge, and [D1](https://developers.cloudflare.com/d1/) is its SQLite database. d1-record sits between the two: you describe each table once as a **Model**, and your Worker reads and writes **records** instead of rows.
+A [Worker](https://developers.cloudflare.com/workers/) is a function that runs at Cloudflare’s edge, and [D1](https://developers.cloudflare.com/d1/) is its SQLite database. d1-record sits between the two: you describe each table once as a **Model**, and your Worker reads and writes **records** instead of rows.
 
 ### 1. Bind a D1 database
 
-Create a database with [Wrangler](https://developers.cloudflare.com/workers/wrangler/), Cloudflare's command-line tool, and add the snippet it prints to your Wrangler config. It gives your Worker a **binding** called `DB`:
+Create a database with [Wrangler](https://developers.cloudflare.com/workers/wrangler/), Cloudflare’s command-line tool, and add the snippet it prints to your Wrangler config. It gives your Worker a **binding** called `DB`:
 
 ```sh
 npx wrangler d1 create my-app-db
@@ -33,7 +33,7 @@ npx wrangler d1 create my-app-db
 
 ### 2. Generate your models
 
-The generator writes each table's migration and its Model, as `rails generate model` does (it needs Node.js 22.13 or later):
+The generator writes each table’s migration and its Model, as `rails generate model` does (it needs Node.js 22.13 or later):
 
 ```sh
 npx d1-record g model User 'email:string!:unique' 'isActive:boolean!=true'
@@ -41,11 +41,11 @@ npx d1-record g model Post user:references 'title:string!' publishedAt:datetime
 npx wrangler d1 migrations apply my-app-db --local
 ```
 
-Along with the migrations, it writes `src/db/schema.ts` (every table's columns, generated from the migrations, like Rails' `schema.rb`) and your app's `ApplicationRecord`.
+Along with the migrations, it writes `src/db/schema.ts` (every table’s columns, generated from the migrations, like Rails’ `schema.rb`) and your app’s `ApplicationRecord`.
 
 ### 3. Add behavior
 
-A Model's attributes come from the schema, so it declares only behavior: associations, scopes, validations and callbacks.
+A Model’s attributes come from the schema, so it declares only behavior: associations, scopes, validations and callbacks.
 
 ```ts
 // src/models/user.ts
@@ -80,7 +80,7 @@ export class Post extends ApplicationRecord("posts") {
 
 ### 4. Use them in your Worker
 
-Queries start from the Model, and use its binding during the request: there's nothing to connect. (For a D1 Session or per-request logging, see [Connecting](https://docs.forestfuture.dev/d1-record/guide/connecting).)
+Queries start from the Model, and use its binding during the request: there’s nothing to connect. (For a D1 Session or per-request logging, see [Connections](https://docs.forestfuture.dev/d1-record/guide/connecting).)
 
 ```ts
 // src/index.ts
@@ -114,7 +114,7 @@ export default {
 
 ### 5. Write several things at once, or not at all
 
-D1 can't keep a transaction open while your code awaits, so there's no `transaction()` block. Instead, `batch([...])` sends a prepared set of writes that all succeed or all fail. `toSave()`, `toDestroy()` and the bulk writes' `to…` forms (`toUpdateAll`, `toDeleteAll`, …) prepare a write for the batch instead of running it:
+D1 can’t keep a transaction open while your code awaits, so there’s no `transaction()` block. Instead, `batch([...])` sends a prepared set of writes that all succeed or all fail. `toSave()`, `toDestroy()` and the bulk writes’ `to…` forms (`toUpdateAll`, `toDeleteAll`, …) prepare a write for the batch instead of running it:
 
 ```ts
 await batch([
@@ -123,30 +123,30 @@ await batch([
 ]);
 ```
 
-## What's in it
+## What’s in it
 
 - **Models** whose attributes come from your migrations (`class Post extends ApplicationRecord("posts")`), typed, with Rails-style generators; or declared with `Model({...})`: camelCase attributes over snake_case columns, defaults (including app-generated keys), timestamps, JSON and dates converted both ways.
 - **Queries**: `where`/`whereNot`/`or`/`merge`, comparisons (`gte`, `between`, …), ordering (`nulls: "last"`, `reorder`), pagination, `select`, `distinct`, `pluck`, `count`, `size`, `exists`, named scopes, and hand-written conditions only through the `sql` tagged template, so values are always bound.
 - **Persistence**: `save`/`create`/`update`/`destroy` with `…OrThrow` variants, validations (`presence`, `length`, `format`, `inclusion`, `numericality`, `uniqueness`), the full Rails callback lifecycle with `abort()`, dirty tracking (`changes`, `attributeWas`, `savedChangeTo`, …).
 - **Associations**: `belongsTo`, `hasMany`, `hasOne` with scopes, `dependent:` strategies, preloading with `includes` (one query per association, never N+1), caching until reload, autosave, and `build`/`create`/`set` through the association.
-- **Queries from the Model**, as in Rails: `User.find(id)`, `User.where(…)`, `User.active()`, on the Model's binding with no setup.
-- **Bulk writes**: `insert`, `insertAll`, `upsert`, `updateAll`, `deleteAll`, and `batch([...])` mixing those with records' `toSave()`/`toDestroy()`.
+- **Queries from the Model**, as in Rails: `User.find(id)`, `User.where(…)`, `User.active()`, on the Model’s binding with no setup.
+- **Bulk writes**: `insert`, `insertAll`, `upsert`, `updateAll`, `deleteAll`, and `batch([...])` mixing those with records’ `toSave()`/`toDestroy()`.
 - **Read replicas**: a request opened with `withDatabase(connect(env.DB, { session }), …)` sends every query through one D1 Session, so it reads its own writes; `db.bookmark()` carries that to the next request.
-- **Observability**: `connect(env.DB, { onQuery })` sees every statement with its SQL, bound values, timing and D1's `meta`.
+- **Observability**: `connect(env.DB, { onQuery })` sees every statement with its SQL, bound values, timing and D1’s `meta`.
 
 ## Honest about D1
 
-d1-record follows Rails wherever D1 allows, and says so where it can't:
+d1-record follows Rails wherever D1 allows, and says so where it can’t:
 
-- **No interactive transactions.** D1 can't hold a transaction open across `await`s, so there's no `transaction(async tx => …)`. Instead, `batch([...])` writes a prepared set of statements and records atomically, and a record with `dependent: "destroy"` or new associated records is written in one batch when its keys are known in advance.
+- **No interactive transactions.** D1 can’t hold a transaction open across `await`s, so there’s no `transaction(async tx => …)`. Instead, `batch([...])` writes a prepared set of statements and records atomically, and a record with `dependent: "destroy"` or new associated records is written in one batch when its keys are known in advance.
 - **Keys generated in code are first-class.** With a `default: () => crypto.randomUUID()`, records can be linked and saved together atomically before D1 has seen them.
-- **D1's limits are handled for you.** Lists of any length bind as one value (`json_each`), so the 100-bound-parameter limit never bites; preloads take one query per association.
+- **D1’s limits are handled for you.** Lists of any length bind as one value (`json_each`), so the 100-bound-parameter limit never bites; preloads take one query per association.
 - **Constraint errors become typed errors** (`RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation`, `CheckViolation`) naming the table, columns and attributes.
-- **No request state on Model classes.** A query uses the Model's binding, the same object for every request, or a database opened for its request with `withDatabase`, so concurrent requests on one isolate never share a Session or listener.
+- **No request state on Model classes.** A query uses the Model’s binding, the same object for every request, or a database opened for its request with `withDatabase`, so concurrent requests on one isolate never share a Session or listener.
 
 ## Coming from Rails
 
-Most of it will feel familiar. The main difference is naming: attributes are camelCase and map to snake_case columns (`createdAt` ↔ `created_at`), and everything names **attributes**, association keys included. Foreign keys are inferred as in Rails (`has_many :posts` on `User` uses `userId`); when you do give one, it's `foreignKey: "userId"` where Rails writes `foreign_key: :user_id`. Column names only appear in `sql` fragments. Methods that raise end in `OrThrow` instead of `!` (`saveOrThrow` for `save!`), and predicates start with `is`/`has` instead of ending in `?` (`isNewRecord()` for `new_record?`).
+Most of it will feel familiar. The main difference is naming: attributes are camelCase and map to snake_case columns (`createdAt` ↔ `created_at`), and everything names **attributes**, association keys included. Foreign keys are inferred as in Rails (`has_many :posts` on `User` uses `userId`); when you do give one, it’s `foreignKey: "userId"` where Rails writes `foreign_key: :user_id`. Column names only appear in `sql` fragments. Methods that raise end in `OrThrow` instead of `!` (`saveOrThrow` for `save!`), and predicates start with `is`/`has` instead of ending in `?` (`isNewRecord()` for `new_record?`).
 
 ## How it compares
 
@@ -154,17 +154,17 @@ Query builders such as [Drizzle](https://orm.drizzle.team) and [Kysely](https://
 
 ## Versioning
 
-d1-record follows [semantic versioning](https://semver.org). While it's on 0.x, a breaking change bumps the minor version (0.1 → 0.2), and features and fixes bump the patch, so a `^0.1.0` range never brings in a breaking change. Every release is listed on the [releases page](https://github.com/forestfuture/d1-record/releases), and in `CHANGELOG.md`.
+d1-record follows [semantic versioning](https://semver.org). While it’s on 0.x, a breaking change bumps the minor version (0.1 → 0.2), and features and fixes bump the patch, so a `^0.1.0` range never brings in a breaking change. Every release is listed on the [releases page](https://github.com/forestfuture/d1-record/releases), and in `CHANGELOG.md`.
 
 ## For AI agents
 
-The guide is also published for coding agents: [`llms.txt`](https://docs.forestfuture.dev/d1-record/llms.txt), [`llms-full.txt`](https://docs.forestfuture.dev/d1-record/llms-full.txt), and every page as Markdown. The package ships the guide for its own version (`node_modules/@forestfuture/d1-record/llms-full.txt`) and an [agent skill](SKILL.md) (`npx skills add forestfuture/d1-record`). See [Using d1-record with AI agents](https://docs.forestfuture.dev/d1-record/guide/ai-agents).
+The guide is also published for coding agents: [`llms.txt`](https://docs.forestfuture.dev/d1-record/llms.txt), [`llms-full.txt`](https://docs.forestfuture.dev/d1-record/llms-full.txt), and every page as Markdown. The package ships the guide for its own version (`node_modules/@forestfuture/d1-record/llms-full.txt`) and an [agent skill](SKILL.md) (`npx skills add forestfuture/d1-record`). See [AI agents](https://docs.forestfuture.dev/d1-record/guide/ai-agents).
 
 ## Documentation
 
-The guide is being built in [`site/`](site/) for [docs.forestfuture.dev/d1-record](https://docs.forestfuture.dev/d1-record). Until it's live:
+The guide is being built in [`site/`](site/) for [docs.forestfuture.dev/d1-record](https://docs.forestfuture.dev/d1-record). Until it’s live:
 
-- [`site/guide/`](site/guide/): the guide pages, from getting started to D1's limits.
+- [`site/guide/`](site/guide/): the guide pages, from getting started to D1’s limits.
 - [`docs/contract.md`](docs/contract.md): the full public behavior, which the tests prove.
 - [`CONTEXT.md`](CONTEXT.md): the domain glossary (Model, Record, Relation, Association, Batch, …).
 - [`docs/adr/`](docs/adr/): the architecture decisions and why they were made.

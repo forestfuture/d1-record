@@ -2,7 +2,7 @@
 description: "Use two or more D1 databases from one Worker: a schema and base class for each binding, generators that choose a database, and per-request options for several at once."
 ---
 
-# Use several databases
+# Multiple databases
 
 A Worker can bind several D1 databases. In d1-record, each gets its own schema file and its own base class, and each Model queries the database its base class names.
 
@@ -22,7 +22,7 @@ A Worker can bind several D1 databases. In d1-record, each gets its own schema f
 }
 ```
 
-Give each database its own `migrations_dir`, since Wrangler applies a folder's migrations to one database.
+Give each database its own `migrations_dir`, since Wrangler applies a folder’s migrations to one database.
 
 ## Generate a schema and base class for each
 
@@ -30,7 +30,7 @@ Give each database its own `migrations_dir`, since Wrangler applies a folder's m
 npx d1-record schema
 ```
 
-With several databases, it writes one of each per binding, named as Rails names a second database's base class:
+With several databases, it writes one of each per binding, named as Rails names a second database’s base class:
 
 | Binding | Schema           | Base class                                   |
 | ------- | ---------------- | -------------------------------------------- |
@@ -58,7 +58,7 @@ npx wrangler d1 migrations apply my-app-logs --local
 
 ## Per-request options for several
 
-To open a request's databases with a Session or `onQuery`, pass them all to `withDatabase`. Each Model uses the one on its own binding:
+To open a request’s databases with a Session or `onQuery`, pass them all to `withDatabase`. Each Model uses the one on its own binding:
 
 <<< @/snippets/guide/connecting.ts#several{ts}
 
