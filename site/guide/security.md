@@ -11,7 +11,7 @@ These are the project’s own reviews, not an independent audit. Each says what 
 ## What d1-record protects against
 
 - **SQL injection.** Every value is bound as a parameter, never written into SQL text. Identifiers come only from a Model’s declared attributes, and are quoted. Raw SQL is only possible through the `sql` tagged template, which binds every value it’s given.
-- **Values that aren’t what TypeScript says.** A value from JSON, a form or a query string is cast to its attribute’s type when it’s assigned or used in a condition, and anything ambiguous is refused: `"false"` can’t save `true`. See [Models](./models#assigned-values-are-cast).
+- **Values that aren’t what TypeScript says.** A value from JSON, a form or a query string is cast to its attribute’s type when it’s assigned or used in a condition, and anything ambiguous is refused: `"false"` can’t save `true`. See [Models](./models#casting-assigned-values).
 - **Prototype pollution and inherited names.** Attributes and associations are looked up only by the Model’s own names, so `__proto__`, `constructor` and other names every object has are unknown names, and `Object.prototype` is never written to.
 - **Secrets in logs and errors.** Values of attributes named like passwords, tokens, keys and emails are hidden from `onQuery` listeners and from error messages. See [Logging](./logging#keep-secrets-out-of-the-logs).
 - **One request’s data reaching another.** Nothing about a request (a D1 Session, a listener) is ever stored on a Model class. See [Database resolution](./query-databases).

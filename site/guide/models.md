@@ -4,20 +4,25 @@ description: 'Reference for Models: ApplicationRecord("table") and overrides, de
 
 # Models
 
-A Model describes one table: its attributes, and its behavior. Usually its attributes come from your migrations, through the generated schema, and the Model declares only behavior.
+A Model describes one table. Its attributes come from your migrations, through the generated schema, so the Model only declares behavior.
 
-## Declaring a Model
+## Defining Models
 
-A Model extends your app’s `ApplicationRecord`, naming its table. The table’s attributes, primary key and types come from `src/db/schema.ts`, which [`d1-record schema`](./command-line#d1-record-schema) generates:
+Extend your app’s `ApplicationRecord`, naming the table:
 
 <<< @/snippets/guide/models.ts#generated{ts}
 
-- **The table is the argument**, not inferred from the class name, so the Model doesn’t depend on its class keeping its name when bundled. A table that isn’t in the schema is a compile error.
-- **Subclasses share it.** Setting another `tableName` on such a Model throws `InvalidModel`; `static primaryKey` can still be set, and must name an attribute.
+The table’s attributes, primary key and types come from `src/db/schema.ts`, which [`d1-record schema`](./command-line#d1-record-schema) generates. A table that isn’t in the schema is a compile error.
 
-### Overrides
+::: warning TIP
+The table is an argument, rather than inferred from the class name, so a Model keeps working when a bundler renames its class.
+:::
 
-The second argument changes how attributes are read and written, never the table. It’s keyed by attribute name, and typed: an unknown name is a compile error.
+Subclasses share the table: setting another `tableName` throws `InvalidModel`. You can still set `static primaryKey`, as long as it names an attribute.
+
+### Overriding attributes
+
+The second argument changes how attributes are read and written. It’s keyed by attribute name, so an unknown name is a compile error:
 
 | Override                     | Does                                                                                                 |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------- |
@@ -25,31 +30,53 @@ The second argument changes how attributes are read and written, never the table
 | `{ type?, null?, default? }` | Replaces those parts of the generated attribute; `null: false` makes it non-null in TypeScript       |
 | `false`                      | Ignores the column: it’s never typed, read or written, and queries name their columns instead of `*` |
 
-The column can’t change, an attribute can’t be added, and the primary key can’t be ignored: each is an `InvalidModel`, even past a cast. Changing an attribute’s `type` drops its generated default, which was for the old type, so the column’s own default applies unless you give one. A `default` isn’t type-checked against the attribute’s type yet ([#74](https://github.com/forestfuture/d1-record/issues/74)), but one that returns a value the type can’t cast throws `TypeError` when a record is built. An ignored `NOT NULL` column without a default makes inserts fail, so give it a default in a migration first.
+An override can’t change a column, add an attribute or ignore the primary key: each throws `InvalidModel`.
+
+- **Changing a `type`** drops the generated default, so the column’s own default applies unless you give one.
+- **A `default`** isn’t type-checked yet ([#74](https://github.com/forestfuture/d1-record/issues/74)). One that returns a value the type can’t cast throws `TypeError` when a record is built.
+- **Ignoring a `NOT NULL` column** without a default makes inserts fail, so give it a default in a migration first.
 
 ## Declaring attributes yourself
 
-For a view, or a table your migrations don’t make, declare the attributes in the Model, with `Model({...})` or `ApplicationRecord({...})` (the same, with your base class’s shared behavior). TypeScript infers the record’s properties from the object:
+For a view, or a table your migrations don’t make, declare the attributes with `Model({...})`. TypeScript infers the record’s properties from the object:
 
 <<< @/snippets/guide/models.ts#declare{ts}
 
-An attribute is a type name, or `{ type, column?, null?, default? }`. The rest of this page applies to both ways of declaring a Model.
+An attribute is a type name, or `{ type, column?, null?, default? }`. `ApplicationRecord({...})` does the same, with your base class’s shared behavior.
 
-## Table names
+## Naming tables
 
-A Model declared with `Model({...})` has its table named after its class, as Rails names it: the class name in snake_case, pluralized. `User` → `users`, `BlogPost` → `blog_posts`, `Category` → `categories`, `Person` → `people`, `Sheep` → `sheep`. A subclass shares its parent’s table.
+A Model declared with `Model({...})` takes its table name from its class, as Rails does: snake_case, pluralized.
 
-The rules are Rails’ own English ones, quirks included: `Human` becomes `humen`, as `man` becomes `men`, and `Leaf` becomes `leafs`. When a table is named differently, say so with `static tableName = "billing_accounts"`. There’s no way to add your own pluralization rules: name the table instead.
+| Class      | Table        |
+| ---------- | ------------ |
+| `User`     | `users`      |
+| `BlogPost` | `blog_posts` |
+| `Category` | `categories` |
+| `Person`   | `people`     |
+| `Sheep`    | `sheep`      |
 
-A class with no name to infer from, such as an anonymous class or `export default class extends Model(...)`, must set `static tableName`.
+To use another name, set `static tableName`:
 
-::: details Bundlers and class names
-The table name comes from the class’s name, so the class has to keep its name when your Worker is bundled. Wrangler keeps names by default, even when minifying. If a bundler renames `User` to something like `e`, the first query to its table throws `InvalidModel`, saying the table `es` doesn’t exist and that its name was inferred from the class name. Set `static tableName`, or keep class names in your bundler’s settings.
+```ts
+export class Account extends Model({ id: "string" }) {
+  static tableName = "billing_accounts";
+}
+```
+
+A subclass shares its parent’s table. An anonymous class, such as `export default class extends Model(...)`, must set `static tableName`.
+
+::: warning TIP
+The rules are Rails’ English ones, quirks included: `Human` becomes `humen` and `Leaf` becomes `leafs`. There’s no way to add your own rules, so set `tableName` instead.
 :::
 
-## Attributes and columns
+::: details Bundlers and class names
+Wrangler keeps class names by default, even when minifying. If a bundler renames `User` to `e`, the first query throws `InvalidModel`, saying the table `es` doesn’t exist and that its name was inferred from the class name. Set `static tableName`, or keep class names in your bundler’s settings.
+:::
 
-Attributes are camelCase in your code and map to snake_case columns, by Rails’ `underscore` rule:
+## Mapping columns
+
+Attributes are camelCase, and map to snake_case columns by Rails’ `underscore` rule:
 
 | Attribute           | Column                |
 | ------------------- | --------------------- |
@@ -59,11 +86,9 @@ Attributes are camelCase in your code and map to snake_case columns, by Rails’
 | `userID`            | `user_id`             |
 | `sha256Hash`        | `sha256_hash`         |
 
-`{ column: "..." }` maps one attribute to a column with another name. Everywhere outside SQL fragments (conditions, ordering, association keys), you name attributes, never columns.
+To map an attribute to a column with another name, give it `{ column: "..." }`. Conditions, ordering and association keys always name attributes; only SQL fragments name columns.
 
-## Types
-
-An attribute is a type name, or `{ type, column?, null?, default? }`.
+## Attribute types
 
 | Type       | JavaScript | Stored in D1 as       |
 | ---------- | ---------- | --------------------- |
@@ -74,13 +99,19 @@ An attribute is a type name, or `{ type, column?, null?, default? }`.
 | `datetime` | `Date`     | `TEXT`, ISO-8601      |
 | `json`     | any value  | `TEXT`, as JSON       |
 
-As in SQLite, an attribute can be `null` unless it’s declared `null: false`, and its TypeScript type includes `| null` to match.
+An attribute can be `null` unless it’s declared `null: false`, and its TypeScript type includes `| null` to match.
 
-Store `json` attributes in a `TEXT` column, as [D1 recommends](https://developers.cloudflare.com/d1/sql-api/query-json/#types), and add `CHECK (json_valid(settings))` to have D1 reject anything that isn’t valid JSON. A column declared `JSON` works too.
+::: warning TIP
+Store `json` attributes in a `TEXT` column, as [D1 recommends](https://developers.cloudflare.com/d1/sql-api/query-json/#types), and add `CHECK (json_valid(settings))` to have D1 reject invalid JSON. A column declared `JSON` works too.
+:::
 
-### Assigned values are cast
+## Casting assigned values
 
-TypeScript can’t check a value that comes from JSON, a form or a query string, so d1-record casts every value to its attribute’s type when it’s assigned: in `build`, `create`, `assign`, `update`, a property setter and a default; in the values given to `insert`, `insertAll`, `upsert`, `upsertAll` and `updateAll`; and in [`permit`](#picking-attributes-from-input-permit). `null` is always NULL. Only what’s unambiguous is accepted:
+Every value is cast to its attribute’s type when it’s assigned, so text from JSON, a form or a query string becomes the right type:
+
+<<< @/snippets/guide/models.ts#casting{ts}
+
+Values are cast wherever they’re assigned: `build`, `create`, `assign`, `update`, a property setter, a default, [`permit`](#permitting-fields), and the values given to `insert`, `insertAll`, `upsert`, `upsertAll` and `updateAll`. `null` is always NULL. Only unambiguous values are accepted:
 
 | Type       | Accepts                                                                                                                                |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
@@ -91,35 +122,51 @@ TypeScript can’t check a value that comes from JSON, a form or a query string,
 | `datetime` | a valid `Date`; a date, `"2026-01-02"` (midnight UTC); or a date and time with `Z` or a `±HH:MM` offset: `"2026-01-02T09:30:00+02:00"` |
 | `json`     | any value                                                                                                                              |
 
-Refused, among others: `""` for every type but `string`; `1.7`, `"12abc"`, `"1e3"` and integers past `Number.MAX_SAFE_INTEGER` for an `integer`; `NaN` and `Infinity`; a number, boolean or `Date` for a `string`; for a `datetime`, a time without an offset, a lowercase `t` or `z`, a day that doesn’t exist (`"2026-02-30"`, with or without a time), other formats, and numbers.
+Anything else throws `TypeError` naming the Model and the attribute, and the attribute keeps its value. The error shows at most 60 characters of the value, and none of a [filtered attribute](#filtering-attributes)’s. Among the values refused:
 
-Anything else throws `TypeError` naming the Model and the attribute, and the attribute keeps its value. The error shows at most 60 characters of the value, and none of a [filtered attribute](#filtered-attributes)‘s:
+- `""` for every type but `string`.
+- `1.7`, `"12abc"`, `"1e3"`, and integers past `Number.MAX_SAFE_INTEGER`, for an `integer`.
+- `NaN` and `Infinity`.
+- A number, boolean or `Date` for a `string`.
+- For a `datetime`: a time without an offset, a lowercase `t` or `z`, a day that doesn’t exist (`"2026-02-30"`), other formats, and numbers.
 
-<<< @/snippets/guide/models.ts#casting{ts}
+### Casting conditions and keys
 
-Conditions are cast the same way, so `where({ quantity: "42" })` finds 42. A condition value that can’t be cast matches nothing, so `find("abc")` on an integer key throws `RecordNotFound`. See [Querying](./querying#conditions). A condition also reads a number as its digits for a `string` attribute, and a record built from that Relation (`where({ label: 7 }).build()`) starts with what the condition matched, `"7"`. A key copied from another record through an association is cast the same way, so an integer key written into a text foreign key becomes its digits.
+Conditions are cast the same way, so `where({ quantity: "42" })` finds 42. A condition value that can’t be cast matches nothing, so `find("abc")` on an integer key throws `RecordNotFound`.
+
+- A condition reads a number as its digits for a `string` attribute, and a record built from that Relation starts with what it matched: `where({ label: 7 }).build()` has the label `"7"`.
+- A key copied from another record through an association is cast too, so an integer key written into a text foreign key becomes its digits.
 
 ::: tip Beyond Rails
-Rails casts too, but leniently: `"12abc"` becomes `12`, `1.7` becomes `1`, any other text is `true`, and `""` is `nil`. d1-record refuses each, so `isAdmin=no` from a form can’t save `true`, and an empty field can’t silently become `null`.
+Rails casts leniently: `"12abc"` becomes `12`, `1.7` becomes `1`, any other text is `true`, and `""` is `nil`. d1-record refuses each, so `isAdmin=no` from a form can’t save `true`, and an empty field can’t silently become `null`.
 :::
 
 ## Building records
 
-`build()` makes a new record without touching the database:
+Build a record without touching the database with `build`:
 
 <<< @/snippets/guide/models.ts#build{ts}
 
-- **Defaults** run at `build()`, so a key generated in code (a UUID, ULID or CUID) exists before the record is saved. That’s what lets records that point at each other be saved together, in one atomic batch.
-- **Unassigned attributes** read as `null`, and aren’t written when the record is inserted, so the column’s own database default applies. After the insert, the record loads what D1 actually stored, generated keys and defaults included.
-- **Unknown attributes** throw `UnknownAttribute`, and an `undefined` value throws `TypeError`. Use `null` to store NULL.
+- **Defaults** run at `build()`, so a key generated in code exists before the record is saved. That lets records that point at each other be saved together, in one atomic batch.
+- **Unassigned attributes** read as `null`, and aren’t written on insert, so the column’s database default applies. After the insert, the record loads what D1 stored.
+- **Unknown attributes** throw `UnknownAttribute`, and `undefined` throws `TypeError`. Use `null` to store NULL.
 
-`assign(attrs)` sets several attributes without saving. `update(attrs)` is `assign` then `save`.
+`assign(attrs)` sets several attributes without saving. `update(attrs)` assigns, then saves.
 
-Records also keep the database they were built or loaded through, for their later saves and association loads. A record made with `new User()` has none: build records with `User.build(…)`.
+::: warning TIP
+A record keeps the database it was built or loaded through, for its later saves and association loads. A record made with `new User()` has none, so build records with `User.build(…)`.
+:::
 
-### Picking attributes from input: `permit`
+### Permitting fields
 
-`Model.permit(input, ...names)` keeps only the named attributes of untrusted input, as Rails’ `params.permit`, and casts each value as assigning it would. Its result, `Partial<Pick<attributes, names>>`, goes straight into `build`, `create` or `update`. [Untrusted input](./untrusted-input) shows it in use.
+Keep only the attributes you name from untrusted input with `permit`. It casts each value as assigning would, and its result goes straight into `build`, `create` or `update`:
+
+```ts
+const permitted = Account.permit(await request.json(), "email", "handle");
+const account = await Account.create(permitted);
+```
+
+It reads three kinds of input:
 
 | Input             | Read                                                             |
 | ----------------- | ---------------------------------------------------------------- |
@@ -127,39 +174,52 @@ Records also keep the database they were built or loaded through, for their late
 | `FormData`        | each field; a repeated key takes its last value                  |
 | `URLSearchParams` | each parameter; a repeated key takes its last value              |
 
-- **Keys it isn’t given** are dropped, silently. A named attribute the input doesn’t have is left out, and a `null` is kept.
+- **Keys you don’t name** are dropped. A named attribute the input doesn’t have is left out, and a `null` is kept.
 - **A name that isn’t an attribute** is a compile error, and throws `UnknownAttribute`.
-- **`TypeError`** for a value that can’t be cast, a file from a form (no attribute stores one), and input that’s anything else: an array, a `Map`, `Headers`, a class instance, `null` or a string.
-- It’s a static, so subclasses and your app’s base class have it.
+- **`TypeError`** is thrown for a value that can’t be cast, a file from a form, and any other input: an array, a `Map`, `Headers`, a class instance, `null` or a string.
 
-## Timestamps
+[Untrusted input](./untrusted-input) shows `permit` in a Worker.
 
-Declare `createdAt` and `updatedAt` as `datetime` attributes and they’re managed for you: both are set when a record is created, and `updatedAt` whenever a save changes something. A save with nothing to change leaves `updatedAt` alone, and a timestamp you assign yourself is kept.
+## Using timestamps
 
-## Change tracking
+Declare `createdAt` and `updatedAt` as `datetime` attributes, and they’re managed for you. Both are set when a record is created, and `updatedAt` whenever a save changes something. A save with nothing to change leaves `updatedAt` alone, and a timestamp you assign yourself is kept.
+
+## Tracking changes
 
 Records know what’s changed since they were loaded or last saved, as in Rails:
 
 <<< @/snippets/guide/models.ts#dirty{ts}
 
 - `isChanged()`, `changed()`, `changedAttributes()` and `changes()` describe the unsaved changes.
-- `attributeWas`, `isAttributeChanged` and `willSaveChangeTo` look at one attribute’s unsaved change: use them in before-callbacks.
-- `savedChanges()`, `savedChangeTo`, `hasSavedChangeTo` and `attributeBeforeLastSave` look at the last successful save: use them in after-callbacks, where the record is already clean.
-- `restoreAttributes()` undoes unsaved changes, to all attributes or the ones you name.
+- `attributeWas`, `isAttributeChanged` and `willSaveChangeTo` look at one attribute’s unsaved change. Use them in before-callbacks.
+- `savedChanges()`, `savedChangeTo`, `hasSavedChangeTo` and `attributeBeforeLastSave` look at the last save. Use them in after-callbacks, where the record is already clean.
+- `restoreAttributes()` undoes unsaved changes, to every attribute or the ones you name.
 
-Changes are found by comparing stored values, so editing a `json` value or a `Date` in place counts as a change. An update writes only the attributes that changed, and a save with nothing changed sends nothing.
+An update writes only the attributes that changed, and a save with nothing changed sends nothing.
 
-## SQL fragments
+::: warning TIP
+Changes are found by comparing stored values, so editing a `json` value or a `Date` in place counts as a change.
+:::
 
-Anything the query methods can’t express is written as an `sql` tagged template, so values are always bound, never pasted into SQL. Fragments are SQL, so they name columns. `column("createdAt")` looks one up from its attribute, so a renamed column is changed in one place. A plain string is rejected.
+## Writing SQL fragments
 
-## Serialization
+For anything the query methods can’t express, write an `sql` tagged template. Values are always bound, and `column()` looks up an attribute’s column:
 
-`toJSON()` gives the record’s attributes with dates as ISO strings, so `Response.json(user)` just works. `attributes()` gives the same object with JavaScript values. Associations are never included, so a response never loads more than you asked for.
+```ts
+const recent = await User.where(sql`${column("createdAt")} > ${since}`).toArray();
+```
+
+A plain string is rejected.
+
+## Serializing records
+
+`toJSON()` gives a record’s attributes with dates as ISO strings, so `Response.json(user)` just works. `attributes()` gives the same object with JavaScript values:
 
 <<< @/snippets/guide/models.ts#json{ts}
 
-## Filtered attributes
+Associations are never included, so a response never loads more than you asked for.
+
+## Filtering attributes
 
 `onQuery` listeners and error messages show a filtered attribute’s values as `"[FILTERED]"`, as Rails’ logs do. D1 still gets the real values. [Logging](./logging#keep-secrets-out-of-the-logs) shows how to change the list.
 
@@ -169,12 +229,19 @@ Anything the query methods can’t express is written as an `sql` tagged templat
 - **Hidden in errors:** a cast error’s value, and a filtered primary key in `RecordNotFound`.
 - **Not hidden:** values inside `sql` fragments, which have no attribute; and `toJSON()` and `attributes()`, which are your data, not logs.
 
-## Inheritance and shared behavior
+## Sharing behavior
 
-A subclass (`class Admin extends User`) inherits a copy of its parent’s attributes, validations, callbacks, scopes and associations, and declaring more on the child never changes the parent. Single-table inheritance isn’t supported.
+A subclass, such as `class Admin extends User`, inherits a copy of its parent’s attributes, validations, callbacks, scopes and associations. Declaring more on the child never changes the parent. Single-table inheritance isn’t supported.
 
-To share methods, callbacks and scopes across every Model, write them on your app’s base class: see [Shared behavior](./shared-behavior).
+To share methods, callbacks and scopes across every Model, write them on your app’s base class. See [Shared behavior](./shared-behavior).
 
-## Checked when first used
+## Checking declarations
 
-The first time a Model is used (its first query, or `db.model(X)`), d1-record checks its declaration and throws `InvalidModel` if something’s wrong: no table name (an empty `tableName`, or a class with no name to infer one from), a `primaryKey` that isn’t an attribute, an attribute named like a record method (`save`, `attributes`, …), or a class field that hides an attribute (such as `email!: string` in the class body). After that, a Model’s declarations are fixed, so request code can never change them.
+The first time a Model is used, by its first query or `db.model(X)`, its declaration is checked. It throws `InvalidModel` for:
+
+- No table name: an empty `tableName`, or a class with no name to infer one from.
+- A `primaryKey` that isn’t an attribute.
+- An attribute named like a record method, such as `save` or `attributes`.
+- A class field that hides an attribute, such as `email!: string` in the class body.
+
+After that, a Model’s declarations are fixed, so request code can’t change them.

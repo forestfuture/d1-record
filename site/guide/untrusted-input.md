@@ -16,7 +16,7 @@ Only permit the fields you want from a request:
 `permit` can also read `FormData` or `URLSearchParams`.
 :::
 
-Permitted values are cast to their attribute’s types, so `"42"` becomes `42` for an integer. [Models](./models#assigned-values-are-cast) lists what each type accepts.
+Permitted values are cast to their attribute’s types, so `"42"` becomes `42` for an integer. [Models](./models#casting-assigned-values) lists what each type accepts.
 
 ::: tip Beyond Rails
 Rails’ `params.permit` only filters keys. d1-record’s also casts each value, and checks that each name is an attribute.
