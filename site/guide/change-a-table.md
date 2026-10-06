@@ -4,9 +4,9 @@ description: "Add, rename, and remove columns with migrations, deploy them in th
 
 # Schema changes
 
-A table changes through a new migration: Wrangler applies each one once, in order, and records it in the database. After each change, `src/db/schema.ts` is regenerated, so the Model’s attributes follow the table with no edits to the Model.
+Change a table with a new migration. Wrangler applies each migration once, in order. The schema is regenerated after each change, so a Model’s attributes follow its table.
 
-## Add a column
+## Adding a column
 
 Generate the migration, then apply it:
 
@@ -19,13 +19,13 @@ npx wrangler d1 migrations apply my-app-db --local
 ALTER TABLE users ADD COLUMN bio TEXT;
 ```
 
-`user.bio` is there straight away, typed as `string | null`. A required column needs a default, since the table’s existing rows need a value: `'role:string!=member'`.
+`user.bio` is there straight away, typed as `string | null`. A required column needs a default for the existing rows: `'role:string!=member'`.
 
-**Deploy in this order:** apply the migration with `--remote` first, then deploy the code that uses the column. Code deployed before the column existed keeps working, since d1-record only writes the attributes a Model has.
+To deploy, apply the migration with `--remote` first, then deploy the code that uses the column. The code already deployed keeps working, since it only writes the attributes it knows.
 
-## Rename a column
+## Renaming a column
 
-There’s no generator for a rename. Generate an empty migration and write it:
+Generate an empty migration, and write the rename:
 
 ```sh
 npx d1-record g migration RenameBioToAbout
@@ -35,11 +35,15 @@ npx d1-record g migration RenameBioToAbout
 ALTER TABLE users RENAME COLUMN bio TO about;
 ```
 
-The attribute follows the column: `bio` becomes `about`. Update the code that uses it, then apply the migration and deploy together, since the old code reads a column that’s gone. (Keeping the old attribute name for a renamed column is [#65](https://github.com/forestfuture/d1-record/issues/65).)
+The attribute follows the column, so `bio` becomes `about`. Update the code that uses it, then apply the migration and deploy together, since the old code reads a column that’s gone.
 
-## Remove a column
+::: warning TIP
+Keeping the old attribute name for a renamed column is planned in [#65](https://github.com/forestfuture/d1-record/issues/65).
+:::
 
-Work in the opposite order to adding one: the code stops using the column before the column goes.
+## Removing a column
+
+Remove a column in the opposite order to adding one, so the code stops using it before it goes:
 
 1. Ignore the column in the Model, remove the code that uses it, and deploy:
 
@@ -55,11 +59,11 @@ Work in the opposite order to adding one: the code stops using the column before
 
 3. Remove `{ bio: false }`, now that the schema no longer has the column.
 
-A `references` column is removed the same way (`RemoveUserFromPosts user:references`): its index is dropped first, then the column.
+Remove a `references` column the same way, with `RemoveUserFromPosts user:references`. Its index is dropped first, then the column.
 
-## Change a column’s type
+## Changing a column’s type
 
-SQLite can’t change a column’s type in place. Write a migration that builds the new table, copies the rows, and swaps the tables, as [SQLite describes](https://www.sqlite.org/lang_altertable.html#otheralter):
+SQLite can’t change a column’s type in place. Write a migration that builds a new table, copies the rows, and swaps the tables, as [SQLite describes](https://www.sqlite.org/lang_altertable.html#otheralter):
 
 ```sql [migrations/0005_make_price_cents_an_integer.sql]
 PRAGMA defer_foreign_keys = true;
@@ -76,6 +80,10 @@ DROP TABLE products;
 ALTER TABLE products_new RENAME TO products;
 ```
 
-`PRAGMA defer_foreign_keys = true` lets the swap happen while other tables point at this one, [as Cloudflare recommends](https://developers.cloudflare.com/d1/reference/migrations/). Recreate the table’s indexes after the swap. Then regenerate the schema with `npx d1-record schema`, since the generators didn’t write this migration.
+- **`PRAGMA defer_foreign_keys = true`** lets the swap happen while other tables point at this one, [as Cloudflare recommends](https://developers.cloudflare.com/d1/reference/migrations/).
+- **Indexes** are dropped with the old table, so recreate them after the swap.
+- **The schema** needs regenerating with `npx d1-record schema`, since you wrote this migration by hand.
 
+::: warning TIP
 Wrangler backs up the database before applying migrations to it.
+:::
