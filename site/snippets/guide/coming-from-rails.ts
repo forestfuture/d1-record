@@ -1,4 +1,4 @@
-import { ApplicationRecord } from "./models";
+import { ApplicationRecord } from "./application-record";
 
 // #region declare
 // Rails:

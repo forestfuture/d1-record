@@ -22,7 +22,11 @@ Subclasses share the table: setting another `tableName` throws `InvalidModel`. Y
 
 ### Overriding attributes
 
-The second argument changes how attributes are read and written. It’s keyed by attribute name, so an unknown name is a compile error:
+Generated attributes are usually all you need. When a column holds something its type doesn’t say, such as a boolean in a plain `INTEGER`, override the attribute with a second argument:
+
+<<< @/snippets/guide/overrides.ts#overrides{ts}
+
+Overrides are keyed by attribute name, so an unknown name is a compile error:
 
 | Override                     | Does                                                                                                  |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -59,6 +63,8 @@ A Model declared with `Model({...})` takes its table name from its class: snake_
 To use another name, set `static tableName`:
 
 ```ts
+import { Model } from "@forestfuture/d1-record";
+
 export class Account extends Model({ id: "string" }) {
   static tableName = "billing_accounts";
 }
@@ -206,6 +212,8 @@ Changes are found by comparing stored values, so editing a `json` value or a `Da
 For anything the query methods can’t express, write an `sql` tagged template. Values are always bound, and `column()` looks up an attribute’s column:
 
 ```ts
+import { column, sql } from "@forestfuture/d1-record";
+
 const recent = await User.where(sql`${column("createdAt")} > ${since}`).toArray();
 ```
 

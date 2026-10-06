@@ -1,5 +1,5 @@
-import { column, Model, modelFor, sql } from "@forestfuture/d1-record";
-import { tables } from "../db/schema";
+import { column, Model, sql } from "@forestfuture/d1-record";
+import { ApplicationRecord } from "./application-record";
 
 // #region declare
 export class User extends Model({
@@ -22,34 +22,9 @@ export class User extends Model({
 }
 // #endregion declare
 
-// #region shared
-// src/models/application-record.ts: what's written on Base, every Model has.
-class Base extends Model.Base {
-  label() {
-    return `${this.constructor.name} ${JSON.stringify(this.attributes())}`;
-  }
-
-  static {
-    this.beforeSave((record) => {
-      console.log(`Saving ${record.constructor.name}`); // before each Model's own callbacks
-    });
-  }
-}
-
-export const ApplicationRecord = modelFor(tables, Base);
-
-// Every Model built on it has label(), and Base's beforeSave.
-export class Account extends ApplicationRecord("billing_accounts") {}
-// #endregion shared
-
 // #region generated
-// src/models/product.ts (ApplicationRecord comes from ./application-record)
-export class Product extends ApplicationRecord("products", {
-  available: "boolean", // the column is a plain INTEGER: read it as a boolean
-  internalNotes: false, // ignored: never read or written
-  priceCents: { default: () => 100 }, // replaces the column's default, 0
-}) {
-  static inStock = this.scope((q) => q.where({ available: true }));
+export class Product extends ApplicationRecord("products") {
+  static newest = this.scope((q) => q.order({ createdAt: "desc" }));
 }
 // #endregion generated
 
