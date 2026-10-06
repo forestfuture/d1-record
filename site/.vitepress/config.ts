@@ -41,25 +41,11 @@ export default defineConfig({
     ],
     sidebar: [
       {
-        text: "Start here",
+        text: "Introduction",
         items: [
           { text: "Getting started", link: "/guide/getting-started" },
           { text: "Coming from Rails", link: "/guide/coming-from-rails" },
           { text: "Using with AI agents", link: "/guide/ai-agents" },
-        ],
-      },
-      {
-        text: "How-to guides",
-        items: [
-          { text: "Generate models and migrations", link: "/guide/generators" },
-          { text: "Change a table", link: "/guide/change-a-table" },
-          { text: "Adopt an existing database", link: "/guide/adopt-a-database" },
-          { text: "Share behavior across Models", link: "/guide/shared-behavior" },
-          { text: "Handle untrusted input", link: "/guide/untrusted-input" },
-          { text: "Log queries", link: "/guide/logging" },
-          { text: "Read your own writes", link: "/guide/read-your-own-writes" },
-          { text: "Test with Miniflare", link: "/guide/testing" },
-          { text: "Use several databases", link: "/guide/several-databases" },
         ],
       },
       {
@@ -75,6 +61,20 @@ export default defineConfig({
           { text: "Connecting", link: "/guide/connecting" },
           { text: "Command line", link: "/guide/command-line" },
           { text: "Errors", link: "/guide/errors" },
+        ],
+      },
+      {
+        text: "How-to guides",
+        items: [
+          { text: "Generate models and migrations", link: "/guide/generators" },
+          { text: "Change a table", link: "/guide/change-a-table" },
+          { text: "Adopt an existing database", link: "/guide/adopt-a-database" },
+          { text: "Share behavior across Models", link: "/guide/shared-behavior" },
+          { text: "Handle untrusted input", link: "/guide/untrusted-input" },
+          { text: "Log queries", link: "/guide/logging" },
+          { text: "Read your own writes", link: "/guide/read-your-own-writes" },
+          { text: "Test with Miniflare", link: "/guide/testing" },
+          { text: "Use several databases", link: "/guide/several-databases" },
         ],
       },
       {
