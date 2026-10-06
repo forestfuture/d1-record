@@ -57,9 +57,21 @@ export function markIgnoringColumns(base: object): void {
   ignoringColumns.add(base);
 }
 
-/** Whether a Model (or a class it extends) ignores some of its table's columns. */
+/** Each Model's answer to `ignoresColumns`, worked out once: every SELECT asks it. */
+const ignoring = new WeakMap<object, boolean>();
+
+/**
+ * Whether a Model (or a class it extends) ignores some of its table's columns. Remembered per
+ * Model: the mark is set when `ApplicationRecord("table", overrides)` makes the base class,
+ * before any Model extending it exists, so it can't change once asked.
+ */
 export function ignoresColumns(model: object): boolean {
-  return ancestors(model).some((each) => ignoringColumns.has(each));
+  let answer = ignoring.get(model);
+  if (answer === undefined) {
+    answer = ancestors(model).some((each) => ignoringColumns.has(each));
+    ignoring.set(model, answer);
+  }
+  return answer;
 }
 
 /** Resolves an attribute's spec into its type, column and default. */
