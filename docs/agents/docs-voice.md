@@ -11,7 +11,7 @@ The guide reads like Laravel's documentation: friendly, direct, and quick to sca
 - **Keep examples short.** One idea per line: name an intermediate value rather than nesting calls.
 - **Write to "you", in plain words.** Short sentences, one idea each.
 - **Present options as refinements:** "By default, …", "If you want …, …".
-- **Put side facts in a tip box** (`::: tip`), including differences from Rails, rather than in the main flow.
+- **Put side facts in a warning box** (`::: warning`, shown in amber) rather than in the main flow. Differences from Rails go in their own `::: tip Beyond Rails` (or `Compared with Rails`) box.
 - **Explain why only when a default would surprise.** The library's internals stay out of the guide.
 - **Cut** hedges, restatements, "Note that", sentences chained with colons, and summaries of what was just shown.
 
@@ -36,6 +36,6 @@ After:
 > const account = await Account.create(permitted);
 > ```
 >
-> ::: tip
+> ::: warning
 > `permit` can also read `FormData` or `URLSearchParams`.
 > :::

@@ -44,7 +44,7 @@ A change users will notice (new behavior, a fix, a breaking change, a deprecatio
 The guide is in `site/guide/` (a VitePress site, `vp run docs:dev`), and a change in behavior updates its page too.
 
 - **Pages are organized by [Diátaxis](https://diataxis.fr/)**: tutorial, how-to guides, reference and background. A new page, or a page's new structure, starts from the `documentation-writer` skill: decide its type, audience and goal, and agree the outline in the issue.
-- **Write in the guide's voice** ([docs-voice.md](docs/agents/docs-voice.md)): open with what the reader does, assume a competent developer, keep examples short, and put side facts in tip boxes.
+- **Write in the guide's voice** ([docs-voice.md](docs/agents/docs-voice.md)): open with what the reader does, assume a competent developer, keep examples short, and put side facts in warning boxes.
 - **Examples use d1-record's syntax**, even for features not built yet. Rails syntax appears only when comparing.
 - **Where d1-record goes beyond Rails or differs from it**, a tip box says so.
 - **Larger examples live in `site/snippets/`**, where `vp check` type-checks them against the library and `tests/integration/site-examples.test.ts` runs them against D1. An example written inline in a page imports what it uses.
