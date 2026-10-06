@@ -36,7 +36,7 @@ As in Rails, a Model queries by itself. Its binding (`static override binding = 
 | `throw :abort`                           | `throw abort("reason")`                           |
 | `to_json`                                | `toJSON()`                                        |
 
-Attributes, conditions and association keys all name **attributes**, in camelCase. Column names only appear inside `sql` fragments. Foreign keys are inferred by Rails’ conventions (`userId` for `User`‘s `has_many`), with `foreignKey` to override them.
+Attributes, conditions and association keys all name **attributes**, in camelCase. Column names only appear inside `sql` fragments. Foreign keys are inferred by Rails’ conventions (`userId` for `User`’s `has_many`), with `foreignKey` to override them.
 
 ## Declaring a Model
 
