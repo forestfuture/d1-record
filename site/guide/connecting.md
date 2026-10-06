@@ -4,56 +4,72 @@ description: "How a query finds its database: a Model's binding with no setup (U
 
 # Connections
 
-A query finds its D1 database in one of three ways. Most apps only ever use the first. To choose one for your situation, see [Which do I need?](./query-databases#which-do-i-need); for why there are three, see [Database resolution](./query-databases).
+A query finds its D1 database in one of three ways. Most apps only use the first.
 
-|                               | How                                                      | Use it for                                                                        |
-| ----------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| **1. The binding**            | `User.find(id)`, nothing to set up                       | Everyday queries                                                                  |
-| **2. The request’s database** | `withDatabase(connect(env.DB, …), fn)`, once per request | Read replicas with a Session, per-request `onQuery` logging, tests, and scripts , |
-| **3. An explicit database**   | `connect(env.DB).model(User).find(id)`                   | Code that passes its database around, or uses two at once                         |
+|                            | How                                                      | Use it for                                                                      |
+| -------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **The binding**            | `User.find(id)`, with nothing to set up                  | Everyday queries                                                                |
+| **The request’s database** | `withDatabase(connect(env.DB, …), fn)`, once per request | Read replicas with a Session, per-request `onQuery` logging, tests, and scripts |
+| **An explicit database**   | `connect(env.DB).model(User).find(id)`                   | Code that passes its database around, or uses two at once                       |
 
-## 1. The binding: no setup
+[Database resolution](./query-databases) explains why there are three, and [which one you need](./query-databases#which-do-i-need).
 
-Each Model names the D1 binding it queries. `d1-record schema` writes it into your app’s base class from your Wrangler config’s `d1_databases` (`static override binding = "DB"`), so every Model has it. Then a Model queries by itself, during any request:
+## Using the binding
+
+Each Model names the D1 binding it queries, so a Model queries by itself during any request:
 
 <<< @/snippets/guide/connecting.ts#binding{ts}
 
-Every Relation method is there on the Model: `find`, `findBy`, `where`, `order`, `first`, `count`, `pluck`, `create`, `insertAll`, `updateAll`, `deleteAll`, and the rest, plus the Model’s scopes (`User.active()`) and `User.all()` for the Relation itself. Records remember where they came from, so `user.save()` and `user.posts()` use the same database later. A record made with `new User()` has none, so anything that needs D1 throws `NoDatabase`: build records with `User.build(...)` (or `db.model(User).build(...)`) instead.
+`d1-record schema` sets the binding on your app’s base class from your Wrangler config’s `d1_databases`, as `static override binding = "DB"`.
 
-The binding is read with `import { env } from "cloudflare:workers"`, which needs no setup. Two things follow from where that works:
+Records remember their database, so `user.save()` and `user.posts()` use the same one later. Build records with `User.build(…)`: a record made with `new User()` has no database, and throws `NoDatabase` when it needs one.
 
-- **During a request only.** Workers don’t allow D1 calls at a module’s top level, outside a request, so a query there fails.
-- **Inside a Worker only.** Tests and scripts running in Node have no `env.DB`; give them their database with `withDatabase` ([Testing](./testing)).
-
-## 2. The request’s database: `withDatabase`
-
-Some things belong to **one request**: a D1 Session that reads its own writes, or `onQuery` logging tagged with the request’s ID. For those, open a database for the request and run its code inside `withDatabase`. Every query started from a Model inside it (and everything it awaits) uses that database instead of the bare binding. Usually it’s one line, in middleware or at the top of `fetch`.
-
-::: info Node.js compatibility
-`withDatabase` uses Workers’ `AsyncLocalStorage`. It’s on by default for compatibility dates from 2026-08-04; for an earlier date, add `"compatibility_flags": ["nodejs_compat"]` to your Wrangler config. Without it, `withDatabase` throws `NoDatabase` saying so. The rest of d1-record doesn’t need it.
+::: warning TIP
+The binding is only there during a request, inside a Worker. Tests and scripts that run in Node get their database from `withDatabase`. See [Testing](./testing).
 :::
 
-What a request’s database is for, step by step:
+## Using the request’s database
 
-- **[Read replicas](./read-your-own-writes):** a D1 Session per request, with read replicas.
+Some things belong to one request, such as a D1 Session that reads its own writes, or logging tagged with the request’s ID. Open a database for the request, and run its code inside `withDatabase`:
+
+```ts
+export default {
+  fetch(request, env) {
+    const db = connect(env.DB, { onQuery: log });
+    return withDatabase(db, () => app.fetch(request, env));
+  },
+};
+```
+
+Every query started from a Model inside it, and everything it awaits, uses that database instead of the binding.
+
+::: warning Node.js compatibility
+`withDatabase` uses Workers’ `AsyncLocalStorage`. It’s on by default for compatibility dates from 2026-08-04. For an earlier date, add `"compatibility_flags": ["nodejs_compat"]` to your Wrangler config, or `withDatabase` throws `NoDatabase`. The rest of d1-record doesn’t need it.
+:::
+
+These pages use a request’s database:
+
+- **[Read replicas](./read-your-own-writes):** a D1 Session per request.
 - **[Logging](./logging):** one request’s queries, tagged with its ID.
-- **[Testing](./testing):** giving Models a database outside a Worker.
+- **[Testing](./testing):** a database for Models outside a Worker.
 - **[Multiple databases](./several-databases):** `withDatabase([...])`, matched to each Model’s binding.
 
-## 3. An explicit database: `db.model`
+## Using an explicit database
 
-`connect(env.DB)` returns a database you hold yourself, and `db.model(User)` starts every query and new record from it, whatever `withDatabase` says:
+Start a query from a database you hold with `db.model`. It ignores `withDatabase`:
 
 <<< @/snippets/guide/connecting.ts#explicit{ts}
 
-If you’d rather name your Models once, `db.models({...})` gives you the same `db.model(...)` for each:
+To name your Models once, use `db.models`:
 
 <<< @/snippets/guide/connecting.ts#models{ts}
 
-`connect(env.DB, { session, onQuery })` takes the same options as above.
+`connect(env.DB, { session, onQuery })` takes the same options as a request’s database.
 
-## Batches
+## Batching writes
 
-`batch([...])` writes statements and records atomically, on the database they were built on: all of them, or none. Entries from a Model’s statics use the current database, the request’s or the binding’s; `db.batch([...])` does the same for an explicit database. Entries from two databases are refused (`IncompatibleRelation`). See [Bulk writes and batches](./batches).
+`batch` writes statements and records atomically, on the database they were built on:
 
 <<< @/snippets/guide/connecting.ts#batch{ts}
+
+Entries from a Model’s statics use the current database. `db.batch([...])` uses an explicit one. See [Bulk writes and batches](./batches).
