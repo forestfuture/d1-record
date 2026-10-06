@@ -1,0 +1,74 @@
+// A project as the commands see it, read from disk once: each D1 database's migrations and
+// generated files. Commands plan from a snapshot, so what they decide is testable without a
+// folder on disk (#95).
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { hasNestedMigrations, toolsWithFiles, type Tool } from "./origin.ts";
+import { migrationsOf, targetsOf, type ProjectOptions, type Target } from "./project.ts";
+import type { Migration } from "./schema.ts";
+
+/** One D1 database, and what's on disk for it. */
+export interface DatabaseSnapshot {
+  target: Target;
+  /** Its migrations, in the order Wrangler applies them; undefined with no migrations folder. */
+  migrations?: Migration[];
+  /** The schema file as it is, when there's one. */
+  schema?: string;
+  /** Whether a folder has the schema file's name, less `.ts` (`src/db/schema/`). */
+  schemaFolder: boolean;
+  /** Whether the app's base class file exists. */
+  base: boolean;
+  /** Whether its migrations are in folders, with no `migrations_pattern` to find them. */
+  nestedMigrations: boolean;
+  /** The tools (Drizzle, Prisma) whose files are in the project or above it. */
+  toolFiles: Tool[];
+}
+
+/** A project: its databases, and any other files a command asked for, by path. */
+export interface ProjectSnapshot {
+  cwd: string;
+  databases: DatabaseSnapshot[];
+  /** The contents of the other files asked for that exist. */
+  files: ReadonlyMap<string, string>;
+}
+
+/** A file's contents, or undefined when there's no such file. */
+function contents(path: string): string | undefined {
+  return existsSync(path) ? readFileSync(path, "utf8") : undefined;
+}
+
+/** What's on disk for one database. */
+export function databaseSnapshot(target: Target, toolFiles: Tool[]): DatabaseSnapshot {
+  const folder = target.out.replace(/\.ts$/, "");
+  return {
+    target,
+    migrations: existsSync(target.migrationsDir) ? migrationsOf(target) : undefined,
+    schema: contents(target.out),
+    schemaFolder: existsSync(folder) && statSync(folder).isDirectory(),
+    base: existsSync(target.base.path),
+    nestedMigrations: hasNestedMigrations(target),
+    toolFiles,
+  };
+}
+
+/**
+ * Reads a project's databases from its Wrangler config, and the other `files` a command needs
+ * (a Model file, for `g model`); or why it can't, such as a missing config.
+ */
+export function readProject(
+  cwd: string,
+  options: ProjectOptions,
+  files: readonly string[] = [],
+): ProjectSnapshot | string {
+  const targets = targetsOf(cwd, options);
+  if (typeof targets === "string") return targets;
+  const toolFiles = targets.length === 0 ? [] : toolsWithFiles(targets[0]!.configDir);
+  const read = files.flatMap((path) => {
+    const text = contents(path);
+    return text === undefined ? [] : [[path, text] as const];
+  });
+  return {
+    cwd,
+    databases: targets.map((target) => databaseSnapshot(target, toolFiles)),
+    files: new Map(read),
+  };
+}
