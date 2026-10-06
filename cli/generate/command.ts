@@ -1,16 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import { generateSchema, targetRefusal } from "../schema/command.ts";
-import {
-  importPath,
-  migrationsOf,
-  shown,
-  slashed,
-  targetsOf,
-  type Print,
-  type Target,
-} from "../schema/project.ts";
+import { apply, type FileToWrite, type Plan } from "../plan.ts";
+import { schemaRefusal, schemaWrites } from "../schema/command.ts";
+import { importPath, shown, slashed, type Print, type Target } from "../schema/project.ts";
 import { schemaOf, type GeneratedTable, type Migration } from "../schema/schema.ts";
+import { readProject, type DatabaseSnapshot, type ProjectSnapshot } from "../schema/snapshot.ts";
 import { parseColumns, type ColumnArg } from "./columns.ts";
 import { migrationFileName, migrationFor, type KeyType } from "./migration.ts";
 import { appendModel, modelFileName, modelSource, type ModelToWrite } from "./model-file.ts";
@@ -38,9 +31,13 @@ export interface GenerateOptions {
   out?: string;
 }
 
+/** The tables a set of migrations makes, and the notes their columns raise. */
+type SchemaTables = { tables: GeneratedTable[]; notes: string[] };
+
 /** What's being generated, once the database and the columns are known. */
 interface Request {
-  cwd: string;
+  project: ProjectSnapshot;
+  db: DatabaseSnapshot;
   target: Target;
   options: GenerateOptions;
   columns: readonly ColumnArg[];
@@ -48,15 +45,16 @@ interface Request {
   className?: string;
 }
 
-/** A file the generator will write: where, and what. */
-interface FileToWrite {
-  path: string;
-  source: string;
-}
-
 /** Everything a generator writes, once it's all been checked; or why nothing will be. */
-type Plan =
-  | { ok: true; target: Target; migration: FileToWrite; model?: FileToWrite; notes: string[] }
+type Checked =
+  | {
+      ok: true;
+      request: Request;
+      migration: FileToWrite;
+      model?: FileToWrite;
+      schema: SchemaTables;
+      notes: string[];
+    }
   | Refusal;
 
 /**
@@ -76,22 +74,23 @@ function listed(names: readonly string[]): string {
 }
 
 /** The database to generate for: the only one, or the one `--database` names. */
-function targetFor(cwd: string, options: GenerateOptions): Target | string {
-  const { config, models, out } = options;
-  const targets = targetsOf(cwd, { config, models, out });
-  if (typeof targets === "string") return targets;
-  const bindings = listed(targets.map((target) => target.database.binding));
+function databaseFor(
+  project: ProjectSnapshot,
+  options: GenerateOptions,
+): DatabaseSnapshot | string {
+  const { databases } = project;
+  const bindings = listed(databases.map((db) => db.target.database.binding));
   if (options.database !== undefined) {
-    const target = targets.find((each) => each.database.binding === options.database);
-    return target ?? `No D1 database is bound as ${options.database}; this config has ${bindings}`;
+    const db = databases.find((each) => each.target.database.binding === options.database);
+    return db ?? `No D1 database is bound as ${options.database}; this config has ${bindings}`;
   }
-  return targets.length === 1
-    ? targets[0]!
+  return databases.length === 1
+    ? databases[0]!
     : `This config has several D1 databases; choose one with --database (${bindings})`;
 }
 
 /** Wrangler only applies migrations its `migrations_pattern` matches, so refuse any other file. */
-function patternRefusal({ cwd, target }: Request, path: string): string | undefined {
+function patternRefusal({ project, target }: Request, path: string): string | undefined {
   const pattern = target.database.migrationsPattern;
   const relativePath = slashed(relative(target.configDir, path));
   if (
@@ -101,7 +100,7 @@ function patternRefusal({ cwd, target }: Request, path: string): string | undefi
     return undefined;
   }
   return (
-    `${shown(cwd, path)} wouldn't match migrations_pattern (${pattern}), so Wrangler wouldn't ` +
+    `${shown(project.cwd, path)} wouldn't match migrations_pattern (${pattern}), so Wrangler wouldn't ` +
     "apply it; write the migration with your migration tool instead"
   );
 }
@@ -116,13 +115,19 @@ function keyTypes(tables: readonly GeneratedTable[]): Map<string, KeyType> {
   );
 }
 
+/** Where `g model` writes a Model: its own file, or the one file Models are appended to. */
+function modelPathOf(cwd: string, options: GenerateOptions, className: string): string {
+  const models = options.models ?? "src/models";
+  return resolve(cwd, models, models.endsWith(".ts") ? "" : modelFileName(className));
+}
+
 /** The Model `g model` writes, and where (its own file, or appended to one); or why it can't. */
 function modelFile(request: Request): FileToWrite | Refusal {
-  const { cwd, target, options, columns } = request;
+  const { project, target, options, columns } = request;
+  const { cwd } = project;
   const className = request.className!;
-  const models = options.models ?? "src/models";
-  const separateFiles = !models.endsWith(".ts");
-  const path = resolve(cwd, models, separateFiles ? modelFileName(className) : "");
+  const separateFiles = !(options.models ?? "src/models").endsWith(".ts");
+  const path = modelPathOf(cwd, options, className);
   const model: ModelToWrite = {
     className,
     table: tableize(className),
@@ -134,8 +139,8 @@ function modelFile(request: Request): FileToWrite | Refusal {
       importPath: importPath(dirname(path), target.base.path),
     },
   };
-  if (!existsSync(path)) return { path, source: modelSource(model, { separateFiles }) };
-  const existing = readFileSync(path, "utf8");
+  const existing = project.files.get(path);
+  if (existing === undefined) return { path, source: modelSource(model, { separateFiles }) };
   if (separateFiles) return refused(`${shown(cwd, path)} already exists`);
   if (new RegExp(`^export class ${className}\\b`, "m").test(existing)) {
     return refused(`${shown(cwd, path)} already has ${className}`);
@@ -160,7 +165,9 @@ function referenceNotes(
 function checkedMigration(
   request: Request,
   existing: readonly Migration[],
-): { ok: true; migration: FileToWrite; notes: string[] } | Refusal {
+):
+  | { ok: true; migration: FileToWrite; after: Migration[]; schema: SchemaTables; notes: string[] }
+  | Refusal {
   const { target, options, columns } = request;
   const migrationsTable = target.database.migrationsTable;
   const current = schemaOf(existing, { migrationsTable });
@@ -174,25 +181,27 @@ function checkedMigration(
   );
   const result = migrationFor(stem, columns, keys, options);
   if (!result.ok) return refused(result.error);
-  const after = schemaOf([...existing, { name, sql: result.sql }], { migrationsTable });
-  if (!after.ok) return refused(...after.errors);
+  const after = [...existing, { name, sql: result.sql }];
+  const checked = schemaOf(after, { migrationsTable });
+  if (!checked.ok) return refused(...checked.errors);
   const migration = { path: join(target.migrationsDir, name), source: result.sql };
-  return { ok: true, migration, notes: referenceNotes(columns, keys) };
+  return { ok: true, migration, after, schema: checked, notes: referenceNotes(columns, keys) };
 }
 
 /** The request: the database, the columns and the names, each checked. */
 function requestFor(
-  cwd: string,
+  project: ProjectSnapshot,
   options: GenerateOptions,
 ): (Request & { notes: string[] }) | Refusal {
-  const target = targetFor(cwd, options);
-  if (typeof target === "string") return { ok: false, errors: [target], wroteNothing: false };
-  // Checked first, so a generator never writes a migration whose schema it then can't write.
-  const refusal = targetRefusal(cwd, target);
+  const db = databaseFor(project, options);
+  if (typeof db === "string") return { ok: false, errors: [db], wroteNothing: false };
+  // Checked first, so a generator never plans a migration whose schema it then can't write.
+  const refusal = schemaRefusal(project.cwd, db);
   if (refusal !== undefined) return refused(refusal);
   const parsed = parseColumns(options.columns);
   if (!parsed.ok) return refused(...parsed.errors);
-  const request = { cwd, target, options, columns: parsed.columns, notes: [] as string[] };
+  const { target } = db;
+  const request = { project, db, target, options, columns: parsed.columns, notes: [] as string[] };
   if (options.kind === "migration") {
     const error = migrationNameError(options.name);
     return error === undefined ? request : refused(error);
@@ -204,10 +213,10 @@ function requestFor(
 }
 
 /** Checks everything a generator would write, before anything is written. */
-function planFor(cwd: string, options: GenerateOptions): Plan {
-  const request = requestFor(cwd, options);
+function checkedFor(project: ProjectSnapshot, options: GenerateOptions): Checked {
+  const request = requestFor(project, options);
   if ("ok" in request) return request;
-  const existing = existsSync(request.target.migrationsDir) ? migrationsOf(request.target) : [];
+  const existing = request.db.migrations ?? [];
   const model = request.className === undefined ? undefined : modelFile(request);
   if (model !== undefined && "ok" in model) return model;
   const checked = checkedMigration(request, existing);
@@ -215,14 +224,37 @@ function planFor(cwd: string, options: GenerateOptions): Plan {
   const refusal = patternRefusal(request, checked.migration.path);
   if (refusal !== undefined) return { ok: false, errors: [refusal], wroteNothing: false };
   const notes = [...request.notes, ...checked.notes];
-  return { ok: true, target: request.target, migration: checked.migration, model, notes };
+  // The schema is planned from the migrations as they'll be, the new one included.
+  request.db = { ...request.db, migrations: checked.after };
+  const { migration, schema } = checked;
+  return { ok: true, request, migration, model, schema, notes };
 }
 
-/** Writes a file, making its folder, and says so. */
-function write(cwd: string, file: FileToWrite, print: Print): void {
-  mkdirSync(dirname(file.path), { recursive: true });
-  writeFileSync(file.path, file.source);
-  print(`Wrote ${shown(cwd, file.path)}`);
+/**
+ * What `g model` or `g migration` writes and prints for a project: a migration (and a Model),
+ * checked against the existing migrations, then the schema regenerated with it.
+ */
+export function planGenerate(project: ProjectSnapshot, options: GenerateOptions): Plan {
+  const checked = checkedFor(project, options);
+  if (!checked.ok) {
+    const lines = checked.wroteNothing ? [...checked.errors, "Wrote nothing"] : checked.errors;
+    return { files: [], lines, code: 1 };
+  }
+  const { request, migration, model, notes } = checked;
+  const { cwd } = project;
+  const own = model === undefined ? [migration] : [migration, model];
+  const schema = schemaWrites(cwd, request.db, checked.schema);
+  const database = request.target.database.databaseName ?? request.target.database.binding;
+  return {
+    files: [...own, ...schema.files],
+    lines: [
+      ...own.map((file) => `Wrote ${shown(cwd, file.path)}`),
+      ...schema.lines,
+      ...notes.map((note) => `Note: ${note}`),
+      `Next: npx wrangler d1 migrations apply ${database} --local`,
+    ],
+    code: 0,
+  };
 }
 
 /**
@@ -231,18 +263,13 @@ function write(cwd: string, file: FileToWrite, print: Print): void {
  */
 export function runGenerate(options: GenerateOptions, print: Print): number {
   const cwd = resolve(options.cwd ?? process.cwd());
-  const plan = planFor(cwd, options);
-  if (!plan.ok) {
-    for (const error of plan.errors) print(error);
-    if (plan.wroteNothing) print("Wrote nothing");
+  const { config, models, out } = options;
+  const model = options.kind === "model" ? modelName(options.name) : undefined;
+  const files = model?.ok === true ? [modelPathOf(cwd, options, model.className)] : [];
+  const project = readProject(cwd, { config, models, out }, files);
+  if (typeof project === "string") {
+    print(project);
     return 1;
   }
-  const { target, migration, model, notes } = plan;
-  write(cwd, migration, print);
-  if (model !== undefined) write(cwd, model, print);
-  const code = generateSchema(cwd, target, false, print);
-  for (const note of notes) print(`Note: ${note}`);
-  const database = target.database.databaseName ?? target.database.binding;
-  print(`Next: npx wrangler d1 migrations apply ${database} --local`);
-  return code;
+  return apply(planGenerate(project, options), print);
 }

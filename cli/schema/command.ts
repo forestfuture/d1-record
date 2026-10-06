@@ -1,23 +1,11 @@
 import { existsSync, watch } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { apply, combined, type Plan } from "../plan.ts";
-import {
-  importPath,
-  shown,
-  targetsOf,
-  type Print,
-  type ProjectOptions,
-  type Target,
-} from "./project.ts";
+import { importPath, shown, targetsOf, type Print, type ProjectOptions } from "./project.ts";
 import { fingerprintIn, fingerprintOf, renderBase, renderSchema } from "./render.ts";
-import { layoutNote, migrationTool, originNotes, toolsWithFiles } from "./origin.ts";
+import { layoutNote, migrationTool, originNotes } from "./origin.ts";
 import { schemaOf, type GeneratedTable } from "./schema.ts";
-import {
-  databaseSnapshot,
-  readProject,
-  type DatabaseSnapshot,
-  type ProjectSnapshot,
-} from "./snapshot.ts";
+import { readProject, type DatabaseSnapshot, type ProjectSnapshot } from "./snapshot.ts";
 
 export interface SchemaOptions extends ProjectOptions {
   /** The project's folder; the current one by default. */
@@ -120,17 +108,6 @@ function planDatabase(cwd: string, db: DatabaseSnapshot, check: boolean): Plan {
   const result = schemaOf(db.migrations, { migrationsTable });
   if (!result.ok) return failed(result.errors, cwd, db);
   return check ? checked(cwd, db, result.tables) : schemaWrites(cwd, db, result);
-}
-
-/** One database's schema, read from disk and written. Generate's until it plans too (#95). */
-export function generateSchema(cwd: string, target: Target, check: boolean, print: Print): number {
-  const db = databaseSnapshot(target, toolsWithFiles(target.configDir));
-  return apply(planDatabase(cwd, db, check), print);
-}
-
-/** Why a target's schema can't be written. Generate's until it plans too (#95). */
-export function targetRefusal(cwd: string, target: Target): string | undefined {
-  return schemaRefusal(cwd, databaseSnapshot(target, []));
 }
 
 /** What `d1-record schema` writes and prints for a project (or, with `check`, only prints). */

@@ -37,7 +37,7 @@ function contents(path: string): string | undefined {
 }
 
 /** What's on disk for one database. */
-export function databaseSnapshot(target: Target, toolFiles: Tool[]): DatabaseSnapshot {
+function databaseSnapshot(target: Target, toolFiles: Tool[]): DatabaseSnapshot {
   const folder = target.out.replace(/\.ts$/, "");
   return {
     target,
