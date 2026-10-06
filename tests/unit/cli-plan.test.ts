@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
+import { planGenerate } from "../../cli/generate/command.ts";
 import { planSchema } from "../../cli/schema/command.ts";
 import type { DatabaseSnapshot, ProjectSnapshot } from "../../cli/schema/snapshot.ts";
 
@@ -77,5 +78,53 @@ describe("planSchema: what d1-record schema writes and prints, from a snapshot",
     const plan = planSchema(project({ toolFiles: ["Drizzle"] }), false);
 
     expect(plan.lines.at(-1)).toMatch(/^Note: these migrations look like Drizzle's\./);
+  });
+});
+
+describe("planGenerate: what g model and g migration write and print, from a snapshot", () => {
+  const product = { kind: "model", name: "Product", columns: ["name:string!"] } as const;
+
+  test("g model writes its migration, its Model, the schema, and the base class", () => {
+    const plan = planGenerate(project(), product);
+
+    expect(plan.files.map((file) => file.path)).toEqual([
+      `${cwd}/migrations/0002_create_products.sql`,
+      `${cwd}/src/models/product.ts`,
+      `${cwd}/src/db/schema.ts`,
+      `${cwd}/src/models/application-record.ts`,
+    ]);
+    expect(plan.lines).toEqual([
+      "Wrote migrations/0002_create_products.sql",
+      "Wrote src/models/product.ts",
+      "Wrote src/db/schema.ts (2 tables) from migrations/",
+      "Wrote src/models/application-record.ts",
+      "Next: npx wrangler d1 migrations apply my-app-db --local",
+    ]);
+    expect(plan.code).toBe(0);
+  });
+
+  test("a Model file that already exists is refused, and nothing is written", () => {
+    const existing = {
+      ...project(),
+      files: new Map([[`${cwd}/src/models/product.ts`, "// mine\n"]]),
+    };
+    const plan = planGenerate(existing, product);
+
+    expect(plan).toEqual({
+      files: [],
+      lines: ["src/models/product.ts already exists", "Wrote nothing"],
+      code: 1,
+    });
+  });
+
+  test("a schema file d1-record didn't write is refused before anything else", () => {
+    const plan = planGenerate(project({ schema: "export {};\n" }), {
+      ...product,
+      columns: ["x:nope"],
+    });
+
+    expect(plan.files).toEqual([]);
+    expect(plan.lines[0]).toMatch(/^src\/db\/schema.ts wasn't written by d1-record schema/);
+    expect(plan.lines.at(-1)).toBe("Wrote nothing");
   });
 });
