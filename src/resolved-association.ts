@@ -1,5 +1,5 @@
 // associations.ts imports this module too; both uses are at call time, never at load.
-import { prepareModel, type AssociationDefinition } from "./associations.ts";
+import { readyModel, type AssociationDefinition } from "./associations.ts";
 import type { Executor } from "./executor.ts";
 import { associationOf, type ModelBase, type ModelClass } from "./model.ts";
 import { state } from "./record-state.ts";
@@ -49,7 +49,7 @@ export class ResolvedAssociation {
     this.definition = associationOf(owner, name);
     this.target = this.definition.target();
     // A Model reached only through an association is still verified and gets its accessors.
-    prepareModel(this.target);
+    readyModel(this.target);
     ({ ownerAttribute: this.ownerAttribute, targetAttribute: this.targetAttribute } = linkOf(
       this.definition,
       owner,
@@ -115,8 +115,7 @@ const resolved = new WeakMap<ModelClass, Map<string, ResolvedAssociation>>();
 
 /** The association `name` of `owner`, resolved once. */
 export function resolveAssociation(owner: ModelClass, name: string): ResolvedAssociation {
-  // Checked on every use, so replacing the owner's associations after first use still throws.
-  prepareModel(owner);
+  readyModel(owner);
   const perModel = resolved.get(owner) ?? new Map<string, ResolvedAssociation>();
   resolved.set(owner, perModel);
   let association = perModel.get(name);

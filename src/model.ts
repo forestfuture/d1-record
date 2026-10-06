@@ -24,7 +24,12 @@ import { associationsOf, declarationIn, newRecord, probeOf } from "./association
 import { RecordStatement } from "./record-statement.ts";
 import { inferTableNames, rejectAbstract, requireTableName } from "./table-names.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
-import type { AssociationDefinition, BelongsTo, HasOne } from "./associations.ts";
+import {
+  readyModel,
+  type AssociationDefinition,
+  type BelongsTo,
+  type HasOne,
+} from "./associations.ts";
 import type { Relation, Scope, Scoped } from "./relation.ts";
 import { currentRelation } from "./current-database.ts";
 import { scopeBodies, scopeName, useModelBase } from "./scoped-relation.ts";
@@ -623,8 +628,9 @@ for (const name of [...relationMethods, "find", "pluck"]) {
   });
 }
 
-// ModelBase and its statics are all defined now: scopes stop at it, and can't take its names.
-useModelBase(ModelBase);
+// ModelBase and its statics are all defined now: scopes stop at it, and can't take its names;
+// and relationFor makes each Model ready with readyModel (hoisted, so it exists already).
+useModelBase(ModelBase, readyModel);
 
 /** A class to build Models on: `Model.Base`, or an app's class extending it (`ApplicationRecord`'s). */
 export type BaseClass = abstract new () => ModelBase;

@@ -1,4 +1,3 @@
-import { prepareModel } from "./associations.ts";
 import { InvalidModel } from "./errors.ts";
 import type { Executor } from "./executor.ts";
 import { ancestors } from "./ancestors.ts";
@@ -16,23 +15,38 @@ const relationClasses = new WeakMap<
 /** Each scope static, to its body: what `Product.newest()` and `relation.newest()` run. */
 export const scopeBodies = new WeakMap<object, Scope<ModelBase>>();
 
-/**
- * The library's base class: where a Model's scopes stop, and whose statics no scope may be named
- * like. Handed over by model.ts once ModelBase is fully defined, so this module never imports it
- * (model.ts imports this one).
- */
+// Module-level, but not request state (ADR-0003): what this module needs from model.ts,
+// handed over once it has loaded, so this module imports neither it nor associations.ts.
+
+/** The library's base class: where a Model's scopes stop, and whose statics no scope may take. */
 let base: { root: object; statics: ReadonlySet<string> } | undefined;
 
+/** Makes a Model ready on first use (verified, its accessors installed, its declarations sealed). */
+let ready: ((model: ModelClass) => void) | undefined;
+
 /** @internal Called once by model.ts, after ModelBase and its statics are defined. */
-export function useModelBase(root: object): void {
+export function useModelBase(root: object, readyModel: (model: ModelClass) => void): void {
   base = { root, statics: new Set(Object.getOwnPropertyNames(root)) };
+  ready = readyModel;
+}
+
+/** What model.ts handed over; missing means a load order bug, not a user's. */
+function setUp(): {
+  root: object;
+  statics: ReadonlySet<string>;
+  ready: (model: ModelClass) => void;
+} {
+  if (base === undefined || ready === undefined) {
+    throw new Error("d1-record: model.ts must load before a Model is used");
+  }
+  return { ...base, ready };
 }
 
 /** A Model's scopes, by name: its statics made with `this.scope(…)`, the nearest class's first. */
 function scopesOf(model: ModelClass): Map<string, object> {
   const scopes = new Map<string, object>();
   for (const each of ancestors(model)) {
-    if (each === base?.root) break;
+    if (each === setUp().root) break;
     for (const name of Object.getOwnPropertyNames(each)) {
       const value: unknown = (each as unknown as Record<string, unknown>)[name];
       if (typeof value === "function" && scopeBodies.has(value) && !scopes.has(name)) {
@@ -56,7 +70,7 @@ export function scopeName(model: ModelClass, scoped: object): string {
 function requireScopeName(model: ModelClass, name: string): void {
   // "then" would make Relations awaitable.
   // A Model's own statics are taken too, besides the Relation methods it mirrors.
-  if (name === "then" || name in Relation.prototype || base?.statics.has(name)) {
+  if (name === "then" || name in Relation.prototype || setUp().statics.has(name)) {
     throw new InvalidModel(
       `${model.name} declares a scope "${name}", which is the name of a Relation method or a Model static; rename the scope`,
     );
@@ -105,7 +119,7 @@ export function relationFor<C extends ModelClass>(
   model: C,
 ): Scoped<InstanceType<C>, ScopesOf<C>> {
   // Every query starts here, so the Model is made ready here, however it was reached.
-  prepareModel(model);
+  setUp().ready(model);
   const Class = relationClassFor(model) as unknown as new (
     ...args: RelationArgs<InstanceType<C>>
   ) => Scoped<InstanceType<C>, ScopesOf<C>>;
