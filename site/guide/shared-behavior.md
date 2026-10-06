@@ -10,7 +10,7 @@ Every Model extends your app’s `ApplicationRecord`, so whatever you write on i
 
 Write them on `Base`, in `src/models/application-record.ts`:
 
-<<< @/snippets/guide/models.ts#shared{ts}
+<<< @/snippets/guide/application-record.ts#shared{ts}
 
 Each is shared like this:
 
