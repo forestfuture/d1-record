@@ -14,7 +14,7 @@ Open the request’s database with a Session, run the request inside `withDataba
 
 <<< @/snippets/guide/connecting.ts#session{ts}
 
-Every query started from a Model inside it, and everything it awaits, goes through the Session: reads, writes, uniqueness checks, association loads, preloads and batches. Records loaded there keep using it.
+Every query started from a Model inside it, and everything it awaits, goes through the Session: reads, writes, uniqueness checks, association loads, preloads, and batches. Records loaded there keep using it.
 
 `withDatabase` needs Node.js compatibility, which is on by default for compatibility dates from 2026-08-04; for an earlier date, add `"compatibility_flags": ["nodejs_compat"]`.
 

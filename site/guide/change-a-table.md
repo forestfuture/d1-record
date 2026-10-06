@@ -1,5 +1,5 @@
 ---
-description: "Add, rename and remove columns with migrations, deploy them in the right order, and change a column's type by rebuilding the table."
+description: "Add, rename, and remove columns with migrations, deploy them in the right order, and change a column's type by rebuilding the table."
 ---
 
 # Schema changes

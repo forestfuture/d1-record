@@ -1,10 +1,10 @@
 ---
-description: "save, create, update and destroy, their OrThrow variants, what each returns or throws, lifecycle state and reload."
+description: "save, create, update, and destroy, their OrThrow variants, what each returns or throws, lifecycle state, and reload."
 ---
 
 # Persistence
 
-Records are saved, updated and destroyed with `save`, `create`, `update` and `destroy`, as in Rails.
+Records are saved, updated, and destroyed with `save`, `create`, `update`, and `destroy`, as in Rails.
 
 ## Saving records
 
@@ -57,7 +57,7 @@ Destroy a record with `destroy`:
 
 <<< @/snippets/guide/persistence.ts#destroy{ts}
 
-It runs the destroy callbacks and the associations’ [`dependent` options](./associations#destroying-dependent-records), then deletes the row. A destroyed record’s attributes stay readable, but setting one, or calling `save`, `update`, `destroy` or `reload`, throws `RecordDestroyed`.
+It runs the destroy callbacks and the associations’ [`dependent` options](./associations#destroying-dependent-records), then deletes the row. A destroyed record’s attributes stay readable, but setting one, or calling `save`, `update`, `destroy`, or `reload`, throws `RecordDestroyed`.
 
 ::: warning TIP
 If another request already deleted the row, `save` and `destroy` still succeed.
@@ -81,4 +81,4 @@ It throws `RecordNotFound` if the row is gone, or the record was never saved.
 
 ## Writing many rows
 
-To insert, update or delete many rows at once, without validations and callbacks, use `insertAll`, `upsertAll`, `updateAll` and `deleteAll`. See [Bulk writes and batches](./batches).
+To insert, update, or delete many rows at once, without validations and callbacks, use `insertAll`, `upsertAll`, `updateAll`, and `deleteAll`. See [Bulk writes and batches](./batches).

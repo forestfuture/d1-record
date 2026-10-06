@@ -17,7 +17,7 @@ Coding agents follow d1-record’s conventions best when its guide is at hand an
 
 ## Install the agent skill
 
-d1-record has an [agent skill](https://github.com/forestfuture/d1-record/blob/main/SKILL.md): its rules, the shapes of a Model and a Worker, and the mistakes to watch for, with pointers into the guide. Agents that support skills (Claude Code, Cursor, Codex and [others](https://skills.sh)) load it when they work on d1-record code.
+d1-record has an [agent skill](https://github.com/forestfuture/d1-record/blob/main/SKILL.md): its rules, the shapes of a Model and a Worker, and the mistakes to watch for, with pointers into the guide. Agents that support skills (Claude Code, Cursor, Codex, and [others](https://skills.sh)) load it when they work on d1-record code.
 
 ```sh
 npx skills add forestfuture/d1-record

@@ -12,16 +12,16 @@ For step-by-step use, see [Generators](./generators).
 
 Applies your migrations, in order, to an in-memory SQLite database, reads each table’s columns, and writes them as `src/db/schema.ts`.
 
-| Option               |                                                                                                   |
-| -------------------- | ------------------------------------------------------------------------------------------------- |
-| `--check`            | Write nothing: fail (exit 1) if the schema file is out of date. For CI.                           |
-| `--watch`            | Regenerate whenever a migration changes.                                                          |
-| `--out <file>`       | Write the schema here instead. With several databases, a folder for one file each.                |
-| `--migrations <dir>` | Read migrations from here instead of the Wrangler config’s folder (one database only).            |
-| `--models <dir>`     | Where `application-record.ts` goes (`src/models/` by default).                                    |
-| `--config <file>`    | Use this Wrangler config instead of finding `wrangler.jsonc`, `wrangler.json` or `wrangler.toml`. |
+| Option               |                                                                                                    |
+| -------------------- | -------------------------------------------------------------------------------------------------- |
+| `--check`            | Write nothing: fail (exit 1) if the schema file is out of date. For CI.                            |
+| `--watch`            | Regenerate whenever a migration changes.                                                           |
+| `--out <file>`       | Write the schema here instead. With several databases, a folder for one file each.                 |
+| `--migrations <dir>` | Read migrations from here instead of the Wrangler config’s folder (one database only).             |
+| `--models <dir>`     | Where `application-record.ts` goes (`src/models/` by default).                                     |
+| `--config <file>`    | Use this Wrangler config instead of finding `wrangler.jsonc`, `wrangler.json`, or `wrangler.toml`. |
 
-**What it reads:** each entry of the Wrangler config’s `d1_databases`, with its `binding`, `migrations_dir` (default `migrations/`), `migrations_pattern` (for migrations in folders) and `migrations_table` (left out of the schema). Migrations apply in file-name order, as Wrangler applies them.
+**What it reads:** each entry of the Wrangler config’s `d1_databases`, with its `binding`, `migrations_dir` (default `migrations/`), `migrations_pattern` (for migrations in folders), and `migrations_table` (left out of the schema). Migrations apply in file-name order, as Wrangler applies them.
 
 **What it writes:**
 
@@ -110,7 +110,7 @@ npx d1-record g migration <Name> [columns] [options]
 | `references`           | `<name>_id`, typed like the referenced table’s key, `REFERENCES <plural> (id)`, and indexed |
 
 - **`!`** makes the column `NOT NULL`. A `references` column is `NOT NULL` in a new table, and can be `NULL` when added to an existing one, as in Rails.
-- **`=value`** is a literal default, for `string`, `integer`, `real` and `boolean` columns (`=draft`, `=0`, `=1.5`, `=true`).
+- **`=value`** is a literal default, for `string`, `integer`, `real`, and `boolean` columns (`=draft`, `=0`, `=1.5`, `=true`).
 - **`:unique`** adds a unique index, and **`:index`** an index, named as Rails names them (`index_products_on_sku`).
 - **Names** can be written `priceCents` or `price_cents`; columns are always snake_case. Names SQLite reserves (`order`, `group`) are quoted.
 
@@ -127,7 +127,7 @@ npx d1-record g migration <Name> [columns] [options]
 | `Remove<Anything>From<Table>` | `DROP INDEX IF EXISTS` for each column’s generated index, then `DROP COLUMN` |
 | anything else                 | An empty migration, to write yourself                                        |
 
-A name can be written `AddSkuToProducts` or `add_sku_to_products`, and the table in it is made plural (`CreateWidget` creates `widgets`). A Model’s name is made singular, with a note (`g model line_items` writes `LineItem`). Names are letters, digits and `_`, starting with a letter.
+A name can be written `AddSkuToProducts` or `add_sku_to_products`, and the table in it is made plural (`CreateWidget` creates `widgets`). A Model’s name is made singular, with a note (`g model line_items` writes `LineItem`). Names are letters, digits, and `_`, starting with a letter.
 
 **File names** are numbered as Wrangler numbers them: the highest number in the migrations folder plus one, in four digits (`0008_add_sku_to_products.sql`).
 

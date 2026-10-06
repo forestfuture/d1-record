@@ -4,7 +4,7 @@ description: "What's different from Rails' Active Record: queries start from the
 
 # Coming from Rails
 
-Most of d1-record will feel familiar: Models, validations, callbacks, associations, scopes and dirty tracking all follow Active Record, down to the default error messages. This page covers what’s different, and why.
+Most of d1-record will feel familiar: Models, validations, callbacks, associations, scopes, and dirty tracking all follow Active Record, down to the default error messages. This page covers what’s different, and why.
 
 ## Queries start from the Model
 
@@ -36,7 +36,7 @@ As in Rails, a Model queries by itself. Its binding (`static override binding = 
 | `throw :abort`                           | `throw abort("reason")`                           |
 | `to_json`                                | `toJSON()`                                        |
 
-Attributes, conditions and association keys all name **attributes**, in camelCase. Column names only appear inside `sql` fragments. Foreign keys are inferred by Rails’ conventions (`userId` for `User`’s `has_many`), with `foreignKey` to override them.
+Attributes, conditions, and association keys all name **attributes**, in camelCase. Column names only appear inside `sql` fragments. Foreign keys are inferred by Rails’ conventions (`userId` for `User`’s `has_many`), with `foreignKey` to override them.
 
 ## Declaring a Model
 
@@ -63,4 +63,4 @@ The generators follow `rails generate model` and `rails generate migration`, wit
 
 ## Not (yet) supported
 
-Default scopes, `has_many :through`, polymorphic associations, single-table inheritance, counter caches, `destroy_async` and i18n of error messages.
+Default scopes, `has_many :through`, polymorphic associations, single-table inheritance, counter caches, `destroy_async`, and i18n of error messages.

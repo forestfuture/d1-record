@@ -6,7 +6,7 @@ description: "Reference for bulk writes (insert, insertAll, upsert, updateAll, d
 
 ## Bulk writes
 
-A Relation can write many rows at once, in a single SQL statement: `insert`, `insertAll`, `upsert`, `upsertAll`, `updateAll` and `deleteAll`. They skip validations and callbacks, as Rails’ `update_all` and `insert_all` do, and they run when you call them:
+A Relation can write many rows at once, in a single SQL statement: `insert`, `insertAll`, `upsert`, `upsertAll`, `updateAll`, and `deleteAll`. They skip validations and callbacks, as Rails’ `update_all` and `insert_all` do, and they run when you call them:
 
 <<< @/snippets/guide/batches.ts#statements{ts}
 
@@ -26,7 +26,7 @@ A Relation can write many rows at once, in a single SQL statement: `insert`, `in
 
 D1 can’t keep a transaction open across `await`s, so there’s no `transaction(async (tx) => …)` block. Instead, `batch([...])` sends a prepared list of writes that are all written, or none of them. It runs on the database its entries were built on: the current one, for entries from a Model’s statics and their records, or an explicit one’s, as `db.batch([...])` does. Entries from two databases are refused (`IncompatibleRelation`).
 
-Each bulk write has a `to…` form that prepares it for a batch instead of running it: `toInsert`, `toInsertAll`, `toUpsert`, `toUpsertAll`, `toUpdateAll` and `toDeleteAll`. Each one returns a **statement**, sent only with its batch. This is the same pattern as records: `save()` runs, and `toSave()` hands the save to a batch.
+Each bulk write has a `to…` form that prepares it for a batch instead of running it: `toInsert`, `toInsertAll`, `toUpsert`, `toUpsertAll`, `toUpdateAll`, and `toDeleteAll`. Each one returns a **statement**, sent only with its batch. This is the same pattern as records: `save()` runs, and `toSave()` hands the save to a batch.
 
 <<< @/snippets/guide/batches.ts#batch{ts}
 
@@ -40,7 +40,7 @@ It resolves to each entry’s result, in order. Rows in one batch can point at e
 
 When the batch runs:
 
-1. Each record, in order, is validated and runs its before-callbacks, just as `save()` or `destroy()` would. The first that’s invalid or aborts throws (`RecordInvalid`, `RecordNotSaved` or `RecordNotDestroyed`) and nothing is sent.
+1. Each record, in order, is validated and runs its before-callbacks, just as `save()` or `destroy()` would. The first that’s invalid or aborts throws (`RecordInvalid`, `RecordNotSaved`, or `RecordNotDestroyed`) and nothing is sent.
 2. Every write goes out as one atomic batch. If D1 refuses it, with a constraint error, nothing is written and every record keeps its unsaved state.
 3. Each record takes its saved state, then its after-callbacks run.
 

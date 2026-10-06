@@ -1,16 +1,16 @@
 ---
-description: "How a query finds its database: a Model's binding with no setup (User.find(id)), withDatabase for a request's Session or onQuery, or an explicit connect(env.DB). Read replicas, bookmarks, batches and watching queries."
+description: "How a query finds its database: a Model's binding with no setup (User.find(id)), withDatabase for a request's Session or onQuery, or an explicit connect(env.DB). Read replicas, bookmarks, batches, and watching queries."
 ---
 
 # Connections
 
 A query finds its D1 database in one of three ways. Most apps only ever use the first. To choose one for your situation, see [Which do I need?](./query-databases#which-do-i-need); for why there are three, see [Database resolution](./query-databases).
 
-|                               | How                                                      | Use it for                                                                     |
-| ----------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| **1. The binding**            | `User.find(id)`, nothing to set up                       | Everyday queries                                                               |
-| **2. The request’s database** | `withDatabase(connect(env.DB, …), fn)`, once per request | Read replicas with a Session, per-request `onQuery` logging, tests and scripts |
-| **3. An explicit database**   | `connect(env.DB).model(User).find(id)`                   | Code that passes its database around, or uses two at once                      |
+|                               | How                                                      | Use it for                                                                        |
+| ----------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| **1. The binding**            | `User.find(id)`, nothing to set up                       | Everyday queries                                                                  |
+| **2. The request’s database** | `withDatabase(connect(env.DB, …), fn)`, once per request | Read replicas with a Session, per-request `onQuery` logging, tests, and scripts , |
+| **3. An explicit database**   | `connect(env.DB).model(User).find(id)`                   | Code that passes its database around, or uses two at once                         |
 
 ## 1. The binding: no setup
 
@@ -18,7 +18,7 @@ Each Model names the D1 binding it queries, as Rails’ `connects_to` does. `d1-
 
 <<< @/snippets/guide/connecting.ts#binding{ts}
 
-Every Relation method is there on the Model: `find`, `findBy`, `where`, `order`, `first`, `count`, `pluck`, `create`, `insertAll`, `updateAll`, `deleteAll` and the rest, plus the Model’s scopes (`User.active()`) and `User.all()` for the Relation itself. Records remember where they came from, so `user.save()` and `user.posts()` use the same database later. A record made with `new User()` has none, so anything that needs D1 throws `NoDatabase`: build records with `User.build(...)` (or `db.model(User).build(...)`) instead.
+Every Relation method is there on the Model: `find`, `findBy`, `where`, `order`, `first`, `count`, `pluck`, `create`, `insertAll`, `updateAll`, `deleteAll`, and the rest, plus the Model’s scopes (`User.active()`) and `User.all()` for the Relation itself. Records remember where they came from, so `user.save()` and `user.posts()` use the same database later. A record made with `new User()` has none, so anything that needs D1 throws `NoDatabase`: build records with `User.build(...)` (or `db.model(User).build(...)`) instead.
 
 The binding is read with `import { env } from "cloudflare:workers"`, which needs no setup. Two things follow from where that works:
 

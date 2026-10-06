@@ -1,10 +1,10 @@
 ---
-description: "belongsTo, hasMany and hasOne: inferred foreign keys, reading, preloading with includes, autosave, writing through associations, scopes and dependent strategies."
+description: "belongsTo, hasMany, and hasOne: inferred foreign keys, reading, preloading with includes, autosave, writing through associations, scopes, and dependent strategies."
 ---
 
 # Associations
 
-Associations connect Models: `belongsTo`, `hasMany` and `hasOne`, as in Rails.
+Associations connect Models: `belongsTo`, `hasMany`, and `hasOne`, as in Rails.
 
 ## Defining associations
 
@@ -40,7 +40,7 @@ Use `hasMany` on the Model the other table’s foreign key points at. A user has
 - **`record.posts()`** is a Relation of the associated records, with every Relation method and the target’s scopes.
 - **`record.posts().build(attrs)`** builds a record with the owner’s key, saved with the owner. See [Autosaving](#autosaving).
 - **`record.posts().create(attrs)`** and **`createOrThrow(attrs)`** save a new record at once. The owner must already be saved.
-- **`insert`, `updateAll` and `deleteAll`** write to the owner’s records. See [Writing many rows](#writing-many-rows).
+- **`insert`, `updateAll`, and `deleteAll`** write to the owner’s records. See [Writing many rows](#writing-many-rows).
 
 | Option       | Does                                                                                                             |
 | ------------ | ---------------------------------------------------------------------------------------------------------------- |
@@ -132,7 +132,7 @@ Narrow or order an association’s records with `scope`, like Rails’ `has_many
 The scope applies to reads and preloads alike, and records created through the association take its equality values. `q` is the target’s Relation, with its attributes and scopes.
 
 ::: warning TIP
-A scope that uses `limit`, `offset` or `distinct` can’t be preloaded, since it would apply to every owner’s records together. `includes` throws `IncompatibleRelation`.
+A scope that uses `limit`, `offset`, or `distinct` can’t be preloaded, since it would apply to every owner’s records together. `includes` throws `IncompatibleRelation`.
 :::
 
 ::: details A Model’s association to itself, scoped with its own scopes
@@ -162,7 +162,7 @@ Without a strategy, it’s up to the database. If the table declares the foreign
 
 ## Writing many rows
 
-`insert`, `updateAll` and `deleteAll` work through a `hasMany`, scoped to the owner’s records, and so do their `to…` forms for a batch:
+`insert`, `updateAll`, and `deleteAll` work through a `hasMany`, scoped to the owner’s records, and so do their `to…` forms for a batch:
 
 <<< @/snippets/guide/associations.ts#statements{ts}
 

@@ -1,5 +1,5 @@
 ---
-description: "Every error d1-record throws: lifecycle, usage and constraint errors, and when each is raised."
+description: "Every error d1-record throws: lifecycle, usage, and constraint errors, and when each is raised."
 ---
 
 # Errors
@@ -10,7 +10,7 @@ Every error d1-record throws extends `D1RecordError`, so one `instanceof` check 
 
 | Error                   | When                                                                     |
 | ----------------------- | ------------------------------------------------------------------------ |
-| `RecordNotFound`        | `find`, `findByOrThrow` or `reload` found nothing                        |
+| `RecordNotFound`        | `find`, `findByOrThrow`, or `reload` found nothing                       |
 | `RecordInvalid`         | an `OrThrow` save found the record invalid; the record is on `.record`   |
 | `RecordNotSaved`        | a save was aborted by a callback, or needs an owner that isn’t saved     |
 | `RecordNotDestroyed`    | a destroy was aborted, or restricted by `restrictWithError`              |
@@ -41,10 +41,10 @@ A name from a request, such as `?include=` or a JSON key, can only ever be one o
 
 `IncompatibleRelation` means you’ve combined things that can’t produce a correct query or write:
 
-- **`or()`, `merge()` or a scope** with a Relation of another Model, or one that resolves to another database when it runs. `or()` also needs both sides to have the same `select`, order, `limit`, `offset`, `distinct` and `includes`, since only their conditions can be combined.
-- **`batch([...])`, `db.batch([...])`, `save()` or `destroy()`** with statements or records from two databases, such as a `belongsTo` target built on another `connect()`. A write runs on one database. The message names where each database came from.
+- **`or()`, `merge()`, or a scope** with a Relation of another Model, or one that resolves to another database when it runs. `or()` also needs both sides to have the same `select`, order, `limit`, `offset`, `distinct`, and `includes`, since only their conditions can be combined.
+- **`batch([...])`, `db.batch([...])`, `save()`, or `destroy()`** with statements or records from two databases, such as a `belongsTo` target built on another `connect()`. A write runs on one database. The message names where each database came from.
 - **`includes`** with `select(...).distinct()`. Preloading needs the keys, and adding them would undo the `distinct`.
-- **Preloading an association scope** that uses `limit`, `offset` or `distinct`. One preload query serves every owner, so the limit would apply to all of their records together.
+- **Preloading an association scope** that uses `limit`, `offset`, or `distinct`. One preload query serves every owner, so the limit would apply to all of their records together.
 - **`updateAll` or `deleteAll`** after `distinct()`: they reject with it, and `toUpdateAll`/`toDeleteAll` throw it.
 
 ## Constraint errors
