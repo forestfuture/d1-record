@@ -27,7 +27,7 @@ import { RecordState, state, type Changes } from "./record-state.ts";
 import type { AssociationDefinition, BelongsTo, HasOne } from "./associations.ts";
 import type { Relation, Scope, Scoped } from "./relation.ts";
 import { currentRelation } from "./current-database.ts";
-import { scopeBodies, scopeName } from "./scoped-relation.ts";
+import { scopeBodies, scopeName, useModelBase } from "./scoped-relation.ts";
 import type { Validation, ValidationOptions } from "./validations.ts";
 
 /** Type-only brand on a scope static (`static newest = this.scope(…)`); never set at runtime. */
@@ -622,6 +622,9 @@ for (const name of [...relationMethods, "find", "pluck"]) {
     configurable: true,
   });
 }
+
+// ModelBase and its statics are all defined now: scopes stop at it, and can't take its names.
+useModelBase(ModelBase);
 
 /** A class to build Models on: `Model.Base`, or an app's class extending it (`ApplicationRecord`'s). */
 export type BaseClass = abstract new () => ModelBase;

@@ -2,7 +2,7 @@ import { prepareModel } from "./associations.ts";
 import { InvalidModel } from "./errors.ts";
 import type { Executor } from "./executor.ts";
 import { ancestors } from "./ancestors.ts";
-import { ModelBase, type ModelClass, type ScopesOf } from "./model.ts";
+import type { ModelBase, ModelClass, ScopesOf } from "./model.ts";
 import { applyScope, Relation, type RelationArgs, type Scope, type Scoped } from "./relation.ts";
 
 type RelationClass = new (...args: RelationArgs<ModelBase>) => Relation<ModelBase>;
@@ -16,11 +16,23 @@ const relationClasses = new WeakMap<
 /** Each scope static, to its body: what `Product.newest()` and `relation.newest()` run. */
 export const scopeBodies = new WeakMap<object, Scope<ModelBase>>();
 
+/**
+ * The library's base class: where a Model's scopes stop, and whose statics no scope may be named
+ * like. Handed over by model.ts once ModelBase is fully defined, so this module never imports it
+ * (model.ts imports this one).
+ */
+let base: { root: object; statics: ReadonlySet<string> } | undefined;
+
+/** @internal Called once by model.ts, after ModelBase and its statics are defined. */
+export function useModelBase(root: object): void {
+  base = { root, statics: new Set(Object.getOwnPropertyNames(root)) };
+}
+
 /** A Model's scopes, by name: its statics made with `this.scope(…)`, the nearest class's first. */
 function scopesOf(model: ModelClass): Map<string, object> {
   const scopes = new Map<string, object>();
   for (const each of ancestors(model)) {
-    if (each === ModelBase) break;
+    if (each === base?.root) break;
     for (const name of Object.getOwnPropertyNames(each)) {
       const value: unknown = (each as unknown as Record<string, unknown>)[name];
       if (typeof value === "function" && scopeBodies.has(value) && !scopes.has(name)) {
@@ -40,15 +52,11 @@ export function scopeName(model: ModelClass, scoped: object): string {
   return name;
 }
 
-// Names a scope can't take: a Model's own statics, besides the Relation methods it mirrors.
-// Read on first use: model.ts imports this module, so ModelBase isn't defined while it loads.
-let modelStatics: ReadonlySet<string> | undefined;
-
 /** Rejects a scope named like a Relation method or a Model static, or "then". */
 function requireScopeName(model: ModelClass, name: string): void {
   // "then" would make Relations awaitable.
-  modelStatics ??= new Set(Object.getOwnPropertyNames(ModelBase));
-  if (name === "then" || name in Relation.prototype || modelStatics.has(name)) {
+  // A Model's own statics are taken too, besides the Relation methods it mirrors.
+  if (name === "then" || name in Relation.prototype || base?.statics.has(name)) {
     throw new InvalidModel(
       `${model.name} declares a scope "${name}", which is the name of a Relation method or a Model static; rename the scope`,
     );
