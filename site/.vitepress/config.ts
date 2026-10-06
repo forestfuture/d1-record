@@ -1,5 +1,4 @@
 import { defineConfig } from "vitepress";
-import { copyOrDownloadAsMarkdownButtons } from "vitepress-plugin-llms";
 import { examples, site } from "./examples.ts";
 import { llms, tidyLlmsTxt } from "./llms.ts";
 
@@ -10,11 +9,6 @@ export default defineConfig({
   // Examples are expanded with their imports first, so the llms plugin reads them expanded too.
   vite: { plugins: [examples(site), llms()] },
   buildEnd: ({ outDir }) => tidyLlmsTxt(outDir),
-  markdown: {
-    config(md) {
-      md.use(copyOrDownloadAsMarkdownButtons); // "Copy page" on every page
-    },
-  },
   title: "d1-record",
   description: "A Rails-inspired Active Record for Cloudflare Workers and D1.",
   // Served at docs.forestfuture.dev/d1-record: built into dist/d1-record so the Worker's
@@ -49,7 +43,7 @@ export default defineConfig({
         ],
       },
       {
-        text: "Reference",
+        text: "Basics",
         items: [
           { text: "Models", link: "/guide/models" },
           { text: "Querying", link: "/guide/querying" },
