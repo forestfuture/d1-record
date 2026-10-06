@@ -8,12 +8,12 @@ Coding agents follow d1-record's conventions best when its guide is at hand and 
 
 ## Give your agent the docs
 
-| Resource                                                                 | What it is                                                                                                                                                                         |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`llms.txt`](https://docs.forestfuture.dev/d1-record/llms.txt)           | An index of the guide, each page linked as Markdown, following [llmstxt.org](https://llmstxt.org). Start here when an agent can fetch pages.                                       |
-| [`llms-full.txt`](https://docs.forestfuture.dev/d1-record/llms-full.txt) | The whole guide in one Markdown file, about 20K tokens.                                                                                                                            |
-| Any page + `.md`                                                         | Every page as Markdown: [`/guide/associations.md`](https://docs.forestfuture.dev/d1-record/guide/associations.md). The **Copy page** button at the top of each page copies it too. |
-| `node_modules/@forestfuture/d1-record/llms-full.txt`                     | The same guide, shipped in the package. It matches the version you've installed, and an agent can read it without fetching anything.                                               |
+| Resource                                                                 | What it is                                                                                                                                   |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`llms.txt`](https://docs.forestfuture.dev/d1-record/llms.txt)           | An index of the guide, each page linked as Markdown, following [llmstxt.org](https://llmstxt.org). Start here when an agent can fetch pages. |
+| [`llms-full.txt`](https://docs.forestfuture.dev/d1-record/llms-full.txt) | The whole guide in one Markdown file, about 20K tokens.                                                                                      |
+| Any page + `.md`                                                         | Every page as Markdown: [`/guide/associations.md`](https://docs.forestfuture.dev/d1-record/guide/associations.md).                           |
+| `node_modules/@forestfuture/d1-record/llms-full.txt`                     | The same guide, shipped in the package. It matches the version you've installed, and an agent can read it without fetching anything.         |
 
 ## Install the agent skill
 
