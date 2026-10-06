@@ -71,7 +71,11 @@ A foreign key names an attribute, such as `authorId`, rather than a column. By d
 If the name doesn’t follow the convention, pass `foreignKey`:
 
 ```ts
-author = belongsTo(User, { foreignKey: "userId" });
+import { belongsTo } from "@forestfuture/d1-record";
+
+export class Post extends ApplicationRecord("posts") {
+  author = belongsTo(User, { foreignKey: "userId" });
+}
 ```
 
 Keys are checked the first time a Model is used, and a missing attribute throws `InvalidModel`.
