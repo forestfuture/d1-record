@@ -4,13 +4,13 @@ description: "Test Models and your Worker against a real D1 database with Vitest
 
 # Testing
 
-[Miniflare](https://developers.cloudflare.com/workers/testing/miniflare/) runs Cloudflare’s runtime, D1 included, inside Node. Tests can then use a real D1 database, with your migrations applied, instead of a fake. d1-record’s own test suite works this way.
+Test your Models and Worker against a real D1 database, with your migrations applied. [Miniflare](https://developers.cloudflare.com/workers/testing/miniflare/) runs Cloudflare’s runtime, D1 included, inside Node:
 
 ```sh
 npm install --save-dev vitest miniflare@4
 ```
 
-## Create a database with your tables
+## Creating a test database
 
 Start Miniflare with a D1 database, and apply your migrations to it, in order:
 
@@ -35,9 +35,9 @@ export async function testDatabase() {
 }
 ```
 
-## Give your Models the database
+## Testing Models
 
-Outside a Worker there’s no `env.DB`, so a query from a Model needs to be told its database. Run the test’s code inside `withDatabase`:
+Outside a Worker there’s no binding, so run the test’s code inside `withDatabase`:
 
 ```ts [test/users.test.ts]
 import { connect, withDatabase } from "@forestfuture/d1-record";
@@ -57,11 +57,11 @@ test("emails are saved in lowercase", async () => {
 });
 ```
 
-Outside a Worker, the database given to `withDatabase` serves every Model, whatever binding its base class names. Code that takes a database explicitly can be given one directly instead: `connect(database.binding).model(User)`. `withDatabase` needs no setup here: Node has `AsyncLocalStorage` built in.
+Outside a Worker, the database given to `withDatabase` serves every Model, whatever binding its base class names. For code that takes a database explicitly, pass it one: `connect(database.binding).model(User)`.
 
-## Test your Worker’s handler
+## Testing your Worker
 
-Your Worker’s `fetch` handler queries through each Model’s binding, which only exists inside a Worker. Call it inside `withDatabase` too, and its queries use the test’s database:
+Call your Worker’s `fetch` handler inside `withDatabase` too, and its queries use the test’s database:
 
 ```ts [test/worker.test.ts]
 import { connect, withDatabase } from "@forestfuture/d1-record";
@@ -81,4 +81,8 @@ test("GET lists users", async () => {
 });
 ```
 
-Each test file gets its own database this way. To run tests inside the Workers runtime itself, see Cloudflare’s [Vitest integration](https://developers.cloudflare.com/workers/testing/vitest-integration/).
+Each test file gets its own database.
+
+::: warning TIP
+To run tests inside the Workers runtime itself, use Cloudflare’s [Vitest integration](https://developers.cloudflare.com/workers/testing/vitest-integration/).
+:::
