@@ -4,7 +4,7 @@ description: "belongsTo, hasMany, and hasOne: inferred foreign keys, reading, pr
 
 # Associations
 
-Associations connect Models: `belongsTo`, `hasMany`, and `hasOne`, as in Rails.
+Associations connect Models: `belongsTo`, `hasMany`, and `hasOne`.
 
 ## Defining associations
 
@@ -63,7 +63,7 @@ Use `hasOne` like `hasMany`, when there’s at most one record. A user has one p
 
 ## Naming foreign keys
 
-A foreign key names an attribute, such as `authorId`, rather than a column. By default, it follows Rails’ convention:
+A foreign key names an attribute, such as `authorId`, rather than a column. By default, it’s inferred:
 
 - **`belongsTo`** uses the association’s name + `Id`. `author = belongsTo(Author)` uses the record’s own `authorId`.
 - **`hasMany` and `hasOne`** use the Model’s class name + `Id`, on the target. `Author`’s associations use `authorId`, `BlogPost`’s use `blogPostId`, and `APIKey`’s use `apiKeyId`.
@@ -82,7 +82,7 @@ Wrangler keeps class names by default, even when minifying. If a bundler renames
 
 ## Caching loaded records
 
-A loaded association is cached on the record, as in Rails. Reading `author()` again doesn’t query, and neither does `articles().toArray()` once the collection is loaded:
+A loaded association is cached on the record. Reading `author()` again doesn’t query, and neither does `articles().toArray()` once the collection is loaded:
 
 <<< @/snippets/guide/associations.ts#read{ts}
 
@@ -111,7 +111,7 @@ Records built or created through a `hasMany` get the owner’s key:
 
 ### Autosaving
 
-A record built through an association is saved with its owner, as in Rails. Build a whole graph, then save the owner:
+A record built through an association is saved with its owner. Build a whole graph, then save the owner:
 
 <<< @/snippets/guide/associations.ts#autosave{ts}
 
@@ -125,7 +125,7 @@ When D1 generates the key, with an `INTEGER PRIMARY KEY`, the key doesn’t exis
 
 ## Scoping associations
 
-Narrow or order an association’s records with `scope`, like Rails’ `has_many :posts, -> { … }`:
+Narrow or order an association’s records with `scope`:
 
 <<< @/snippets/guide/associations.ts#scoped{ts}
 
@@ -166,7 +166,7 @@ Without a strategy, it’s up to the database. If the table declares the foreign
 
 <<< @/snippets/guide/associations.ts#statements{ts}
 
-As in Rails, `deleteAll()` on the association follows its `dependent` strategy: it deletes the records for `"destroy"` or `"deleteAll"`, and otherwise sets their foreign keys to `NULL`. See [Bulk writes and batches](./batches).
+`deleteAll()` on the association follows its `dependent` strategy: it deletes the records for `"destroy"` or `"deleteAll"`, and otherwise sets their foreign keys to `NULL`. See [Bulk writes and batches](./batches).
 
 ## Not built yet
 

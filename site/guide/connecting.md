@@ -14,7 +14,7 @@ A query finds its D1 database in one of three ways. Most apps only ever use the 
 
 ## 1. The binding: no setup
 
-Each Model names the D1 binding it queries, as Rails’ `connects_to` does. `d1-record schema` writes it into your app’s base class from your Wrangler config’s `d1_databases` (`static override binding = "DB"`), so every Model has it. Then a Model queries by itself, during any request:
+Each Model names the D1 binding it queries. `d1-record schema` writes it into your app’s base class from your Wrangler config’s `d1_databases` (`static override binding = "DB"`), so every Model has it. Then a Model queries by itself, during any request:
 
 <<< @/snippets/guide/connecting.ts#binding{ts}
 

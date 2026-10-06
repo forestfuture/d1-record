@@ -18,7 +18,7 @@ Only permit the fields you want from a request:
 
 Permitted values are cast to their attribute’s types, so `"42"` becomes `42` for an integer. [Models](./models#casting-assigned-values) lists what each type accepts.
 
-::: tip Beyond Rails
+::: warning Beyond Rails
 Rails’ `params.permit` only filters keys. d1-record’s also casts each value, and checks that each name is an attribute.
 :::
 

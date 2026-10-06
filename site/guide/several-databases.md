@@ -30,7 +30,7 @@ Give each database its own `migrations_dir`, since Wrangler applies a folder’s
 npx d1-record schema
 ```
 
-With several databases, it writes one of each per binding, named as Rails names a second database’s base class:
+With several databases, it writes one of each per binding:
 
 | Binding | Schema           | Base class                                   |
 | ------- | ---------------- | -------------------------------------------- |

@@ -12,10 +12,11 @@ The guide reads like Laravel's documentation: friendly, direct, and quick to sca
 - **Keep examples short.** One idea per line: name an intermediate value rather than nesting calls.
 - **Write to "you", in plain words.** Short sentences, one idea each.
 - **Present options as refinements:** "By default, …", "If you want …, …".
-- **Put side facts in an amber box titled TIP** (`::: warning TIP`) rather than in the main flow. A real warning gets a `::: warning` box with its own title ("Uniqueness isn't a guarantee"). Differences from Rails go in their own `::: tip Beyond Rails` (or `Compared with Rails`) box.
+- **Put side facts in an amber box titled TIP** (`::: warning TIP`) rather than in the main flow. A real warning gets a `::: warning` box with its own title ("Uniqueness isn't a guarantee"). Anything about Rails goes in its own amber box, `::: warning Compared with Rails` (or `Beyond Rails` for what d1-record adds).
+- **Keep Rails out of instructional copy.** Many readers don’t know Rails, so “as in Rails” and “like Rails’ `save!`” go in a Compared with Rails box, or nowhere. The Coming from Rails page and the Background pages can compare freely.
 - **Explain why only when a default would surprise.** The library's internals stay out of the guide.
 - **Use the Oxford comma** in every list of three or more: “narrows, orders, or pages”, “`save`, `update`, and `destroy`”.
-- **Use smart quotes and apostrophes in prose** (“ ” ‘ ’), never straight ones (" '), in the guide, the README and the sidebar. Code, inline code, URLs and front matter keep straight quotes, since there they're syntax.
+- **Use smart quotes and apostrophes in prose** (“ ” ‘ ’), never straight ones (" '), in the guide, the README, and the sidebar. Code, inline code, URLs, and front matter keep straight quotes, since there they're syntax.
 - **Cut** hedges, restatements, "Note that", sentences chained with colons, and summaries of what was just shown.
 
 ## Before and after

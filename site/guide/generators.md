@@ -4,7 +4,7 @@ description: "Add a table with its Model, change a table, write columns, referen
 
 # Generators
 
-d1-record’s generators write a table’s migration (and its Model) from a short description, as Rails’ `rails generate` does, then regenerate `src/db/schema.ts`. Every option and convention is in the [Command line](./command-line) reference.
+d1-record’s generators write a table’s migration (and its Model) from a short description, then regenerate `src/db/schema.ts`. Every option and convention is in the [Command line](./command-line) reference.
 
 ## Add a table and its Model
 
@@ -43,13 +43,13 @@ Each column is `name:type`, with optional marks after it:
 
 Quote columns that contain `!` in bash or zsh. The [column syntax](./command-line#column-syntax) lists every type.
 
-::: tip `=value` defaults are d1-record’s own
+::: warning Beyond Rails
 Rails’ generators have no syntax for a column’s default. d1-record adds `=value` (`=0`, `=true`, `=draft`), because SQLite can’t add a required (`NOT NULL`) column to an existing table without one.
 :::
 
 ## Change a table
 
-`g migration` reads what to do from the migration’s name, as Rails does:
+`g migration` reads what to do from the migration’s name:
 
 ```sh
 npx d1-record g migration AddSlugToPosts slug:string:unique   # ADD COLUMN, with a unique index
@@ -67,7 +67,7 @@ A required column added without a default is refused, before anything is written
 
 ## Reference the same table
 
-`g model Category parent:references` points `parent_id` at a `parents` table and writes `parent = belongsTo(Parent)`, as Rails’ generator does: it can’t know the parent is another category. Edit both files before applying the migration:
+`g model Category parent:references` points `parent_id` at a `parents` table and writes `parent = belongsTo(Parent)`, since it can’t know the parent is another category. Edit both files before applying the migration:
 
 1. In the migration, point the column at `categories`, and make it optional, since top-level categories have no parent:
 
@@ -79,7 +79,7 @@ A required column added without a default is refused, before anything is written
 
 <<< @/snippets/guide/generators.ts#self-reference{ts}
 
-::: tip Compared with Rails
+::: warning Compared with Rails
 Rails writes `belongs_to :parent, class_name: "Category", optional: true`. Here the association takes the class itself, so there’s no `class_name`, and whether a parent is required comes from the column: `parentId` can be `null` because the migration allows it.
 :::
 
