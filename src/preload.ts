@@ -1,7 +1,6 @@
 import { castAs } from "./attribute-values.ts";
-import { prepareModel } from "./associations.ts";
 import type { Executor } from "./executor.ts";
-import { associationOf, type ModelBase, type ModelClass } from "./model.ts";
+import type { ModelBase, ModelClass } from "./model.ts";
 import { mergeTrees, type IncludeTree } from "./query.ts";
 import { state } from "./record-state.ts";
 import { requirePreloadable } from "./relation.ts";
@@ -88,10 +87,8 @@ export function includeTree(model: ModelClass, specs: readonly unknown[]): Inclu
             Array.isArray(nested) ? nested : [nested],
           ]);
     for (const [name, nested] of entries) {
-      const definition = associationOf(model, name);
-      const target = definition.target();
-      // A Model reached only through includes is still verified and gets its accessors.
-      prepareModel(target);
+      // Resolving it makes the owner and its target ready, as any use does.
+      const { target } = resolveAssociation(model, name);
       tree = mergeTrees(tree, { [name]: includeTree(target, nested) });
     }
   }
