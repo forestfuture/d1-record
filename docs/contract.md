@@ -356,7 +356,7 @@ _Guide:_ [persistence](../site/guide/persistence.md). _Code:_ `src/record-state.
 
 ## Relations
 
-_Guide:_ [querying](../site/guide/querying.md). _Code:_ `src/relation.ts`, `src/query.ts`, `src/compiler.ts`, `src/comparisons.ts`, `src/sql.ts`.
+_Guide:_ [querying](../site/guide/querying.md). _Code:_ `src/relation.ts`, `src/relation-checks.ts`, `src/query.ts`, `src/compiler.ts`, `src/comparisons.ts`, `src/sql.ts`.
 
 - Every modifier returns a new Relation. Building a Relation never queries D1.
 - `static primaryKey` (default `"id"`) must name a declared attribute, or `db.model(X)` throws `InvalidModel`. `find(id)` takes one id, a `string | number`, and resolves to a record. `find(1, 2)` or `find([1, 2])` resolves to an array in the ids' order, or in the Relation's order if it has one, as in Rails. It's one query, repeated ids are found once, `find([])` resolves to `[]`, and a missing id throws `RecordNotFound` saying how many were found. Ids are cast to the key's type first, as in Rails, so `"01"` and `1` are the same id for an integer key. Unlike Rails, `find(1, 1)` still resolves to an array, so the return type follows the arguments. Any number of ids fits in the one query, as with `where`.

@@ -8,7 +8,6 @@ import {
   compileDeleteAll,
   compileSelect,
   compileUpdateAll,
-  type Assignment,
   type CompiledSql,
   type Conflict,
 } from "./compiler.ts";
@@ -27,13 +26,11 @@ import {
   mergeTrees,
   Negated,
   type Condition,
-  type NullsPlacement,
-  type OrderDirection,
   type OrderTerm,
   type QueryDescription,
 } from "./query.ts";
 import type { Executor } from "./executor.ts";
-import { attributeOf, type AttributeType } from "./metadata.ts";
+import { attributeOf } from "./metadata.ts";
 import {
   buildRecord,
   hydrate,
@@ -45,88 +42,21 @@ import {
   type ModelClass,
 } from "./model.ts";
 import { readValue, writeValue } from "./conversion.ts";
-import { Comparison } from "./comparisons.ts";
-import { ColumnReference, SafeSql } from "./sql.ts";
+import { SafeSql } from "./sql.ts";
+import {
+  checkChanges,
+  checkConditions,
+  isEmptyConditions,
+  orderTerms,
+  skipOn,
+  updateOn,
+  type Conditions,
+  type InsertOptions,
+  type OrderSpec,
+  type UpsertOptions,
+} from "./relation-checks.ts";
 import type { OwnedCollection } from "./owned-collection.ts";
 import { insertStatement, runAlone, Statement } from "./statement.ts";
-
-/**
- * Attribute conditions for `where`/`findBy`: a value, an array meaning "any of these", or a
- * comparison (`gte(18)`, `between(a, b)`). `null` (alone or in an array) matches NULL, and is
- * only allowed for nullable attributes.
- */
-export type Conditions<M> = {
-  [K in keyof AttributesOf<M>]?:
-    | AttributesOf<M>[K]
-    | readonly AttributesOf<M>[K][]
-    | ComparisonOf<NonNullable<AttributesOf<M>[K]>>;
-};
-
-/** Numbers, strings and dates are ordered, so they can be compared; booleans and json can't. */
-type ComparisonOf<V> = [V] extends [number | string | Date] ? Comparison<V> : never;
-
-/** `insert`/`insertAll` options: `onDuplicate: "skip"` skips rows that clash with a unique index. */
-export interface InsertOptions {
-  onDuplicate?: "skip";
-}
-
-/** `upsert`/`upsertAll` options: the attributes of the unique index to match on. */
-export interface UpsertOptions<M> {
-  uniqueBy?: (keyof AttributesOf<M> & string) | readonly (keyof AttributesOf<M> & string)[];
-}
-
-/** `{ attribute: "asc" | "desc" }`; key order sets precedence. */
-export type OrderSpec<M> = {
-  [K in keyof AttributesOf<M>]?:
-    | OrderDirection
-    | { direction: OrderDirection; nulls?: NullsPlacement };
-};
-
-function requireObjectOrFragment(conditions: unknown, method: string): void {
-  if (typeof conditions !== "object" || conditions === null || Array.isArray(conditions)) {
-    throw new TypeError(
-      `${method}() takes an object of attribute values or an sql\`…\` fragment; plain strings are not accepted`,
-    );
-  }
-}
-
-/** An undefined value (alone or in an array) would bind NULL into `= ?` and match nothing. */
-function rejectUndefined(value: unknown, name: string, method: string): void {
-  if (value === undefined || (Array.isArray(value) && value.includes(undefined))) {
-    throw new TypeError(
-      `${method}() got undefined for "${name}"; use null to match NULL, or leave the key out`,
-    );
-  }
-}
-
-/** Only ordered values compare meaningfully; booleans (0/1) and json text don't. */
-function requireOrdered(type: AttributeType, name: string, method: string): void {
-  if (type === "boolean" || type === "json") {
-    throw new TypeError(
-      `${method}() can't compare "${name}", a ${type} attribute; match values instead`,
-    );
-  }
-}
-
-/** `{}` adds no condition at all (common when an object is built from optional filters). */
-function isEmptyConditions(conditions: object): boolean {
-  return !(conditions instanceof SafeSql) && Object.keys(conditions).length === 0;
-}
-
-/** `"desc"` or `{ direction: "desc", nulls: "last" }` for `attribute`, checked. */
-function attributeOrder(attribute: string, value: unknown, method: string): OrderTerm {
-  const [direction, nulls] =
-    typeof value === "object" && value !== null
-      ? [Reflect.get(value, "direction"), Reflect.get(value, "nulls")]
-      : [value, undefined];
-  if (direction !== "asc" && direction !== "desc") {
-    throw new TypeError(`${method}() direction for "${attribute}" must be "asc" or "desc"`);
-  }
-  if (nulls !== undefined && nulls !== "first" && nulls !== "last") {
-    throw new TypeError(`${method}() nulls for "${attribute}" must be "first" or "last"`);
-  }
-  return nulls === undefined ? { attribute, direction } : { attribute, direction, nulls };
-}
 
 /** The same term sorting the other way; NULLs move to the other end too, as in Rails. */
 function reversed(term: OrderTerm): OrderTerm {
@@ -138,13 +68,6 @@ function reversed(term: OrderTerm): OrderTerm {
   const direction = term.direction === "asc" ? "desc" : "asc";
   const nulls = term.nulls && (term.nulls === "first" ? "last" : "first");
   return { ...term, direction, ...(nulls && { nulls }) };
-}
-
-/** The conflict for `onDuplicate: "skip"`, checked; none without it. */
-function skipOn({ onDuplicate }: InsertOptions, method: string): Conflict | undefined {
-  if (onDuplicate === undefined) return undefined;
-  if (onDuplicate !== "skip") throw new TypeError(`${method}() onDuplicate must be "skip"`);
-  return { kind: "skip" };
 }
 
 /** One record from the page: `limit(0)` stays empty, and `offset` is kept by the caller. */
@@ -219,14 +142,14 @@ export class Relation<M extends ModelBase, S = {}> {
   }
 
   where(conditions: Conditions<M> | SafeSql): Scoped<M, S> {
-    this.#checkConditions(conditions, "where");
+    checkConditions(this.#model, conditions, "where");
     if (isEmptyConditions(conditions)) return this.#scoped(this);
     return this.#with({ conditions: [...this.#query.conditions, conditions] });
   }
 
   /** Negates the whole condition: `NOT (…)`. Rows where it is NULL are excluded too. */
   whereNot(conditions: Conditions<M> | SafeSql): Scoped<M, S> {
-    this.#checkConditions(conditions, "whereNot");
+    checkConditions(this.#model, conditions, "whereNot");
     if (isEmptyConditions(conditions)) return this.#scoped(this);
     return this.#with({ conditions: [...this.#query.conditions, new Negated(conditions)] });
   }
@@ -260,12 +183,12 @@ export class Relation<M extends ModelBase, S = {}> {
    * nulls: "last" } }`), or by an `sql` fragment expression. Repeated calls append.
    */
   order(spec: OrderSpec<M> | SafeSql): Scoped<M, S> {
-    return this.#with({ order: [...this.#query.order, ...this.#orderTerms(spec, "order")] });
+    return this.#with({ order: [...this.#query.order, ...orderTerms(this.#model, spec, "order")] });
   }
 
   /** Replaces the order so far, as in Rails; `reorder()` removes it. */
   reorder(spec?: OrderSpec<M> | SafeSql): Scoped<M, S> {
-    const order = spec === undefined ? [] : this.#orderTerms(spec, "reorder");
+    const order = spec === undefined ? [] : orderTerms(this.#model, spec, "reorder");
     return this.#with({ order, reordered: true });
   }
 
@@ -390,7 +313,7 @@ export class Relation<M extends ModelBase, S = {}> {
 
   /** `upsert`, as a Statement for `db.batch([...])`. */
   toUpsert(attributes: Partial<AttributesOf<M>>, options: UpsertOptions<M> = {}): Statement {
-    return this.#insertStatement([attributes], this.#updateOn(options), "upsert");
+    return this.#insertStatement([attributes], updateOn(this.#model, options), "upsert");
   }
 
   /** `upsert` for several rows with the same attributes, now (Rails' `upsert_all`). */
@@ -406,14 +329,7 @@ export class Relation<M extends ModelBase, S = {}> {
     rows: readonly Partial<AttributesOf<M>>[],
     options: UpsertOptions<M> = {},
   ): Statement {
-    return this.#insertStatement(rows, this.#updateOn(options), "upsertAll");
-  }
-
-  /** An upsert's conflict: update, matching on `uniqueBy` (the primary key by default). */
-  #updateOn(options: UpsertOptions<M>): Conflict {
-    const uniqueBy = [options.uniqueBy ?? this.#model.primaryKey].flat() as string[];
-    for (const name of uniqueBy) attributeOf(this.#model, name);
-    return { kind: "update", uniqueBy };
+    return this.#insertStatement(rows, updateOn(this.#model, options), "upsertAll");
   }
 
   #insertStatement(
@@ -444,7 +360,7 @@ export class Relation<M extends ModelBase, S = {}> {
 
   /** `updateAll`, as a Statement for `db.batch([...])`. */
   toUpdateAll(changes: Partial<AttributesOf<M>> | SafeSql): Statement {
-    const checked = this.#checkChanges(changes);
+    const checked = checkChanges(this.#model, changes);
     const query = compileUpdateAll(this.#writableQuery("updateAll"), checked);
     this.#collection?.invalidate();
     return new Statement(this.#executor, query);
@@ -713,34 +629,6 @@ export class Relation<M extends ModelBase, S = {}> {
     }
   }
 
-  /**
-   * Validates conditions when they're written, not when they run: rejects plain strings,
-   * unknown attributes, and undefined values (which would otherwise silently match nothing).
-   */
-  #checkConditions(conditions: object, method: string): void {
-    requireObjectOrFragment(conditions, method);
-    if (conditions instanceof SafeSql) {
-      this.#checkFragment(conditions);
-      return;
-    }
-    for (const [name, value] of Object.entries(conditions)) {
-      const { type } = attributeOf(this.#model, name);
-      rejectUndefined(value, name, method);
-      if (value instanceof Comparison) requireOrdered(type, name, method);
-    }
-  }
-
-  /** Attribute changes for `updateAll`, checked like conditions: declared, and not undefined. */
-  #checkChanges(changes: Partial<AttributesOf<M>> | SafeSql): Assignment[] | SafeSql {
-    this.#checkConditions(changes, "updateAll");
-    if (changes instanceof SafeSql) return changes;
-    const assignments = Object.entries(changes);
-    if (assignments.length === 0) {
-      throw new TypeError("updateAll() needs at least one attribute to change");
-    }
-    return assignments;
-  }
-
   /** The query a write statement targets; rows from `distinct()` have no identity to write to. */
   #writableQuery(method: string): QueryDescription {
     if (this.#query.distinct) {
@@ -814,26 +702,6 @@ export class Relation<M extends ModelBase, S = {}> {
     const records = rows.map((row) => hydrate(this.#model, row, executor));
     if (query.includes !== undefined) await preload(records, query.includes, executor);
     return records;
-  }
-
-  /** A fragment's `column()` references must name declared attributes. */
-  #checkFragment(fragment: SafeSql): void {
-    for (const value of fragment.values) {
-      if (value instanceof ColumnReference) attributeOf(this.#model, value.attribute);
-    }
-  }
-
-  /** Checks an order spec when it's written, not when it runs. */
-  #orderTerms(spec: OrderSpec<M> | SafeSql, method: string): OrderTerm[] {
-    requireObjectOrFragment(spec, method);
-    if (spec instanceof SafeSql) {
-      this.#checkFragment(spec);
-      return [spec];
-    }
-    return Object.entries(spec).map(([attribute, value]) => {
-      attributeOf(this.#model, attribute);
-      return attributeOrder(attribute, value, method);
-    });
   }
 
   /** This Relation's order, then the primary key ascending, so ties come back the same way. */
