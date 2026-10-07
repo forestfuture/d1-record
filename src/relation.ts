@@ -8,7 +8,6 @@ import {
   compileDeleteAll,
   compileSelect,
   compileUpdateAll,
-  type CompiledSql,
   type Conflict,
 } from "./compiler.ts";
 import {
@@ -18,7 +17,7 @@ import {
   RecordNotSaved,
 } from "./errors.ts";
 import { includeTree } from "./preload.ts";
-import { inKeyOrder, keysToFind, loadRecords } from "./load.ts";
+import { inKeyOrder, keysToFind, runnerFor, type QueryRunner } from "./load.ts";
 import {
   allOf,
   either,
@@ -125,6 +124,7 @@ export class Relation<M extends ModelBase, S = {}> {
   readonly #executor: Executor;
   readonly #model: ModelClass<M>;
   readonly #query: QueryDescription;
+  readonly #runner: QueryRunner<M>;
   /** For a hasMany of an owner: what the owner already knows about it. Not query data. */
   readonly #collection: OwnedCollection | undefined;
 
@@ -137,6 +137,7 @@ export class Relation<M extends ModelBase, S = {}> {
     this.#executor = executor;
     this.#model = model;
     this.#query = query ?? allOf(model);
+    this.#runner = runnerFor(executor, model, this.#query);
     this.#collection = collection;
   }
 
@@ -389,8 +390,7 @@ export class Relation<M extends ModelBase, S = {}> {
 
   /** Runs a statement built from this Relation: the rows it changed, or 0 without a query on `none()`. */
   async #countOf(statement: Statement): Promise<number> {
-    if (this.#query.none) return 0;
-    return (await this.#runNow(statement)).changes;
+    return this.#runner.changes(() => this.#runNow(statement));
   }
 
   /**
@@ -457,7 +457,7 @@ export class Relation<M extends ModelBase, S = {}> {
   async #findSome(ids: readonly (string | number)[]): Promise<M[]> {
     const { primaryKey, name } = this.#model;
     const query = { ...this.#finderQuery({ [primaryKey]: ids }), order: this.#query.order };
-    const records = await this.#load(query);
+    const records = await this.#runner.load(query);
     if (records.length < ids.length) {
       throw new RecordNotFound(
         `Couldn't find all ${name} records with '${primaryKey}': ` +
@@ -497,7 +497,7 @@ export class Relation<M extends ModelBase, S = {}> {
     if (cached !== undefined) return cached.at(-1) ?? null;
     const { limit, offset } = this.#query;
     if (limit !== undefined || offset !== undefined) {
-      const page = await this.#load({ ...this.#query, order: this.#orderOrPrimaryKey() });
+      const page = await this.#runner.load({ ...this.#query, order: this.#orderOrPrimaryKey() });
       return page.at(-1) ?? null;
     }
     return this.#one(this.#orderOrPrimaryKey().map(reversed));
@@ -512,7 +512,7 @@ export class Relation<M extends ModelBase, S = {}> {
 
   /** The number of matching records, or of non-null values of `attribute`. */
   async count(attribute?: keyof AttributesOf<M> & string): Promise<number> {
-    const [row] = await this.#all(compileCount(this.#query, attribute));
+    const [row] = await this.#runner.rows(compileCount(this.#query, attribute));
     return Number(row?.["count"] ?? 0);
   }
 
@@ -548,7 +548,7 @@ export class Relation<M extends ModelBase, S = {}> {
   async exists(conditions?: Conditions<M> | SafeSql): Promise<boolean> {
     const relation = conditions === undefined ? this : this.where(conditions);
     const query = { ...relation.#query, limit: atMostOne(relation.#query.limit) };
-    return (await this.#all(compileSelect(query, "1"))).length > 0;
+    return (await this.#runner.rows(compileSelect(query, "1"))).length > 0;
   }
 
   /** Converted values of one attribute, or tuples of several, in this Relation's order. */
@@ -569,7 +569,9 @@ export class Relation<M extends ModelBase, S = {}> {
     const values =
       cached === undefined
         ? (
-            await this.#all(compileSelect(this.#query, compileColumns(this.#model, attributes)))
+            await this.#runner.rows(
+              compileSelect(this.#query, compileColumns(this.#model, attributes)),
+            )
           ).map((row) => definitions.map(({ type, column }) => readValue(type, row[column])))
         : cached.map((record) =>
             // Copies, as a query would give, never the records' own objects.
@@ -584,9 +586,9 @@ export class Relation<M extends ModelBase, S = {}> {
     const cached = this.#cached();
     if (cached !== undefined) return [...cached];
     const collection = this.#collection;
-    if (collection?.fill === undefined) return this.#load(this.#query);
+    if (collection?.fill === undefined) return this.#runner.load(this.#query);
     // Loaded for the owner in its order, then target primary-key order, as preloaded.
-    const records = await this.#load({ ...this.#query, order: this.#withPrimaryKeyOrder() });
+    const records = await this.#runner.load({ ...this.#query, order: this.#withPrimaryKeyOrder() });
     collection.fill(records);
     return [...(this.#cached() ?? records)];
   }
@@ -623,11 +625,6 @@ export class Relation<M extends ModelBase, S = {}> {
       throw new IncompatibleRelation(`${method}() can't be combined with distinct()`);
     }
     return this.#query;
-  }
-
-  /** Runs SQL other than loading records (that's load.ts); a `none()` relation never reaches D1. */
-  async #all(query: CompiledSql): Promise<Record<string, unknown>[]> {
-    return this.#query.none ? [] : this.#executor.all(query);
   }
 
   /** @internal Runs a scope on this Relation, checking it returned a Relation of the same Model. */
@@ -670,10 +667,6 @@ export class Relation<M extends ModelBase, S = {}> {
     return new Class({ executor: this.#executor, model: this.#model, query, collection });
   }
 
-  async #load(query: QueryDescription): Promise<M[]> {
-    return loadRecords(this.#executor, this.#model, query);
-  }
-
   /** This Relation's order, then the primary key ascending, so ties come back the same way. */
   #withPrimaryKeyOrder(): readonly OrderTerm[] {
     return [...this.#query.order, { attribute: this.#model.primaryKey, direction: "asc" }];
@@ -685,7 +678,7 @@ export class Relation<M extends ModelBase, S = {}> {
   }
 
   async #one(order: readonly OrderTerm[]): Promise<M | null> {
-    const [record] = await this.#load({
+    const [record] = await this.#runner.load({
       ...this.#query,
       order,
       limit: atMostOne(this.#query.limit),
@@ -695,7 +688,7 @@ export class Relation<M extends ModelBase, S = {}> {
 
   /** One matching row by the finder rules: keeps conditions, ignores order and pagination. */
   async #findOne(extra?: Condition): Promise<M | null> {
-    const [record] = await this.#load({ ...this.#finderQuery(extra), limit: 1 });
+    const [record] = await this.#runner.load({ ...this.#finderQuery(extra), limit: 1 });
     return record ?? null;
   }
 
@@ -703,8 +696,7 @@ export class Relation<M extends ModelBase, S = {}> {
   #finderQuery(extra?: Condition): QueryDescription {
     const conditions =
       extra === undefined ? this.#query.conditions : [...this.#query.conditions, extra];
-    const { includes, none } = this.#query;
-    return { model: this.#model, conditions, order: [], includes, ...(none && { none }) };
+    return { model: this.#model, conditions, order: [], includes: this.#query.includes };
   }
 }
 

@@ -1,18 +1,50 @@
-// Loading a query's records (one SELECT, hydrated, then preloaded), and the keys `find` looks up.
+// How a Relation's query runs (on D1, or not at all for `none()`), and the keys `find` looks up.
 import { castAs, uncastable } from "./attribute-values.ts";
-import { compileColumns, compileSelect } from "./compiler.ts";
+import { compileColumns, compileSelect, type CompiledSql } from "./compiler.ts";
 import { databaseNow, type Executor } from "./executor.ts";
 import { hydrate, primaryKeyOf, type ModelBase, type ModelClass } from "./model.ts";
 import { keysForIncludes, preload } from "./preload.ts";
 import type { QueryDescription } from "./query.ts";
 
-/** The records `query` matches, with its includes preloaded; a `none()` query never reaches D1. */
-export async function loadRecords<M extends ModelBase>(
+/**
+ * How a Relation's query runs. The one place that knows a `none()` query never reaches D1: its
+ * Relation's reads find nothing and its bulk writes change nothing, without a database.
+ */
+export interface QueryRunner<M extends ModelBase> {
+  /** The records `query` matches (one SELECT), hydrated, with its includes preloaded. */
+  load(query: QueryDescription): Promise<M[]>;
+  /** The rows of SQL other than loading records: a count, `exists`, `pluck`. */
+  rows(query: CompiledSql): Promise<Record<string, unknown>[]>;
+  /** The rows `write` changed, running it now. */
+  changes(write: () => Promise<D1Meta>): Promise<number>;
+}
+
+/** How `query`, a Relation's, runs: on `executor`, unless it's a `none()` query. */
+export function runnerFor<M extends ModelBase>(
+  executor: Executor,
+  model: ModelClass<M>,
+  query: QueryDescription,
+): QueryRunner<M> {
+  if (query.none) return nothing;
+  return {
+    load: (query) => loadRecords(executor, model, query),
+    rows: (query) => executor.all(query),
+    changes: async (write) => (await write()).changes,
+  };
+}
+
+/** A `none()` query's runner: nothing is sent, so nothing is found or changed. */
+const nothing: QueryRunner<never> = {
+  load: async () => [],
+  rows: async () => [],
+  changes: async () => 0,
+};
+
+async function loadRecords<M extends ModelBase>(
   executor: Executor,
   model: ModelClass<M>,
   query: QueryDescription,
 ): Promise<M[]> {
-  if (query.none) return [];
   // A partial record keeps its primary key, so it keeps its identity — except after
   // distinct(), where adding the key would make every row distinct.
   const loaded =

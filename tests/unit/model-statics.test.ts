@@ -57,6 +57,17 @@ describe("none() with no database", () => {
     expect(await none.exists()).toBe(false);
     await expect(none.find(1)).rejects.toThrow("User with id 1 not found");
   });
+
+  test("so do its other reads and its bulk writes, chained or not", async () => {
+    const none = User.where({ age: 30 }).none().order({ id: "desc" });
+
+    expect(await none.pluck("email")).toEqual([]);
+    expect(await none.exists({ email: "ada@example.com" })).toBe(false);
+    expect([await none.size(), await none.isEmpty()]).toEqual([0, true]);
+    await expect(none.find(1, 2)).rejects.toThrow("Couldn't find all User records");
+    expect(await none.where({ email: "ada@example.com" }).findBy({ age: 30 })).toBeNull();
+    expect([await none.updateAll({ age: 31 }), await none.deleteAll()]).toEqual([0, 0]);
+  });
 });
 
 describe("withDatabase", () => {
