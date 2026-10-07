@@ -28,7 +28,7 @@ Follow `docs/agents/workflow.md` for every issue. In short: orient (the issue an
 - Tests: `tests/unit/**` (no database), `tests/integration/**` (real D1 through Miniflare in Node; see ADR-0002 and `tests/support/d1.ts`), and `tests/remote/**` (a smoke suite against a real remote D1, skipped unless configured; see `docs/agents/remote-smoke.md`). Run one project with `vp test --project unit`.
 - Behavior is the contract: every public behavior needs a test, and integration tests prove it against D1.
 - A public change updates every file in `CONTRIBUTING.md#what-a-public-change-touches`, a changeset included (`docs/agents/releasing.md`). Merging CI's Version Packages pull request is what publishes to npm.
-- `vp check` enforces size and complexity limits (Oxlint `complexity`, `max-depth`, `max-params`, `max-lines-per-function` in `vite.config.ts`). Split code that hits them rather than raising the limits. `vp run knip` reports unused files, exports and dependencies.
+- `vp check` enforces size and complexity limits (Oxlint `complexity`, `max-depth`, `max-params`, `max-lines-per-function`, and `max-lines` per module in `vite.config.ts`). Split code that hits them rather than raising the limits. `vp run knip` reports unused files, exports and dependencies.
 
 <!--VITE PLUS START-->
 

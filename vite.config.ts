@@ -74,9 +74,13 @@ export default defineConfig({
     jsPlugins: ["./scripts/lint/module-header.mjs"],
     overrides: [
       {
-        // Each library and command line module opens with what it owns (scripts/lint/).
+        // Each library and command line module opens with what it owns (scripts/lint/), and stays
+        // small enough to read: a module that outgrows the limit is split, not exempted.
         files: ["src/**/*.ts", "cli/**/*.ts"],
-        rules: { "d1-record/module-header": "error" },
+        rules: {
+          "d1-record/module-header": "error",
+          "max-lines": ["error", { max: 500, skipBlankLines: true, skipComments: true }],
+        },
       },
       {
         // A describe() callback holds a whole suite, so it's long by design.
