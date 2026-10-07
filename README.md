@@ -166,7 +166,7 @@ The guide is being built in [`site/`](site/) for [docs.forestfuture.dev/d1-recor
 
 - [`site/guide/`](site/guide/): the guide pages, from getting started to D1’s limits.
 - [`docs/contract.md`](docs/contract.md): the full public behavior, which the tests prove.
-- [`CONTEXT.md`](CONTEXT.md): the domain glossary (Model, Record, Relation, Association, Batch, …).
+- [`GLOSSARY.md`](GLOSSARY.md): the domain glossary (Model, Record, Relation, Association, Batch, …).
 - [`docs/adr/`](docs/adr/): the architecture decisions and why they were made.
 
 ## Development

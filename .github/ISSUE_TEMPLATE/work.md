@@ -8,7 +8,7 @@ labels: needs-triage
 
 ## Scope
 
-<!-- The public behavior to build, in CONTEXT.md terms. Say what's explicitly out of scope. -->
+<!-- The public behavior to build, in GLOSSARY.md terms. Say what's explicitly out of scope. -->
 
 -
 

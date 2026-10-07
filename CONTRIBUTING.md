@@ -19,7 +19,7 @@ vp test      # every test
 Every change goes through a pull request, maintainers' included:
 
 1. **Start from an issue**, or a Discussion that reached a decision. Use the issue templates.
-2. **Agree the design in the issue before writing tests**: the behavior to test and any open decisions. Read [`CONTEXT.md`](CONTEXT.md) (the glossary), [`docs/contract.md`](docs/contract.md) (the agreed behavior) and the ADRs in [`docs/adr/`](docs/adr/) first.
+2. **Agree the design in the issue before writing tests**: the behavior to test and any open decisions. Read [`GLOSSARY.md`](GLOSSARY.md) (the glossary), [`docs/contract.md`](docs/contract.md) (the agreed behavior) and the ADRs in [`docs/adr/`](docs/adr/) first.
 3. **Build it test-first**, one red → green slice per commit, on a branch named `<issue>-<slug>` (`79-contributing`).
 4. **Open the pull request** with `Closes #<issue>`. CI runs `vp check`, `vp test`, the package build and its checks, `vp run knip` and the docs build, and must pass to merge. On a first contribution, CI waits for a maintainer to approve the run.
 

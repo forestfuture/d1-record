@@ -1,6 +1,6 @@
 # Build Brief: a Rails-inspired Active Record for Cloudflare D1
 
-> **Updated 2026-09-23** to reflect the decisions recorded in `docs/adr/` (0001–0007). The detailed behavior is specified in `docs/contract.md`, and the vocabulary in `CONTEXT.md`. Where this brief and those documents differ, they take precedence.
+> **Updated 2026-09-23** to reflect the decisions recorded in `docs/adr/` (0001–0007). The detailed behavior is specified in `docs/contract.md`, and the vocabulary in `GLOSSARY.md`. Where this brief and those documents differ, they take precedence.
 
 ## Your mission
 

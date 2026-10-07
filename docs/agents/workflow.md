@@ -7,7 +7,7 @@ The skills named below are in `.claude/skills/`. Claude Code loads them automati
 ## 1. Orient
 
 - Read the issue **and its comments**. Scope often moves between issues in comments ("moved here from #1").
-- Read `CONTEXT.md` (use its terms), the `docs/contract.md` sections the issue names, and the ADRs in `docs/adr/` that touch the area.
+- Read `GLOSSARY.md` (use its terms), the `docs/contract.md` sections the issue names, and the ADRs in `docs/adr/` that touch the area.
 - Check the current state: `vp install`, `vp check`, `vp test` should all pass before you change anything.
 
 ## 2. Agree the seams and open decisions — ✋ human checkpoint
@@ -16,7 +16,7 @@ Before writing any test, propose to the human, in one message:
 
 - **The seams under test** (see the `tdd` skill). The default for this repo is the **public API against a real Miniflare D1**. Observe queries only through the public `onQuery` hook. There's no fake executor (ADR-0002). Type tests go in `tests/unit/`.
 - **The build order**: the list of red → green slices you'll work through.
-- **Open decisions**: anything the issue or contract leaves unsettled. Number each one, give a recommendation, and say why (the `grilling` skill's format). If a term is fuzzy or new, sharpen it with the `domain-modeling` skill: update `CONTEXT.md`, and offer an ADR only for decisions that are hard to reverse, surprising, and a real trade-off.
+- **Open decisions**: anything the issue or contract leaves unsettled. Number each one, give a recommendation, and say why (the `grilling` skill's format). If a term is fuzzy or new, sharpen it with the `domain-modeling` skill: update `GLOSSARY.md`, and offer an ADR only for decisions that are hard to reverse, surprising, and a real trade-off.
 
 **Wait for the human's answers.** Postponed ideas become `deferred` issues, one per item, not notes in a comment.
 
@@ -64,7 +64,11 @@ Run the `code-review` skill, with the commit before the issue's work as the fixe
 - Full validation: `vp check`, `vp test`, `vp pack` (with attw and publint), `vp run check:public-types` (after `vp pack`: the published types expose no internals; mark internals `/** @internal */`), `vp run knip`, `vp run docs:build` (the site builds with no dead links). After a push to `main`, CI deploys the site once the checks pass (the Cloudflare tokens it uses are in [cloudflare-tokens.md](cloudflare-tokens.md)).
 - **Never push without the human's approval.** Pushing over SSH may need the human to unlock their key. If a push fails with `agent refused operation`, ask them to run `git push` themselves.
 - After the push, wait for CI to pass (`gh run watch`), then close the issue with a summary comment: what was delivered, the decisions made (link any `deferred` issues), and what the review found and fixed.
+- When work goes through a pull request, write its body with the `pr` skill.
+- The human may then run `/retro` on the session. It suggests changes to the agent's environment (checks, standards, steering files), not to the code.
 
-## Shortcut
+## Shortcuts
 
 The `implement` skill chains steps 3–4 (`tdd`, then `code-review`). This document adds the repo-specific parts around it: the checkpoints, the D1 seam, the contract, and closing the issue.
+
+For a parent issue with sub-issues, the human can run `/implement-spec` instead. It builds the sub-issues in parallel worktrees and merges them onto one integration branch. Agree the seams and open decisions for each sub-issue first (step 2), and treat merging the integration branch into `main` like a push: only with the human's approval.

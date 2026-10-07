@@ -1,6 +1,6 @@
 # Behavior contract (draft)
 
-The public behavior agreed during design, which the tests must prove. It's written to become the basis of the VitePress documentation site later. Terms follow `CONTEXT.md`; the reasons for decisions are in `docs/adr/`.
+The public behavior agreed during design, which the tests must prove. It's written to become the basis of the VitePress documentation site later. Terms follow `GLOSSARY.md`; the reasons for decisions are in `docs/adr/`.
 
 ## Toolchain
 
