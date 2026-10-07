@@ -48,7 +48,7 @@ const models = db.models({ User, Post }); // convenience: models.User has the sa
 
 ## Declaring a Model
 
-_Guide:_ [models](../site/guide/models.md), [untrusted-input](../site/guide/untrusted-input.md). _Code:_ `src/model.ts`, `src/metadata.ts`, `src/table-names.ts`, `src/permit.ts`.
+_Guide:_ [models](../site/guide/models.md), [untrusted-input](../site/guide/untrusted-input.md). _Code:_ `src/model.ts`, `src/metadata.ts`, `src/table-names.ts`, `src/verify-model.ts`, `src/permit.ts`.
 
 ```ts
 class User extends Model({

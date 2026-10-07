@@ -4,14 +4,8 @@ import { InvalidModel } from "./errors.ts";
 import { associationsOf } from "./association-fields.ts";
 import { belongsToAccessor, hasOneAccessor } from "./association-writers.ts";
 import { inferenceHint, type Inference } from "./foreign-keys.ts";
-import {
-  ModelBase,
-  modelOf,
-  verifyModel,
-  type AttributesOf,
-  type ModelClass,
-  type ScopesOf,
-} from "./model.ts";
+import { ModelBase, modelOf, type AttributesOf, type ModelClass, type ScopesOf } from "./model.ts";
+import { verifyModel } from "./verify-model.ts";
 import { state } from "./record-state.ts";
 import { ownedCollection } from "./owned-collection.ts";
 import { ofOwner, type Scoped } from "./relation.ts";
