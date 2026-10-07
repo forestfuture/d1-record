@@ -89,7 +89,7 @@ Load only some attributes with `select`. The primary key is always loaded too, s
 
 ## Matching nothing
 
-`none()` matches nothing without asking D1. Chaining more onto it keeps it empty:
+`none()` matches nothing without asking D1, so it needs no database to answer. Chaining more onto it keeps it empty:
 
 <<< @/snippets/guide/querying.ts#none{ts}
 

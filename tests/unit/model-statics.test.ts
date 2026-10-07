@@ -44,6 +44,21 @@ describe("Relation methods as a Model's statics", () => {
   });
 });
 
+describe("none() with no database", () => {
+  test("it answers without one, since it never reaches D1", async () => {
+    const none = User.none();
+
+    expect(await none.toArray()).toEqual([]);
+    expect(await none.first()).toBeNull();
+    expect(await none.last()).toBeNull();
+    expect(await none.take()).toBeNull();
+    expect(await none.findBy({ email: "ada@example.com" })).toBeNull();
+    expect(await none.count()).toBe(0);
+    expect(await none.exists()).toBe(false);
+    await expect(none.find(1)).rejects.toThrow("User with id 1 not found");
+  });
+});
+
 describe("withDatabase", () => {
   test("without Node.js compatibility, it says which Wrangler setting turns it on", async () => {
     vi.resetModules();

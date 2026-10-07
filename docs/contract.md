@@ -382,7 +382,7 @@ _Guide:_ [querying](../site/guide/querying.md). _Code:_ `src/relation.ts`, `src/
 - `exists(conds?)` issues `SELECT 1 … LIMIT 1`.
 - `size()`, `isEmpty()` and `hasAny()`, as Rails' `size`, `empty?` and `any?`. A loaded association answers from its records, built ones included, without a query. Otherwise `size()` is a `COUNT(*)` plus an association's unsaved built records, and `isEmpty()` is `!exists()` (it's `false` without a query while an association has unsaved built records). `hasAny()` is the opposite of `isEmpty()`. Rails' `one?`, `many?` and `none?` aren't offered: `hasOne`/`hasMany` would read like the association declarations, and `isEmpty()` already says "none".
 - Naming: `is…` asks about a state of the thing itself (`isNewRecord()`, `isEmpty()`, `isLoaded()`, `isAttributeChanged()`), and `has…` about something it holds: a collection's records (`hasAny()`) or a record's last saved change (`hasSavedChangeTo()`). Methods that raise end in `OrThrow` (ADR-0005).
-- `none()` never touches D1: `toArray` gives `[]`, `count` gives `0`, `exists` gives `false`, `first`/`last`/`take`/`findBy` give `null`, `pluck` gives `[]`, and `find` throws `RecordNotFound`. Chaining keeps it `none()`. `none().or(r)` and `r.or(none())` both return `r`.
+- `none()` never touches D1, so it needs no database (no `withDatabase` or binding): `toArray` gives `[]`, `count` gives `0`, `exists` gives `false`, `first`/`last`/`take`/`findBy` give `null`, `pluck` gives `[]`, and `find` throws `RecordNotFound`. Chaining keeps it `none()`. `none().or(r)` and `r.or(none())` both return `r`.
 
 ## Partial records
 
