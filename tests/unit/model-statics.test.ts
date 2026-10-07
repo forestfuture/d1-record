@@ -45,7 +45,7 @@ describe("Relation methods as a Model's statics", () => {
 });
 
 describe("none() with no database", () => {
-  test("it answers without one, since it never reaches D1", async () => {
+  test("finders and counts answer, since it never reaches D1", async () => {
     const none = User.none();
 
     expect(await none.toArray()).toEqual([]);
@@ -58,7 +58,7 @@ describe("none() with no database", () => {
     await expect(none.find(1)).rejects.toThrow("User with id 1 not found");
   });
 
-  test("so do its other reads and its bulk writes, chained or not", async () => {
+  test("other reads and bulk writes answer, wherever none() is in the chain", async () => {
     const none = User.where({ age: 30 }).none().order({ id: "desc" });
 
     expect(await none.pluck("email")).toEqual([]);
