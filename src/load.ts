@@ -1,4 +1,4 @@
-// Loading a query's records: one SELECT, hydrated on the database it ran on, then preloaded.
+// Loading a query's records (one SELECT, hydrated, then preloaded), and the keys `find` looks up.
 import { castAs, uncastable } from "./attribute-values.ts";
 import { compileColumns, compileSelect } from "./compiler.ts";
 import { databaseNow, type Executor } from "./executor.ts";

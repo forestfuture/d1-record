@@ -1,4 +1,4 @@
-// What a Relation's methods are given, and its checks, run when a query is written, not when it runs.
+// What a Relation's methods take, checked when a query is written, not when it runs.
 import type { Assignment, Conflict } from "./compiler.ts";
 import { Comparison } from "./comparisons.ts";
 import { attributeOf, type AttributeType } from "./metadata.ts";

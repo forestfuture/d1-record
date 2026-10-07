@@ -1,4 +1,4 @@
-// Comparison conditions for `where`: `gt`, `gte`, `lt`, `lte` and `between`.
+// Comparison conditions for `where`: `gt`, `gte`, `lt`, `lte`, and `between`.
 declare const comparedType: unique symbol;
 
 /** @internal The library's key for reading a Comparison's parts. */

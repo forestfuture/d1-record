@@ -1,4 +1,4 @@
-// `belongsTo`, `hasMany` and `hasOne`: the field declarations, and reading a Model's from them.
+// `belongsTo`, `hasMany`, and `hasOne`: the field declarations, and reading a Model's from them.
 import type {
   AssociationDeclaration,
   AssociationDefinition,

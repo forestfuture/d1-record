@@ -1,4 +1,4 @@
-// Recognises migrations written by another tool (Drizzle, Prisma), and the columns to check.
+// Recognizes migrations written by another tool (Drizzle, Prisma), and the columns to check.
 // Those tools can store values differently from d1-record's conventions, so some columns
 // convert to the wrong type without an error (#73).
 import { existsSync, readdirSync } from "node:fs";

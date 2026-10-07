@@ -1,4 +1,4 @@
-// Relation: the chainable query (`where`, `order`, …), its finders and terminals, and bulk writes.
+// Relation: the chainable query (`where`, `order`, …), its finders, terminals, and bulk writes.
 import { jointly } from "./executor.ts";
 import { shownKey } from "./filtering.ts";
 import { castInherited } from "./attribute-values.ts";
@@ -625,7 +625,7 @@ export class Relation<M extends ModelBase, S = {}> {
     return this.#query;
   }
 
-  /** The one place a Relation runs SQL; a `none()` relation never reaches D1. */
+  /** Runs SQL other than loading records (that's load.ts); a `none()` relation never reaches D1. */
   async #all(query: CompiledSql): Promise<Record<string, unknown>[]> {
     return this.#query.none ? [] : this.#executor.all(query);
   }

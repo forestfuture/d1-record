@@ -1,7 +1,8 @@
-// An attribute value's whole path (#94): cast, refused, stored and bound in one place.
+// An attribute value's whole path (#94): cast, refused, stored, and bound in one place.
 // Cast by how it reaches the attribute (its use), refused with an error that names it, put in
-// the form D1 stores, and bound hidden from listeners when the attribute is filtered. Records, Relations, associations, preloads and the compiler all go
-// through here, so no caller has to cast or bind a value its own way.
+// the form D1 stores, and bound hidden from listeners when the attribute is filtered. Records,
+// Relations, associations, preloads, and the compiler all go through here, so no caller has to
+// cast or bind a value its own way.
 import { castCondition, castValue, isInvalidDate, uncastable, writeValue } from "./conversion.ts";
 import { FILTERED, Filtered, isFiltered } from "./filtering.ts";
 import { attributeOf } from "./metadata.ts";

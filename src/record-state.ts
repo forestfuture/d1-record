@@ -1,4 +1,4 @@
-// A record's private state: its values, changes, errors and lifecycle flags.
+// A record's private state: its values, changes, errors, and lifecycle flags.
 import { castAs } from "./attribute-values.ts";
 import type { Assignment } from "./compiler.ts";
 import { readValue, writeValue } from "./conversion.ts";

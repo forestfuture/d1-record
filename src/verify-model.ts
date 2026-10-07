@@ -1,4 +1,5 @@
-// Checks a Model's declaration the first time it's used: its table, primary key and attribute names.
+// Checks a Model's declaration the first time it's used, then seals its declarations.
+// It checks the table, the primary key, and the attribute names.
 import { ancestors } from "./ancestors.ts";
 import { declarationIn, probeOf } from "./association-fields.ts";
 import { seal } from "./declarations.ts";
