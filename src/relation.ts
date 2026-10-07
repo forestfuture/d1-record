@@ -1,7 +1,7 @@
 // Relation: the chainable query (`where`, `order`, …), its finders and terminals, and bulk writes.
-import { databaseNow, jointly } from "./executor.ts";
+import { jointly } from "./executor.ts";
 import { shownKey } from "./filtering.ts";
-import { castAs, castInherited, uncastable } from "./attribute-values.ts";
+import { castInherited } from "./attribute-values.ts";
 import {
   compileColumns,
   compileCount,
@@ -17,7 +17,8 @@ import {
   RecordNotFound,
   RecordNotSaved,
 } from "./errors.ts";
-import { includeTree, keysForIncludes, preload } from "./preload.ts";
+import { includeTree } from "./preload.ts";
+import { inKeyOrder, keysToFind, loadRecords } from "./load.ts";
 import {
   allOf,
   either,
@@ -33,8 +34,6 @@ import type { Executor } from "./executor.ts";
 import { attributeOf } from "./metadata.ts";
 import {
   buildRecord,
-  hydrate,
-  primaryKeyOf,
   type AssociationName,
   type AttributesOf,
   type LoadedValue,
@@ -441,17 +440,7 @@ export class Relation<M extends ModelBase, S = {}> {
     if (args.length === 1 && (typeof only === "string" || typeof only === "number")) {
       return this.#findById(only);
     }
-    // Cast to the key's type as a condition is, then each id once, as Rails does; one that
-    // can't be cast stays as given, matches nothing, and is reported missing.
-    const of = { model: this.#model, attribute: this.#model.primaryKey };
-    const ids = [
-      ...new Set(
-        args.flat().map((id) => {
-          const cast = castAs("condition", of, id);
-          return cast === uncastable ? id : (cast as string | number);
-        }),
-      ),
-    ];
+    const ids = keysToFind(this.#model, args.flat());
     return ids.length === 0 ? [] : this.#findSome(ids);
   }
 
@@ -477,8 +466,7 @@ export class Relation<M extends ModelBase, S = {}> {
       );
     }
     if (this.#query.order.length > 0) return records;
-    const byId = new Map(records.map((record) => [primaryKeyOf(record), record]));
-    return ids.map((id) => byId.get(id) as M);
+    return inKeyOrder(records, ids);
   }
 
   /** The first record matching `conditions` (in no particular order), or null. */
@@ -683,25 +671,7 @@ export class Relation<M extends ModelBase, S = {}> {
   }
 
   async #load(query: QueryDescription): Promise<M[]> {
-    // A partial record keeps its primary key, so it keeps its identity — except after
-    // distinct(), where adding the key would make every row distinct.
-    const { primaryKey } = this.#model;
-    const loaded =
-      query.select && !query.distinct
-        ? [
-            ...new Set([
-              primaryKey,
-              ...keysForIncludes(this.#model, query.includes),
-              ...query.select,
-            ]),
-          ]
-        : query.select;
-    const rows = await this.#all(compileSelect(query, compileColumns(this.#model, loaded)));
-    // Bound to the database the query used, which they keep, even past a request's withDatabase.
-    const executor = await databaseNow(this.#executor);
-    const records = rows.map((row) => hydrate(this.#model, row, executor));
-    if (query.includes !== undefined) await preload(records, query.includes, executor);
-    return records;
+    return loadRecords(this.#executor, this.#model, query);
   }
 
   /** This Relation's order, then the primary key ascending, so ties come back the same way. */
@@ -733,7 +703,8 @@ export class Relation<M extends ModelBase, S = {}> {
   #finderQuery(extra?: Condition): QueryDescription {
     const conditions =
       extra === undefined ? this.#query.conditions : [...this.#query.conditions, extra];
-    return { model: this.#model, conditions, order: [], includes: this.#query.includes };
+    const { includes, none } = this.#query;
+    return { model: this.#model, conditions, order: [], includes, ...(none && { none }) };
   }
 }
 

@@ -374,7 +374,7 @@ _Guide:_ [querying](../site/guide/querying.md). _Code:_ `src/relation.ts`, `src/
 
 ## Terminal operations
 
-_Guide:_ [querying](../site/guide/querying.md). _Code:_ `src/relation.ts`.
+_Guide:_ [querying](../site/guide/querying.md). _Code:_ `src/relation.ts`, `src/load.ts`.
 
 - `toArray`, `first`, `last`, `take`, `find`, `findBy`, `findByOrThrow`.
 - `pluck("email")` resolves to converted values. `pluck("id", "email")` resolves to tuples.
