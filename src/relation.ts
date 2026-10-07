@@ -124,6 +124,7 @@ export class Relation<M extends ModelBase, S = {}> {
   readonly #executor: Executor;
   readonly #model: ModelClass<M>;
   readonly #query: QueryDescription;
+  /** How its query runs: on D1, or not at all for `none()`. */
   readonly #runner: QueryRunner<M>;
   /** What a hasMany's owner already knows about it, or `unowned`. Not query data. */
   readonly #collection: OwnedCollection;
@@ -523,20 +524,15 @@ export class Relation<M extends ModelBase, S = {}> {
   async size(): Promise<number> {
     const cached = this.#cached();
     if (cached !== undefined) return cached.length;
-    return (await this.count()) + this.#unsavedCount();
+    return (await this.count()) + this.#collection.unsavedCount();
   }
 
   /** Whether there are no records: a loaded association answers itself, else `!exists()`. */
   async isEmpty(): Promise<boolean> {
     const cached = this.#cached();
     if (cached !== undefined) return cached.length === 0;
-    if (this.#unsavedCount() > 0) return false;
+    if (this.#collection.unsavedCount() > 0) return false;
     return !(await this.exists());
-  }
-
-  /** How many records were built through this association and not yet saved. */
-  #unsavedCount(): number {
-    return this.#collection.unsavedCount();
   }
 
   /** Whether there are any records: the opposite of `isEmpty()` (Rails' `any?`). */

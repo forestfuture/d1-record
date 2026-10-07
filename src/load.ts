@@ -11,10 +11,10 @@ import type { QueryDescription } from "./query.ts";
  * Relation's reads find nothing and its bulk writes change nothing, without a database.
  */
 export interface QueryRunner<M extends ModelBase> {
-  /** The records `query` matches (one SELECT), hydrated, with its includes preloaded. */
-  load(query: QueryDescription): Promise<M[]>;
+  /** The records `description` matches (one SELECT), hydrated, with its includes preloaded. */
+  load(description: QueryDescription): Promise<M[]>;
   /** The rows of SQL other than loading records: a count, `exists`, `pluck`. */
-  rows(query: CompiledSql): Promise<Record<string, unknown>[]>;
+  rows(sql: CompiledSql): Promise<Record<string, unknown>[]>;
   /** The rows `write` changed, running it now. */
   changes(write: () => Promise<D1Meta>): Promise<number>;
 }
@@ -27,8 +27,8 @@ export function runnerFor<M extends ModelBase>(
 ): QueryRunner<M> {
   if (query.none) return nothing;
   return {
-    load: (query) => loadRecords(executor, model, query),
-    rows: (query) => executor.all(query),
+    load: (description) => loadRecords(executor, model, description),
+    rows: (sql) => executor.all(sql),
     changes: async (write) => (await write()).changes,
   };
 }
@@ -40,6 +40,7 @@ const nothing: QueryRunner<never> = {
   changes: async () => 0,
 };
 
+/** One SELECT for `query`'s records, hydrated, then its includes preloaded. */
 async function loadRecords<M extends ModelBase>(
   executor: Executor,
   model: ModelClass<M>,

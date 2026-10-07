@@ -394,7 +394,7 @@ _Guide:_ [querying](../site/guide/querying.md). _Code:_ `src/relation.ts`, `src/
 
 ## Batches
 
-_Guide:_ [batches](../site/guide/batches.md). _Code:_ `src/statement.ts`, `src/record-statement.ts`, `src/unit-of-work.ts`, `src/database.ts`.
+_Guide:_ [batches](../site/guide/batches.md). _Code:_ `src/statement.ts`, `src/record-statement.ts`, `src/unit-of-work.ts`, `src/database.ts`, `src/relation.ts`, `src/load.ts`.
 
 ```ts
 const userId = crypto.randomUUID(); // ids generated in code link rows inside one batch
