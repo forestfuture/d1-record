@@ -27,13 +27,26 @@ Pull requests are merged by rebasing, so each commit stays on `main`: make each 
 
 The rules that matter most:
 
-- **The contract is the source of truth.** A change in behavior updates `docs/contract.md` in the same pull request.
+- **The contract is the source of truth.** A change in behavior updates `docs/contract.md` in the same pull request, and everything else it touches ([below](#what-a-public-change-touches)).
 - **Every public behavior has a test**, through the public API, and integration tests prove it against D1 (there's no fake database).
 - **Library code runs on Cloudflare Workers.** `src/` uses no Node APIs, and is type-checked against `@cloudflare/workers-types` only.
 - **Size limits mean splitting code.** `vp check` enforces complexity and function-length limits; split code that hits them rather than raising them.
 - **Rails is the precedent.** When a behavior is open, d1-record does what Rails' Active Record does, unless D1 or TypeScript gets in the way.
 
 The pre-commit hook runs `vp check --fix` on the staged files, and the commit-msg hook checks the title's length. Run `vp test` yourself before pushing.
+
+## What a public change touches
+
+A change to public behavior or the public API updates, in the same pull request, each of these it affects:
+
+- **`docs/contract.md`**: the section for the behavior. Its _Guide_ and _Code_ line names the pages and modules to check.
+- **`GLOSSARY.md`**: a new term, or a term whose meaning changed.
+- **`site/guide/`**: the page for the behavior, and its examples in `site/snippets/` (see [Documentation](#documentation)).
+- **`src/index.ts`**: a new public name is exported here; an internal one is marked `/** @internal */`, and `vp run check:public-types` keeps it out of the published types.
+- **`SKILL.md`**: its rules, when the change alters how an app should write code with d1-record.
+- **`README.md`**: its quick look and feature list, when they show the behavior.
+- **`.changeset/`**: a changeset (see [Changesets](#changesets)).
+- **`docs/adr/`**: an ADR, for a decision that's hard to reverse, surprising, and a real trade-off.
 
 ## Changesets
 
