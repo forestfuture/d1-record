@@ -1,3 +1,4 @@
+// The `Database` that `connect` returns: `db.model()`, sessions, and `db.batch`.
 import { NoSession, RecordNotSaved } from "./errors.ts";
 import {
   prepareDestroy,

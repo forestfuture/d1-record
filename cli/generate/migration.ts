@@ -1,3 +1,4 @@
+// A generated migration's SQL and its Wrangler-numbered file name.
 import { pluralize } from "../../src/inflections.ts";
 import { underscore } from "../../src/naming.ts";
 import type { ColumnArg } from "./columns.ts";

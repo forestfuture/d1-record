@@ -1,3 +1,4 @@
+// Filtered attributes: values hidden from `onQuery` listeners and error messages (#83).
 import type { ModelClass } from "./model.ts";
 import { underscore } from "./naming.ts";
 

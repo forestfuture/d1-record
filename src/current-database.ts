@@ -1,5 +1,6 @@
-// Where a query started from a Model (`Product.find(id)`) finds its database (#77): the request's,
-// set with `withDatabase`, or else the Model's binding from `cloudflare:workers`. Nothing
+// `withDatabase`, and where a query from a Model's statics (`Product.find(id)`) finds its database.
+// It's the request's, set with `withDatabase`, or else the Model's binding from
+// `cloudflare:workers` (#77). Nothing
 // per-request is ever stored on a class (ADR-0003): a request's database lives only in its
 // AsyncLocalStorage, and a binding's Database holds no per-request state.
 import { connect, databaseParts, type Database } from "./database.ts";

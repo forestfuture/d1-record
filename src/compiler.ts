@@ -1,3 +1,4 @@
+// Turns a QueryDescription or a write into SQL text and bound values. No other module writes SQL.
 import { bindAs, storedAs, storedRows, uncastable, type ValueOf } from "./attribute-values.ts";
 import { attributeOf, ignoresColumns } from "./metadata.ts";
 import type { ModelBase, ModelClass } from "./model.ts";

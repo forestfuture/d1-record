@@ -1,3 +1,4 @@
+// Converting values between attribute types and what D1 stores, per attribute type.
 import type { AttributeType } from "./metadata.ts";
 
 /** A value that can't be read as the attribute's type. */

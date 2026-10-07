@@ -1,7 +1,5 @@
-/**
- * English pluralization and singularization, ported from Active Support's default inflections
- * (activesupport/lib/active_support/inflections.rb), so tables are named as Rails names them.
- */
+// English pluralization and singularization, so tables are named as Rails names them.
+// Ported from Active Support's default inflections (active_support/inflections.rb).
 
 type Rule = readonly [RegExp, string];
 

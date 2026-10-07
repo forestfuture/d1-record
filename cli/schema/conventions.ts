@@ -1,3 +1,4 @@
+// Reads a column as an attribute by the conventions (#66): name, type, nullability, default.
 import { underscore } from "../../src/naming.ts";
 import { attributeName } from "./names.ts";
 

@@ -1,3 +1,4 @@
+// Every error class the library throws on purpose, all extending `D1RecordError`.
 import type { ModelBase } from "./model.ts";
 
 /** Base class for every error the library throws on purpose. */

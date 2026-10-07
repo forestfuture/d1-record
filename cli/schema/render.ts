@@ -1,3 +1,4 @@
+// The generated `schema.ts` and `ApplicationRecord` files, and the schema's fingerprint.
 import { stringLiteral } from "../source.ts";
 import { createHash } from "node:crypto";
 import type { Default, Spec } from "./conventions.ts";

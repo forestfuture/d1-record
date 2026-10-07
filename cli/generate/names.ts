@@ -1,3 +1,4 @@
+// Names the generators accept, and Rails' `tableize` for a Model's table.
 import { pluralize, singularize } from "../../src/inflections.ts";
 import { underscore } from "../../src/naming.ts";
 import { classify } from "../schema/names.ts";

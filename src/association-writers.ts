@@ -1,3 +1,4 @@
+// The belongsTo and hasOne accessors: `post.author()` and its `set`, `build` and `create`.
 import { cachedRead } from "./associations.ts";
 import { RecordNotSaved } from "./errors.ts";
 import { buildRecord, type ModelBase } from "./model.ts";

@@ -1,3 +1,4 @@
+// Scopes: a Model's scope statics, and the Relations that carry them as methods.
 import { InvalidModel } from "./errors.ts";
 import type { Executor } from "./executor.ts";
 import { ancestors } from "./ancestors.ts";

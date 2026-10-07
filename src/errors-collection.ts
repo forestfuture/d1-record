@@ -1,3 +1,4 @@
+// `record.errors`: the validation failures a record collects.
 import { underscore } from "./naming.ts";
 
 /** One validation failure: which attribute (or `"base"`), what kind, and the message. */

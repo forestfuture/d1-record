@@ -1,3 +1,4 @@
+// The `sql` tagged template and `column()`: the only way raw SQL enters a query (ADR-0006).
 /**
  * A SQL fragment built with the `sql` tagged template (ADR-0006). The template
  * text is written by the developer; every interpolated value is bound as a

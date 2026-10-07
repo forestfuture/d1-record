@@ -1,3 +1,4 @@
+// The one place the library calls D1: runs statements, reports them to `onQuery`.
 import { boundValue, shownValue } from "./filtering.ts";
 import type { CompiledSql } from "./compiler.ts";
 import { translateConstraintError } from "./constraints.ts";

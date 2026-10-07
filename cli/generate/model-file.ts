@@ -1,3 +1,4 @@
+// A generated Model's source file, or the class added to an existing one.
 import { stringLiteral, stringLiteralPattern } from "../source.ts";
 import { moduleName } from "../schema/names.ts";
 

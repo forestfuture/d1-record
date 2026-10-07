@@ -1,3 +1,4 @@
+// RecordStatement: a record's save or destroy, prepared for `db.batch`.
 import type { ModelBase } from "./model.ts";
 
 declare const recordType: unique symbol;

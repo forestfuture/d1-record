@@ -1,3 +1,4 @@
+// What destroying a record does to its `dependent` associations, planned before the DELETE.
 import { associationsOf } from "./association-fields.ts";
 import type { CompiledSql } from "./compiler.ts";
 import { DeleteRestriction } from "./errors.ts";

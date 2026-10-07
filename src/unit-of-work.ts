@@ -1,3 +1,4 @@
+// Writing prepared writes as one atomic batch, then committing each and running its callbacks.
 import type { CompiledSql } from "./compiler.ts";
 import type { Executor } from "./executor.ts";
 

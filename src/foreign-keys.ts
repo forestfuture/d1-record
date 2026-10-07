@@ -1,3 +1,4 @@
+// Foreign keys for associations: the one declared, or inferred by Rails' naming convention.
 import type {
   AssociationDeclaration,
   AssociationDefinition,

@@ -71,7 +71,13 @@ export default defineConfig({
       "max-params": ["error", { max: 4 }],
       "max-lines-per-function": ["error", { max: 60, skipBlankLines: true, skipComments: true }],
     },
+    jsPlugins: ["./scripts/lint/module-header.mjs"],
     overrides: [
+      {
+        // Each library and command line module opens with what it owns (scripts/lint/).
+        files: ["src/**/*.ts", "cli/**/*.ts"],
+        rules: { "d1-record/module-header": "error" },
+      },
       {
         // A describe() callback holds a whole suite, so it's long by design.
         files: ["tests/**"],

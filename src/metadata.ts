@@ -1,3 +1,4 @@
+// Attribute metadata: each attribute's type, column and default, resolved from its spec.
 import { ancestors } from "./ancestors.ts";
 import { UnknownAttribute } from "./errors.ts";
 import type { ModelClass } from "./model.ts";

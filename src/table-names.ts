@@ -1,3 +1,4 @@
+// A Model's table name: inferred from its class name as Rails does, bound, or declared.
 import { ancestors } from "./ancestors.ts";
 import { InvalidModel } from "./errors.ts";
 import { pluralize } from "./inflections.ts";

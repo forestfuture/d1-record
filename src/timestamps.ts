@@ -1,3 +1,4 @@
+// `createdAt` and `updatedAt`: the timestamps a write adds.
 import type { Assignment } from "./compiler.ts";
 import type { ModelClass } from "./model.ts";
 

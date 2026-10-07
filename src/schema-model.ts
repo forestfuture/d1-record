@@ -1,3 +1,4 @@
+// `modelFor` and `ApplicationRecord`: Model base classes built on the generated schema (ADR-0010).
 import { InvalidModel } from "./errors.ts";
 import { markIgnoringColumns, type AttributeSpecs, type AttributeType } from "./metadata.ts";
 import {

@@ -1,3 +1,4 @@
+// Parses a generator's `name:type` column arguments.
 import { pluralize } from "../../src/inflections.ts";
 import { camelize, underscore } from "../../src/naming.ts";
 

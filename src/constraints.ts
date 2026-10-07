@@ -1,3 +1,4 @@
+// Turns a D1 constraint failure into the matching `ConstraintViolation` for the written tables.
 import {
   CheckViolation,
   ConstraintViolation,

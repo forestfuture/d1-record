@@ -1,3 +1,4 @@
+// `d1-record g model` and `g migration`: plans and writes a migration, a Model, and the schema.
 import { dirname, join, relative, resolve } from "node:path";
 import { apply, printed, printing, written, type FileToWrite, type Plan } from "../plan.ts";
 import { schemaRefusal, schemaWrites, type SchemaTables } from "../schema/command.ts";

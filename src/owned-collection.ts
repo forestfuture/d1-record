@@ -1,3 +1,4 @@
+// A hasMany's Relation as its owner sees it: records built through it join the owner.
 import type { ModelBase } from "./model.ts";
 import { state } from "./record-state.ts";
 import type { ResolvedAssociation } from "./resolved-association.ts";

@@ -1,3 +1,4 @@
+// Saving and destroying a record: validation, the callback order, and preparing the writes.
 import { shownKey } from "./filtering.ts";
 import { compileDelete, compileInsert, compileSelect, compileUpdate } from "./compiler.ts";
 import {

@@ -1,3 +1,4 @@
+// `Model({...})` and `ModelBase`: the record class, its statics, and its attribute accessors.
 import { InvalidModel } from "./errors.ts";
 import type { Executor, QueryListener } from "./executor.ts";
 import {

@@ -1,5 +1,5 @@
-// A project's D1 databases, from its Wrangler config: where each one's migrations are, and
-// where its generated schema goes. Shared by \`d1-record schema\` and the generators.
+// A project's D1 databases from its Wrangler config: migrations folders and schema paths.
+// For each database, where its migrations are and where its generated schema goes. Shared by \`d1-record schema\` and the generators.
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { classify, moduleName } from "./names.ts";

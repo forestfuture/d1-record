@@ -1,3 +1,4 @@
+// `permit`: keeps only the named attributes from untrusted input, each cast to its type (#82).
 import { castAs } from "./attribute-values.ts";
 import { attributeOf } from "./metadata.ts";
 import type { ModelClass } from "./model.ts";

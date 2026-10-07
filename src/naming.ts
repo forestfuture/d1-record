@@ -1,3 +1,4 @@
+// camelCase attribute names to snake_case columns and back, as Rails' `underscore` and `camelize`.
 /**
  * Converts a camelCase attribute name to its snake_case column name, treating
  * a run of capitals as one word (Rails' `underscore`): `htmlURL` → `html_url`,

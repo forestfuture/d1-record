@@ -1,5 +1,5 @@
-// A project as the commands see it, read from disk once: each D1 database's migrations and
-// generated files. Commands plan from a snapshot, so what they decide is testable without a
+// A project as the commands see it, read from disk once: migrations and generated files.
+// One per D1 database. Commands plan from a snapshot, so what they decide is testable without a
 // folder on disk (#95).
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { hasNestedMigrations, toolsWithFiles, type Tool } from "./origin.ts";

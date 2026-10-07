@@ -1,3 +1,4 @@
+// Validators (`presence`, `length`, `uniqueness`, …) and running them on a record.
 import type { Errors } from "./errors-collection.ts";
 import type { AttributesOf } from "./model.ts";
 

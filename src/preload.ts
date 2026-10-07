@@ -1,3 +1,4 @@
+// `includes()`: preloading associations, one `WHERE key IN (…)` query per association.
 import { castAs } from "./attribute-values.ts";
 import type { Executor } from "./executor.ts";
 import type { ModelBase, ModelClass } from "./model.ts";

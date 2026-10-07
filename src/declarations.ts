@@ -1,3 +1,4 @@
+// A Model's declared callbacks and validations, inherited, and sealed on its first use.
 import { ancestors } from "./ancestors.ts";
 import { InvalidModel } from "./errors.ts";
 import type { Callback, ModelBase } from "./model.ts";

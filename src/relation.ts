@@ -1,3 +1,4 @@
+// Relation: the chainable query (`where`, `order`, …), its finders and terminals, and bulk writes.
 import { databaseNow, jointly } from "./executor.ts";
 import { shownKey } from "./filtering.ts";
 import { castAs, castInherited, uncastable } from "./attribute-values.ts";

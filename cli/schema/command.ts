@@ -1,3 +1,4 @@
+// `d1-record schema`: plans the generated schema for each database, and `--watch`.
 import { watch } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { apply, combined, printing, written, type Plan, type Step } from "../plan.ts";

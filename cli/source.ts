@@ -1,3 +1,4 @@
+// Writing values safely into generated TypeScript source.
 /**
  * Text as a string literal in generated TypeScript, quotes and backslashes escaped: for values
  * that come from a project's config or paths (#85).

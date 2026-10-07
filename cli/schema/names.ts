@@ -1,3 +1,4 @@
+// Attribute, export, class and module names for generated code.
 import { camelize, underscore } from "../../src/naming.ts";
 
 /** Whether a name can be written bare: as a `const`, or as an object key without quotes. */

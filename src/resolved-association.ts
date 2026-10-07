@@ -1,3 +1,4 @@
+// An association resolved for one owner: which attributes link the records, and in what order.
 // associations.ts imports this module too; both uses are at call time, never at load.
 import { readyModel, type AssociationDefinition } from "./associations.ts";
 import type { Executor } from "./executor.ts";

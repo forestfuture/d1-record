@@ -1,3 +1,4 @@
+// The package's public API: everything an app imports. Anything not exported here is internal.
 export { belongsTo, hasMany, hasOne } from "./association-fields.ts";
 export type {
   AssociationOptions,

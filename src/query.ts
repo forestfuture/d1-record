@@ -1,3 +1,4 @@
+// QueryDescription, the immutable value a Relation describes, and combining (`or`, `merge`).
 import { Comparison } from "./comparisons.ts";
 import { IncompatibleRelation } from "./errors.ts";
 import type { ModelBase, ModelClass } from "./model.ts";

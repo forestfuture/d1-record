@@ -1,5 +1,5 @@
-// What a command decides to do, apart from doing it: the files to write and the lines to
-// print. Commands plan from a snapshot of the project (cli/schema/snapshot.ts), and `apply`
+// A command's plan (the files to write and the lines to print), and `apply`, which carries it out.
+// What a command decides to do is kept apart from doing it. Commands plan from a snapshot of the project (cli/schema/snapshot.ts), and `apply`
 // is the one place that writes (#95).
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
