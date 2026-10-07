@@ -1,4 +1,4 @@
-// A hasMany's Relation as its owner sees it: records built through it join the owner.
+// A hasMany's Relation as its owner sees it (records built through it join the owner), or no owner.
 import type { ModelBase } from "./model.ts";
 import { state } from "./record-state.ts";
 import type { ResolvedAssociation } from "./resolved-association.ts";
@@ -9,7 +9,8 @@ import type { ResolvedAssociation } from "./resolved-association.ts";
  * an owner with a key (its loaded records, cached on it, followed by the ones built through
  * it) and an owner without one (just what was built through it). A narrowed Relation of it
  * (`where`, `order`, a scope, …) keeps a narrowed form: records built or created through it
- * still join the owner, but reads query.
+ * still join the owner, but reads query. A plain query's Relation holds `unowned`, which
+ * knows nothing and joins nothing, so a Relation never asks whether it has an owner.
  */
 export interface OwnedCollection {
   /** The records it holds without a query (stored, then built), or undefined if not loaded. */
@@ -31,11 +32,24 @@ export interface OwnedCollection {
    * without a deleting `dependent:`; undefined when it deletes.
    */
   readonly nullifies: string | undefined;
-  /** Its foreign key and association, which a key that can't be cast names (#94). */
-  readonly link: { attribute: string; association: string };
+  /** Its foreign key and association, which a key that can't be cast names (#94); none unowned. */
+  readonly link: { attribute: string; association: string } | undefined;
   /** Its form in a narrowed Relation. */
   narrowed(): OwnedCollection;
 }
+
+/** A plain query's: no owner, so it holds nothing, refuses nothing, and a deleteAll deletes. */
+export const unowned: OwnedCollection = {
+  loaded: () => undefined,
+  created: () => {},
+  built: () => {},
+  invalidate: () => {},
+  unsavedCount: () => 0,
+  refusal: undefined,
+  nullifies: undefined,
+  link: undefined,
+  narrowed: () => unowned,
+};
 
 /** `owner`'s hasMany `association`, as its Relation sees it. */
 export function ownedCollection(

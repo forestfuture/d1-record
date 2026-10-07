@@ -53,7 +53,7 @@ import {
   type OrderSpec,
   type UpsertOptions,
 } from "./relation-checks.ts";
-import type { OwnedCollection } from "./owned-collection.ts";
+import { unowned, type OwnedCollection } from "./owned-collection.ts";
 import { insertStatement, runAlone, Statement } from "./statement.ts";
 
 /** The same term sorting the other way; NULLs move to the other end too, as in Rails. */
@@ -125,8 +125,8 @@ export class Relation<M extends ModelBase, S = {}> {
   readonly #model: ModelClass<M>;
   readonly #query: QueryDescription;
   readonly #runner: QueryRunner<M>;
-  /** For a hasMany of an owner: what the owner already knows about it. Not query data. */
-  readonly #collection: OwnedCollection | undefined;
+  /** What a hasMany's owner already knows about it, or `unowned`. Not query data. */
+  readonly #collection: OwnedCollection;
 
   /**
    * Relations come from `db.model(Model)` and from other Relations, never `new Relation()`:
@@ -138,7 +138,7 @@ export class Relation<M extends ModelBase, S = {}> {
     this.#model = model;
     this.#query = query ?? allOf(model);
     this.#runner = runnerFor(executor, model, this.#query);
-    this.#collection = collection;
+    this.#collection = collection ?? unowned;
   }
 
   where(conditions: Conditions<M> | SafeSql): Scoped<M, S> {
@@ -250,7 +250,7 @@ export class Relation<M extends ModelBase, S = {}> {
    */
   build(attributes: Partial<AttributesOf<M>> = {}): M {
     const record = this.#build(attributes);
-    this.#collection?.built(record);
+    this.#collection.built(record);
     return record;
   }
 
@@ -258,14 +258,14 @@ export class Relation<M extends ModelBase, S = {}> {
     const inherited = castInherited(
       this.#model,
       inheritedAttributes(this.#query.conditions),
-      this.#collection?.link,
+      this.#collection.link,
     );
     return buildRecord(this.#model, { ...inherited, ...attributes }, this.#executor);
   }
 
   /** As in Rails, records can't be created through an owner that has no key yet. */
   #requireSavedOwner(): void {
-    const reason = this.#collection?.refusal;
+    const reason = this.#collection.refusal;
     if (reason !== undefined) {
       throw new RecordNotSaved(`You cannot create a ${this.#model.name} here: ${reason}`);
     }
@@ -338,11 +338,11 @@ export class Relation<M extends ModelBase, S = {}> {
     method: string,
   ): Statement {
     this.#requireSavedOwner();
-    this.#collection?.invalidate();
+    this.#collection.invalidate();
     const inherited = castInherited(
       this.#model,
       inheritedAttributes(this.#query.conditions),
-      this.#collection?.link,
+      this.#collection.link,
     );
     const withInherited = rows.map((row) => ({ ...inherited, ...row }));
     return insertStatement(this.#executor, this.#model, withInherited, { conflict, method });
@@ -362,7 +362,7 @@ export class Relation<M extends ModelBase, S = {}> {
   toUpdateAll(changes: Partial<AttributesOf<M>> | SafeSql): Statement {
     const checked = checkChanges(this.#model, changes);
     const query = compileUpdateAll(this.#writableQuery("updateAll"), checked);
-    this.#collection?.invalidate();
+    this.#collection.invalidate();
     return new Statement(this.#executor, query);
   }
 
@@ -379,8 +379,8 @@ export class Relation<M extends ModelBase, S = {}> {
   /** `deleteAll`, as a Statement for `db.batch([...])`. */
   toDeleteAll(): Statement {
     const query = this.#writableQuery("deleteAll");
-    this.#collection?.invalidate();
-    const nullifies = this.#collection?.nullifies;
+    this.#collection.invalidate();
+    const nullifies = this.#collection.nullifies;
     const compiled =
       nullifies === undefined
         ? compileDeleteAll(query)
@@ -402,7 +402,7 @@ export class Relation<M extends ModelBase, S = {}> {
     try {
       return await runAlone(statement);
     } finally {
-      this.#collection?.invalidate();
+      this.#collection.invalidate();
     }
   }
 
@@ -410,7 +410,7 @@ export class Relation<M extends ModelBase, S = {}> {
   async create(attributes: Partial<AttributesOf<M>> = {}): Promise<M> {
     this.#requireSavedOwner();
     const record = this.#build(attributes);
-    if (await record.save()) this.#collection?.created(record);
+    if (await record.save()) this.#collection.created(record);
     return record;
   }
 
@@ -419,7 +419,7 @@ export class Relation<M extends ModelBase, S = {}> {
     this.#requireSavedOwner();
     const record = this.#build(attributes);
     await record.saveOrThrow();
-    this.#collection?.created(record);
+    this.#collection.created(record);
     return record;
   }
 
@@ -536,7 +536,7 @@ export class Relation<M extends ModelBase, S = {}> {
 
   /** How many records were built through this association and not yet saved. */
   #unsavedCount(): number {
-    return this.#collection?.unsavedCount() ?? 0;
+    return this.#collection.unsavedCount();
   }
 
   /** Whether there are any records: the opposite of `isEmpty()` (Rails' `any?`). */
@@ -586,7 +586,7 @@ export class Relation<M extends ModelBase, S = {}> {
     const cached = this.#cached();
     if (cached !== undefined) return [...cached];
     const collection = this.#collection;
-    if (collection?.fill === undefined) return this.#runner.load(this.#query);
+    if (collection.fill === undefined) return this.#runner.load(this.#query);
     // Loaded for the owner in its order, then target primary-key order, as preloaded.
     const records = await this.#runner.load({ ...this.#query, order: this.#withPrimaryKeyOrder() });
     collection.fill(records);
@@ -595,7 +595,7 @@ export class Relation<M extends ModelBase, S = {}> {
 
   /** The owner's loaded records for this hasMany, if it has them. */
   #cached(): M[] | undefined {
-    return this.#collection?.loaded() as M[] | undefined;
+    return this.#collection.loaded() as M[] | undefined;
   }
 
   /** This Relation on its and `other`'s databases, which must be one when it runs (#93). */
@@ -663,7 +663,7 @@ export class Relation<M extends ModelBase, S = {}> {
       );
     }
     // A changed query no longer matches what the owner has loaded: the collection narrows.
-    const collection = this.#collection?.narrowed();
+    const collection = this.#collection.narrowed();
     return new Class({ executor: this.#executor, model: this.#model, query, collection });
   }
 
