@@ -143,6 +143,25 @@ describe("paginate", () => {
       expect(titles(page.records)).toEqual(["E"]);
       expect(page.hasNext).toBe(false);
     });
+
+    test("preloads includes() for the page's records only, not the one past it", async () => {
+      await binding.batch([
+        binding.prepare("INSERT INTO users (id, email) VALUES (2, 'b@example.com')"),
+        binding.prepare("UPDATE posts SET user_id = 2 WHERE id = 5"),
+      ]);
+
+      const posts = db().model(Post).includes("user");
+      const counted = await posts.paginate({ page: 2, perPage: 2 });
+      const countedPreload = events.at(-1);
+      const page = await posts.paginate({ page: 2, perPage: 2, count: false });
+
+      expect(page.records.map((post) => post.loaded("user")?.email)).toEqual([
+        "a@example.com",
+        "a@example.com",
+      ]);
+      expect(titles(counted.records)).toEqual(titles(page.records));
+      expect(events.at(-1)?.meta?.rows_read).toBe(countedPreload?.meta?.rows_read);
+    });
   });
 
   describe("untrusted page and perPage", () => {

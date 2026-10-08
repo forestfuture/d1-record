@@ -15,6 +15,11 @@ export interface QueryRunner<M extends ModelBase> {
   load(description: QueryDescription): Promise<M[]>;
   /** The records `description` matches and the count `count` gives, sent as one batch. */
   loadCounted(description: QueryDescription, count: CompiledSql): Promise<Counted<M>>;
+  /**
+   * The records `description` matches (one SELECT, its limit given), and whether more follow:
+   * one row past the limit is read to learn that, and isn't hydrated or preloaded.
+   */
+  loadAhead(description: QueryDescription & { limit: number }): Promise<LoadedAhead<M>>;
   /** The rows of SQL other than loading records: a count, `exists`, `pluck`. */
   rows(sql: CompiledSql): Promise<Record<string, unknown>[]>;
   /** The rows `write` changed, running it now. */
@@ -27,6 +32,12 @@ interface Counted<M extends ModelBase> {
   count: number;
 }
 
+/** Records, and whether more follow them. */
+interface LoadedAhead<M extends ModelBase> {
+  records: M[];
+  hasMore: boolean;
+}
+
 /** How `query`, a Relation's, runs: on `executor`, unless it's a `none()` query. */
 export function runnerFor<M extends ModelBase>(
   executor: Executor,
@@ -37,6 +48,7 @@ export function runnerFor<M extends ModelBase>(
   return {
     load: (description) => loadRecords(executor, model, description),
     loadCounted: (description, count) => loadCounted(executor, model, description, count),
+    loadAhead: (description) => loadAhead(executor, model, description),
     rows: (sql) => executor.all(sql),
     changes: async (write) => (await write()).changes,
   };
@@ -46,6 +58,7 @@ export function runnerFor<M extends ModelBase>(
 const nothing: QueryRunner<never> = {
   load: async () => [],
   loadCounted: async () => ({ records: [], count: 0 }),
+  loadAhead: async () => ({ records: [], hasMore: false }),
   rows: async () => [],
   changes: async () => 0,
 };
@@ -69,6 +82,17 @@ async function loadCounted<M extends ModelBase>(
   const [counted, loaded] = await executor.batch([count, selectFor(model, query)]);
   const records = await hydrated(executor, model, query, loaded?.results ?? []);
   return { records, count: Number(counted?.results[0]?.["count"] ?? 0) };
+}
+
+/** One SELECT for `query`'s records and one past its limit, which is read but not loaded. */
+async function loadAhead<M extends ModelBase>(
+  executor: Executor,
+  model: ModelClass<M>,
+  query: QueryDescription & { limit: number },
+): Promise<LoadedAhead<M>> {
+  const rows = await executor.all(selectFor(model, { ...query, limit: query.limit + 1 }));
+  const records = await hydrated(executor, model, query, rows.slice(0, query.limit));
+  return { records, hasMore: rows.length > query.limit };
 }
 
 /** The SELECT for `query`'s records. */

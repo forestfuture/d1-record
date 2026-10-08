@@ -78,9 +78,8 @@ export async function paginate<M extends ModelBase>(
   };
   const hasPrevious = page > 1;
   if (options.count === false) {
-    const records = await runner.load({ ...onPage, limit: perPage + 1 });
-    const hasNext = records.length > perPage;
-    return { records: records.slice(0, perPage), page, perPage, hasNext, hasPrevious };
+    const { records, hasMore } = await runner.loadAhead(onPage);
+    return { records, page, perPage, hasNext: hasMore, hasPrevious };
   }
   const { records, count } = await runner.loadCounted(onPage, compileCount(query));
   const totalPages = Math.ceil(count / perPage);
