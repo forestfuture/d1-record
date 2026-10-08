@@ -1,5 +1,5 @@
 // Checks a Model's declaration the first time it's used, then seals its declarations.
-// It checks the table, the primary key, the attribute names, and generated ids.
+// It checks the table, the primary key, the attribute names, generated ids, and page sizes.
 import { ancestors } from "./ancestors.ts";
 import { declarationIn, probeOf } from "./association-fields.ts";
 import { seal } from "./declarations.ts";
@@ -21,6 +21,7 @@ export function verifyModel(model: ModelClass): void {
   rejectReservedAttributeNames(model);
   rejectBadGeneratedIds(model);
   rejectShadowingFields(model);
+  rejectBadPageSizes(model);
   // The classes it inherits declarations from too (an app's Base), so none can change later.
   for (const each of ancestors(model)) {
     if (each === ModelBase) break;
@@ -54,6 +55,18 @@ function rejectBadGeneratedIds(model: ModelClass): void {
   for (const [name, definition] of model.attributeDefinitions) {
     const problem = generateIdProblem(`${model.name}.${name}`, definition);
     if (problem !== undefined) throw new InvalidModel(problem);
+  }
+}
+
+/** `perPage` and `maxPerPage` are page sizes: whole numbers from 1, so the cap always holds. */
+function rejectBadPageSizes(model: ModelClass): void {
+  for (const name of ["perPage", "maxPerPage"] as const) {
+    const size = model[name];
+    if (!Number.isSafeInteger(size) || size < 1) {
+      throw new InvalidModel(
+        `${model.name}'s ${name} is ${String(size)}; set it to a whole number from 1`,
+      );
+    }
   }
 }
 

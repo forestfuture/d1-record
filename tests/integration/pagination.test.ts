@@ -4,6 +4,7 @@ import {
   connect,
   hasMany,
   IncompatibleRelation,
+  InvalidModel,
   Model,
   modelFor,
   type QueryEvent,
@@ -227,6 +228,19 @@ describe("paginate", () => {
   describe("perPage and maxPerPage", () => {
     test("default to 25 and 100", () => {
       expect([Model.Base.perPage, Model.Base.maxPerPage]).toEqual([25, 100]);
+    });
+
+    test.each([
+      ["perPage", 0],
+      ["perPage", 2.5],
+      ["maxPerPage", Number.POSITIVE_INFINITY],
+      ["maxPerPage", Number.NaN],
+    ])("a %s of %s is an InvalidModel", (name, value) => {
+      class Odd extends Post {}
+      Object.defineProperty(Odd, name, { value });
+
+      expect(() => db().model(Odd)).toThrow(InvalidModel);
+      expect(() => db().model(Odd)).toThrow(new RegExp(`Odd's ${name}`));
     });
 
     test("a larger perPage is capped at maxPerPage, without throwing", async () => {
