@@ -1,15 +1,16 @@
 // `paginate()`: one page of a Relation's records, and its total, in one round trip (#100).
 import { compileCount } from "./compiler.ts";
+import { castValue, uncastable } from "./conversion.ts";
 import type { QueryRunner } from "./load.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import type { QueryDescription } from "./query.ts";
 
 /** What `paginate()` takes: which page, how many records on it, and whether to count them all. */
 export interface PageOptions {
-  /** The page, from 1. */
-  page?: number;
-  /** Records on a page. */
-  perPage?: number;
+  /** The page, from 1: a number, or untrusted text such as a query string's `"2"`. */
+  page?: number | string | null;
+  /** Records on a page, a number or text as `page` is. */
+  perPage?: number | string | null;
   /** `false` skips the `COUNT`: the page has no `total` or `totalPages`. */
   count?: boolean;
 }
@@ -60,8 +61,8 @@ export async function paginate<M extends ModelBase>(
   { model, query, runner }: Paged<M>,
   options: PageOptions,
 ): Promise<Page<M> | CountlessPage<M>> {
-  const page = options.page ?? 1;
-  const perPage = options.perPage ?? 25;
+  const page = whole("page", options.page) ?? 1;
+  const perPage = whole("perPage", options.perPage) ?? 25;
   const order =
     query.order.length > 0
       ? query.order
@@ -77,4 +78,17 @@ export async function paginate<M extends ModelBase>(
   const totalPages = Math.ceil(count / perPage);
   const hasNext = page < totalPages;
   return { records, page, perPage, total: count, totalPages, hasNext, hasPrevious };
+}
+
+/**
+ * A page or page size, cast as an integer attribute is (#81), so `"2"` is 2. Missing, `null` or
+ * `""` is `undefined`, for the default; anything else not a whole number from 1 is a `TypeError`.
+ */
+function whole(name: string, value: number | string | null | undefined): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const cast = castValue("integer", value);
+  if (cast === uncastable || (cast as number) < 1) {
+    throw new TypeError(`paginate()'s ${name} must be a whole number from 1`);
+  }
+  return cast as number;
 }

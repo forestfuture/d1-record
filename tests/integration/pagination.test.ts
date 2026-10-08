@@ -117,4 +117,41 @@ describe("paginate", () => {
       expect(page.hasNext).toBe(false);
     });
   });
+
+  describe("untrusted page and perPage", () => {
+    test("are cast as an integer attribute is", async () => {
+      const page = await db().model(Post).paginate({ page: "2", perPage: " 2 " });
+
+      expect(titles(page.records)).toEqual(["C", "D"]);
+      expect([page.page, page.perPage]).toEqual([2, 2]);
+    });
+
+    test("missing, null or empty, are the first page and the default size", async () => {
+      const params = new URLSearchParams("page=");
+      const pages = [
+        await db().model(Post).paginate(),
+        await db().model(Post).paginate({ page: null, perPage: null }),
+        await db()
+          .model(Post)
+          .paginate({ page: params.get("page"), perPage: params.get("per") }),
+      ];
+
+      expect(pages.map(({ page, perPage }) => [page, perPage])).toEqual([
+        [1, 25],
+        [1, 25],
+        [1, 25],
+      ]);
+    });
+
+    test.each(["abc", "1.5", 1.5, "1e3", 0, "-1", Number.NaN])(
+      "%s throws TypeError, as a page or a perPage",
+      async (value) => {
+        const posts = db().model(Post);
+
+        await expect(posts.paginate({ page: value })).rejects.toThrow(TypeError);
+        await expect(posts.paginate({ perPage: value })).rejects.toThrow(TypeError);
+        expect(events).toEqual([]);
+      },
+    );
+  });
 });
