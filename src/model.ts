@@ -191,6 +191,12 @@ export class ModelBase {
    */
   static filterAttributes: readonly FilterAttribute[] = defaultFilterAttributes;
 
+  /**
+   * Attribute names `toJSON()` leaves out, so `Response.json(record)` can't send them. Exact
+   * names; none by default. `attributes()` still has them (#101).
+   */
+  static hiddenAttributes: readonly string[] = [];
+
   /** Records on a page of `paginate()` when it isn't given `perPage` (#100). */
   static perPage = 25;
 
@@ -622,13 +628,16 @@ export class ModelBase {
     return this[state].attributes();
   }
 
-  /** The loaded attributes as JSON-ready values (dates as ISO strings), for `Response.json(record)`. */
+  /**
+   * The loaded attributes as JSON-ready values (dates as ISO strings), without the Model's
+   * `hiddenAttributes`, for `Response.json(record)`.
+   */
   toJSON(): Record<string, unknown> {
+    const { hiddenAttributes } = modelOf(this);
     return Object.fromEntries(
-      Object.entries(this[state].attributes()).map(([name, value]) => [
-        name,
-        value instanceof Date ? value.toISOString() : value,
-      ]),
+      Object.entries(this[state].attributes())
+        .filter(([name]) => !hiddenAttributes.includes(name))
+        .map(([name, value]) => [name, value instanceof Date ? value.toISOString() : value]),
     );
   }
 }
