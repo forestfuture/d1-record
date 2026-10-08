@@ -55,7 +55,7 @@ import {
 } from "./relation-checks.ts";
 import { unowned, type OwnedCollection } from "./owned-collection.ts";
 import { insertStatement, runAlone, Statement } from "./statement.ts";
-import { paginate, type Page, type PageOptions } from "./pagination.ts";
+import { paginate, type CountlessPage, type Page, type PageOptions } from "./pagination.ts";
 
 /** The same term sorting the other way; NULLs move to the other end too, as in Rails. */
 function reversed(term: OrderTerm): OrderTerm {
@@ -579,8 +579,14 @@ export class Relation<M extends ModelBase, S = {}> {
     return attributes.length === 1 ? values.map(([value]) => value) : values;
   }
 
-  /** One page of records and its total, by this Relation's order or the primary key (#100). */
-  async paginate(options: PageOptions = {}): Promise<Page<M>> {
+  /**
+   * One page of records and its total, by this Relation's order or the primary key, in one
+   * round trip (#100). With `count: false`, no `COUNT`: the page has no total.
+   */
+  async paginate(options: PageOptions & { count: false }): Promise<CountlessPage<M>>;
+  async paginate(options?: PageOptions & { count?: true }): Promise<Page<M>>;
+  async paginate(options: PageOptions): Promise<Page<M> | CountlessPage<M>>;
+  async paginate(options: PageOptions = {}): Promise<Page<M> | CountlessPage<M>> {
     return paginate({ model: this.#model, query: this.#query, runner: this.#runner }, options);
   }
 

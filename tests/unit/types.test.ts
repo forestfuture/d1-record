@@ -426,4 +426,19 @@ describe("types", () => {
     };
     expectTypeOf(typeOnly).toBeFunction();
   });
+
+  test("a page from paginate({ count: false }) has no total", () => {
+    const typeOnly = async () => {
+      const counted = await db.model(User).paginate({ page: 1 });
+      const countless = await User.paginate({ page: 1, count: false });
+      expectTypeOf(counted.total).toEqualTypeOf<number>();
+      expectTypeOf(counted.records).toEqualTypeOf<User[]>();
+      expectTypeOf(countless.records).toEqualTypeOf<User[]>();
+      // @ts-expect-error a countless page has no total
+      expectTypeOf(countless.total).toBeNumber();
+      // @ts-expect-error a countless page has no totalPages
+      expectTypeOf(countless.totalPages).toBeNumber();
+    };
+    expectTypeOf(typeOnly).toBeFunction();
+  });
 });

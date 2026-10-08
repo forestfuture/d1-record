@@ -29,6 +29,22 @@ export interface Page<M extends ModelBase> extends CountlessPage<M> {
   totalPages: number;
 }
 
+/** `paginate` as a static of every Model, typed for the class it's called on. */
+export interface PaginateStatic {
+  <C extends ModelClass>(
+    this: C,
+    options: PageOptions & { count: false },
+  ): Promise<CountlessPage<InstanceType<C>>>;
+  <C extends ModelClass>(
+    this: C,
+    options?: PageOptions & { count?: true },
+  ): Promise<Page<InstanceType<C>>>;
+  <C extends ModelClass>(
+    this: C,
+    options: PageOptions,
+  ): Promise<Page<InstanceType<C>> | CountlessPage<InstanceType<C>>>;
+}
+
 /** A Relation's query and how it runs: what `paginate` pages. */
 export interface Paged<M extends ModelBase> {
   model: ModelClass<M>;
@@ -36,29 +52,29 @@ export interface Paged<M extends ModelBase> {
   runner: QueryRunner<M>;
 }
 
-/** One page of `paged`'s records, counted: the `COUNT` and the page's SELECT as one batch. */
+/**
+ * One page of `paged`'s records. Counted, the `COUNT` and the page's SELECT go as one batch;
+ * with `count: false`, one SELECT fetches a record past the page to learn whether there's a next.
+ */
 export async function paginate<M extends ModelBase>(
   { model, query, runner }: Paged<M>,
   options: PageOptions,
-): Promise<Page<M>> {
+): Promise<Page<M> | CountlessPage<M>> {
   const page = options.page ?? 1;
   const perPage = options.perPage ?? 25;
   const order =
     query.order.length > 0
       ? query.order
       : [{ attribute: model.primaryKey, direction: "asc" as const }];
-  const { records, count } = await runner.loadCounted(
-    { ...query, order, limit: perPage, offset: (page - 1) * perPage },
-    compileCount(query),
-  );
+  const onPage = { ...query, order, limit: perPage, offset: (page - 1) * perPage };
+  const hasPrevious = page > 1;
+  if (options.count === false) {
+    const records = await runner.load({ ...onPage, limit: perPage + 1 });
+    const hasNext = records.length > perPage;
+    return { records: records.slice(0, perPage), page, perPage, hasNext, hasPrevious };
+  }
+  const { records, count } = await runner.loadCounted(onPage, compileCount(query));
   const totalPages = Math.ceil(count / perPage);
-  return {
-    records,
-    page,
-    perPage,
-    total: count,
-    totalPages,
-    hasNext: page < totalPages,
-    hasPrevious: page > 1,
-  };
+  const hasNext = page < totalPages;
+  return { records, page, perPage, total: count, totalPages, hasNext, hasPrevious };
 }

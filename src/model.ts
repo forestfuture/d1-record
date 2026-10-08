@@ -31,6 +31,7 @@ import {
   type HasOne,
 } from "./associations.ts";
 import type { Relation, Scope, Scoped } from "./relation.ts";
+import type { PaginateStatic } from "./pagination.ts";
 import { currentRelation } from "./current-database.ts";
 import { scopeBodies, scopeName, useModelBase } from "./scoped-relation.ts";
 import type { Validation, ValidationOptions } from "./validations.ts";
@@ -70,7 +71,7 @@ type RelationStatic<K extends RelationMethod> = <C extends ModelClass>(
   ...args: On<C>[K] extends (...args: infer A) => unknown ? A : never
 ) => On<C>[K] extends (...args: never) => infer R ? R : never;
 
-/** The Relation methods every Model has as statics (besides `find` and `pluck`, overloaded). */
+/** The Relation methods every Model has as statics (besides the overloaded ones). */
 const relationMethods = [
   "where",
   "whereNot",
@@ -110,7 +111,6 @@ const relationMethods = [
   "hasAny",
   "exists",
   "toArray",
-  "paginate",
 ] as const;
 
 /** A Model's association by name; `UnknownAssociation` for any other name. */
@@ -266,7 +266,7 @@ export class ModelBase {
   declare static hasAny: RelationStatic<"hasAny">;
   declare static exists: RelationStatic<"exists">;
   declare static toArray: RelationStatic<"toArray">;
-  declare static paginate: RelationStatic<"paginate">;
+  declare static paginate: PaginateStatic;
   declare static find: {
     <C extends ModelClass>(this: C, id: string | number): Promise<InstanceType<C>>;
     <C extends ModelClass>(this: C, ids: readonly (string | number)[]): Promise<InstanceType<C>[]>;
@@ -628,7 +628,7 @@ export class ModelBase {
 export type ModelClass<M extends ModelBase = ModelBase> = (new () => M) &
   Omit<typeof ModelBase, "prototype">;
 
-for (const name of [...relationMethods, "find", "pluck"]) {
+for (const name of [...relationMethods, "find", "pluck", "paginate"]) {
   Object.defineProperty(ModelBase, name, {
     value(this: ModelClass, ...args: unknown[]): unknown {
       const relation = this.all() as unknown as Record<string, (...args: unknown[]) => unknown>;

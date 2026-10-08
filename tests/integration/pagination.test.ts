@@ -93,4 +93,28 @@ describe("paginate", () => {
       true,
     ]);
   });
+
+  describe("with { count: false }", () => {
+    test("fetches one record past the page to learn whether there's a next, in one query", async () => {
+      const page = await db().model(Post).paginate({ page: 2, perPage: 2, count: false });
+
+      expect(titles(page.records)).toEqual(["C", "D"]);
+      expect({ ...page, records: undefined }).toEqual({
+        records: undefined,
+        page: 2,
+        perPage: 2,
+        hasNext: true,
+        hasPrevious: true,
+      });
+      expect(events).toHaveLength(1);
+      expect(batches).toBe(0);
+    });
+
+    test("on the last page, has no next", async () => {
+      const page = await db().model(Post).paginate({ page: 3, perPage: 2, count: false });
+
+      expect(titles(page.records)).toEqual(["E"]);
+      expect(page.hasNext).toBe(false);
+    });
+  });
 });
