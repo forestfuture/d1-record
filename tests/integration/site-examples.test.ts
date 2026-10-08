@@ -150,7 +150,7 @@ describe("Getting started", () => {
     }
 
     const response = await paginating.listPosts(new Request("https://example.com/?page=1"));
-    const second = (await withDatabase(db, paginating.countless)) as { records: unknown[] };
+    const second = await withDatabase(db, paginating.countless);
 
     expect(await response.json()).toMatchObject({
       records: [{ title: "Day 2" }, { title: "Day 1" }, { title: "Hello, D1" }],
@@ -161,14 +161,7 @@ describe("Getting started", () => {
       hasNext: false,
       hasPrevious: false,
     });
-    expect(second).toEqual({
-      records: [],
-      page: 2,
-      perPage: 25,
-      hasNext: false,
-      hasPrevious: true,
-      more: false,
-    });
+    expect(second).toEqual({ records: [], hasNext: false });
     expect([paginating.Base.perPage, paginating.Base.maxPerPage]).toEqual([20, 50]);
   });
 });

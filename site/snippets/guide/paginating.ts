@@ -11,10 +11,10 @@ export async function listPosts(request: Request): Promise<Response> {
 
 export async function countless(): Promise<unknown> {
   // #region countless
-  const posts = await Post.order({ publishedAt: "desc" }).paginate({ page: 2, count: false });
-  const more = posts.hasNext; // whether page 3 has any posts
+  const posts = Post.order({ publishedAt: "desc" });
+  const { records, hasNext } = await posts.paginate({ page: 2, count: false });
   // #endregion countless
-  return { ...posts, more };
+  return { records, hasNext };
 }
 
 // #region per-page
