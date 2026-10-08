@@ -38,7 +38,7 @@ Each bulk write has a `to…` form that prepares it instead of running it: `toIn
 
 `batch` resolves to each entry’s result, in order.
 
-- **Keys:** rows in one batch can only point at each other through keys that exist before it’s sent, so generate keys in code, with `crypto.randomUUID()`.
+- **Keys:** rows in one batch can only point at each other through keys that exist before it’s sent, so generate keys in code, with [`generateId`](./models#generating-ids).
 - **Databases:** a batch runs on the database its entries were built on. Entries from two databases throw `IncompatibleRelation`.
 
 ::: warning TIP

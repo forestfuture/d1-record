@@ -5,7 +5,7 @@ const ApplicationRecord = modelFor(
   {
     categories: {
       attributes: {
-        id: { type: "string", null: false, default: () => crypto.randomUUID() },
+        id: { type: "string", null: false, generateId: true },
         parentId: "string",
         name: { type: "string", null: false },
       },

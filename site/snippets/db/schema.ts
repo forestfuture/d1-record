@@ -9,7 +9,7 @@ export const billingAccounts = {
 
 /** products */
 export const products = {
-  id: { type: "string", null: false, default: () => crypto.randomUUID() },
+  id: { type: "string", null: false, generateId: true },
   name: { type: "string", null: false },
   priceCents: { type: "integer", null: false, default: () => 0 },
   available: { type: "integer", null: false, default: () => 1 },

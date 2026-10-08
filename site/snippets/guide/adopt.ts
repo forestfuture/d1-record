@@ -5,7 +5,7 @@ const ApplicationRecord = modelFor(
   {
     posts: {
       attributes: {
-        id: { type: "string", null: false, default: () => crypto.randomUUID() },
+        id: { type: "string", null: false, generateId: true },
         title: { type: "string", null: false },
         metadata: "string",
         archived: "integer",

@@ -21,7 +21,7 @@ The `d1-record g model` and `g migration` commands: they write a migration (and 
 _Avoid_: Scaffold, codegen
 
 **Override**:
-A change a Model makes to an attribute of the **Generated schema** (its type, nullability or default), or `false` to ignore the column.
+A change a Model makes to an attribute of the **Generated schema** (its type, nullability, default or **Generated id**), or `false` to ignore the column.
 _Avoid_: Patch, customization
 
 **Record**:
@@ -63,6 +63,10 @@ _Avoid_: Connection, client, context (on its own)
 **Attribute**:
 A value declared on a **Model**, with a camelCase name, the snake_case column it maps to, and a type that says how its value moves between JavaScript and SQLite. Only declared attributes can appear in object-style queries or be written.
 _Avoid_: Field, property
+
+**Generated id**:
+A string **Attribute** declared with `generateId: true`, whose value, when not given, comes from its **Model**'s `generateId` where a default would: a key made in code, before the row is written. A `TEXT` primary key in the **Generated schema** is one.
+_Avoid_: Generated attribute, auto id
 
 **Column**:
 The D1 table column behind an **Attribute**. The word only applies on the SQL side: raw SQL fragments name columns, and everything else names attributes.

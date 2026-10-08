@@ -28,15 +28,16 @@ Generated attributes are usually all you need. When a column holds something its
 
 Overrides are keyed by attribute name, so an unknown name is a compile error:
 
-| Override                     | Does                                                                                                  |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `"boolean"` (a type name)    | Reads and writes the attribute as that type                                                           |
-| `{ type?, null?, default? }` | Replaces those parts of the generated attribute; `null: false` makes it non-null in TypeScript        |
-| `false`                      | Ignores the column: it’s never typed, read, or written, and queries name their columns instead of `*` |
+| Override                                  | Does                                                                                                  |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `"boolean"` (a type name)                 | Reads and writes the attribute as that type                                                           |
+| `{ type?, null?, default?, generateId? }` | Replaces those parts of the generated attribute; `null: false` makes it non-null in TypeScript        |
+| `false`                                   | Ignores the column: it’s never typed, read, or written, and queries name their columns instead of `*` |
 
 An override can’t change a column, add an attribute, or ignore the primary key: each throws `InvalidModel`.
 
-- **Changing a `type`** drops the generated default, so the column’s own default applies unless you give one.
+- **Changing a `type`** drops the generated default or `generateId`, so the column’s own default applies unless you give one.
+- **A `default` and `generateId`** replace each other, so an attribute has one or the other. `generateId` is only for strings.
 - **A `default`** isn’t type-checked yet ([#74](https://github.com/forestfuture/d1-record/issues/74)). One that returns a value the type can’t cast throws `TypeError` when a record is built.
 - **Ignoring a `NOT NULL` column** without a default makes inserts fail, so give it a default in a migration first.
 
@@ -153,7 +154,7 @@ Build a record without touching the database with `build`:
 
 <<< @/snippets/guide/models.ts#build{ts}
 
-- **Defaults** run at `build()`, so a key generated in code exists before the record is saved. That lets records that point at each other be saved together, in one atomic batch.
+- **Defaults** and [generated ids](#generating-ids) run at `build()`, so a key generated in code exists before the record is saved. That lets records that point at each other be saved together, in one atomic batch.
 - **Unassigned attributes** read as `null`, and aren’t written on insert, so the column’s database default applies. After the insert, the record loads what D1 stored.
 - **Unknown attributes** throw `UnknownAttribute`, and `undefined` throws `TypeError`. Use `null` to store NULL.
 
@@ -185,6 +186,44 @@ It reads three kinds of input:
 - **`TypeError`** is thrown for a value that can’t be cast, a file from a form, and any other input: an array, a `Map`, `Headers`, a class instance, `null`, or a string.
 
 [Untrusted input](./untrusted-input) shows `permit` in a Worker.
+
+## Generating ids
+
+A `TEXT` primary key gets its value from the Model’s `generateId` when you don’t give one. By default, that’s a UUID:
+
+```ts
+const post = Post.build({ title: "Hello" });
+post.id; // "3b241101-e2bb-4255-8caf-4136c566a962"
+```
+
+To use another kind of id across your app, override `generateId` on your app’s base class:
+
+```ts
+import { Model } from "@forestfuture/d1-record";
+import { uuidv7 } from "uuidv7";
+
+class Base extends Model.Base {
+  static override generateId = () => uuidv7();
+}
+```
+
+`generateId` gets the attribute’s name, so it can prefix ids: `` `${attribute}_${uuidv7()}` ``.
+
+To generate another string attribute the same way, turn it on with an override:
+
+```ts
+export class Post extends ApplicationRecord("posts", { publicId: { generateId: true } }) {}
+```
+
+In a Model you declare yourself, write it on the attribute: `id: { type: "string", null: false, generateId: true }`.
+
+::: warning TIP
+For one attribute with its own format, use a `default`: ``shareToken: { default: () => `share_${uuidv7()}` }``. A value made from other attributes, such as a slug, belongs in a [callback](./callbacks), since `generateId` never sees the record.
+:::
+
+::: warning Beyond Rails
+Rails has no `generateId`. Its UUID keys come from the database (`gen_random_uuid()` in PostgreSQL), which D1 can’t do for a key a batch needs before the row is written.
+:::
 
 ## Using timestamps
 

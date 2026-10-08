@@ -80,7 +80,7 @@ Also:
 
 - **Names:** `price_cents` becomes `priceCents`. A column whose name doesn’t come back the same from camelCase gets `column: "…"`.
 - **`NOT NULL`** becomes `null: false`. A primary key is never null.
-- **Primary keys:** the key column is the Model’s `primaryKey`. A `TEXT` key gets `default: () => crypto.randomUUID()`; an `INTEGER PRIMARY KEY` is left to D1. A table with no key, or a key of several columns, is an error.
+- **Primary keys:** the key column is the Model’s `primaryKey`. A `TEXT` key gets `generateId: true`, so the Model’s [`generateId`](./models#generating-ids) makes it; an `INTEGER PRIMARY KEY` is left to D1. A table with no key, or a key of several columns, is an error.
 - **Defaults:** literal defaults (numbers, strings, `TRUE`/`FALSE`, JSON) are copied, so a new record shows them before it’s saved. Expressions such as `CURRENT_TIMESTAMP` are left to D1.
 - **Foreign keys** take the referenced column’s type. They don’t create associations, which are behavior you declare.
 - **Left out:** SQLite’s own tables, Cloudflare’s (`_cf_…`), the migrations table, and virtual tables.

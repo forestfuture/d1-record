@@ -2,7 +2,7 @@ import { belongsTo, hasMany, hasOne, Model, type HasMany } from "@forestfuture/d
 
 // #region declare
 export class Author extends Model({
-  id: { type: "string", null: false, default: () => crypto.randomUUID() },
+  id: { type: "string", null: false, generateId: true },
   name: { type: "string", null: false },
 }) {
   articles = hasMany(Article, { dependent: "destroy" }); // Article's authorId
@@ -10,7 +10,7 @@ export class Author extends Model({
 }
 
 export class Article extends Model({
-  id: { type: "string", null: false, default: () => crypto.randomUUID() },
+  id: { type: "string", null: false, generateId: true },
   authorId: { type: "string", null: false },
   title: { type: "string", null: false },
 }) {

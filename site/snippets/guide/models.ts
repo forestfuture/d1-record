@@ -3,7 +3,7 @@ import { ApplicationRecord } from "./application-record";
 
 // #region declare
 export class User extends Model({
-  id: { type: "string", null: false, default: () => crypto.randomUUID() },
+  id: { type: "string", null: false, generateId: true },
   email: { type: "string", null: false },
   role: "string",
   isActive: "boolean", // column: is_active
