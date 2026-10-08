@@ -22,7 +22,7 @@ export interface QueryRunner<M extends ModelBase> {
 }
 
 /** Records, and a count sent with them. */
-export interface Counted<M extends ModelBase> {
+interface Counted<M extends ModelBase> {
   records: M[];
   count: number;
 }

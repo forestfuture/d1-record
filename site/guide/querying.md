@@ -1,5 +1,5 @@
 ---
-description: "Reference for querying: a Model's statics, Relations, where and comparisons, sql fragments, ordering and paging, find/findBy/first/count, partial records, none(), merge, scopes, and preloading."
+description: "Reference for querying: a Model's statics, Relations, where and comparisons, sql fragments, ordering and paging, paginate, find/findBy/first/count, partial records, none(), merge, scopes, and preloading."
 ---
 
 # Querying
@@ -55,10 +55,44 @@ Sort by each key in turn with `order`, and page with `limit` and `offset`:
 
 <<< @/snippets/guide/querying.ts#order{ts}
 
-Calling `order` again adds more keys. `reorder` replaces the order so far, and `reorder()` removes it.
+Calling `order` again adds more keys. `reorder` replaces the order so far, and `reorder()` removes it. To get a page with its total, use [`paginate`](#paginating).
 
 ::: warning TIP
 NULLs sort first in ascending order, as in SQLite. Place them with `nulls: "first"` or `nulls: "last"`.
+:::
+
+## Paginating
+
+`paginate` resolves to one page of records and the total they’re a page of, in a single round trip to D1:
+
+<<< @/snippets/guide/paginating.ts#paginate{ts}
+
+- `page` and `perPage` take numbers, or text from a query string. Missing, `null`, or empty, they mean the first page and the default size. Anything that isn’t a whole number from 1 throws `TypeError`.
+- Without an order, pages sort by the primary key, so a record stays on its page between requests.
+- A page past the last has no records, but still has the real `total`.
+- `includes()` preloads the page’s associations once the page is loaded.
+- A Relation with its own `limit` or `offset` throws `IncompatibleRelation`.
+
+### Skipping the count
+
+Counting reads every matching row, and D1 bills each row it reads. If you only need to know whether there’s a next page, pass `count: false`:
+
+<<< @/snippets/guide/paginating.ts#countless{ts}
+
+The page then has no `total` or `totalPages`.
+
+### Setting the page size
+
+By default, a page holds 25 records, and none holds more than 100. To change both, set `perPage` and `maxPerPage` on your app’s base class:
+
+<<< @/snippets/guide/paginating.ts#per-page{ts}
+
+::: warning TIP
+D1 limits neither the rows a query returns nor the size of its response. `maxPerPage` keeps one request from reading, and paying for, too many rows, within a Worker’s 128 MB of memory and a query’s 30 seconds.
+:::
+
+::: warning Beyond Rails
+Rails leaves pagination to gems such as Kaminari and Pagy. d1-record builds it in, and sends the count and the page to D1 together.
 :::
 
 ## Getting results

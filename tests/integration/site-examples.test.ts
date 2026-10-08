@@ -23,6 +23,7 @@ import { runSchema } from "../../cli/schema/command.ts";
 import { Post, User } from "../../site/snippets/getting-started/models.ts";
 import * as models from "../../site/snippets/guide/models.ts";
 import * as untrusted from "../../site/snippets/guide/untrusted-input.ts";
+import * as paginating from "../../site/snippets/guide/paginating.ts";
 import * as filtering from "../../site/snippets/guide/filtering.ts";
 import worker from "../../site/snippets/getting-started/src/index.ts";
 import { publishDraftsAndRemove } from "../../site/snippets/getting-started/src/publish.ts";
@@ -138,6 +139,37 @@ describe("Getting started", () => {
     expect(await db.model(User).pluck("email")).toEqual(["grace@example.com"]);
     expect(await db.model(Post).where({ publishedAt: null }).count()).toBe(0);
     expect(await db.model(Post).count()).toBe(1);
+  });
+
+  test("Querying: the paginate examples page the posts, newest first", async () => {
+    const db = connect(binding);
+    const grace = await db.model(User).findByOrThrow({ email: "grace@example.com" });
+    for (const day of [1, 2]) {
+      const publishedAt = new Date(Date.UTC(2030, 0, day));
+      await db.model(Post).create({ userId: grace.id, title: `Day ${day}`, publishedAt });
+    }
+
+    const response = await paginating.listPosts(new Request("https://example.com/?page=1"));
+    const second = (await withDatabase(db, paginating.countless)) as { records: unknown[] };
+
+    expect(await response.json()).toMatchObject({
+      records: [{ title: "Day 2" }, { title: "Day 1" }, { title: "Hello, D1" }],
+      page: 1,
+      perPage: 20,
+      total: 3,
+      totalPages: 1,
+      hasNext: false,
+      hasPrevious: false,
+    });
+    expect(second).toEqual({
+      records: [],
+      page: 2,
+      perPage: 25,
+      hasNext: false,
+      hasPrevious: true,
+      more: false,
+    });
+    expect([paginating.Base.perPage, paginating.Base.maxPerPage]).toEqual([20, 50]);
   });
 });
 
