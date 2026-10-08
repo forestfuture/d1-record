@@ -153,6 +153,7 @@ describe("generated ids", () => {
 
     test("on an attribute that isn't a string is an InvalidModel", () => {
       class Counted extends Model({
+        // @ts-expect-error a compile error too; this checks plain JavaScript
         id: { type: "integer", null: false, generateId: true },
       }) {
         static override tableName = "notes";
@@ -200,6 +201,7 @@ describe("generated ids", () => {
         ),
       );
       expect(() =>
+        // @ts-expect-error a compile error too; this checks plain JavaScript
         ApplicationRecord("notebooks", { id: { type: "integer", generateId: true } }),
       ).toThrow(
         new InvalidModel(

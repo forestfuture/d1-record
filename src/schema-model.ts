@@ -5,6 +5,7 @@ import {
   markIgnoringColumns,
   type AttributeSpecs,
   type AttributeType,
+  type SpecObject,
 } from "./metadata.ts";
 import {
   defineModel,
@@ -27,7 +28,16 @@ export type TableSchemas = Readonly<Record<string, TableSchema>>;
 /** A change to a generated attribute: its type alone, or its type, nullability and default. */
 type AttributeOverride =
   | AttributeType
-  | { type?: AttributeType; null?: boolean; default?: () => unknown; generateId?: boolean };
+  | (OverrideObject & { type?: "string" })
+  | (OverrideObject & { type: Exclude<AttributeType, "string">; generateId?: false });
+
+/** An override written out; `generateId` only with a string type (#99). */
+interface OverrideObject {
+  type?: AttributeType;
+  null?: boolean;
+  default?: () => unknown;
+  generateId?: boolean;
+}
 
 /** What `ApplicationRecord("products", {...})` may change: any attribute, and ignore any but the key. */
 type Overrides<T extends TableSchema> = {
@@ -123,11 +133,16 @@ function overridden(
   spec: AttributeSpecs[string],
   change: Partial<Exclude<AttributeOverride, AttributeType>>,
 ): AttributeSpecs[string] {
-  const base = typeof spec === "string" ? { type: spec } : spec;
+  const base: SpecObject = typeof spec === "string" ? { type: spec } : spec;
   const retyped = change.type !== undefined && change.type !== base.type;
   const { default: initial, generateId, ...rest } = base;
   const keeps = !retyped && change.default === undefined && change.generateId === undefined;
-  return { ...rest, ...(keeps && { default: initial, generateId }), ...change };
+  // Checked by generateIdProblem, since a merged spec's type isn't known statically.
+  return {
+    ...rest,
+    ...(keeps && { default: initial, generateId }),
+    ...change,
+  } as AttributeSpecs[string];
 }
 
 /** `spec` with `change` applied, refused if it leaves a `generateId` it can't have (#99). */

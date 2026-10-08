@@ -6,17 +6,24 @@ import { underscore } from "./naming.ts";
 
 export type AttributeType = "string" | "integer" | "real" | "boolean" | "datetime" | "json";
 
+/** An attribute's spec written out: its type, and optionally nullability, column and default. */
+export interface SpecObject {
+  type: AttributeType;
+  null?: boolean;
+  column?: string;
+  /** Evaluated at `build()`, e.g. `() => new Date()`. */
+  default?: () => unknown;
+  /**
+   * Made by the Model's `generateId` when not given, where a default would run: an
+   * app-generated key (#99). Generated ids are strings, so only a string attribute has one.
+   */
+  generateId?: boolean;
+}
+
 export type AttributeSpec =
   | AttributeType
-  | {
-      type: AttributeType;
-      null?: boolean;
-      column?: string;
-      /** Evaluated at `build()`, e.g. `() => crypto.randomUUID()` for app-generated keys. */
-      default?: () => unknown;
-      /** Filled in by the Model's `generateId` when not given, as a default is (#99). */
-      generateId?: boolean;
-    };
+  | (SpecObject & { type: "string" })
+  | (SpecObject & { type: Exclude<AttributeType, "string">; generateId?: false });
 
 export type AttributeSpecs = Record<string, AttributeSpec>;
 

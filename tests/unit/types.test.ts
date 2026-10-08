@@ -372,4 +372,26 @@ describe("types", () => {
     };
     expectTypeOf(typeOnly).toBeFunction();
   });
+
+  test("generateId is for string attributes, and generateId overrides keep a string", () => {
+    class Note extends Model({ id: { type: "string", null: false, generateId: true } }) {}
+    expectTypeOf<Note["id"]>().toEqualTypeOf<string>();
+
+    // @ts-expect-error generated ids are strings
+    Model({ id: { type: "integer", null: false, generateId: true } });
+
+    class Uuidv7Base extends Model.Base {
+      static override generateId = () => "0190…";
+    }
+    class PrefixBase extends Model.Base {
+      static override generateId(attribute: string) {
+        return `${attribute}_1`;
+      }
+    }
+    // @ts-expect-error generateId returns a string
+    class NumberBase extends Model.Base {
+      static override generateId = () => 42;
+    }
+    expectTypeOf([Uuidv7Base, PrefixBase, NumberBase]).toBeArray();
+  });
 });
