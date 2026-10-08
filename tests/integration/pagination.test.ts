@@ -65,4 +65,32 @@ describe("paginate", () => {
     expect(batches).toBe(1);
     expect(events).toHaveLength(2);
   });
+
+  test("keeps the Relation's conditions and order", async () => {
+    const page = await db()
+      .model(Post)
+      .where({ id: [1, 2, 3, 4] })
+      .order({ title: "desc" })
+      .paginate({ page: 1, perPage: 3 });
+
+    expect(titles(page.records)).toEqual(["D", "C", "B"]);
+    expect([page.total, page.totalPages, page.hasNext, page.hasPrevious]).toEqual([
+      4,
+      2,
+      true,
+      false,
+    ]);
+  });
+
+  test("past the last page, has no records but the real total", async () => {
+    const page = await db().model(Post).paginate({ page: 9, perPage: 2 });
+
+    expect(page.records).toEqual([]);
+    expect([page.total, page.totalPages, page.hasNext, page.hasPrevious]).toEqual([
+      5,
+      3,
+      false,
+      true,
+    ]);
+  });
 });
