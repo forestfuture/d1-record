@@ -222,7 +222,7 @@ For one attribute with its own format, use a `default`: ``shareToken: { default:
 :::
 
 ::: warning Beyond Rails
-Rails has no `generateId`. Its UUID keys come from the database (`gen_random_uuid()` in PostgreSQL), which D1 can’t do for a key a batch needs before the row is written.
+Rails has no `generateId`. Its UUID keys come from the database (`gen_random_uuid()` in PostgreSQL), which D1 can’t do for a key a batch needs before the row is written. See [Primary keys](./coming-from-rails#primary-keys).
 :::
 
 ## Using timestamps

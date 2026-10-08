@@ -21,7 +21,7 @@ The `d1-record g model` and `g migration` commands: they write a migration (and 
 _Avoid_: Scaffold, codegen
 
 **Override**:
-A change a Model makes to an attribute of the **Generated schema** (its type, nullability, default or **Generated id**), or `false` to ignore the column.
+A change a Model makes to an attribute of the **Generated schema** (its type, nullability, default, or **Generated id**), or `false` to ignore the column.
 _Avoid_: Patch, customization
 
 **Record**:
