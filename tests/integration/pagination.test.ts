@@ -59,6 +59,8 @@ describe("paginate", () => {
 
   beforeAll(async () => {
     ({ db: binding, dispose } = await createTestDatabase());
+    // Read backwards for a descending order, the index gives tied rows in reverse key order.
+    await binding.prepare("CREATE INDEX posts_user_id ON posts (user_id)").run();
   });
   afterAll(() => dispose());
   beforeEach(async () => {
@@ -290,5 +292,34 @@ describe("paginate", () => {
     const page = await db().model(Post).select("userId").distinct().paginate();
 
     expect([page.records.map(({ userId }) => userId), page.total]).toEqual([[1], 1]);
+  });
+
+  test("ends the Relation's order with the primary key, so tied records keep their pages", async () => {
+    const posts = db().model(Post).order({ userId: "desc" });
+
+    const pages = [
+      await posts.paginate({ page: 1, perPage: 2 }),
+      await posts.paginate({ page: 2, perPage: 2, count: false }),
+    ];
+
+    expect(pages.map(({ records }) => titles(records))).toEqual([
+      ["A", "B"],
+      ["C", "D"],
+    ]);
+  });
+
+  test("after distinct(), with no order, pages sort by the selected attributes", async () => {
+    await binding.batch([
+      binding.prepare("INSERT INTO users (id, email) VALUES (2, 'b@example.com')"),
+      binding.prepare("UPDATE posts SET user_id = 2 WHERE id IN (1, 3)"),
+    ]);
+    const userIds = db().model(Post).select("userId").distinct();
+
+    const pages = [
+      await userIds.paginate({ page: 1, perPage: 1 }),
+      await userIds.paginate({ page: 2, perPage: 1 }),
+    ];
+
+    expect(pages.map(({ records }) => records.map(({ userId }) => userId))).toEqual([[1], [2]]);
   });
 });

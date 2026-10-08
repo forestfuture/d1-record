@@ -4,7 +4,8 @@ import { castValue, uncastable } from "./conversion.ts";
 import { IncompatibleRelation } from "./errors.ts";
 import type { QueryRunner } from "./load.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
-import type { QueryDescription } from "./query.ts";
+import type { OrderTerm, QueryDescription } from "./query.ts";
+import { SafeSql } from "./sql.ts";
 
 /** What `paginate()` takes: which page, how many records on it, and whether to count them all. */
 export interface PageOptions {
@@ -69,11 +70,12 @@ export async function paginate<M extends ModelBase>(
   }
   const page = whole("page", options.page) ?? 1;
   const perPage = Math.min(whole("perPage", options.perPage) ?? model.perPage, model.maxPerPage);
-  const order =
-    query.order.length > 0
-      ? query.order
-      : [{ attribute: model.primaryKey, direction: "asc" as const }];
-  const onPage = { ...query, order, limit: perPage, offset: (page - 1) * perPage };
+  const onPage = {
+    ...query,
+    order: stableOrder(model, query),
+    limit: perPage,
+    offset: (page - 1) * perPage,
+  };
   const hasPrevious = page > 1;
   if (options.count === false) {
     const records = await runner.load({ ...onPage, limit: perPage + 1 });
@@ -84,6 +86,20 @@ export async function paginate<M extends ModelBase>(
   const totalPages = Math.ceil(count / perPage);
   const hasNext = page < totalPages;
   return { records, page, perPage, total: count, totalPages, hasNext, hasPrevious };
+}
+
+/**
+ * `query`'s order, ended with what makes a row unique, so tied rows keep their pages between
+ * requests: the primary key, or after `distinct()`, the selected attributes (the key isn't
+ * loaded). Those already in the order aren't added again.
+ */
+function stableOrder(model: ModelClass, query: QueryDescription): readonly OrderTerm[] {
+  const unique = query.distinct && query.select ? query.select : [model.primaryKey];
+  const ordered = new Set(query.order.map((term) => !(term instanceof SafeSql) && term.attribute));
+  const ties = unique
+    .filter((attribute) => !ordered.has(attribute))
+    .map((attribute) => ({ attribute, direction: "asc" as const }));
+  return [...query.order, ...ties];
 }
 
 /**

@@ -68,7 +68,7 @@ NULLs sort first in ascending order, as in SQLite. Place them with `nulls: "firs
 <<< @/snippets/guide/paginating.ts#paginate{ts}
 
 - `page` and `perPage` take numbers, or text from a query string. Missing, `null`, or empty, they mean the first page and the default size. Anything that isn’t a whole number from 1 throws `TypeError`.
-- Without an order, pages sort by the primary key, so a record stays on its page between requests.
+- Pages sort by the Relation’s order, then by the primary key, so records that tie keep their pages between requests.
 - A page past the last has no records, but still has the real `total`.
 - `includes()` preloads the page’s associations once the page is loaded.
 - A Relation with its own `limit` or `offset` throws `IncompatibleRelation`.
