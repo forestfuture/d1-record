@@ -49,6 +49,14 @@ const tables = {
 
 class SequentialNote extends modelFor(tables, SequentialBase)("notes") {}
 
+const generatedTables = {
+  notebooks: {
+    attributes: { id: { type: "string", null: false, generateId: true }, title: "string" },
+    primaryKey: "id",
+  },
+} as const;
+const ApplicationRecord = modelFor(generatedTables);
+
 class PrefixedNote extends Model({
   id: { type: "string", null: false, generateId: true },
   body: "string",
@@ -155,6 +163,32 @@ describe("generated ids", () => {
           'Counted.id is "integer", so it can\'t have generateId: generated ids are strings',
         ),
       );
+    });
+  });
+
+  describe('overriding one in ApplicationRecord("table", {...})', () => {
+    test("a default replaces generateId", () => {
+      class Given extends ApplicationRecord("notebooks", { id: { default: () => "fixed" } }) {}
+
+      expect(connect(binding).model(Given).build().id).toBe("fixed");
+    });
+
+    test("generateId: false turns it off", () => {
+      class Plain extends ApplicationRecord("notebooks", { id: { generateId: false } }) {}
+
+      expect(connect(binding).model(Plain).build().id).toBeNull();
+    });
+
+    test("changing the type drops it", () => {
+      class Retyped extends ApplicationRecord("notebooks", { id: "integer" }) {}
+
+      expect(connect(binding).model(Retyped).build().id).toBeNull();
+    });
+
+    test("generateId: true turns it on for a string attribute", () => {
+      class Titled extends ApplicationRecord("notebooks", { title: { generateId: true } }) {}
+
+      expect(connect(binding).model(Titled).build().title).toMatch(uuid);
     });
   });
 });

@@ -132,7 +132,7 @@ describe("modelFor: the generated Model", () => {
   test("an override past the types is checked too: the column, or anything but a spec, is an InvalidModel", () => {
     const message = (attribute: string) =>
       new InvalidModel(
-        `products.${attribute}: an override is a type name, { type, null, default }, or false`,
+        `products.${attribute}: an override is a type name, { type, null, default, generateId }, or false`,
       );
 
     expect(() => Model("products", { sku: { column: "code" } } as never)).toThrow(message("sku"));

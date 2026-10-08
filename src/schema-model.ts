@@ -22,7 +22,7 @@ export type TableSchemas = Readonly<Record<string, TableSchema>>;
 /** A change to a generated attribute: its type alone, or its type, nullability and default. */
 type AttributeOverride =
   | AttributeType
-  | { type?: AttributeType; null?: boolean; default?: () => unknown };
+  | { type?: AttributeType; null?: boolean; default?: () => unknown; generateId?: boolean };
 
 /** What `ApplicationRecord("products", {...})` may change: any attribute, and ignore any but the key. */
 type Overrides<T extends TableSchema> = {
@@ -70,15 +70,20 @@ export interface SchemaModel<T extends TableSchemas, B extends BaseClass = typeo
 
 const types: readonly unknown[] = ["string", "integer", "real", "boolean", "datetime", "json"];
 
-/** Whether `value` is an object override: only `type`, `null` and `default`, each well formed. */
+/** What each key of an object override may hold (besides `undefined`, which changes nothing). */
+const overrideKeys: Readonly<Record<string, (value: unknown) => boolean>> = {
+  type: (value) => types.includes(value),
+  null: (value) => typeof value === "boolean",
+  default: (value) => typeof value === "function",
+  generateId: (value) => typeof value === "boolean",
+};
+
+/** Whether `value` is an object override: only `type`, `null`, `default` and `generateId`, well formed. */
 function isSpecOverride(value: unknown): value is Exclude<AttributeOverride, AttributeType> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  const { type, null: nullable, default: initial, ...rest } = value as Record<string, unknown>;
-  return (
-    Object.keys(rest).length === 0 &&
-    (type === undefined || types.includes(type)) &&
-    (nullable === undefined || typeof nullable === "boolean") &&
-    (initial === undefined || typeof initial === "function")
+  return Object.entries(value).every(
+    ([key, each]) =>
+      Object.hasOwn(overrideKeys, key) && (each === undefined || overrideKeys[key]!(each)),
   );
 }
 
@@ -97,16 +102,17 @@ function checked(
   }
   if (!isSpecOverride(override)) {
     throw new InvalidModel(
-      `${where}.${attribute}: an override is a type name, { type, null, default }, or false`,
+      `${where}.${attribute}: an override is a type name, { type, null, default, generateId }, or false`,
     );
   }
   return Object.fromEntries(Object.entries(override).filter(([, value]) => value !== undefined));
 }
 
 /**
- * A generated spec with an override applied. A new type drops the generated default, which was
- * written for the old type (#81): the column's own default applies on insert, unless the
- * override gives one.
+ * A generated spec with an override applied. A new type drops the generated default or
+ * `generateId`, which were written for the old type (#81): the column's own default applies on
+ * insert, unless the override gives one. A `default` replaces `generateId`, and `generateId`
+ * a `default`, so an attribute has one or the other (#99).
  */
 function overridden(
   spec: AttributeSpecs[string],
@@ -114,8 +120,9 @@ function overridden(
 ): AttributeSpecs[string] {
   const base = typeof spec === "string" ? { type: spec } : spec;
   const retyped = change.type !== undefined && change.type !== base.type;
-  const { default: _generated, ...rest } = base;
-  return { ...(retyped ? rest : base), ...change };
+  const { default: initial, generateId, ...rest } = base;
+  const keeps = !retyped && change.default === undefined && change.generateId === undefined;
+  return { ...rest, ...(keeps && { default: initial, generateId }), ...change };
 }
 
 /** A table's attribute specs with `overrides` applied; throws `InvalidModel` for a bad one. */
