@@ -285,4 +285,10 @@ describe("paginate", () => {
     expect([titles(page.records), page.total]).toEqual([["A", "B"], 5]);
     expect(events).toHaveLength(2);
   });
+
+  test("with select() and distinct(), the total counts what the pages hold", async () => {
+    const page = await db().model(Post).select("userId").distinct().paginate();
+
+    expect([page.records.map(({ userId }) => userId), page.total]).toEqual([[1], 1]);
+  });
 });
