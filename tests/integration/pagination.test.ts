@@ -1,12 +1,26 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 import {
+  belongsTo,
   connect,
+  hasMany,
   IncompatibleRelation,
   Model,
   modelFor,
   type QueryEvent,
+  sql,
+  column,
+  withDatabase,
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
+
+class User extends Model({
+  id: { type: "integer", null: false },
+  email: { type: "string", null: false },
+}) {
+  static tableName = "users";
+
+  posts = hasMany(Post, { foreignKey: "userId" });
+}
 
 class Post extends Model({
   id: { type: "integer", null: false },
@@ -14,6 +28,11 @@ class Post extends Model({
   title: { type: "string", null: false },
 }) {
   static tableName = "posts";
+  static titledAfter = this.scope((q, title: string) =>
+    q.where(sql`${column("title")} > ${title}`),
+  );
+
+  user = belongsTo(User, { foreignKey: "userId" });
 }
 
 describe("paginate", () => {
@@ -235,5 +254,35 @@ describe("paginate", () => {
       hasPrevious: false,
     });
     expect(events).toEqual([]);
+  });
+
+  test("preloads includes() after the page, as toArray() does", async () => {
+    const page = await db().model(Post).includes("user").paginate({ perPage: 2 });
+
+    expect(page.records.map((post) => post.loaded("user")?.email)).toEqual([
+      "a@example.com",
+      "a@example.com",
+    ]);
+    expect([batches, events.length]).toEqual([1, 3]);
+  });
+
+  test("is a static of every Model, and carries scopes", async () => {
+    const page = await withDatabase(db(), () =>
+      Post.titledAfter("B").paginate({ perPage: 2, count: false }),
+    );
+    const total = (await withDatabase(db(), () => Post.paginate())).total;
+
+    expect(titles(page.records)).toEqual(["C", "D"]);
+    expect(total).toBe(5);
+  });
+
+  test("on a hasMany, queries D1 even when the owner has the records loaded", async () => {
+    const user = await db().model(User).includes("posts").findByOrThrow({ id: 1 });
+    events.length = 0;
+
+    const page = await user.posts().paginate({ perPage: 2 });
+
+    expect([titles(page.records), page.total]).toEqual([["A", "B"], 5]);
+    expect(events).toHaveLength(2);
   });
 });
