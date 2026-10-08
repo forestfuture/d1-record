@@ -306,8 +306,9 @@ describe("paginate", () => {
     expect(total).toBe(5);
   });
 
-  test("on a hasMany, queries D1 even when the owner has the records loaded", async () => {
+  test("on a hasMany, queries D1, leaving out the owner's loaded and unsaved built records", async () => {
     const user = await db().model(User).includes("posts").findByOrThrow({ id: 1 });
+    user.posts().build({ title: "0 unsaved" });
     events.length = 0;
 
     const page = await user.posts().paginate({ perPage: 2 });
