@@ -1,6 +1,7 @@
 // `paginate()`: one page of a Relation's records, and its total, in one round trip (#100).
 import { compileCount } from "./compiler.ts";
 import { castValue, uncastable } from "./conversion.ts";
+import { IncompatibleRelation } from "./errors.ts";
 import type { QueryRunner } from "./load.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import type { QueryDescription } from "./query.ts";
@@ -61,6 +62,11 @@ export async function paginate<M extends ModelBase>(
   { model, query, runner }: Paged<M>,
   options: PageOptions,
 ): Promise<Page<M> | CountlessPage<M>> {
+  if (query.limit !== undefined || query.offset !== undefined) {
+    throw new IncompatibleRelation(
+      "paginate() pages with its own limit and offset; remove the Relation's limit() and offset()",
+    );
+  }
   const page = whole("page", options.page) ?? 1;
   const perPage = Math.min(whole("perPage", options.perPage) ?? model.perPage, model.maxPerPage);
   const order =

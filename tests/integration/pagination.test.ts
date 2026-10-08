@@ -1,5 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model, modelFor, type QueryEvent } from "../../src/index.ts";
+import {
+  connect,
+  IncompatibleRelation,
+  Model,
+  modelFor,
+  type QueryEvent,
+} from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class Post extends Model({
@@ -194,5 +200,40 @@ describe("paginate", () => {
       expect(pages.map(({ perPage }) => perPage)).toEqual([2, 3, 3]);
       expect(pages[0]?.records.map(({ title }) => title)).toEqual(["A", "B"]);
     });
+  });
+
+  test("a Relation with its own limit or offset rejects with IncompatibleRelation", async () => {
+    const posts = db().model(Post);
+
+    await expect(posts.limit(2).paginate()).rejects.toThrow(IncompatibleRelation);
+    await expect(posts.offset(2).paginate({ count: false })).rejects.toThrow(IncompatibleRelation);
+    expect(events).toEqual([]);
+  });
+
+  test("on none(), is an empty page, without a query", async () => {
+    const posts = db().model(Post).none();
+
+    const [counted, countless] = [
+      await posts.paginate({ page: 2 }),
+      await posts.paginate({ count: false }),
+    ];
+
+    expect(counted).toEqual({
+      records: [],
+      page: 2,
+      perPage: 25,
+      total: 0,
+      totalPages: 0,
+      hasNext: false,
+      hasPrevious: true,
+    });
+    expect(countless).toEqual({
+      records: [],
+      page: 1,
+      perPage: 25,
+      hasNext: false,
+      hasPrevious: false,
+    });
+    expect(events).toEqual([]);
   });
 });
