@@ -180,6 +180,15 @@ describe("paginate", () => {
         expect(events).toEqual([]);
       },
     );
+
+    test("a page too far to be skipped to exactly throws TypeError", async () => {
+      const posts = db().model(Post);
+      const page = String(Number.MAX_SAFE_INTEGER);
+
+      await expect(posts.paginate({ page, perPage: 2 })).rejects.toThrow(TypeError);
+      await expect(posts.paginate({ page, count: false })).rejects.toThrow(TypeError);
+      expect(events).toEqual([]);
+    });
   });
 
   describe("perPage and maxPerPage", () => {

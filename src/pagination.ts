@@ -74,7 +74,7 @@ export async function paginate<M extends ModelBase>(
     ...query,
     order: stableOrder(model, query),
     limit: perPage,
-    offset: (page - 1) * perPage,
+    offset: offsetOf(page, perPage),
   };
   const hasPrevious = page > 1;
   if (options.count === false) {
@@ -86,6 +86,18 @@ export async function paginate<M extends ModelBase>(
   const totalPages = Math.ceil(count / perPage);
   const hasNext = page < totalPages;
   return { records, page, perPage, total: count, totalPages, hasNext, hasPrevious };
+}
+
+/**
+ * The rows before `page`. A page so far that the rows to it (and one more, for `count: false`)
+ * aren't a safe integer is a `TypeError`, as an uncastable page is, rather than an inexact offset.
+ */
+function offsetOf(page: number, perPage: number): number {
+  const offset = (page - 1) * perPage;
+  if (!Number.isSafeInteger(offset + perPage + 1)) {
+    throw new TypeError("paginate()'s page is too far to reach");
+  }
+  return offset;
 }
 
 /**
