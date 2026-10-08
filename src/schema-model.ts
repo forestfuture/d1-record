@@ -6,6 +6,7 @@ import {
   type AttributeSpecs,
   type AttributeType,
   type SpecObject,
+  type ValueSource,
 } from "./metadata.ts";
 import {
   defineModel,
@@ -25,19 +26,20 @@ export interface TableSchema {
 /** A generated schema's tables, by name (`tables` in `src/db/schema.ts`). */
 export type TableSchemas = Readonly<Record<string, TableSchema>>;
 
-/** A change to a generated attribute: its type alone, or its type, nullability and default. */
+/** An override written out, as read at runtime: any of a spec's parts but its column. */
+type ObjectOverride = Partial<Omit<SpecObject, "column">>;
+
+/**
+ * A change to a generated attribute: its type alone, or its type, nullability, default and
+ * `generateId`, typed so `generateId` goes only with a string, and never with a default (#99).
+ */
 type AttributeOverride =
   | AttributeType
-  | (OverrideObject & { type?: "string" })
-  | (OverrideObject & { type: Exclude<AttributeType, "string">; generateId?: false });
-
-/** An override written out; `generateId` only with a string type (#99). */
-interface OverrideObject {
-  type?: AttributeType;
-  null?: boolean;
-  default?: () => unknown;
-  generateId?: boolean;
-}
+  | (Pick<ObjectOverride, "null"> & { type?: "string" } & ValueSource)
+  | (Pick<ObjectOverride, "null" | "default"> & {
+      type: Exclude<AttributeType, "string">;
+      generateId?: false;
+    });
 
 /** What `ApplicationRecord("products", {...})` may change: any attribute, and ignore any but the key. */
 type Overrides<T extends TableSchema> = {
@@ -94,7 +96,7 @@ const overrideKeys: Readonly<Record<string, (value: unknown) => boolean>> = {
 };
 
 /** Whether `value` is an object override: only `type`, `null`, `default` and `generateId`, well formed. */
-function isSpecOverride(value: unknown): value is Exclude<AttributeOverride, AttributeType> {
+function isSpecOverride(value: unknown): value is ObjectOverride {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   return Object.entries(value).every(
     ([key, each]) =>
@@ -106,11 +108,7 @@ function isSpecOverride(value: unknown): value is Exclude<AttributeOverride, Att
  * An override as given, checked (TypeScript checks it too, but not in plain JavaScript or past
  * a cast): `false` to ignore the column, or the spec changes, with unset keys left out.
  */
-function checked(
-  where: string,
-  attribute: string,
-  override: unknown,
-): Partial<Exclude<AttributeOverride, AttributeType>> | false {
+function checked(where: string, attribute: string, override: unknown): ObjectOverride | false {
   if (override === false) return false;
   if (typeof override === "string" && types.includes(override)) {
     return { type: override as AttributeType };
@@ -129,10 +127,7 @@ function checked(
  * insert, unless the override gives one. A `default` replaces `generateId`, and `generateId`
  * a `default`, so an attribute has one or the other (#99).
  */
-function overridden(
-  spec: AttributeSpecs[string],
-  change: Partial<Exclude<AttributeOverride, AttributeType>>,
-): AttributeSpecs[string] {
+function overridden(spec: AttributeSpecs[string], change: ObjectOverride): AttributeSpecs[string] {
   const base: SpecObject = typeof spec === "string" ? { type: spec } : spec;
   const retyped = change.type !== undefined && change.type !== base.type;
   const { default: initial, generateId, ...rest } = base;
@@ -152,7 +147,7 @@ function overridden(
 function checkedOverride(
   where: string,
   spec: AttributeSpecs[string],
-  change: Partial<Exclude<AttributeOverride, AttributeType>>,
+  change: ObjectOverride,
 ): AttributeSpecs[string] {
   const changed = overridden(spec, change);
   const problem = typeof changed === "string" ? undefined : generateIdProblem(where, changed);

@@ -143,6 +143,7 @@ describe("generated ids", () => {
   describe("declaring one", () => {
     test("with a default too is an InvalidModel", () => {
       class Both extends Model({
+        // @ts-expect-error a compile error too; this checks plain JavaScript
         id: { type: "string", null: false, generateId: true, default: () => "x" },
       }) {
         static override tableName = "notes";
@@ -202,8 +203,9 @@ describe("generated ids", () => {
       expect(connect(binding).model(Colored).build().color).toBe("blue");
     });
 
-    test('a bad one is an InvalidModel when ApplicationRecord("table", {...}) is called', () => {
+    test("a bad one is an InvalidModel when called", () => {
       expect(() =>
+        // @ts-expect-error a compile error too; this checks plain JavaScript
         ApplicationRecord("notebooks", { id: { generateId: true, default: () => "x" } }),
       ).toThrow(
         new InvalidModel(

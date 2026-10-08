@@ -379,6 +379,9 @@ describe("types", () => {
 
     // @ts-expect-error generated ids are strings
     Model({ id: { type: "integer", null: false, generateId: true } });
+    // @ts-expect-error a generated id has no default
+    Model({ id: { type: "string", generateId: true, default: () => "x" } });
+    Model({ id: { type: "string", generateId: false, default: () => "x" } });
 
     class Uuidv7Base extends Model.Base {
       static override generateId = () => "0190…";

@@ -20,10 +20,18 @@ export interface SpecObject {
   generateId?: boolean;
 }
 
+/** Where a string attribute's value comes from when it isn't given: a default or `generateId`, never both. */
+export type ValueSource =
+  | { default?: () => unknown; generateId?: false }
+  | { default?: never; generateId: true };
+
 export type AttributeSpec =
   | AttributeType
-  | (SpecObject & { type: "string" })
-  | (SpecObject & { type: Exclude<AttributeType, "string">; generateId?: false });
+  | (Omit<SpecObject, "default" | "generateId"> & { type: "string" } & ValueSource)
+  | (Omit<SpecObject, "type" | "generateId"> & {
+      type: Exclude<AttributeType, "string">;
+      generateId?: false;
+    });
 
 export type AttributeSpecs = Record<string, AttributeSpec>;
 
@@ -124,15 +132,7 @@ export function attributesForColumn(model: ModelClass, column: string): string[]
  */
 export function generateIdProblem(
   where: string,
-  {
-    type,
-    default: initial,
-    generateId,
-  }: {
-    type: AttributeType;
-    default?: (() => unknown) | undefined;
-    generateId?: boolean | undefined;
-  },
+  { type, default: initial, generateId }: Pick<SpecObject, "type" | "default" | "generateId">,
 ): string | undefined {
   if (generateId !== true) return undefined;
   if (initial !== undefined) {
