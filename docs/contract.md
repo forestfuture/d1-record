@@ -171,7 +171,7 @@ _Guide:_ [querying](../site/guide/querying.md), [models](../site/guide/models.md
 _Guide:_ [shared-behavior](../site/guide/shared-behavior.md), [models](../site/guide/models.md). _Code:_ `src/ancestors.ts`, `src/declarations.ts`, `src/model.ts`.
 
 - A subclass (`class Admin extends User`) inherits a copy of its parent's attributes, validations, callbacks, scopes and associations. Declaring more on the child never changes the parent. Single-table inheritance is out of scope.
-- Share behavior between Models with plain functions called from `static {}` (e.g. `audited(this)`), not with an app-wide base class. A `.with({...})` helper for adding attributes to a subclass of a shared base can be added later if needed.
+- Share behavior between all Models on the app's base class, `ApplicationRecord`'s `Base` (see "Shared behavior" under The generated schema), as Rails does. Behavior only some Models share can be a plain function called from their `static {}` (e.g. `audited(this)`). A `.with({...})` helper for adding attributes to a subclass of a shared base is deferred (#14).
 - `attributes()` returns a plain object of loaded camelCase attributes with JavaScript values. `toJSON()` returns the same object, but with a `Date` as an ISO string, so `Response.json(user)` works. Associations are never included automatically.
 
 ## Change tracking
