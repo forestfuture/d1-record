@@ -136,11 +136,14 @@ function overridden(
   const base: SpecObject = typeof spec === "string" ? { type: spec } : spec;
   const retyped = change.type !== undefined && change.type !== base.type;
   const { default: initial, generateId, ...rest } = base;
-  const keeps = !retyped && change.default === undefined && change.generateId === undefined;
+  // A default and generateId replace each other; `generateId: false` leaves a default alone.
+  const keepsDefault = !retyped && change.generateId !== true;
+  const keepsGenerateId = !retyped && change.default === undefined;
   // Checked by generateIdProblem, since a merged spec's type isn't known statically.
   return {
     ...rest,
-    ...(keeps && { default: initial, generateId }),
+    ...(keepsDefault && { default: initial }),
+    ...(keepsGenerateId && { generateId }),
     ...change,
   } as AttributeSpecs[string];
 }

@@ -51,7 +51,11 @@ class SequentialNote extends modelFor(tables, SequentialBase)("notes") {}
 
 const generatedTables = {
   notebooks: {
-    attributes: { id: { type: "string", null: false, generateId: true }, title: "string" },
+    attributes: {
+      id: { type: "string", null: false, generateId: true },
+      title: "string",
+      color: { type: "string", default: () => "blue" },
+    },
     primaryKey: "id",
   },
 } as const;
@@ -190,6 +194,12 @@ describe("generated ids", () => {
       class Titled extends ApplicationRecord("notebooks", { title: { generateId: true } }) {}
 
       expect(connect(binding).model(Titled).build().title).toMatch(uuid);
+    });
+
+    test("generateId: false leaves a default alone", () => {
+      class Colored extends ApplicationRecord("notebooks", { color: { generateId: false } }) {}
+
+      expect(connect(binding).model(Colored).build().color).toBe("blue");
     });
 
     test('a bad one is an InvalidModel when ApplicationRecord("table", {...}) is called', () => {
