@@ -190,6 +190,15 @@ export class ModelBase {
   static filterAttributes: readonly FilterAttribute[] = defaultFilterAttributes;
 
   /**
+   * Makes the value of an attribute declared with `generateId: true` that wasn't given: a
+   * UUID by default. Override it on the app's base class to choose the app's ids
+   * (`static override generateId = uuidv7`); it gets the attribute's name, never the record (#99).
+   */
+  static generateId(_attribute: string): string {
+    return crypto.randomUUID();
+  }
+
+  /**
    * Declares a scope, as Rails' `scope :active, -> { … }`: `static active = this.scope((q) =>
    * q.where({ isActive: true }))`. It's a static (`User.active()`) and a Relation method
    * (`User.where(…).active()`), inherited like any static. Inside it, `q` has every Relation

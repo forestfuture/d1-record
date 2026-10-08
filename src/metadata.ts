@@ -14,6 +14,8 @@ export type AttributeSpec =
       column?: string;
       /** Evaluated at `build()`, e.g. `() => crypto.randomUUID()` for app-generated keys. */
       default?: () => unknown;
+      /** Filled in by the Model's `generateId` when not given, as a default is (#99). */
+      generateId?: boolean;
     };
 
 export type AttributeSpecs = Record<string, AttributeSpec>;
@@ -23,6 +25,7 @@ export interface AttributeDefinition {
   type: AttributeType;
   column: string;
   default?: () => unknown;
+  generateId?: true;
 }
 
 type JsType<T extends AttributeType> = T extends "string"
@@ -84,7 +87,12 @@ export function ignoresColumns(model: object): boolean {
 export function define(name: string, spec: AttributeSpec): AttributeDefinition {
   return typeof spec === "string"
     ? { type: spec, column: underscore(name) }
-    : { type: spec.type, column: spec.column ?? underscore(name), default: spec.default };
+    : {
+        type: spec.type,
+        column: spec.column ?? underscore(name),
+        default: spec.default,
+        ...(spec.generateId === true && { generateId: true as const }),
+      };
 }
 
 /** Looks up a declared attribute; throws `UnknownAttribute` for any other name. */
@@ -110,9 +118,19 @@ export function requireDefined(model: ModelClass, name: string, value: unknown):
   }
 }
 
-/** The Model's declared defaults, evaluated now, for every attribute not in `given`. */
+/**
+ * The Model's declared defaults, evaluated now, for every attribute not in `given`: each one's
+ * `default`, or for a generated id, the Model's `generateId(name)`.
+ */
 export function evaluateDefaults(model: ModelClass, given: object = {}): [string, unknown][] {
   return [...model.attributeDefinitions]
-    .filter(([name, definition]) => definition.default !== undefined && !(name in given))
-    .map(([name, definition]) => [name, definition.default!()]);
+    .filter(([name, definition]) => !(name in given) && hasDefault(definition))
+    .map(([name, definition]) => [
+      name,
+      definition.generateId ? model.generateId(name) : definition.default!(),
+    ]);
+}
+
+function hasDefault(definition: AttributeDefinition): boolean {
+  return definition.generateId === true || definition.default !== undefined;
 }
