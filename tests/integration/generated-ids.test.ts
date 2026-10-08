@@ -20,6 +20,7 @@ class Note extends Model({
 class Notebook extends Model({
   id: { type: "string", null: false, generateId: true },
   title: "string",
+  slug: "string",
 }) {
   notes = hasMany(Note);
 }
@@ -116,6 +117,15 @@ describe("generated ids", () => {
     expect(ids).toHaveLength(2);
     for (const id of ids) expect(id).toMatch(uuid);
     expect(new Set(ids).size).toBe(2);
+  });
+
+  test("an upsert that matches an existing row keeps that row's id", async () => {
+    const notebooks = connect(binding).model(Notebook);
+    const existing = await notebooks.create({ slug: "ideas", title: "Ideas" });
+
+    await notebooks.upsert({ slug: "ideas", title: "Better ideas" }, { uniqueBy: "slug" });
+
+    expect(await notebooks.pluck("id", "title")).toEqual([[existing.id, "Better ideas"]]);
   });
 
   test("a given id is kept", async () => {

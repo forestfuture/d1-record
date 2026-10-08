@@ -1,7 +1,8 @@
 CREATE TABLE notebooks (
   id TEXT PRIMARY KEY NOT NULL,
   title TEXT,
-  color TEXT
+  color TEXT,
+  slug TEXT UNIQUE
 );
 
 CREATE TABLE notes (
