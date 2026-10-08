@@ -85,6 +85,7 @@ describe("generated ids", () => {
   beforeEach(async () => {
     await binding.prepare("DELETE FROM notes").run();
     await binding.prepare("DELETE FROM notebooks").run();
+    issued = 0;
   });
 
   test("a built record has a UUID before it's saved", () => {
@@ -94,7 +95,6 @@ describe("generated ids", () => {
   });
 
   test("a function assigned to the base class's generateId makes every Model's ids", async () => {
-    issued = 0;
     const note = await connect(binding).model(SequentialNote).create({ body: "hi" });
 
     expect(note.id).toBe("id-1");
@@ -150,9 +150,7 @@ describe("generated ids", () => {
       }
 
       expect(() => connect(binding).model(Both)).toThrow(
-        new InvalidModel(
-          "Both.id has both generateId and a default; keep one (generateId uses the Model's generateId)",
-        ),
+        new InvalidModel("Both.id has both generateId and a default; keep one"),
       );
     });
 
@@ -207,11 +205,7 @@ describe("generated ids", () => {
       expect(() =>
         // @ts-expect-error a compile error too; this checks plain JavaScript
         ApplicationRecord("notebooks", { id: { generateId: true, default: () => "x" } }),
-      ).toThrow(
-        new InvalidModel(
-          "notebooks.id has both generateId and a default; keep one (generateId uses the Model's generateId)",
-        ),
-      );
+      ).toThrow(new InvalidModel("notebooks.id has both generateId and a default; keep one"));
       expect(() =>
         // @ts-expect-error a compile error too; this checks plain JavaScript
         ApplicationRecord("notebooks", { id: { type: "integer", generateId: true } }),

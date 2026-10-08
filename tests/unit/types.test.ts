@@ -383,8 +383,14 @@ describe("types", () => {
     Model({ id: { type: "string", generateId: true, default: () => "x" } });
     Model({ id: { type: "string", generateId: false, default: () => "x" } });
 
+    const uuidv7 = () => "0190…";
     class Uuidv7Base extends Model.Base {
-      static override generateId = () => "0190…";
+      static override generateId = uuidv7;
+    }
+    class OwnIds extends Model({ id: { type: "string", null: false, generateId: true } }) {
+      static override generateId(attribute: string) {
+        return `${attribute}_${super.generateId(attribute)}`;
+      }
     }
     class PrefixBase extends Model.Base {
       static override generateId(attribute: string) {
@@ -395,6 +401,6 @@ describe("types", () => {
     class NumberBase extends Model.Base {
       static override generateId = () => 42;
     }
-    expectTypeOf([Uuidv7Base, PrefixBase, NumberBase]).toBeArray();
+    expectTypeOf([Uuidv7Base, PrefixBase, NumberBase, OwnIds]).toBeArray();
   });
 });

@@ -136,7 +136,7 @@ export function generateIdProblem(
 ): string | undefined {
   if (generateId !== true) return undefined;
   if (initial !== undefined) {
-    return `${where} has both generateId and a default; keep one (generateId uses the Model's generateId)`;
+    return `${where} has both generateId and a default; keep one`;
   }
   if (type !== "string") {
     return `${where} is "${type}", so it can't have generateId: generated ids are strings`;
