@@ -110,6 +110,7 @@ const relationMethods = [
   "hasAny",
   "exists",
   "toArray",
+  "paginate",
 ] as const;
 
 /** A Model's association by name; `UnknownAssociation` for any other name. */
@@ -265,6 +266,7 @@ export class ModelBase {
   declare static hasAny: RelationStatic<"hasAny">;
   declare static exists: RelationStatic<"exists">;
   declare static toArray: RelationStatic<"toArray">;
+  declare static paginate: RelationStatic<"paginate">;
   declare static find: {
     <C extends ModelClass>(this: C, id: string | number): Promise<InstanceType<C>>;
     <C extends ModelClass>(this: C, ids: readonly (string | number)[]): Promise<InstanceType<C>[]>;
