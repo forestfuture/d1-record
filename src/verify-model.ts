@@ -20,6 +20,7 @@ export function verifyModel(model: ModelClass): void {
   requirePrimaryKeyAttribute(model);
   rejectReservedAttributeNames(model);
   rejectBadGeneratedIds(model);
+  rejectUnknownHiddenAttributes(model);
   rejectShadowingFields(model);
   rejectBadPageSizes(model);
   // The classes it inherits declarations from too (an app's Base), so none can change later.
@@ -65,6 +66,30 @@ function rejectBadPageSizes(model: ModelClass): void {
     if (!Number.isSafeInteger(size) || size < 1) {
       throw new InvalidModel(
         `${model.name}'s ${name} is ${String(size)}; set it to a whole number from 1`,
+      );
+    }
+  }
+}
+
+/**
+ * A name in `hiddenAttributes` must be an attribute, so a typo doesn't leave one in the JSON.
+ * Names listed by a class without attributes (the app's base class) are the exception: they
+ * apply to the Models that have them (#101).
+ */
+function rejectUnknownHiddenAttributes(model: ModelClass): void {
+  const shared = new Set(
+    ancestors(model)
+      .slice(1)
+      .filter((each) => !Object.hasOwn(each, "attributeDefinitions"))
+      .flatMap((each) =>
+        Object.hasOwn(each, "hiddenAttributes") ? (each as ModelClass).hiddenAttributes : [],
+      ),
+  );
+  for (const name of model.hiddenAttributes) {
+    if (!shared.has(name) && !model.attributeDefinitions.has(name)) {
+      throw new InvalidModel(
+        `${model.name} hides "${name}" from toJSON, but has no such attribute; ` +
+          "hiddenAttributes names attributes exactly",
       );
     }
   }

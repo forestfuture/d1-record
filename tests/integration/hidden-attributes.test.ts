@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model, modelFor } from "../../src/index.ts";
+import { connect, InvalidModel, Model, modelFor } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
@@ -92,6 +92,36 @@ describe("hiddenAttributes", () => {
       expect((await db.model(Account).create(row)).toJSON()).toEqual({ id: 1 });
       await binding.prepare("DELETE FROM users").run();
       expect((await db.model(Reader).create(row)).toJSON()).toEqual(row);
+    });
+  });
+
+  describe("naming one the Model doesn't have", () => {
+    test("in its own list is an InvalidModel", () => {
+      class Typo extends Model({ id: "integer", role: "string" }) {
+        static override tableName = "users";
+        static override hiddenAttributes = ["rol"];
+      }
+
+      expect(() => connect(binding).model(Typo)).toThrow(
+        new InvalidModel(
+          'Typo hides "rol" from toJSON, but has no such attribute; hiddenAttributes names attributes exactly',
+        ),
+      );
+    });
+
+    test("is ignored when the base class's list does", () => {
+      const Slim = modelFor(
+        { users: { attributes: { id: "integer", role: "string" }, primaryKey: "id" } } as const,
+        Base,
+      );
+      class Plain extends Slim("users") {}
+      class Extended extends Slim("users") {
+        static override hiddenAttributes = [...Base.hiddenAttributes, "role"];
+      }
+      const db = connect(binding);
+
+      expect(() => db.model(Plain)).not.toThrow();
+      expect(() => db.model(Extended)).not.toThrow();
     });
   });
 });
