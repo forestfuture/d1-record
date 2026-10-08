@@ -128,5 +128,9 @@ export const tables = {
     expect(source).toContain(
       "    // A callback that runs for every Model, before each Model's own:\n    // this.beforeSave(",
     );
+    expect(source).toContain(
+      "  // How new TEXT keys are made (a UUID by default), e.g. time-ordered ones from a\n" +
+        "  // library you choose:\n  // static override generateId = () => uuidv7();",
+    );
   });
 });

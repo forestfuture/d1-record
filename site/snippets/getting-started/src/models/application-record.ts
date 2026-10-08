@@ -26,6 +26,10 @@ class Base extends Model.Base {
   // are Rails' defaults (passwords, tokens, keys, emails…); add yours, or leave one out:
   // static override filterAttributes = [...Model.Base.filterAttributes, "iban"];
 
+  // How new TEXT keys are made (a UUID by default), e.g. time-ordered ones from a
+  // library you choose:
+  // static override generateId = () => uuidv7();
+
   static {
     // A callback that runs for every Model, before each Model's own:
     // this.beforeSave((record) => {
