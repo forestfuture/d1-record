@@ -32,6 +32,10 @@ The table is `products`, with an `id` generated in code, `created_at`, and `upda
 - **`--id integer`** gives it a key D1 generates instead.
 - **`--no-timestamps`** leaves out the timestamps.
 
+::: warning Compared with Rails
+Keys are UUIDs, not auto-incrementing integers. With `--id integer`, a record and the records built through it no longer save atomically. See [Autosaving](./associations#autosaving).
+:::
+
 Use `--remote` instead of `--local` when you deploy.
 
 ## Writing columns

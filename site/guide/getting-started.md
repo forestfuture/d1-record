@@ -57,8 +57,8 @@ Here’s the migration for posts:
 
 <<< @/snippets/getting-started/migrations/0002_create_posts.sql{sql} [migrations/0002_create_posts.sql]
 
-::: warning TIP
-Each `id` is generated in code, so a new user has its key before it’s saved. That lets a user and their posts be written together, atomically.
+::: warning Compared with Rails
+Each `id` is a UUID generated in code, not an auto-incrementing integer, so a user and their posts save together atomically. [Generators](./generators#adding-a-table) covers integer keys.
 :::
 
 ## Creating the tables

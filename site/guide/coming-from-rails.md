@@ -1,5 +1,5 @@
 ---
-description: "What's different from Rails' Active Record: queries start from the request, camelCase attributes, OrThrow methods, batches instead of transactions."
+description: "What's different from Rails' Active Record: queries start from the request, camelCase attributes, OrThrow methods, UUID keys, batches instead of transactions."
 ---
 
 # Coming from Rails
@@ -53,6 +53,12 @@ A Model names its table, since TypeScript can’t derive a class’s types from 
 ## Writing atomically
 
 There’s no `transaction do … end`, since D1 can’t keep a transaction open across awaits. Instead, [`batch([...])`](./batches) writes a prepared set of statements and records atomically, with records’ `toSave()` and `toDestroy()`, and bulk writes’ `toUpdateAll()`, `toDeleteAll()`, and so on. Generating keys in code makes whole graphs of new records atomic too. See [D1’s limits](./d1).
+
+## Primary keys
+
+::: warning Keys are UUIDs, not integers
+`g model` gives each table a `TEXT` `id` generated in code, which is what makes those batches atomic. `--id integer` gives you integer keys that D1 assigns, without that guarantee.
+:::
 
 ## Generating code
 
