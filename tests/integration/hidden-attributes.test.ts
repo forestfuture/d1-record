@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model } from "../../src/index.ts";
+import { connect, Model, modelFor } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
@@ -18,6 +18,19 @@ class Member extends Model({
 }) {
   static tableName = "users";
 }
+
+class Base extends Model.Base {
+  static override hiddenAttributes = ["email"];
+}
+const ApplicationRecord = modelFor(
+  {
+    users: {
+      attributes: { id: "integer", email: "string", role: "string" },
+      primaryKey: "id",
+    },
+  } as const,
+  Base,
+);
 
 // What `toJSON()` leaves out of a record, so `Response.json(user)` can't leak it (#101).
 describe("hiddenAttributes", () => {
@@ -55,5 +68,30 @@ describe("hiddenAttributes", () => {
     const [user] = await connect(binding).model(User).select("id", "role").toArray();
 
     expect(user?.toJSON()).toEqual({ id: 1, role: "admin" });
+  });
+
+  describe("on an app's base class", () => {
+    const row = { id: 1, email: "ada@example.com", role: "admin" };
+
+    test("every Model built on it inherits them", async () => {
+      class Account extends ApplicationRecord("users") {}
+      const account = await connect(binding).model(Account).create(row);
+
+      expect(account.toJSON()).toEqual({ id: 1, role: "admin" });
+    });
+
+    test("a Model's own list replaces them", async () => {
+      class Account extends ApplicationRecord("users") {
+        static override hiddenAttributes = [...Base.hiddenAttributes, "role"];
+      }
+      class Reader extends ApplicationRecord("users") {
+        static override hiddenAttributes = [];
+      }
+      const db = connect(binding);
+
+      expect((await db.model(Account).create(row)).toJSON()).toEqual({ id: 1 });
+      await binding.prepare("DELETE FROM users").run();
+      expect((await db.model(Reader).create(row)).toJSON()).toEqual(row);
+    });
   });
 });
