@@ -7,7 +7,7 @@ import { MissingAttribute, NoDatabase, RecordDestroyed } from "./errors.ts";
 import type { Executor } from "./executor.ts";
 import {
   attributeOf,
-  evaluateDefaults,
+  initialValues,
   requireDefined,
   type AttributeDefinition,
 } from "./metadata.ts";
@@ -43,8 +43,8 @@ export class RecordState {
   readonly #values: Record<string, unknown> = {};
   readonly #assigned = new Set<string>();
   readonly #snapshot = new Map<string, unknown>();
-  /** A new record's declared defaults in stored form, which `restore` returns attributes to. */
-  readonly #defaults = new Map<string, unknown>();
+  /** A new record's initial values in stored form, which `restore` returns attributes to. */
+  readonly #initialValues = new Map<string, unknown>();
   #savedChanges: Changes = {};
   readonly #errors = new Errors();
   #abortReason: string | undefined;
@@ -175,12 +175,12 @@ export class RecordState {
     }
   }
 
-  /** A new record: every attribute reads as null until assigned, and defaults are evaluated now. */
+  /** A new record: every attribute reads as null until assigned, and initial values are made now. */
   build(attributes: Record<string, unknown>): void {
     for (const name of this.#model.attributeDefinitions.keys()) this.#values[name] = null;
-    for (const [name, value] of evaluateDefaults(this.#model)) {
+    for (const [name, value] of initialValues(this.#model)) {
       this.write(name, value);
-      this.#defaults.set(name, this.#storedForm(name));
+      this.#initialValues.set(name, this.#storedForm(name));
     }
     this.assign(attributes);
   }
@@ -294,14 +294,14 @@ export class RecordState {
   }
 
   /**
-   * An attribute's value as last loaded or saved (a copy). A new record's is its declared
-   * default, or null, as Rails' `attribute_was` is.
+   * An attribute's value as last loaded or saved (a copy). A new record's is its initial
+   * value (a default or generated id), or null, as Rails' `attribute_was` is.
    */
   valueInDatabase(name: string): unknown {
     this.read(name);
     const { type } = this.#definition(name);
     if (this.#snapshot.has(name)) return readValue(type, this.#snapshot.get(name));
-    return this.#defaults.has(name) ? readValue(type, this.#defaults.get(name)) : null;
+    return this.#initialValues.has(name) ? readValue(type, this.#initialValues.get(name)) : null;
   }
 
   /**
@@ -321,7 +321,7 @@ export class RecordState {
     return change !== undefined && this.#matches(name, change[0], change[1], options);
   }
 
-  /** Puts unsaved changes back: to the Snapshot, or to a new record's defaults (or null). */
+  /** Puts unsaved changes back: to the Snapshot, or to a new record's initial values (or null). */
   restore(names: readonly string[] = this.changedNames()): void {
     this.#requireNotDestroyed("be changed");
     for (const name of names) {
@@ -329,8 +329,8 @@ export class RecordState {
       if (this.#lifecycle !== "new") {
         if (this.#snapshot.has(name))
           this.#values[name] = readValue(type, this.#snapshot.get(name));
-      } else if (this.#defaults.has(name)) {
-        this.#values[name] = readValue(type, this.#defaults.get(name));
+      } else if (this.#initialValues.has(name)) {
+        this.#values[name] = readValue(type, this.#initialValues.get(name));
       } else {
         this.#values[name] = null;
         this.#assigned.delete(name);

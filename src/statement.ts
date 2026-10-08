@@ -7,7 +7,7 @@ import {
   type Conflict,
 } from "./compiler.ts";
 import type { Executor } from "./executor.ts";
-import { attributeOf, evaluateDefaults, requireDefined } from "./metadata.ts";
+import { attributeOf, initialValues, requireDefined } from "./metadata.ts";
 import type { ModelClass } from "./model.ts";
 import { timestampsFor } from "./timestamps.ts";
 
@@ -42,12 +42,12 @@ export function runAlone(statement: Statement): Promise<D1Meta> {
 }
 
 /**
- * The attributes an insert statement writes: the given ones, then declared defaults for the
+ * The attributes an insert statement writes: the given ones, then initial values for the
  * rest (where app-generated keys come from), then `createdAt`/`updatedAt` unless given.
  */
 function insertAssignments(model: ModelClass, attributes: Record<string, unknown>): Assignment[] {
   for (const name of Object.keys(attributes)) attributeOf(model, name);
-  const values = [...Object.entries(attributes), ...evaluateDefaults(model, attributes)];
+  const values = [...Object.entries(attributes), ...initialValues(model, attributes)];
   for (const [name, value] of values) requireDefined(model, name, value);
   return [...values, ...timestampsFor(model, "insert", values)];
 }

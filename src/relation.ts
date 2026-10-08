@@ -274,7 +274,7 @@ export class Relation<M extends ModelBase, S = {}> {
 
   /**
    * Inserts one row now, resolving to D1's `meta`: `await db.model(Post).insert({ title })`.
-   * Skips validations and callbacks; declared defaults and timestamps apply, and this
+   * Skips validations and callbacks; declared defaults, generated ids, and timestamps apply, and this
    * Relation's equality conditions are inserted too, as with `build()`. A duplicate throws,
    * unless `onDuplicate: "skip"` (Rails' `insert`). `toInsert` is the same write, for a batch.
    */

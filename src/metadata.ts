@@ -152,18 +152,19 @@ export function requireDefined(model: ModelClass, name: string, value: unknown):
 }
 
 /**
- * The Model's declared defaults, evaluated now, for every attribute not in `given`: each one's
+ * The initial values of every attribute not in `given` that has one, made now: each one's
  * `default`, or for a generated id, the Model's `generateId(name)`.
  */
-export function evaluateDefaults(model: ModelClass, given: object = {}): [string, unknown][] {
+export function initialValues(model: ModelClass, given: object = {}): [string, unknown][] {
   return [...model.attributeDefinitions]
-    .filter(([name, definition]) => !(name in given) && hasDefault(definition))
+    .filter(([name, definition]) => !(name in given) && hasInitialValue(definition))
     .map(([name, definition]) => [
       name,
       definition.generateId ? model.generateId(name) : definition.default!(),
     ]);
 }
 
-function hasDefault(definition: AttributeDefinition): boolean {
+/** Whether an attribute gets a value when none is given: from its `default`, or `generateId`. */
+function hasInitialValue(definition: AttributeDefinition): boolean {
   return definition.generateId === true || definition.default !== undefined;
 }
