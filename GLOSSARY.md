@@ -76,6 +76,10 @@ _Avoid_: Attribute (when talking about SQL)
 A lazy, immutable description of a query against one **Model**. Each modifier returns a new Relation, and only a terminal operation (`toArray`, `first`, `count`, …) runs a query.
 _Avoid_: Query, query builder, scope (for a Relation)
 
+**Page**:
+One page of a **Relation**'s records, from `paginate()`, with its position (`page`, `perPage`, `hasNext`, `hasPrevious`) and, when counted, the `total` it's a page of. A plain object, ready for `Response.json()`.
+_Avoid_: Paginator, cursor (that's keyset pagination), batch (that's D1's)
+
 **Scope**:
 A named, reusable change to a Relation, declared on a **Model**, that may take arguments. Calling a scope never runs a query.
 _Avoid_: Filter, named query

@@ -81,6 +81,7 @@ export default {
 - **`onQuery` listeners see filtered attributes' values as `"[FILTERED]"`**: passwords, tokens, keys and emails, by Rails' default list. Add names to `static filterAttributes` on the app's base class for other secrets. Values inside `sql` fragments aren't filtered.
 - **Uniqueness validation is a friendly check, not a guarantee.** Two requests can pass it at once; the table's UNIQUE index decides, and the save then throws `RecordNotUnique`. Declare both.
 - **`record.loaded("posts")` reads what was preloaded or already read**, synchronously, and throws `AssociationNotLoaded` otherwise. `await user.posts().toArray()` loads when needed.
+- **Page a list with `paginate()`, not a hand-built `limit` and `offset`**: `Post.published().paginate({ page: url.searchParams.get("page") })` casts the untrusted page, caps its size at `static maxPerPage`, and sends the count with the page in one round trip. `{ count: false }` skips the `COUNT`, which reads (and bills) every matching row.
 - **`find(id)` throws `RecordNotFound`**; `findBy(conditions)` resolves to `null`.
 - **After-callbacks run once D1 has committed the write.** An error there reaches the caller with the record already saved: nothing rolls back.
 - **Read replicas:** a request run in `withDatabase(connect(env.DB, { session: "first-unconstrained" }), fn)` reads its own writes. Pass that database's `db.bookmark()` to the next request to keep that across requests.
