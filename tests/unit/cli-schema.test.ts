@@ -82,7 +82,7 @@ describe("schemaOf: from migrations to table schemas", () => {
     expect(attributes("CREATE TABLE things (id TEXT PRIMARY KEY)").id).toEqual({
       type: "string",
       null: false,
-      default: { generated: "uuid" },
+      generateId: true,
     });
     expect(attributes("CREATE TABLE things (id INTEGER PRIMARY KEY)").id).toEqual({
       type: "integer",

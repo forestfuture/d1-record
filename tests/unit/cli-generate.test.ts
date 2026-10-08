@@ -194,7 +194,7 @@ ALTER TABLE products DROP COLUMN code;
     const result = schemaOf([{ name: "0001_create_products.sql", sql }]);
 
     expect(result.ok && result.tables[0]!.attributes).toEqual({
-      id: { type: "string", null: false, default: { generated: "uuid" } },
+      id: { type: "string", null: false, generateId: true },
       name: { type: "string", null: false },
       active: { type: "boolean", null: false, default: { literal: false } },
       settings: { type: "json" },

@@ -4,8 +4,8 @@ import { attributeName } from "./names.ts";
 
 type AttributeType = "string" | "integer" | "real" | "boolean" | "datetime" | "json";
 
-/** A default the generated spec carries: a literal value, a date, or a key generated in code. */
-export type Default = { literal: unknown } | { date: string } | { generated: "uuid" };
+/** A default the generated spec carries: a literal value, or a date. */
+export type Default = { literal: unknown } | { date: string };
 
 /** One attribute as the generated schema declares it, the shape `Model({...})` takes. */
 export interface Spec {
@@ -13,6 +13,8 @@ export interface Spec {
   null?: false;
   column?: string;
   default?: Default;
+  /** A key made in code by the Model's `generateId` (#99). */
+  generateId?: true;
 }
 
 /** One column as SQLite describes it (`pragma_table_info`), with what the table adds to it. */
@@ -135,9 +137,8 @@ export function convert(column: Column): Converted {
   if (column.notNull || column.primaryKey) spec.null = false;
   if (underscore(attribute) !== column.name) spec.column = column.name;
   // A key's own literal default wins; a TEXT key without one is generated in code.
-  const generated =
-    column.primaryKey && type === "string" ? { generated: "uuid" as const } : undefined;
-  const defaultValue = literalDefault(column.defaultValue, type) ?? generated;
+  const defaultValue = literalDefault(column.defaultValue, type);
   if (defaultValue !== undefined) spec.default = defaultValue;
+  else if (column.primaryKey && type === "string") spec.generateId = true;
   return note === undefined ? { ok: true, attribute, spec } : { ok: true, attribute, spec, note };
 }

@@ -9,7 +9,7 @@ import type { GeneratedTable } from "./schema.ts";
  * The generated file's format. Bump it when the output changes, so `--check` reports files an
  * older d1-record wrote (its fingerprint covers the format as well as the schema).
  */
-const format = 1;
+const format = 2;
 
 /** An object key: bare when it's an identifier, quoted otherwise (`"first name"`). */
 function keySource(name: string): string {
@@ -29,7 +29,6 @@ function valueSource(value: unknown): string {
 }
 
 function defaultSource(value: Default): string {
-  if ("generated" in value) return "() => crypto.randomUUID()";
   if ("date" in value) return `() => new Date(${JSON.stringify(value.date)})`;
   const source = valueSource(value.literal);
   return `() => ${source.startsWith("{") ? `(${source})` : source}`;
@@ -41,6 +40,7 @@ function specSource(spec: Spec): string {
   if (spec.null === false) parts.push("null: false");
   if (spec.column !== undefined) parts.push(`column: ${JSON.stringify(spec.column)}`);
   if (spec.default !== undefined) parts.push(`default: ${defaultSource(spec.default)}`);
+  if (spec.generateId) parts.push("generateId: true");
   return parts.length === 1 ? JSON.stringify(spec.type) : `{ ${parts.join(", ")} }`;
 }
 

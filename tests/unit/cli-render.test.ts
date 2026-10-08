@@ -27,13 +27,13 @@ describe("renderSchema: the generated schema.ts", () => {
 
 /** line_items — last changed by 0001_create.sql */
 export const lineItems = {
-  code: { type: "string", null: false, default: () => crypto.randomUUID() },
+  code: { type: "string", null: false, generateId: true },
   active: { type: "boolean", default: () => true },
 } as const;
 
 /** products — last changed by 0001_create.sql */
 export const products = {
-  id: { type: "string", null: false, default: () => crypto.randomUUID() },
+  id: { type: "string", null: false, generateId: true },
   name: { type: "string", null: false },
   priceCents: { type: "integer", null: false, default: () => 0 },
   settings: "json",
