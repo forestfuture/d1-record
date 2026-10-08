@@ -13,8 +13,8 @@ import type { QueryDescription } from "./query.ts";
 export interface QueryRunner<M extends ModelBase> {
   /** The records `description` matches (one SELECT), hydrated, with its includes preloaded. */
   load(description: QueryDescription): Promise<M[]>;
-  /** The records `description` matches and the count `count` gives, sent as one batch. */
-  loadCounted(description: QueryDescription, count: CompiledSql): Promise<Counted<M>>;
+  /** The records `description` matches and the count `countSql` gives, sent as one batch. */
+  loadCounted(description: QueryDescription, countSql: CompiledSql): Promise<Counted<M>>;
   /**
    * The records `description` matches (one SELECT, its limit given), and whether more follow:
    * one row past the limit is read to learn that, and isn't hydrated or preloaded.
@@ -47,7 +47,7 @@ export function runnerFor<M extends ModelBase>(
   if (query.none) return nothing;
   return {
     load: (description) => loadRecords(executor, model, description),
-    loadCounted: (description, count) => loadCounted(executor, model, description, count),
+    loadCounted: (description, countSql) => loadCounted(executor, model, description, countSql),
     loadAhead: (description) => loadAhead(executor, model, description),
     rows: (sql) => executor.all(sql),
     changes: async (write) => (await write()).changes,
@@ -72,14 +72,14 @@ async function loadRecords<M extends ModelBase>(
   return hydrated(executor, model, query, await executor.all(selectFor(model, query)));
 }
 
-/** `count` and the SELECT for `query`'s records as one batch: one round trip. */
+/** `countSql` and the SELECT for `query`'s records as one batch: one round trip. */
 async function loadCounted<M extends ModelBase>(
   executor: Executor,
   model: ModelClass<M>,
   query: QueryDescription,
-  count: CompiledSql,
+  countSql: CompiledSql,
 ): Promise<Counted<M>> {
-  const [counted, loaded] = await executor.batch([count, selectFor(model, query)]);
+  const [counted, loaded] = await executor.batch([countSql, selectFor(model, query)]);
   const records = await hydrated(executor, model, query, loaded?.results ?? []);
   return { records, count: Number(counted?.results[0]?.["count"] ?? 0) };
 }

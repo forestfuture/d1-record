@@ -40,7 +40,8 @@ describe("paginate", () => {
   let dispose: () => Promise<void>;
   const events: QueryEvent[] = [];
   let batches = 0;
-  // The binding, counting its batches: each is one round trip to D1.
+  // The binding, counting its batches: each is one round trip to D1. onQuery reports a batch's
+  // statements one by one, so it can't tell one batch from separate queries.
   const counting = () =>
     new Proxy(binding, {
       get(target, key) {

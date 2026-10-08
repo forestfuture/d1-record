@@ -68,8 +68,11 @@ export async function paginate<M extends ModelBase>(
       "paginate() pages with its own limit and offset; remove the Relation's limit() and offset()",
     );
   }
-  const page = whole("page", options.page) ?? 1;
-  const perPage = Math.min(whole("perPage", options.perPage) ?? model.perPage, model.maxPerPage);
+  const page = pageNumber("page", options.page) ?? 1;
+  const perPage = Math.min(
+    pageNumber("perPage", options.perPage) ?? model.perPage,
+    model.maxPerPage,
+  );
   const onPage = {
     ...query,
     order: stableOrder(model, query),
@@ -117,7 +120,7 @@ function stableOrder(model: ModelClass, query: QueryDescription): readonly Order
  * A page or page size, cast as an integer attribute is (#81), so `"2"` is 2. Missing, `null` or
  * `""` is `undefined`, for the default; anything else not a whole number from 1 is a `TypeError`.
  */
-function whole(name: string, value: number | string | null | undefined): number | undefined {
+function pageNumber(name: string, value: number | string | null | undefined): number | undefined {
   if (value === undefined || value === null || value === "") return undefined;
   const cast = castValue("integer", value);
   if (cast === uncastable || (cast as number) < 1) {
