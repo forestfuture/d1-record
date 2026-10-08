@@ -5,6 +5,7 @@ import {
   markIgnoringColumns,
   type AttributeSpecs,
   type AttributeType,
+  type ExactSpecs,
   type SpecObject,
   type ValueSource,
 } from "./metadata.ts";
@@ -82,7 +83,7 @@ export interface SchemaModel<T extends TableSchemas, B extends BaseClass = typeo
     table: N,
     overrides?: Exactly<O, T[N]>,
   ): ModelBaseFor<AsSpecs<OverriddenSpecs<T[N]["attributes"], O>>, B>;
-  <const A extends AttributeSpecs>(specs: A): ModelBaseFor<A, B>;
+  <const A extends AttributeSpecs>(specs: A & ExactSpecs<A>): ModelBaseFor<A, B>;
 }
 
 const types: readonly unknown[] = ["string", "integer", "real", "boolean", "datetime", "json"];

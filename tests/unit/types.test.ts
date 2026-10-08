@@ -8,6 +8,7 @@ import {
   hasOne,
   lt,
   Model,
+  modelFor,
   type HasMany,
   type RecordStatement,
   Relation,
@@ -402,5 +403,27 @@ describe("types", () => {
       static override generateId = () => 42;
     }
     expectTypeOf([Uuidv7Base, PrefixBase, NumberBase, OwnIds]).toBeArray();
+  });
+
+  test("a misspelled key in a spec or override is a compile error", () => {
+    const ApplicationRecord = modelFor({
+      notes: {
+        attributes: { id: { type: "string", null: false }, body: "string" },
+        primaryKey: "id",
+      },
+    } as const);
+
+    // Compile-time checks only: the misspelled override also throws at runtime.
+    const typeOnly = () => {
+      // @ts-expect-error nul isn't a spec key
+      Model({ id: { type: "string", nul: false } });
+      // @ts-expect-error nul isn't a spec key
+      ApplicationRecord({ id: { type: "string", nul: false } });
+      // @ts-expect-error nul isn't an override key
+      ApplicationRecord("notes", { body: { nul: false } });
+      Model({ id: { type: "string", null: false, column: "note_id", default: () => "x" } });
+      ApplicationRecord("notes", { body: { type: "string", null: false, default: () => "" } });
+    };
+    expectTypeOf(typeOnly).toBeFunction();
   });
 });

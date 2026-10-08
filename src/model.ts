@@ -6,6 +6,7 @@ import {
   type AttributeProperties,
   type AttributeDefinition,
   type AttributeSpecs,
+  type ExactSpecs,
 } from "./metadata.ts";
 import { permitted } from "./permit.ts";
 import { defaultFilterAttributes, type FilterAttribute } from "./filtering.ts";
@@ -658,7 +659,7 @@ export type ModelBaseFor<
  * Creates a Model base class whose records have the given attributes.
  * The attribute object is the single source of truth (ADR-0007).
  */
-export function Model<const A extends AttributeSpecs>(specs: A): ModelBaseFor<A> {
+export function Model<const A extends AttributeSpecs>(specs: A & ExactSpecs<A>): ModelBaseFor<A> {
   return defineModel(specs, ModelBase);
 }
 
