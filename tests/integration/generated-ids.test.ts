@@ -1,5 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, hasMany, Model, modelFor, RecordNotUnique } from "../../src/index.ts";
+import {
+  connect,
+  hasMany,
+  InvalidModel,
+  Model,
+  modelFor,
+  RecordNotUnique,
+} from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -119,5 +126,35 @@ describe("generated ids", () => {
 
     expect(await connect(binding).model(Notebook).count()).toBe(0);
     expect(await connect(binding).model(Note).pluck("id")).toEqual(["taken"]);
+  });
+
+  describe("declaring one", () => {
+    test("with a default too is an InvalidModel", () => {
+      class Both extends Model({
+        id: { type: "string", null: false, generateId: true, default: () => "x" },
+      }) {
+        static override tableName = "notes";
+      }
+
+      expect(() => connect(binding).model(Both)).toThrow(
+        new InvalidModel(
+          "Both.id has both generateId and a default; keep one (generateId uses the Model's generateId)",
+        ),
+      );
+    });
+
+    test("on an attribute that isn't a string is an InvalidModel", () => {
+      class Counted extends Model({
+        id: { type: "integer", null: false, generateId: true },
+      }) {
+        static override tableName = "notes";
+      }
+
+      expect(() => connect(binding).model(Counted)).toThrow(
+        new InvalidModel(
+          'Counted.id is "integer", so it can\'t have generateId: generated ids are strings',
+        ),
+      );
+    });
   });
 });

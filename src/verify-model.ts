@@ -18,6 +18,7 @@ export function verifyModel(model: ModelClass): void {
   requireTableName(model);
   requirePrimaryKeyAttribute(model);
   rejectReservedAttributeNames(model);
+  rejectBadGeneratedIds(model);
   rejectShadowingFields(model);
   // The classes it inherits declarations from too (an app's Base), so none can change later.
   for (const each of ancestors(model)) {
@@ -42,6 +43,23 @@ function rejectReservedAttributeNames(model: ModelClass): void {
       throw new InvalidModel(
         `${model.name} declares an attribute "${name}", which is the name of a record method or property; ` +
           "rename the attribute and map it with { column }",
+      );
+    }
+  }
+}
+
+/** A generated id is a string, and comes from `generateId` alone, not a default as well. */
+function rejectBadGeneratedIds(model: ModelClass): void {
+  for (const [name, definition] of model.attributeDefinitions) {
+    if (!definition.generateId) continue;
+    if (definition.default !== undefined) {
+      throw new InvalidModel(
+        `${model.name}.${name} has both generateId and a default; keep one (generateId uses the Model's generateId)`,
+      );
+    }
+    if (definition.type !== "string") {
+      throw new InvalidModel(
+        `${model.name}.${name} is "${definition.type}", so it can't have generateId: generated ids are strings`,
       );
     }
   }
