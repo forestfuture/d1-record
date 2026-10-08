@@ -62,7 +62,7 @@ export async function paginate<M extends ModelBase>(
   options: PageOptions,
 ): Promise<Page<M> | CountlessPage<M>> {
   const page = whole("page", options.page) ?? 1;
-  const perPage = whole("perPage", options.perPage) ?? 25;
+  const perPage = Math.min(whole("perPage", options.perPage) ?? model.perPage, model.maxPerPage);
   const order =
     query.order.length > 0
       ? query.order

@@ -191,6 +191,15 @@ export class ModelBase {
    */
   static filterAttributes: readonly FilterAttribute[] = defaultFilterAttributes;
 
+  /** Records on a page of `paginate()` when it isn't given `perPage` (#100). */
+  static perPage = 25;
+
+  /**
+   * The most records on a page of `paginate()`: a larger `perPage`, given or declared, is
+   * capped at it, since D1 bills every row read.
+   */
+  static maxPerPage = 100;
+
   /**
    * Makes the value of an attribute declared with `generateId: true` that wasn't given: a
    * UUID by default. Override it on the app's base class to choose the app's ids

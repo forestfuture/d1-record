@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model, type QueryEvent } from "../../src/index.ts";
+import { connect, Model, modelFor, type QueryEvent } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class Post extends Model({
@@ -153,5 +153,46 @@ describe("paginate", () => {
         expect(events).toEqual([]);
       },
     );
+  });
+
+  describe("perPage and maxPerPage", () => {
+    test("default to 25 and 100", () => {
+      expect([Model.Base.perPage, Model.Base.maxPerPage]).toEqual([25, 100]);
+    });
+
+    test("a larger perPage is capped at maxPerPage, without throwing", async () => {
+      const page = await db().model(Post).paginate({ perPage: 1000 });
+
+      expect(page.perPage).toBe(100);
+    });
+
+    test("set on an app's base class, every Model built on it inherits them", async () => {
+      class Base extends Model.Base {
+        static override perPage = 2;
+        static override maxPerPage = 3;
+      }
+      const ApplicationRecord = modelFor(
+        {
+          posts: {
+            attributes: { id: "integer", userId: "integer", title: "string" },
+            primaryKey: "id",
+          },
+        } as const,
+        Base,
+      );
+      class Article extends ApplicationRecord("posts") {}
+      class Brief extends ApplicationRecord("posts") {
+        static override perPage = 9;
+      }
+
+      const pages = [
+        await db().model(Article).paginate(),
+        await db().model(Article).paginate({ perPage: 4 }),
+        await db().model(Brief).paginate(),
+      ];
+
+      expect(pages.map(({ perPage }) => perPage)).toEqual([2, 3, 3]);
+      expect(pages[0]?.records.map(({ title }) => title)).toEqual(["A", "B"]);
+    });
   });
 });
