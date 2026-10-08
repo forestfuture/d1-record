@@ -201,6 +201,19 @@ describe("paginate", () => {
       },
     );
 
+    test.each([[[2]], [["2"]], [{}], [true]])(
+      "%j from a JSON body throws TypeError, as a page or a perPage",
+      async (value) => {
+        const posts = db().model(Post);
+        // A JSON body's value can be any JSON, whatever the type says.
+        const untyped = value as unknown as number;
+
+        await expect(posts.paginate({ page: untyped })).rejects.toThrow(TypeError);
+        await expect(posts.paginate({ perPage: untyped })).rejects.toThrow(TypeError);
+        expect(events).toEqual([]);
+      },
+    );
+
     test("a page too far to be skipped to exactly throws TypeError", async () => {
       const posts = db().model(Post);
       const page = String(Number.MAX_SAFE_INTEGER);
@@ -316,6 +329,18 @@ describe("paginate", () => {
 
     expect([titles(page.records), page.total]).toEqual([["A", "B"], 5]);
     expect(events).toHaveLength(2);
+  });
+
+  test("on a hasMany, counts only the owner's records", async () => {
+    await binding.batch([
+      binding.prepare("INSERT INTO users (id, email) VALUES (2, 'b@example.com')"),
+      binding.prepare("INSERT INTO posts (id, user_id, title) VALUES (6, 2, 'F')"),
+    ]);
+    const user = await db().model(User).findByOrThrow({ id: 2 });
+
+    const page = await user.posts().paginate();
+
+    expect([titles(page.records), page.total]).toEqual([["F"], 1]);
   });
 
   test("with select() and distinct(), the total counts what the pages hold", async () => {
