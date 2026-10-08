@@ -1,6 +1,11 @@
 // `modelFor` and `ApplicationRecord`: Model base classes built on the generated schema (ADR-0010).
 import { InvalidModel } from "./errors.ts";
-import { markIgnoringColumns, type AttributeSpecs, type AttributeType } from "./metadata.ts";
+import {
+  generateIdProblem,
+  markIgnoringColumns,
+  type AttributeSpecs,
+  type AttributeType,
+} from "./metadata.ts";
 import {
   defineModel,
   ModelBase,
@@ -125,6 +130,18 @@ function overridden(
   return { ...rest, ...(keeps && { default: initial, generateId }), ...change };
 }
 
+/** `spec` with `change` applied, refused if it leaves a `generateId` it can't have (#99). */
+function checkedOverride(
+  where: string,
+  spec: AttributeSpecs[string],
+  change: Partial<Exclude<AttributeOverride, AttributeType>>,
+): AttributeSpecs[string] {
+  const changed = overridden(spec, change);
+  const problem = typeof changed === "string" ? undefined : generateIdProblem(where, changed);
+  if (problem !== undefined) throw new InvalidModel(problem);
+  return changed;
+}
+
 /** A table's attribute specs with `overrides` applied; throws `InvalidModel` for a bad one. */
 function specsFor(
   name: string,
@@ -147,7 +164,8 @@ function specsFor(
   for (const [attribute, spec] of Object.entries(table.attributes)) {
     const change = changes.get(attribute);
     if (change === false) continue;
-    specs[attribute] = change === undefined ? spec : overridden(spec, change);
+    specs[attribute] =
+      change === undefined ? spec : checkedOverride(`${name}.${attribute}`, spec, change);
   }
   return { specs, ignoring: [...changes.values()].includes(false) };
 }

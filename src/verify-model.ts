@@ -1,9 +1,10 @@
 // Checks a Model's declaration the first time it's used, then seals its declarations.
-// It checks the table, the primary key, and the attribute names.
+// It checks the table, the primary key, the attribute names, and generated ids.
 import { ancestors } from "./ancestors.ts";
 import { declarationIn, probeOf } from "./association-fields.ts";
 import { seal } from "./declarations.ts";
 import { InvalidModel } from "./errors.ts";
+import { generateIdProblem } from "./metadata.ts";
 import { ModelBase, type ModelClass } from "./model.ts";
 import { rejectAbstract, requireTableName } from "./table-names.ts";
 
@@ -51,17 +52,8 @@ function rejectReservedAttributeNames(model: ModelClass): void {
 /** A generated id is a string, and comes from `generateId` alone, not a default as well. */
 function rejectBadGeneratedIds(model: ModelClass): void {
   for (const [name, definition] of model.attributeDefinitions) {
-    if (!definition.generateId) continue;
-    if (definition.default !== undefined) {
-      throw new InvalidModel(
-        `${model.name}.${name} has both generateId and a default; keep one (generateId uses the Model's generateId)`,
-      );
-    }
-    if (definition.type !== "string") {
-      throw new InvalidModel(
-        `${model.name}.${name} is "${definition.type}", so it can't have generateId: generated ids are strings`,
-      );
-    }
+    const problem = generateIdProblem(`${model.name}.${name}`, definition);
+    if (problem !== undefined) throw new InvalidModel(problem);
   }
 }
 

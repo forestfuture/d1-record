@@ -190,5 +190,22 @@ describe("generated ids", () => {
 
       expect(connect(binding).model(Titled).build().title).toMatch(uuid);
     });
+
+    test('a bad one is an InvalidModel when ApplicationRecord("table", {...}) is called', () => {
+      expect(() =>
+        ApplicationRecord("notebooks", { id: { generateId: true, default: () => "x" } }),
+      ).toThrow(
+        new InvalidModel(
+          "notebooks.id has both generateId and a default; keep one (generateId uses the Model's generateId)",
+        ),
+      );
+      expect(() =>
+        ApplicationRecord("notebooks", { id: { type: "integer", generateId: true } }),
+      ).toThrow(
+        new InvalidModel(
+          'notebooks.id is "integer", so it can\'t have generateId: generated ids are strings',
+        ),
+      );
+    });
   });
 });

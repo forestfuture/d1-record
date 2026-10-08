@@ -111,6 +111,32 @@ export function attributesForColumn(model: ModelClass, column: string): string[]
     .map(([name]) => name);
 }
 
+/**
+ * Why an attribute can't have `generateId`, or undefined if it can: a generated id is a string,
+ * and comes from `generateId` alone, not a default as well (#99). `where` names it (`User.id`).
+ */
+export function generateIdProblem(
+  where: string,
+  {
+    type,
+    default: initial,
+    generateId,
+  }: {
+    type: AttributeType;
+    default?: (() => unknown) | undefined;
+    generateId?: boolean | undefined;
+  },
+): string | undefined {
+  if (generateId !== true) return undefined;
+  if (initial !== undefined) {
+    return `${where} has both generateId and a default; keep one (generateId uses the Model's generateId)`;
+  }
+  if (type !== "string") {
+    return `${where} is "${type}", so it can't have generateId: generated ids are strings`;
+  }
+  return undefined;
+}
+
 /** `undefined` would silently store NULL, so writing it throws `TypeError` (use `null`). */
 export function requireDefined(model: ModelClass, name: string, value: unknown): void {
   if (value === undefined) {
