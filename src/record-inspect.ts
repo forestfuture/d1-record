@@ -52,7 +52,10 @@ export function inspectRecord(
   const shown = Object.fromEntries(
     Object.entries(attributes).map(([name, value]) => {
       const change = changes[name];
-      if (value !== null && isFiltered(model, name)) return [name, new Redacted(!!change)];
+      // A null has nothing to hide, but becoming null is a change worth flagging.
+      if (isFiltered(model, name) && (value !== null || change)) {
+        return [name, new Redacted(!!change)];
+      }
       return [name, change ? new Unsaved(value, change[0]) : value];
     }),
   );

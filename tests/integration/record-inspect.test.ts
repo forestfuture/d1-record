@@ -18,6 +18,15 @@ class Setting extends Model({
   static tableName = "samples";
 }
 
+// A filtered attribute that can be null: its label.
+class Secret extends Model({
+  id: { type: "integer", null: false },
+  label: "string",
+}) {
+  static tableName = "samples";
+  static override filterAttributes = ["label"];
+}
+
 class User extends Model({
   id: { type: "integer", null: false },
   email: { type: "string", null: false }, // filtered by default: "email"
@@ -132,6 +141,13 @@ describe("inspect", () => {
       const sample = connect(binding).model(Sample).build({ label: "bolt" });
 
       expect(inspect(sample)).toBe("Sample { id: null, label: 'bolt', quantity: null }");
+    });
+
+    test("in a filtered attribute that became null still says it changed", async () => {
+      const secret = await connect(binding).model(Secret).create({ id: 1, label: "open sesame" });
+      secret.label = null;
+
+      expect(inspect(secret)).toBe("Secret { id: 1, label: [FILTERED] (changed) }");
     });
 
     test("in a filtered attribute says only that it changed", async () => {
