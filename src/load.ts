@@ -111,7 +111,7 @@ function selectFor(model: ModelClass, query: QueryDescription): CompiledSql {
  * The SELECT `toSql()` shows for `query`. A `none()` query is never sent, so it shows what
  * matching nothing would be: its conditions and `1 = 0`.
  */
-export function selectToShow(model: ModelClass, query: QueryDescription): CompiledSql {
+export function selectForToSql(model: ModelClass, query: QueryDescription): CompiledSql {
   const never = sql`1 = 0`;
   return selectFor(
     model,

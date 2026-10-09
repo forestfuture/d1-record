@@ -14,7 +14,7 @@ import {
 } from "./compiler.ts";
 import { IncompatibleRelation, RecordNotFound, RecordNotSaved } from "./errors.ts";
 import { includeTree } from "./preload.ts";
-import { inKeyOrder, keysToFind, runnerFor, selectToShow, type QueryRunner } from "./load.ts";
+import { inKeyOrder, keysToFind, runnerFor, selectForToSql, type QueryRunner } from "./load.ts";
 import {
   allOf,
   either,
@@ -576,7 +576,7 @@ export class Relation<M extends ModelBase, S = {}> {
    * are never inlined into the SQL (ADR-0006), and none are redacted, filtered attributes included.
    */
   toSql(): QuerySql {
-    return querySql(selectToShow(this.#model, this.#query));
+    return querySql(selectForToSql(this.#model, this.#query));
   }
 
   async toArray(): Promise<M[]> {
