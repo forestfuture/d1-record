@@ -40,4 +40,20 @@ describe("the console session", () => {
     );
     await console.close();
   });
+
+  test("a const lives on across lines", async () => {
+    const console = await drive({ scope: { Sample, db: connect(binding) } });
+
+    await console.send("const sample = await db.model(Sample).find(1)");
+    expect(await console.send("sample.label")).toBe("#=> 'bolt'");
+    await console.close();
+  });
+
+  test("an error prints its message, and the session carries on", async () => {
+    const console = await drive({ scope: { Sample, db: connect(binding) } });
+
+    expect(await console.send("await db.model(Sample).find(99)")).toMatch(/RecordNotFound/);
+    expect(await console.send("1 + 1")).toBe("#=> 2");
+    await console.close();
+  });
 });
