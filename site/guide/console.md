@@ -26,7 +26,7 @@ Models: Post, User
 #=> undefined
 ```
 
-Leave with `.exit` or Ctrl-D.
+Leave with `.exit` or Ctrl-D. Ctrl-C stops a line that’s still running. `npx d1-record c` is the short form.
 
 ## What you can use
 
@@ -52,7 +52,7 @@ The console opens the local database in `.wrangler/state`, beside your Wrangler 
 
 It never opens your remote database, even for a binding your config marks `remote: true`.
 
-On a terminal, what you type is kept in `.wrangler/d1-record-history`, which Wrangler projects already ignore.
+On a terminal, what you type is kept in `.wrangler/d1-record-history`, which Wrangler projects already ignore. A line can hold a token or an email, so add `--no-history` when you’d rather it wasn’t kept.
 
 ## Running a few lines at once
 
@@ -63,7 +63,11 @@ echo 'await User.count()' | npx d1-record console
 ```
 
 ::: warning TIP
-The console reads your TypeScript Models directly, including extensionless imports and `tsconfig.json` paths, so it works in TypeScript projects. It needs Node.js 22.13 or later, and `wrangler` and `@forestfuture/d1-record` installed in your project: it uses your copies, so your Models and the console share one library.
+The console reads your TypeScript Models directly, including extensionless imports and `tsconfig.json` paths, so it works in TypeScript projects. It needs Node.js 22.13 or later, and `wrangler` and `@forestfuture/d1-record` installed in your project. It uses your copies, so your Models and the console share one library.
+:::
+
+::: warning Only in projects you trust
+The console runs your project’s code: your Models, and the `wrangler` and `@forestfuture/d1-record` in its `node_modules`. Run it in a project you’d run `wrangler dev` in.
 :::
 
 ::: rails Compared with Rails

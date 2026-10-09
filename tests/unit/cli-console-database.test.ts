@@ -1,12 +1,18 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "vite-plus/test";
+import { afterAll, describe, expect, test } from "vite-plus/test";
 import { databaseFor } from "../../cli/console/database.ts";
+
+const made: string[] = [];
+afterAll(() => {
+  for (const dir of made) rmSync(dir, { recursive: true, force: true });
+});
 
 /** A project folder with a Wrangler config binding these D1 databases. */
 function project(...bindings: string[]): string {
   const dir = mkdtempSync(join(tmpdir(), "console-db-"));
+  made.push(dir);
   const d1_databases = bindings.map((binding) => ({ binding, database_name: `${binding}-name` }));
   writeFileSync(join(dir, "wrangler.jsonc"), JSON.stringify({ d1_databases }));
   return dir;
@@ -42,6 +48,7 @@ describe("the database the console opens", () => {
 
   test("no config says so", () => {
     const cwd = mkdtempSync(join(tmpdir(), "console-db-"));
+    made.push(cwd);
 
     expect(databaseFor(cwd, {})).toBe(
       "No wrangler.jsonc, wrangler.json or wrangler.toml here (pass --config)",

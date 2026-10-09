@@ -157,13 +157,15 @@ _Guide:_ [generators](../site/guide/generators.md), [change-a-table](../site/gui
 
 _Guide:_ [console](../site/guide/console.md), [command-line](../site/guide/command-line.md). _Code:_ `cli/console/`. See ADR-0014.
 
-- `d1-record console` (also `c`; options `--database`, `--models`, `--config`) opens the project's **local** D1 database in a REPL (#104). Local only: `getPlatformProxy` is called with `remoteBindings: false`, so a binding marked `remote: true` still opens locally.
+- `d1-record console` (also `c`; options `--database`, `--models`, `--config`, `--no-history`) opens the project's **local** D1 database in a REPL (#104). Local only: `getPlatformProxy` is called with `remoteBindings: false`, so a binding marked `remote: true` still opens locally.
 - **The database** is the only `d1_databases` binding in the Wrangler config, or the one `--database` names; with several and no `--database`, or a name the config doesn't bind, it prints why and exits 1, as `g` does. State is read and written in `<config dir>/.wrangler/state/v3`, where `wrangler dev` keeps it (not relative to the working directory, as `getPlatformProxy`'s own default is).
 - **The project's own code.** `wrangler` and `@forestfuture/d1-record` are resolved from the project, never from the CLI's copy, so the Models and the console share one library instance (ADR-0014). One `jiti`, based in the project, loads the Models (TypeScript, extensionless imports, `tsconfig.json` `paths`, and the library itself). Without either package installed, the console says so.
 - **The Models** are the exported classes (extending `Model.Base`) of every `.ts` file in `--models` (`src/models`), or of the one file `--models` names. Each is in scope by its class name, with `db` (the connected `Database`). No Models, a file that throws on load (named in the message), or no folder: it prints why and exits 1.
 - **Each line** is evaluated inside `withDatabase(db, …)`, so Models' statics and records need no database argument. Top-level `await` works; `const` and `let` last for the session. A result prints as `#=> ` and its `util.inspect` (colored on a terminal, so a record prints as under Printing); an uncaught error prints as Node prints it, without `#=>`, and the session carries on.
 - **Lines pasted or piped** run in order, each after the one before, and the session finishes them before it ends. The REPL closes as soon as its input ends, so piped input is held back until they are done.
-- **History** is kept on a terminal only, in `<config dir>/.wrangler/d1-record-history`.
+- **History** is kept on a terminal only, in `<config dir>/.wrangler/d1-record-history`; `--no-history` keeps nothing (a line can hold a token or an email).
+- **Ctrl-C** on a terminal stops a line that is still running (`breakEvalOnSigint`), such as an `await` that never ends; the session carries on.
+- **When it can't start** it prints why and exits 1: a binding Wrangler can't open (with Wrangler's reason), or `wrangler` or the library that is found but throws on load (named as that, not as "not installed").
 - **Needs** Node 22.13 or later (as every command). It starts by printing the database (`Local database DB (.wrangler/state)`) and the Models (`Models: Post, User`).
 - Not in this slice (#104): `--verbose`, `reload!`, `--remote`, `--sandbox`; and a one-shot `-e` (#105).
 

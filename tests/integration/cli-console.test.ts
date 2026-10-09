@@ -32,10 +32,17 @@ describe("the console session", () => {
     await binding.prepare("INSERT INTO samples (id, label, quantity) VALUES (1, 'bolt', 36)").run();
   });
 
-  test("a Model is in scope, and a result prints after #=>", async () => {
+  test("a Model is in scope", async () => {
     const console = await session();
 
     expect(await console.send("Sample.tableName")).toBe("#=> 'samples'");
+    await console.close();
+  });
+
+  test("a result prints after #=>", async () => {
+    const console = await session();
+
+    expect(await console.send("1 + 1")).toBe("#=> 2");
     await console.close();
   });
 
@@ -56,23 +63,38 @@ describe("the console session", () => {
     await console.close();
   });
 
-  test("an error prints its message, and the session carries on", async () => {
+  test("an error prints its message, not as a result", async () => {
     const console = await session();
 
     const failure = await console.send("await db.model(Sample).find(99)");
+
     expect(failure).toMatch(/RecordNotFound/);
     expect(failure).not.toContain("#=>");
+    await console.close();
+  });
+
+  test("the session carries on after an error", async () => {
+    const console = await session();
+
+    await console.send("await db.model(Sample).find(99)");
+
     expect(await console.send("1 + 1")).toBe("#=> 2");
     await console.close();
   });
 
-  test("a Model's statics and a record's writes need no database argument", async () => {
+  test("a Model's statics need no database argument", async () => {
     const console = await session();
 
     expect(await console.send("await Sample.find(1)")).toBe(
       "#=> Sample { id: 1, label: 'bolt', quantity: 36 }",
     );
-    expect(await console.send("const sample = await Sample.find(1)")).toBe("#=> undefined");
+    await console.close();
+  });
+
+  test("a record's writes need no database argument", async () => {
+    const console = await session();
+
+    await console.send("const sample = await Sample.find(1)");
     expect(await console.send('await sample.update({ label: "nut" })')).toBe("#=> true");
     expect(await binding.prepare("SELECT label FROM samples WHERE id = 1").first("label")).toBe(
       "nut",

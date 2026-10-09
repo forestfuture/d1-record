@@ -56,7 +56,7 @@ Their schemas often live at `src/db/schema.ts` or `src/db/schema/`. Write d1-rec
 
 ## `d1-record console`
 
-Open your local database with your Models in a console ([Console](./console) shows a session):
+Open your local database with your Models in a console, or `d1-record c` for short ([Console](./console) shows a session):
 
 ```sh
 npx d1-record console
@@ -67,6 +67,7 @@ npx d1-record console
 | `--database <name>` | The D1 binding to open, when the config has several.                                       |
 | `--models <path>`   | Where the Models are: a folder (`src/models`) or one file (`src/models.ts`).               |
 | `--config <file>`   | Use this Wrangler config instead of finding `wrangler.jsonc`, `wrangler.json`, or `.toml`. |
+| `--no-history`      | Don’t keep what you type in `.wrangler/d1-record-history`.                                 |
 
 It reads TypeScript Models and uses your project’s own `wrangler` and `@forestfuture/d1-record`. It opens the local database only, and it refuses, printing why, when there’s no Wrangler config, with several databases and no `--database`, with no Models, or with `wrangler` or the library not installed.
 
