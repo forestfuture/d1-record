@@ -288,6 +288,16 @@ export class RecordState {
     return changes;
   }
 
+  /** `changes()`, with `undefined` before an attribute the record never loaded (a partial record's). */
+  changesSinceLoad(): Changes {
+    return Object.fromEntries(
+      Object.entries(this.changes()).map(([name, [before, after]]) => [
+        name,
+        [this.#snapshot.has(name) ? before : undefined, after],
+      ]),
+    );
+  }
+
   /** The changes the last successful save wrote (copies). */
   savedChanges(): Changes {
     return { ...this.#savedChanges };

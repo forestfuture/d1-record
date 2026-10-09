@@ -143,6 +143,14 @@ describe("inspect", () => {
       expect(inspect(sample)).toBe("Sample { id: null, label: 'bolt', quantity: null }");
     });
 
+    test("on a column a partial record never loaded says only that it changed", async () => {
+      await connect(binding).model(Sample).create({ id: 1, label: "bolt", quantity: 36 });
+      const [sample] = await connect(binding).model(Sample).select("id").toArray();
+      sample!.label = "nut";
+
+      expect(inspect(sample)).toBe("Sample { id: 1, label: 'nut' (changed) }");
+    });
+
     test("in a filtered attribute that became null still says it changed", async () => {
       const secret = await connect(binding).model(Secret).create({ id: 1, label: "open sesame" });
       secret.label = null;

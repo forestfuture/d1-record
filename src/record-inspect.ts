@@ -28,7 +28,7 @@ export class Redacted {
   }
 }
 
-/** An unsaved change: the new value, and the one the record was loaded or saved with. */
+/** An unsaved change: the new value, and the one the record was loaded or saved with, if any. */
 class Unsaved {
   constructor(
     private readonly after: unknown,
@@ -36,7 +36,10 @@ class Unsaved {
   ) {}
 
   [inspectCustom](_depth: number, options: InspectOptions, inspect: Inspect): string {
-    return `${inspect(this.after, options)} (was ${inspect(this.before, options)})`;
+    const now = inspect(this.after, options);
+    return this.before === undefined
+      ? `${now} (changed)`
+      : `${now} (was ${inspect(this.before, options)})`;
   }
 }
 

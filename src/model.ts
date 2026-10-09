@@ -625,7 +625,7 @@ export class ModelBase {
   [inspectCustom](depth: number, options: InspectOptions, inspect: Inspect): string {
     const record = this[state];
     // A new record's attributes are all unsaved, so only a persisted record flags its changes.
-    const changes = record.isPersisted ? record.changes() : {};
+    const changes = record.isPersisted ? record.changesSinceLoad() : {};
     return inspectRecord(modelOf(this), record.attributes(), changes, [depth, options, inspect]);
   }
 
