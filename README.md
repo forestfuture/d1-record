@@ -1,5 +1,7 @@
 # d1-record
 
+[![CI](https://github.com/forestfuture/d1-record/actions/workflows/ci.yml/badge.svg)](https://github.com/forestfuture/d1-record/actions/workflows/ci.yml)
+
 A Rails-inspired Active Record for [Cloudflare Workers](https://developers.cloudflare.com/workers/) and [D1](https://developers.cloudflare.com/d1/).
 
 Models with validations, callbacks, associations, and change tracking; lazy, composable queries; and a predictable save lifecycle, built for the Worker runtime and honest about what D1 can and can’t do.
