@@ -6,9 +6,11 @@ export function terminalStreams() {
   const input = new PassThrough();
   const output = new PassThrough();
   let printed = "";
+  let transcript = "";
   const waiting: (() => void)[] = [];
   output.on("data", (chunk: Buffer) => {
     printed += chunk.toString();
+    transcript += chunk.toString();
     if (printed.endsWith("> ")) for (const wake of waiting.splice(0)) wake();
   });
   const ready = () =>
@@ -23,7 +25,10 @@ export function terminalStreams() {
     async ready(): Promise<void> {
       await ready();
       printed = "";
+      transcript = "";
     },
+    /** Everything printed since `ready`, prompts included. */
+    transcript: () => transcript,
     /** Types a line; resolves with what the console printed before it asked for the next one. */
     async send(line: string): Promise<string> {
       printed = "";

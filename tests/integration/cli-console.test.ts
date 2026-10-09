@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 import { connect, Model, withDatabase } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
-import { drive } from "../support/console.ts";
+import { startSession } from "../../cli/console/session.ts";
+import { drive, terminalStreams } from "../support/console.ts";
 
 class Sample extends Model({
   id: { type: "integer", null: false },
@@ -77,5 +78,31 @@ describe("the console session", () => {
       "nut",
     );
     await console.close();
+  });
+
+  test("piped input runs in order, and the session outlasts the end of its input", async () => {
+    const terminal = terminalStreams();
+    const session = startSession({
+      input: terminal.input,
+      output: terminal.output,
+      scope: { Sample, db: connect(binding) },
+      withDatabase: (run) => withDatabase(connect(binding), run),
+    });
+    await terminal.ready();
+
+    terminal.input.write("const sample = await Sample.find(1)\n");
+    terminal.input.write("sample.label\n");
+    terminal.input.write('await sample.update({ label: "nut" })\n');
+    terminal.input.end();
+    await session.closed;
+
+    expect(terminal.transcript().match(/#=> .*/g)).toEqual([
+      "#=> undefined",
+      "#=> 'bolt'",
+      "#=> true",
+    ]);
+    expect(await binding.prepare("SELECT label FROM samples WHERE id = 1").first("label")).toBe(
+      "nut",
+    );
   });
 });
