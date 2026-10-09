@@ -63,8 +63,16 @@ export async function examples(since: Date, until: Date): Promise<unknown> {
   const nothing = await User.none().where({ role: "admin" }).toArray(); // [], no query
   // #endregion none
 
+  // #region to-sql
+  const { sql: text, params } = User.where({ role: "admin" }).limit(10).toSql();
+  console.log(text); // SELECT * FROM "users" WHERE ("role" = ?) LIMIT ?
+  console.log(params); // ["admin", 10]
+  // #endregion to-sql
+
   return [
     users,
+    text,
+    params,
     all,
     user,
     two,

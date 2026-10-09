@@ -127,6 +127,24 @@ Load only some attributes with `select`. The primary key is always loaded too, s
 
 <<< @/snippets/guide/querying.ts#none{ts}
 
+## Seeing a query’s SQL
+
+Call `toSql()` on a Relation to see the SQL its `toArray()` would send, without sending it. The values come back apart from the SQL, since they’re always bound:
+
+<<< @/snippets/guide/querying.ts#to-sql{ts}
+
+A Statement from `toInsert`, `toUpdateAll`, `toDeleteAll`, and the other `to…` methods has `toSql()` too. A `none()` Relation shows `1 = 0`, the condition that matches nothing.
+
+::: warning TIP
+`toSql()` returns the real values, filtered attributes included. To see what a query sent, with those filtered, use [`onQuery`](./logging).
+:::
+
+A record’s `toSave()` and `toDestroy()` have no `toSql()`. Their SQL depends on validations and callbacks that only run inside `db.batch`.
+
+::: rails Compared with Rails
+`toSql()` is Rails’ `to_sql`, except that Rails writes the values into the SQL and `toSql()` keeps them in `params`.
+:::
+
 ## Defining scopes
 
 A scope is a named, reusable part of a query. Declare one as a static that receives the Relation, plus any arguments, and returns a narrower one:

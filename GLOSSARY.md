@@ -125,7 +125,7 @@ A D1 session that one **Database** can be opened with. Every query in that reque
 _Avoid_: Transaction, connection
 
 **Statement**:
-A bulk write prepared for a **Batch** rather than run (`toInsert`, `toUpdateAll`, `toDeleteAll`, …), skipping validations and callbacks. It runs only with its **Batch**, and is never run by being awaited.
+A bulk write prepared for a **Batch** rather than run (`toInsert`, `toUpdateAll`, `toDeleteAll`, …), skipping validations and callbacks. It runs only with its **Batch**, and is never run by being awaited. Its SQL can be read with `toSql()`, unsent.
 _Avoid_: Query, command
 
 **Batch**:

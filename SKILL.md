@@ -79,6 +79,7 @@ export default {
 ## Where code goes wrong
 
 - **`onQuery` listeners see filtered attributes' values as `"[FILTERED]"`**: passwords, tokens, keys and emails, by Rails' default list. Add names to `static filterAttributes` on the app's base class for other secrets. Values inside `sql` fragments aren't filtered.
+- **`relation.toSql()` and `statement.toSql()` show a query's `{ sql, params }` without sending it**, to inspect it while debugging. The params are real values, filtered attributes included, so don't log them where `onQuery` wouldn't. A record's `toSave()`/`toDestroy()` have no `toSql()`.
 - **`toJSON()` sends every loaded attribute**, so `Response.json(user)` includes `passwordDigest`. List the names to leave out in `static hiddenAttributes` on the app's base class (exact names; a Model's own list replaces it). `attributes()` still has them.
 - **Uniqueness validation is a friendly check, not a guarantee.** Two requests can pass it at once; the table's UNIQUE index decides, and the save then throws `RecordNotUnique`. Declare both.
 - **`record.loaded("posts")` reads what was preloaded or already read**, synchronously, and throws `AssociationNotLoaded` otherwise. `await user.posts().toArray()` loads when needed.

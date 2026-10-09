@@ -134,7 +134,7 @@ await batch([
 - **Queries from the Model**, as in Rails: `User.find(id)`, `User.where(…)`, `User.active()`, on the Model’s binding with no setup.
 - **Bulk writes**: `insert`, `insertAll`, `upsert`, `updateAll`, `deleteAll`, and `batch([...])` mixing those with records’ `toSave()`/`toDestroy()`.
 - **Read replicas**: a request opened with `withDatabase(connect(env.DB, { session }), …)` sends every query through one D1 Session, so it reads its own writes; `db.bookmark()` carries that to the next request.
-- **Observability**: `connect(env.DB, { onQuery })` sees every statement with its SQL, bound values, timing, and D1’s `meta`.
+- **Observability**: `connect(env.DB, { onQuery })` sees every statement with its SQL, bound values, timing, and D1’s `meta`. `toSql()` shows a query’s SQL and values without sending it.
 
 ## Honest about D1
 
