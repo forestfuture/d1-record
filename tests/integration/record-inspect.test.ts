@@ -1,6 +1,6 @@
 import { inspect } from "node:util";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model, type QueryEvent } from "../../src/index.ts";
+import { connect, hasMany, Model, type QueryEvent } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class Sample extends Model({
@@ -33,6 +33,16 @@ class User extends Model({
   role: "string",
 }) {
   static tableName = "users";
+
+  posts = hasMany(Post);
+}
+
+class Post extends Model({
+  id: { type: "integer", null: false },
+  userId: { type: "integer", null: false },
+  title: { type: "string", null: false },
+}) {
+  static tableName = "posts";
 }
 
 class Hider extends Model({
@@ -55,8 +65,11 @@ describe("inspect", () => {
   });
   afterAll(() => dispose());
   beforeEach(async () => {
-    await binding.prepare("DELETE FROM samples").run();
-    await binding.prepare("DELETE FROM users").run();
+    await binding.batch([
+      binding.prepare("DELETE FROM samples"),
+      binding.prepare("DELETE FROM posts"),
+      binding.prepare("DELETE FROM users"),
+    ]);
   });
 
   test("a record prints its class and attributes", async () => {
@@ -100,6 +113,13 @@ describe("inspect", () => {
 
       expect(inspect(user)).toBe("User { id: null, email: null, role: null }");
     });
+  });
+
+  test("a destroyed record still prints its last attributes", async () => {
+    const sample = await connect(binding).model(Sample).create({ id: 1, label: "bolt" });
+    await sample.destroy();
+
+    expect(inspect(sample)).toBe("Sample { id: 1, label: 'bolt', quantity: null }");
   });
 
   test("a hidden attribute is still shown: hiding is for serializing, not for logs", async () => {
@@ -188,6 +208,14 @@ describe("inspect", () => {
       const relation = connect(binding).model(User).where({ email: "ada@example.com" });
 
       expect(inspect(relation, flat)).toContain("params: [ [FILTERED] ]");
+    });
+
+    test("a hasMany of a record prints its owner's key as a param", async () => {
+      const user = await connect(binding)
+        .model(User)
+        .create({ id: 7, email: "ada@example.com", role: null });
+
+      expect(inspect(user.posts(), flat)).toContain("params: [ 7 ]");
     });
 
     test("prints as [Relation] when nested deeper than depth allows", () => {
