@@ -102,6 +102,7 @@ describe("d1-record console", () => {
     expect(await main(["console", "--help"], (line) => lines.push(line))).toBe(0);
     expect(lines[0]).toMatch(/d1-record console \(or c\) +Open a console/);
     expect(lines[0]).toMatch(/Options for console:\n  --database <name>/);
+    expect(lines[0]).toMatch(/--no-history +Don't keep what you type/);
     expect(lines[0]).toMatch(/Options for every command:\n  --config <file>/);
   });
 
@@ -132,5 +133,21 @@ describe("d1-record console", () => {
     await done;
 
     expect(readFileSync(history, "utf8")).toContain("1 + 1");
+  }, 90_000);
+
+  test("--no-history keeps what you type out of the history file", async () => {
+    const cwd = await shop();
+    const terminal = terminalStreams();
+    const done = runConsole({ cwd, history: false }, () => {}, { ...terminal, terminal: true });
+
+    terminal.input.write("1 + 1\n");
+    for (let waited = 0; !terminal.transcript().includes("#=>") && waited < 100; waited++) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    terminal.input.end();
+    await done;
+
+    expect(existsSync(join(cwd, ".wrangler/d1-record-history"))).toBe(false);
   }, 90_000);
 });

@@ -15,6 +15,8 @@ export interface ConsoleOptions {
   database?: string;
   /** Where the Models are: a folder or one file (`src/models`). */
   models?: string;
+  /** Keep what is typed on a terminal in the history file; on unless `false`. */
+  history?: boolean;
 }
 
 /** The two ends of the console, and whether they are a terminal (colors, line editing, history). */
@@ -62,7 +64,7 @@ export async function runConsole(
       ...io,
       scope: { ...models, db: database },
       withDatabase: async (run) => void (await library.withDatabase(database, run)),
-      historyFile: historyFileFor(chosen.configFile),
+      historyFile: options.history === false ? undefined : historyFileFor(chosen.configFile),
     });
     await session.closed;
   } finally {
