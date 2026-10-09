@@ -11,6 +11,14 @@ class Sample extends Model({
   static tableName = "samples";
 }
 
+class User extends Model({
+  id: { type: "integer", null: false },
+  email: { type: "string", null: false }, // filtered by default: "email"
+  role: "string",
+}) {
+  static tableName = "users";
+}
+
 // How a record prints in a console, a log or a test failure (#104).
 describe("inspect", () => {
   let binding: TestDatabase;
@@ -22,6 +30,7 @@ describe("inspect", () => {
   afterAll(() => dispose());
   beforeEach(async () => {
     await binding.prepare("DELETE FROM samples").run();
+    await binding.prepare("DELETE FROM users").run();
   });
 
   test("a record prints its class and attributes", async () => {
@@ -43,5 +52,27 @@ describe("inspect", () => {
     const [sample] = await connect(binding).model(Sample).select("id", "label").toArray();
 
     expect(inspect(sample)).toBe("Sample { id: 1, label: 'bolt' }");
+  });
+
+  describe("a filtered attribute", () => {
+    const row = { id: 1, email: "ada@example.com", role: null };
+
+    test("prints as [FILTERED], unquoted so it isn't mistaken for a string", async () => {
+      const user = await connect(binding).model(User).create(row);
+
+      expect(inspect(user)).toBe("User { id: 1, email: [FILTERED], role: null }");
+    });
+
+    test("is highlighted as a special value when colors are on", async () => {
+      const user = await connect(binding).model(User).create(row);
+
+      expect(inspect(user, { colors: true })).toContain("email: \u001b[36m[FILTERED]\u001b[39m");
+    });
+
+    test("prints null when it has no value, as there is nothing to hide", () => {
+      const user = connect(binding).model(User).build({});
+
+      expect(inspect(user)).toBe("User { id: null, email: null, role: null }");
+    });
   });
 });
