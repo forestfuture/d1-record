@@ -4,7 +4,9 @@ import {
   compileInsertRows,
   type Assignment,
   type CompiledSql,
+  querySql,
   type Conflict,
+  type QuerySql,
 } from "./compiler.ts";
 import type { Executor } from "./executor.ts";
 import { attributeOf, initialValues, requireDefined } from "./metadata.ts";
@@ -27,6 +29,14 @@ export class Statement {
   constructor(executor: Executor, query: CompiledSql) {
     this.#executor = executor;
     this.#query = query;
+  }
+
+  /**
+   * The SQL this Statement sends, and its bound values, without sending it (Rails' `to_sql`).
+   * Values are never inlined into the SQL (ADR-0006), and none are redacted.
+   */
+  toSql(): QuerySql {
+    return querySql(this.#query);
   }
 
   /** @internal The Database's Executor it runs on, and its compiled SQL. */
