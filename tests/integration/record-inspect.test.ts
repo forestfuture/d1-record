@@ -1,6 +1,6 @@
 import { inspect } from "node:util";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model } from "../../src/index.ts";
+import { connect, Model, type QueryEvent } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class Sample extends Model({
@@ -134,6 +134,35 @@ describe("inspect", () => {
       user.email = "grace@example.com";
 
       expect(inspect(user)).toBe("User { id: 1, email: [FILTERED] (changed), role: 'admin' }");
+    });
+  });
+
+  describe("a Relation", () => {
+    const flat = { breakLength: Infinity };
+
+    test("prints its Model and the SELECT it would send, and sends nothing", () => {
+      const events: QueryEvent[] = [];
+      const db = connect(binding, { onQuery: (event) => events.push(event) });
+      const relation = db.model(Sample).where({ label: "bolt" }).order({ id: "asc" }).limit(5);
+
+      expect(inspect(relation, flat)).toBe(
+        "Relation<Sample> { " +
+          `sql: 'SELECT * FROM "samples" WHERE (("label" = ?)) ORDER BY "id" ASC LIMIT ?', ` +
+          "params: [ 'bolt', 5 ] }",
+      );
+      expect(events).toEqual([]);
+    });
+
+    test("shows a filtered value as [FILTERED]", () => {
+      const relation = connect(binding).model(User).where({ email: "ada@example.com" });
+
+      expect(inspect(relation, flat)).toContain("params: [ [FILTERED] ]");
+    });
+
+    test("prints as [Relation] when nested deeper than depth allows", () => {
+      const relation = connect(binding).model(Sample);
+
+      expect(inspect({ relation }, { depth: 0 })).toBe("{ relation: [Relation] }");
     });
   });
 });

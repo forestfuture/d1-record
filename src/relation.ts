@@ -14,6 +14,8 @@ import {
 } from "./compiler.ts";
 import { IncompatibleRelation, RecordNotFound, RecordNotSaved } from "./errors.ts";
 import { includeTree } from "./preload.ts";
+import { inspectCustom, type Inspect, type InspectOptions } from "./record-inspect.ts";
+import { inspectRelation } from "./relation-inspect.ts";
 import { inKeyOrder, keysToFind, runnerFor, selectForToSql, type QueryRunner } from "./load.ts";
 import {
   allOf,
@@ -577,6 +579,12 @@ export class Relation<M extends ModelBase, S = {}> {
    */
   toSql(): QuerySql {
     return querySql(selectForToSql(this.#model, this.#query));
+  }
+
+  /** Prints as `Relation<Model> { sql, params }`: the SELECT it would send, without sending it (#104). */
+  [inspectCustom](depth: number, options: InspectOptions, inspect: Inspect): string {
+    const compiled = selectForToSql(this.#model, this.#query);
+    return inspectRelation(this.#model.name, compiled, [depth, options, inspect]);
   }
 
   async toArray(): Promise<M[]> {

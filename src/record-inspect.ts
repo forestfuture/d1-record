@@ -15,12 +15,12 @@ export type Inspect = (value: unknown, options?: InspectOptions) => string;
 export const inspectCustom = Symbol.for("nodejs.util.inspect.custom");
 
 /** Text in the color of a special value, or plain when colors are off. */
-function styled(options: InspectOptions, text: string): string {
+export function styled(options: InspectOptions, text: string): string {
   return options.stylize ? options.stylize(text, "special") : text;
 }
 
 /** A filtered value's stand-in: prints unquoted, so it isn't taken for a string, as a special value. */
-class Redacted {
+export class Redacted {
   constructor(private readonly changed: boolean) {}
 
   [inspectCustom](_depth: number, options: InspectOptions): string {
