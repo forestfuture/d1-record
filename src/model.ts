@@ -622,8 +622,8 @@ export class ModelBase {
   }
 
   /** Prints as `Name { attribute: value, … }` in a console, a log or a test failure (#104). */
-  [inspectCustom](_depth: number, options: InspectOptions, inspect: Inspect): string {
-    return inspectRecord(modelOf(this), this[state].attributes(), options, inspect);
+  [inspectCustom](depth: number, options: InspectOptions, inspect: Inspect): string {
+    return inspectRecord(modelOf(this), this[state].attributes(), [depth, options, inspect]);
   }
 
   /**

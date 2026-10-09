@@ -19,6 +19,16 @@ class User extends Model({
   static tableName = "users";
 }
 
+class Hider extends Model({
+  id: { type: "integer", null: false },
+  email: { type: "string", null: false },
+  role: "string",
+}) {
+  static tableName = "users";
+  static override filterAttributes = [];
+  static hiddenAttributes = ["email"];
+}
+
 // How a record prints in a console, a log or a test failure (#104).
 describe("inspect", () => {
   let binding: TestDatabase;
@@ -74,5 +84,21 @@ describe("inspect", () => {
 
       expect(inspect(user)).toBe("User { id: null, email: null, role: null }");
     });
+  });
+
+  test("a hidden attribute is still shown: hiding is for serializing, not for logs", async () => {
+    const hider = await connect(binding)
+      .model(Hider)
+      .create({ id: 1, email: "ada@example.com", role: "admin" });
+
+    expect(inspect(hider)).toBe("Hider { id: 1, email: 'ada@example.com', role: 'admin' }");
+  });
+
+  test("a record in an array or object prints in place, and depth is respected", async () => {
+    const sample = await connect(binding).model(Sample).create({ id: 1, label: "bolt" });
+
+    expect(inspect([sample])).toBe("[ Sample { id: 1, label: 'bolt', quantity: null } ]");
+    expect(inspect({ sample }, { depth: 0 })).toBe("{ sample: [Sample] }");
+    expect(inspect({ sample }, { depth: 1 })).toContain("sample: Sample { id: 1,");
   });
 });
