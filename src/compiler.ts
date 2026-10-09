@@ -14,6 +14,17 @@ export interface CompiledSql {
   model: ModelClass<ModelBase>;
 }
 
+/** What `toSql()` shows: a query's SQL, with its values bound apart from it (ADR-0006). */
+export interface QuerySql {
+  sql: string;
+  params: unknown[];
+}
+
+/** `compiled` as `toSql()` shows it, without the Model it is for. */
+export function querySql({ sql, params }: CompiledSql): QuerySql {
+  return { sql, params: [...params] };
+}
+
 /** Quotes a SQLite identifier; embedded double quotes are doubled. */
 function quoteIdentifier(name: string): string {
   return `"${name.replaceAll('"', '""')}"`;

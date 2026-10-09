@@ -17,19 +17,13 @@ import {
   RecordInvalid,
   RecordNotDestroyed,
   RecordNotSaved,
-  UnknownAssociation,
 } from "./errors.ts";
 import { destroyLifecycle, reloadRecord, saveLifecycle, validateRecord } from "./lifecycle.ts";
-import { associationsOf, newRecord } from "./association-fields.ts";
+import { associationOf, newRecord } from "./association-fields.ts";
 import { RecordStatement } from "./record-statement.ts";
 import { inferTableNames } from "./table-names.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
-import {
-  readyModel,
-  type AssociationDefinition,
-  type BelongsTo,
-  type HasOne,
-} from "./associations.ts";
+import { readyModel, type BelongsTo, type HasOne } from "./associations.ts";
 import type { Relation, Scope, Scoped } from "./relation.ts";
 import type { PaginateStatic } from "./pagination.ts";
 import { currentRelation } from "./current-database.ts";
@@ -111,16 +105,8 @@ const relationMethods = [
   "hasAny",
   "exists",
   "toArray",
+  "toSql",
 ] as const;
-
-/** A Model's association by name; `UnknownAssociation` for any other name. */
-export function associationOf(model: ModelClass, name: string): AssociationDefinition {
-  const definition = associationsOf(model).get(name);
-  if (definition === undefined) {
-    throw new UnknownAssociation(`${model.name} has no association "${name}"`);
-  }
-  return definition;
-}
 
 /** What `loaded()` returns for an association accessor: its records, or its record or null. */
 export type LoadedValue<F> = F extends () => Promise<infer R>
@@ -281,6 +267,7 @@ export class ModelBase {
   declare static hasAny: RelationStatic<"hasAny">;
   declare static exists: RelationStatic<"exists">;
   declare static toArray: RelationStatic<"toArray">;
+  declare static toSql: RelationStatic<"toSql">;
   declare static paginate: PaginateStatic;
   declare static find: {
     <C extends ModelClass>(this: C, id: string | number): Promise<InstanceType<C>>;

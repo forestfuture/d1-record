@@ -10,7 +10,7 @@ import type {
   HasOne,
   HasOneDependent,
 } from "./associations.ts";
-import { NoDatabase } from "./errors.ts";
+import { NoDatabase, UnknownAssociation } from "./errors.ts";
 import { withForeignKeys } from "./foreign-keys.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { modelClassName } from "./table-names.ts";
@@ -120,4 +120,13 @@ export function newRecord<M extends ModelBase>(model: ModelClass<M>): M {
     delete (record as unknown as Record<string, unknown>)[names[index]!];
   }
   return record;
+}
+
+/** A Model's association by name; `UnknownAssociation` for any other name. */
+export function associationOf(model: ModelClass, name: string): AssociationDefinition {
+  const definition = associationsOf(model).get(name);
+  if (definition === undefined) {
+    throw new UnknownAssociation(`${model.name} has no association "${name}"`);
+  }
+  return definition;
 }

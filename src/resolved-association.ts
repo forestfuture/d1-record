@@ -2,7 +2,8 @@
 // associations.ts imports this module too; both uses are at call time, never at load.
 import { readyModel, type AssociationDefinition } from "./associations.ts";
 import type { Executor } from "./executor.ts";
-import { associationOf, type ModelBase, type ModelClass } from "./model.ts";
+import { associationOf } from "./association-fields.ts";
+import type { ModelBase, ModelClass } from "./model.ts";
 import { state } from "./record-state.ts";
 import { applyScope, type Scope, type Scoped } from "./relation.ts";
 import { relationFor } from "./scoped-relation.ts";

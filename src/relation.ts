@@ -8,16 +8,13 @@ import {
   compileDeleteAll,
   compileSelect,
   compileUpdateAll,
+  querySql,
   type Conflict,
+  type QuerySql,
 } from "./compiler.ts";
-import {
-  IncompatibleRelation,
-  IrreversibleOrder,
-  RecordNotFound,
-  RecordNotSaved,
-} from "./errors.ts";
+import { IncompatibleRelation, RecordNotFound, RecordNotSaved } from "./errors.ts";
 import { includeTree } from "./preload.ts";
-import { inKeyOrder, keysToFind, runnerFor, type QueryRunner } from "./load.ts";
+import { inKeyOrder, keysToFind, runnerFor, selectFor, type QueryRunner } from "./load.ts";
 import {
   allOf,
   either,
@@ -54,25 +51,9 @@ import {
   type UpsertOptions,
 } from "./relation-checks.ts";
 import { unowned, type OwnedCollection } from "./owned-collection.ts";
+import { atMostOne, reversed } from "./finder-order.ts";
 import { insertStatement, runAlone, Statement } from "./statement.ts";
 import { paginate, type CountlessPage, type Page, type PageOptions } from "./pagination.ts";
-
-/** The same term sorting the other way; NULLs move to the other end too, as in Rails. */
-function reversed(term: OrderTerm): OrderTerm {
-  if (term instanceof SafeSql) {
-    throw new IrreversibleOrder(
-      "last() can't reverse an order given as an sql fragment; order by attributes, or reverse the fragment yourself and use first()",
-    );
-  }
-  const direction = term.direction === "asc" ? "desc" : "asc";
-  const nulls = term.nulls && (term.nulls === "first" ? "last" : "first");
-  return { ...term, direction, ...(nulls && { nulls }) };
-}
-
-/** One record from the page: `limit(0)` stays empty, and `offset` is kept by the caller. */
-function atMostOne(limit: number | undefined): number {
-  return Math.min(limit ?? 1, 1);
-}
 
 declare const scopeTypes: unique symbol;
 
@@ -588,6 +569,14 @@ export class Relation<M extends ModelBase, S = {}> {
   async paginate(options: PageOptions): Promise<Page<M> | CountlessPage<M>>;
   async paginate(options: PageOptions = {}): Promise<Page<M> | CountlessPage<M>> {
     return paginate({ model: this.#model, query: this.#query, runner: this.#runner }, options);
+  }
+
+  /**
+   * The SQL `toArray()` sends, and its bound values, without sending it (Rails' `to_sql`). Values
+   * are never inlined into the SQL (ADR-0006), and none are redacted, filtered attributes included.
+   */
+  toSql(): QuerySql {
+    return querySql(selectFor(this.#model, this.#query));
   }
 
   async toArray(): Promise<M[]> {
