@@ -55,6 +55,8 @@ export function startSession({
     output,
     terminal,
     useColors: terminal,
+    // Ctrl-C stops a running line, even an `await` that never finishes.
+    breakEvalOnSigint: terminal,
     useGlobal: false,
     writer(this: repl.REPLServer, value: unknown) {
       const shown = inspect(value, { colors: this.useColors });
