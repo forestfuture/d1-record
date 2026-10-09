@@ -105,4 +105,23 @@ describe("the console session", () => {
       "nut",
     );
   });
+
+  test("a terminal gets colors in its results", async () => {
+    const terminal = terminalStreams();
+    const session = startSession({
+      input: terminal.input,
+      output: terminal.output,
+      terminal: true,
+      scope: { Sample },
+      withDatabase: (run) => withDatabase(connect(binding), run),
+    });
+    terminal.input.write("1 + 1\n");
+    for (let waited = 0; !terminal.transcript().includes("#=>") && waited < 50; waited++) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    terminal.input.end();
+    await session.closed;
+
+    expect(terminal.transcript()).toContain("#=> \u001b[33m2\u001b[39m");
+  });
 });

@@ -56,8 +56,10 @@ export function startSession({
     terminal,
     useColors: terminal,
     useGlobal: false,
-    writer: (value: unknown) =>
-      types.isNativeError(value) ? inspect(value) : `#=> ${inspect(value)}`,
+    writer(this: repl.REPLServer, value: unknown) {
+      const shown = inspect(value, { colors: this.useColors });
+      return types.isNativeError(value) ? shown : `#=> ${shown}`;
+    },
   });
   if (terminal && historyFile !== undefined) server.setupHistory(historyFile, () => {});
   Object.assign(server.context, scope);
