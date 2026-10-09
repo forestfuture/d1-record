@@ -1,5 +1,5 @@
 // A console session: a REPL on any streams, with the project's Models and database in scope (#104).
-import { inspect } from "node:util";
+import { inspect, types } from "node:util";
 import repl from "node:repl";
 import type { Readable, Writable } from "node:stream";
 
@@ -22,7 +22,8 @@ export function startSession({ input, output, scope, withDatabase }: SessionOpti
     output,
     terminal: false,
     useGlobal: false,
-    writer: (value: unknown) => `#=> ${inspect(value)}`,
+    writer: (value: unknown) =>
+      types.isNativeError(value) ? inspect(value) : `#=> ${inspect(value)}`,
   });
   Object.assign(server.context, scope);
   // The REPL's input events don't inherit an async context, so each line runs inside its own

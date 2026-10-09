@@ -58,7 +58,9 @@ describe("the console session", () => {
   test("an error prints its message, and the session carries on", async () => {
     const console = await session();
 
-    expect(await console.send("await db.model(Sample).find(99)")).toMatch(/RecordNotFound/);
+    const failure = await console.send("await db.model(Sample).find(99)");
+    expect(failure).toMatch(/RecordNotFound/);
+    expect(failure).not.toContain("#=>");
     expect(await console.send("1 + 1")).toBe("#=> 2");
     await console.close();
   });
