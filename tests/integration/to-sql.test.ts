@@ -75,6 +75,15 @@ describe("toSql", () => {
     expect(params).toEqual([]);
   });
 
+  // A guard, as Rails: its to_sql shows real values while its logs filter them (#83).
+  test("shows a filtered attribute's real value, which onQuery still hides", async () => {
+    const users = db().model(User).where({ email: "a@example.com" });
+
+    expect(users.toSql().params).toEqual(["a@example.com"]);
+    await users.toArray();
+    expect(events[0]?.params).toEqual(["[FILTERED]"]);
+  });
+
   describe("a Statement", () => {
     test("is the SQL db.batch sends for it, and building or inspecting it sends nothing", async () => {
       const database = db();

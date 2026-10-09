@@ -6,6 +6,7 @@ import { Comparison, comparisonParts, type Operator } from "./comparisons.ts";
 import { Either, Negated, type Condition, type QueryDescription } from "./query.ts";
 import { ColumnReference, SafeSql } from "./sql.ts";
 import { writeUntypedValue } from "./conversion.ts";
+import { boundValue } from "./filtering.ts";
 
 /** One SQL statement ready for D1, with the Model whose table it reads or writes. */
 export interface CompiledSql {
@@ -20,9 +21,9 @@ export interface QuerySql {
   params: unknown[];
 }
 
-/** `compiled` as `toSql()` shows it, without the Model it is for. */
+/** `compiled` as `toSql()` shows it: the values D1 binds, and not the Model it is for. */
 export function querySql({ sql, params }: CompiledSql): QuerySql {
-  return { sql, params: [...params] };
+  return { sql, params: params.map(boundValue) };
 }
 
 /** Quotes a SQLite identifier; embedded double quotes are doubled. */
