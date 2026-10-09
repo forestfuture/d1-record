@@ -23,12 +23,8 @@ import { associationOf, newRecord } from "./association-fields.ts";
 import { RecordStatement } from "./record-statement.ts";
 import { inferTableNames } from "./table-names.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
-import {
-  inspectCustom,
-  inspectRecord,
-  type Inspect,
-  type InspectOptions,
-} from "./record-inspect.ts";
+import { inspectCustom, type Inspect, type InspectOptions } from "./inspect-support.ts";
+import { inspectRecord } from "./record-inspect.ts";
 import { readyModel, type BelongsTo, type HasOne } from "./associations.ts";
 import type { Relation, Scope, Scoped } from "./relation.ts";
 import type { PaginateStatic } from "./pagination.ts";
@@ -623,10 +619,7 @@ export class ModelBase {
 
   /** Prints as `Name { attribute: value, … }` in a console, a log or a test failure (#104). */
   [inspectCustom](depth: number, options: InspectOptions, inspect: Inspect): string {
-    const record = this[state];
-    // A new record's attributes are all unsaved, so only a persisted record flags its changes.
-    const changes = record.isPersisted ? record.changesSinceLoad() : {};
-    return inspectRecord(modelOf(this), record.attributes(), changes, [depth, options, inspect]);
+    return inspectRecord(modelOf(this), this[state], { depth, options, inspect });
   }
 
   /**

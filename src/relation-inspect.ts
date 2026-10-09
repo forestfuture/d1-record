@@ -1,15 +1,17 @@
 // How a Relation prints: its Model and the SELECT it would send, which printing never sends (#104).
 import type { CompiledSql } from "./compiler.ts";
 import { Filtered } from "./filtering.ts";
-import { Redacted, styled, type Inspect, type InspectOptions } from "./record-inspect.ts";
+import { FilteredMark, printed, type InspectArgs } from "./inspect-support.ts";
 
 /** `Relation<Model> { sql, params }`, filtered params as `[FILTERED]`; `[Relation]` past `depth`. */
 export function inspectRelation(
   modelName: string,
   { sql, params }: CompiledSql,
-  [depth, options, inspect]: [number, InspectOptions, Inspect],
+  args: InspectArgs,
 ): string {
-  if (depth < 0) return styled(options, "[Relation]");
-  const shown = params.map((param) => (param instanceof Filtered ? new Redacted(false) : param));
-  return `Relation<${modelName}> ${inspect({ sql, params: shown }, { ...options, depth })}`;
+  const body = () => ({
+    sql,
+    params: params.map((param) => (param instanceof Filtered ? new FilteredMark(false) : param)),
+  });
+  return printed(`Relation<${modelName}>`, "Relation", body, args);
 }
