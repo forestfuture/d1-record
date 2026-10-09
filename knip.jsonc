@@ -15,6 +15,8 @@
         ],
       },
       "ignoreDependencies": ["@arethetypeswrong/core", "publint", "cloudflare"],
+      // tests/integration/cli-console-command.test.ts lists a process's children with it.
+      "ignoreBinaries": ["pgrep"],
     },
     "site": {
       // Examples are included into pages by Markdown (<<<), not imported.
