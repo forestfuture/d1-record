@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
 import { loadProject } from "../../cli/console/project.ts";
@@ -125,6 +125,93 @@ describe("loading a project's Models for the console", () => {
       );
 
       expect(await loadProject(cwd)).toMatch(/^@forestfuture\/d1-record isn't installed here/);
+    });
+  });
+
+  describe("reloading", () => {
+    /** A loaded project, and the folder it is in, for edits between loads. */
+    async function loaded() {
+      const cwd = project({
+        "src/models/application-record.ts": applicationRecord,
+        "src/models/user.ts": `
+          import { ApplicationRecord } from "./application-record";
+          import { greeting } from "@/lib/greeting";
+          export class User extends ApplicationRecord("users") { static greeting = greeting; }
+        `,
+        "src/lib/greeting.ts": `export const greeting: string = "hello";`,
+      });
+      const first = await loadProject(cwd);
+      if (typeof first === "string") throw new Error(first);
+      return { cwd, first };
+    }
+
+    test("picks up an edit to a Model's file", async () => {
+      const { cwd, first } = await loaded();
+      writeFileSync(
+        join(cwd, "src/models/user.ts"),
+        `
+          import { ApplicationRecord } from "./application-record";
+          export class User extends ApplicationRecord("users") { static edited = true; }
+        `,
+      );
+
+      const again = await first.reload();
+
+      if (typeof again === "string") throw new Error(again);
+      expect((again.User as unknown as { edited: boolean }).edited).toBe(true);
+    });
+
+    test("picks up an edit to a file a Model imports", async () => {
+      const { cwd, first } = await loaded();
+      writeFileSync(join(cwd, "src/lib/greeting.ts"), `export const greeting = "bonjour";`);
+
+      const again = await first.reload();
+
+      if (typeof again === "string") throw new Error(again);
+      expect((again.User as unknown as { greeting: string }).greeting).toBe("bonjour");
+    });
+
+    test("finds a Model file added since, and drops one that was removed", async () => {
+      const { cwd, first } = await loaded();
+      writeFileSync(
+        join(cwd, "src/models/post.ts"),
+        `
+          import { ApplicationRecord } from "./application-record";
+          export class Post extends ApplicationRecord("posts") {}
+        `,
+      );
+      rmSync(join(cwd, "src/models/user.ts"));
+
+      const again = await first.reload();
+
+      if (typeof again === "string") throw new Error(again);
+      expect(Object.keys(again)).toEqual(["Post"]);
+    });
+
+    test("keeps the library: a reloaded Model is still a Model of the same library", async () => {
+      const { first } = await loaded();
+
+      const again = await first.reload();
+
+      if (typeof again === "string") throw new Error(again);
+      const User = again.User as { prototype: object };
+      expect(User.prototype instanceof first.library.Model.Base).toBe(true);
+    });
+
+    test("says which file fails, and leaves the loaded Models as they were", async () => {
+      const { cwd, first } = await loaded();
+      writeFileSync(join(cwd, "src/models/user.ts"), 'throw new Error("mid-edit");');
+
+      expect(await first.reload()).toBe("Couldn't load src/models/user.ts: mid-edit");
+      writeFileSync(
+        join(cwd, "src/models/user.ts"),
+        `
+          import { ApplicationRecord } from "./application-record";
+          export class User extends ApplicationRecord("users") {}
+        `,
+      );
+      expect(typeof (await first.reload())).toBe("object");
+      expect(Object.keys(first.models)).toEqual(["User"]);
     });
   });
 });

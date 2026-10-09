@@ -1,6 +1,6 @@
 // Loads a project's TypeScript Models and its own copy of the library for the console (#104).
 import { existsSync, readdirSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { createJiti } from "jiti";
 import { defaultModels, oneModelsFile, shown } from "../schema/project.ts";
 
@@ -18,6 +18,11 @@ export interface ConsoleProject {
   library: Library;
   /** Each Model class the models folder exports, by name. */
   models: Record<string, unknown>;
+  /**
+   * Reads the project's files again, so edits show: the Models now, or why they can't be loaded
+   * (the loaded Models are left as they were). The library is not reloaded: it stays one copy.
+   */
+  reload: () => Promise<Record<string, unknown> | string>;
 }
 
 /** The Model files: the folder's `.ts` files, or the one file `--models` names. */
@@ -73,6 +78,33 @@ async function loadModels(
   return found;
 }
 
+/** The Models found in the files now, or why there are none to use. */
+async function modelsIn(
+  cwd: string,
+  models: string,
+  jiti: Jiti,
+  library: Library,
+): Promise<Record<string, unknown> | string> {
+  const files = modelFiles(cwd, models);
+  if (typeof files === "string") return files;
+  const found = await loadModels(cwd, jiti, files, library);
+  if (typeof found === "string") return found;
+  if (Object.keys(found).length === 0) {
+    return `No Models in ${shown(cwd, resolve(cwd, models))} (run d1-record g model, or pass --models)`;
+  }
+  return found;
+}
+
+/** Forgets the project's own modules, so they are read again. Dependencies stay as they are. */
+function forgetProjectFiles(cwd: string, jiti: Jiti): void {
+  const folder = `${resolve(cwd)}${sep}`;
+  for (const file of Object.keys(jiti.cache)) {
+    if (file.startsWith(folder) && !file.includes(`${sep}node_modules${sep}`)) {
+      delete jiti.cache[file];
+    }
+  }
+}
+
 /**
  * The project's Models and library, loaded as its own code would load them: one `jiti` based in
  * the project reads TypeScript, extensionless imports and `tsconfig.json` paths, and resolves
@@ -83,15 +115,22 @@ export async function loadProject(
   cwd: string,
   models = defaultModels,
 ): Promise<ConsoleProject | string> {
-  const files = modelFiles(cwd, models);
-  if (typeof files === "string") return files;
+  const folder = modelFiles(cwd, models);
+  if (typeof folder === "string") return folder;
   const jiti = createJiti(`${cwd}/`, { tsconfigPaths: true, fsCache: false, moduleCache: true });
   const library = await loadLibrary(jiti);
   if (typeof library === "string") return library;
-  const found = await loadModels(cwd, jiti, files, library);
+  const found = await modelsIn(cwd, models, jiti, library);
   if (typeof found === "string") return found;
-  if (Object.keys(found).length === 0) {
-    return `No Models in ${shown(cwd, resolve(cwd, models))} (run d1-record g model, or pass --models)`;
-  }
-  return { library, models: found };
+  const project: ConsoleProject = {
+    library,
+    models: found,
+    reload: async () => {
+      forgetProjectFiles(cwd, jiti);
+      const again = await modelsIn(cwd, models, jiti, library);
+      if (typeof again !== "string") project.models = again;
+      return again;
+    },
+  };
+  return project;
 }
