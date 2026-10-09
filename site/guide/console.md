@@ -52,6 +52,8 @@ The console opens the local database in `.wrangler/state`, beside your Wrangler 
 
 It never opens your remote database, even for a binding your config marks `remote: true`.
 
+It starts only that D1 binding. The rest of your Wrangler config (Durable Objects, services, `vars`, and the secrets in `.dev.vars`) isn’t started, so it can’t warn or fail on them, and your Models can’t reach them either.
+
 On a terminal, what you type is kept in `.wrangler/d1-record-history`, which Wrangler projects already ignore. A line can hold a token or an email, so add `--no-history` when you’d rather it wasn’t kept.
 
 ## Running a few lines at once

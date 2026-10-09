@@ -1,11 +1,21 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, test } from "vite-plus/test";
+import { describe, expect, test, vi } from "vite-plus/test";
 import { openLocalBinding } from "../../cli/console/binding.ts";
+import type { ChosenDatabase } from "../../cli/console/database.ts";
 import type { TestDatabase } from "../support/d1.ts";
 import { scratchDirs } from "../support/scratch.ts";
 
 const scratch = scratchDirs();
+
+/** The first D1 binding of the project's wrangler.jsonc, as `d1-record console` would choose it. */
+function chosen(cwd: string): ChosenDatabase {
+  const configFile = join(cwd, "wrangler.jsonc");
+  const config = JSON.parse(readFileSync(configFile, "utf8")) as {
+    d1_databases?: Record<string, unknown>[];
+  };
+  return { binding: "DB", entry: config.d1_databases?.[0] ?? { binding: "DB" }, configFile };
+}
 
 /** A project in the repo (so it finds this repo's wrangler) with one D1 binding configured. */
 function project(binding: object): string {
@@ -17,16 +27,14 @@ function project(binding: object): string {
 describe("the console's local database binding", () => {
   test("is the project's local D1, kept in .wrangler/state between sessions", async () => {
     const cwd = project({ binding: "DB", database_name: "shop", database_id: "local-shop" });
-    const configFile = join(cwd, "wrangler.jsonc");
-
-    const first = await openLocalBinding(cwd, { binding: "DB", configFile });
+    const first = await openLocalBinding(cwd, chosen(cwd));
     if (typeof first === "string") throw new Error(first);
     const db = first.binding as TestDatabase;
     await db.exec("CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT)");
     await db.prepare("INSERT INTO notes (id, body) VALUES (1, 'kept')").run();
     await first.dispose();
 
-    const second = await openLocalBinding(cwd, { binding: "DB", configFile });
+    const second = await openLocalBinding(cwd, chosen(cwd));
     if (typeof second === "string") throw new Error(second);
     const kept = await (second.binding as TestDatabase)
       .prepare("SELECT body FROM notes WHERE id = 1")
@@ -48,10 +56,7 @@ describe("the console's local database binding", () => {
       remote: true,
     });
 
-    const opened = await openLocalBinding(cwd, {
-      binding: "DB",
-      configFile: join(cwd, "wrangler.jsonc"),
-    });
+    const opened = await openLocalBinding(cwd, chosen(cwd));
     if (typeof opened === "string") throw new Error(opened);
     const one = await (opened.binding as TestDatabase).prepare("SELECT 1 AS one").first("one");
     await opened.dispose();
@@ -64,9 +69,9 @@ describe("the console's local database binding", () => {
     const cwd = scratch("console-nowrangler-", true);
     writeFileSync(join(cwd, "wrangler.jsonc"), "{}");
 
-    expect(
-      await openLocalBinding(cwd, { binding: "DB", configFile: join(cwd, "wrangler.jsonc") }),
-    ).toBe("wrangler isn't installed here (install it, then run d1-record console again)");
+    expect(await openLocalBinding(cwd, chosen(cwd))).toBe(
+      "wrangler isn't installed here (install it, then run d1-record console again)",
+    );
   });
 
   test("a wrangler that fails to load is reported as that, not as missing", async () => {
@@ -82,30 +87,61 @@ describe("the console's local database binding", () => {
     );
     writeFileSync(join(cwd, "wrangler.jsonc"), "{}");
 
-    expect(
-      await openLocalBinding(cwd, { binding: "DB", configFile: join(cwd, "wrangler.jsonc") }),
-    ).toBe("Couldn't load wrangler: engine mismatch");
+    expect(await openLocalBinding(cwd, chosen(cwd))).toBe(
+      "Couldn't load wrangler: engine mismatch",
+    );
   });
 
-  test("a config wrangler rejects is reported with wrangler's reason", async () => {
-    const cwd = project({
-      binding: "DB",
-      database_name: "shop",
-      database_id: "local-shop",
-    });
-    writeFileSync(
-      join(cwd, "wrangler.jsonc"),
-      JSON.stringify({
-        compatibility_date: "not-a-date",
-        d1_databases: [{ binding: "DB", database_name: "shop", database_id: "local-shop" }],
-      }),
-    );
+  test("a D1 entry wrangler rejects is reported with wrangler's reason", async () => {
+    // A database_id must be a string; the entry reaches wrangler as the config has it.
+    const cwd = project({ binding: "DB", database_name: "shop", database_id: 42 });
 
-    const opened = await openLocalBinding(cwd, {
-      binding: "DB",
-      configFile: join(cwd, "wrangler.jsonc"),
-    });
+    const opened = await openLocalBinding(cwd, chosen(cwd));
 
     expect(opened).toMatch(/^Wrangler couldn't open DB: /);
+  }, 60_000);
+
+  test("opens only the D1 binding: the rest of the config can't warn or fail", async () => {
+    const cwd = project({ binding: "DB", database_name: "shop", database_id: "local-shop" });
+    const configFile = join(cwd, "wrangler.jsonc");
+    writeFileSync(
+      configFile,
+      JSON.stringify({
+        name: "shop",
+        compatibility_date: "2025-09-01",
+        d1_databases: [{ binding: "DB", database_name: "shop", database_id: "local-shop" }],
+        // Not exported by any Worker here, as in a project whose Durable Objects live elsewhere.
+        durable_objects: { bindings: [{ name: "USERS", class_name: "User" }] },
+        vars: { GREETING: "hi" },
+      }),
+    );
+    writeFileSync(join(cwd, ".dev.vars"), "SECRET=1\n");
+    const written: string[] = [];
+    const record = (chunk: unknown) => {
+      written.push(String(chunk));
+      return true;
+    };
+    const out = vi.spyOn(process.stdout, "write").mockImplementation(record);
+    const err = vi.spyOn(process.stderr, "write").mockImplementation(record);
+    const log = vi
+      .spyOn(console, "log")
+      .mockImplementation((...args) => void record(args.join(" ")));
+    const warn = vi
+      .spyOn(console, "warn")
+      .mockImplementation((...args) => void record(args.join(" ")));
+
+    let opened: Awaited<ReturnType<typeof openLocalBinding>>;
+    try {
+      opened = await openLocalBinding(cwd, chosen(cwd));
+    } finally {
+      for (const spy of [out, err, log, warn]) spy.mockRestore();
+    }
+    if (typeof opened === "string") throw new Error(opened);
+    const db = opened.binding as TestDatabase;
+    await db.exec("CREATE TABLE notes (id INTEGER PRIMARY KEY)");
+    await opened.dispose();
+
+    expect(written.join("")).toBe("");
+    expect(existsSync(join(cwd, ".wrangler/state/v3/d1"))).toBe(true);
   }, 60_000);
 });

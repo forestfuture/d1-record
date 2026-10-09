@@ -1,4 +1,6 @@
 // The console's D1 binding: the project's local database, opened through its own Wrangler (#104).
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createJiti } from "jiti";
 import type { ChosenDatabase } from "./database.ts";
@@ -20,6 +22,19 @@ interface Wrangler {
 }
 
 /**
+ * A Wrangler config holding only this D1 binding, in a folder of its own. `getPlatformProxy`
+ * starts every binding a config declares, so the project's own config would bring its Durable
+ * Objects, services and secrets (with their warnings, or failures) into a console that only
+ * needs the database. The entry is the project's, verbatim, so Wrangler names the same local D1.
+ */
+function d1OnlyConfig(entry: Record<string, unknown>): { file: string; remove: () => void } {
+  const dir = mkdtempSync(join(tmpdir(), "d1-record-console-"));
+  const file = join(dir, "wrangler.jsonc");
+  writeFileSync(file, JSON.stringify({ name: "d1-record-console", d1_databases: [entry] }));
+  return { file, remove: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
+/**
  * The chosen binding on the project's local D1, in the `.wrangler/state` beside the config that
  * `wrangler dev` and `wrangler d1 migrations apply --local` use (`getPlatformProxy`'s own default
  * is relative to the working directory, which can be anywhere). `remoteBindings: false` keeps it
@@ -27,7 +42,7 @@ interface Wrangler {
  */
 export async function openLocalBinding(
   cwd: string,
-  { binding, configFile }: ChosenDatabase,
+  { binding, entry, configFile }: ChosenDatabase,
 ): Promise<OpenBinding | string> {
   let file: string;
   try {
@@ -42,18 +57,23 @@ export async function openLocalBinding(
     return `Couldn't load wrangler: ${(error as Error).message}`;
   }
   let proxy: Awaited<ReturnType<Wrangler["getPlatformProxy"]>>;
+  const config = d1OnlyConfig(entry);
   try {
     proxy = await wrangler.getPlatformProxy({
-      configPath: configFile,
+      configPath: config.file,
       persist: { path: join(dirname(configFile), ".wrangler/state/v3") },
       remoteBindings: false,
     });
   } catch (error) {
+    config.remove();
     return `Wrangler couldn't open ${binding}: ${(error as Error).message}`;
   }
   return {
     binding: proxy.env[binding],
     description: `Local database ${binding} (.wrangler/state)`,
-    dispose: proxy.dispose,
+    dispose: async () => {
+      await proxy.dispose();
+      config.remove();
+    },
   };
 }

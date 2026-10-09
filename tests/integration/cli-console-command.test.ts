@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, onTestFinished, test, vi } from "vite-plus/test";
 import { openLocalBinding } from "../../cli/console/binding.ts";
+import type { ChosenDatabase } from "../../cli/console/database.ts";
 import { runConsole } from "../../cli/console/command.ts";
 import { main } from "../../cli/main.ts";
 import { terminalStreams, waitFor } from "../support/console.ts";
@@ -12,6 +13,12 @@ import { scratchDirs } from "../support/scratch.ts";
 // source, as an app's finds its own copies.
 const library = new URL("../../src/index.ts", import.meta.url).pathname;
 const scratch = scratchDirs();
+
+/** The project's one D1 binding, as the console would choose it. */
+function chosen(cwd: string): ChosenDatabase {
+  const entry = { binding: "DB", database_name: "shop", database_id: "local-shop" };
+  return { binding: "DB", entry, configFile: join(cwd, "wrangler.jsonc") };
+}
 
 /** A project with a users table in its local D1, a User Model, and a Wrangler config. */
 async function shop(): Promise<string> {
@@ -38,10 +45,7 @@ async function shop(): Promise<string> {
     mkdirSync(dirname(join(cwd, path)), { recursive: true });
     writeFileSync(join(cwd, path), text);
   }
-  const opened = await openLocalBinding(cwd, {
-    binding: "DB",
-    configFile: join(cwd, "wrangler.jsonc"),
-  });
+  const opened = await openLocalBinding(cwd, chosen(cwd));
   if (typeof opened === "string") throw new Error(opened);
   const db = opened.binding as TestDatabase;
   await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)");
@@ -66,10 +70,7 @@ describe("d1-record console", () => {
     terminal.input.end();
     expect(await done).toBe(0);
 
-    const reopened = await openLocalBinding(cwd, {
-      binding: "DB",
-      configFile: join(cwd, "wrangler.jsonc"),
-    });
+    const reopened = await openLocalBinding(cwd, chosen(cwd));
     if (typeof reopened === "string") throw new Error(reopened);
     const name = await (reopened.binding as TestDatabase)
       .prepare("SELECT name FROM users WHERE id = 1")

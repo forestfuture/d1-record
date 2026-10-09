@@ -12,6 +12,8 @@ export interface DatabaseConfig {
   /** Cloudflare's `migrations_pattern`, a glob for nested layouts. */
   migrationsPattern?: string;
   migrationsTable?: string;
+  /** The `d1_databases` entry as the config has it (a TOML config's string values only). */
+  entry: Record<string, unknown>;
 }
 
 export type ConfigResult =
@@ -91,6 +93,7 @@ function databaseOf(entry: Record<string, unknown>): DatabaseConfig {
   const database: DatabaseConfig = {
     binding: String(entry.binding),
     migrationsDir: typeof entry.migrations_dir === "string" ? entry.migrations_dir : "migrations",
+    entry,
   };
   if (typeof entry.migrations_pattern === "string")
     database.migrationsPattern = entry.migrations_pattern;

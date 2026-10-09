@@ -19,7 +19,12 @@ function project(database: Partial<DatabaseSnapshot> = {}): ProjectSnapshot {
     databases: [
       {
         target: {
-          database: { binding: "DB", databaseName: "my-app-db", migrationsDir: "migrations" },
+          database: {
+            binding: "DB",
+            databaseName: "my-app-db",
+            migrationsDir: "migrations",
+            entry: { binding: "DB" },
+          },
           configDir: cwd,
           migrationsDir: `${cwd}/migrations`,
           out: `${cwd}/src/db/schema.ts`,
@@ -158,7 +163,10 @@ describe("planGenerate: what g model and g migration write and print, from a sna
     const one = project().databases[0]!;
     const logs = {
       ...one,
-      target: { ...one.target, database: { binding: "LOGS", migrationsDir: "logs" } },
+      target: {
+        ...one.target,
+        database: { binding: "LOGS", migrationsDir: "logs", entry: { binding: "LOGS" } },
+      },
     };
     const several = { ...project(), databases: [one, logs] };
 

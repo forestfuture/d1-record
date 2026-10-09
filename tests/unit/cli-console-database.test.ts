@@ -24,6 +24,7 @@ describe("the database the console opens", () => {
 
     expect(databaseFor(cwd, {})).toEqual({
       binding: "DB",
+      entry: { binding: "DB", database_name: "DB-name" },
       configFile: join(cwd, "wrangler.jsonc"),
     });
   });
