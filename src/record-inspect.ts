@@ -49,7 +49,6 @@ export function inspectRecord(
 ): string {
   // Nested deeper than `depth` allows: just the name, as Node prints any class instance.
   if (depth < 0) return styled(options, `[${model.name}]`);
-  const innerDepth = options.depth == null ? options.depth : options.depth - 1;
   const shown = Object.fromEntries(
     Object.entries(attributes).map(([name, value]) => {
       const change = changes[name];
@@ -57,5 +56,5 @@ export function inspectRecord(
       return [name, change ? new Unsaved(value, change[0]) : value];
     }),
   );
-  return `${model.name} ${inspect(shown, { ...options, depth: innerDepth })}`;
+  return `${model.name} ${inspect(shown, { ...options, depth })}`;
 }

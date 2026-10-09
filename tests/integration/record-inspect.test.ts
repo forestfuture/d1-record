@@ -11,6 +11,13 @@ class Sample extends Model({
   static tableName = "samples";
 }
 
+class Setting extends Model({
+  id: { type: "integer", null: false },
+  settings: "json",
+}) {
+  static tableName = "samples";
+}
+
 class User extends Model({
   id: { type: "integer", null: false },
   email: { type: "string", null: false }, // filtered by default: "email"
@@ -163,6 +170,25 @@ describe("inspect", () => {
       const relation = connect(binding).model(Sample);
 
       expect(inspect({ relation }, { depth: 0 })).toBe("{ relation: [Relation] }");
+    });
+  });
+
+  describe("depth", () => {
+    const nested = { a: { b: 1 } };
+
+    test("a record's attributes are as deep as the same object's would be", async () => {
+      const setting = await connect(binding).model(Setting).create({ id: 1, settings: nested });
+
+      expect(inspect(setting, { depth: 1 })).toBe("Setting { id: 1, settings: { a: [Object] } }");
+      expect(inspect(setting, { depth: 0 })).toBe("Setting { id: 1, settings: [Object] }");
+    });
+
+    test("a nested record counts the levels above it", async () => {
+      const setting = await connect(binding).model(Setting).create({ id: 1, settings: nested });
+
+      expect(inspect({ setting }, { depth: 2 })).toBe(
+        "{ setting: Setting { id: 1, settings: { a: [Object] } } }",
+      );
     });
   });
 });

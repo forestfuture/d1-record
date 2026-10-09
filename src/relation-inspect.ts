@@ -11,6 +11,5 @@ export function inspectRelation(
 ): string {
   if (depth < 0) return styled(options, "[Relation]");
   const shown = params.map((param) => (param instanceof Filtered ? new Redacted(false) : param));
-  const innerDepth = options.depth == null ? options.depth : options.depth - 1;
-  return `Relation<${modelName}> ${inspect({ sql, params: shown }, { ...options, depth: innerDepth })}`;
+  return `Relation<${modelName}> ${inspect({ sql, params: shown }, { ...options, depth })}`;
 }
