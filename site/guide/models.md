@@ -266,6 +266,20 @@ A plain string is rejected.
 
 Associations are never included, so a response never loads more than you asked for.
 
+`toJSON()` sends every loaded attribute, so a `passwordDigest` goes out with the rest. List the names it leaves out in `static hiddenAttributes` on your app’s base class:
+
+<<< @/snippets/guide/hidden-attributes.ts#base{ts}
+
+Names are exact, and none are hidden by default. A Model’s own list replaces the base class’s:
+
+<<< @/snippets/guide/hidden-attributes.ts#extend{ts}
+
+A name a Model doesn’t have throws `InvalidModel` when the Model is first used, so a typo can’t leave an attribute in your responses. The base class’s names are the exception: they’re ignored where a Model lacks them. `attributes()` still returns every attribute, for when you do mean to send one.
+
+::: warning Beyond Rails
+Rails’ `serializable_hash(except:)` is per call, and `filter_attributes` only covers logs and inspection. d1-record keeps a class-level list, so `Response.json(user)` is safe without each call site remembering to strip the attribute.
+:::
+
 ## Filtering attributes
 
 `onQuery` listeners and error messages show a filtered attribute’s values as `"[FILTERED]"`. D1 still gets the real values. [Logging](./logging#keeping-secrets-out-of-the-logs) shows how to change the list.

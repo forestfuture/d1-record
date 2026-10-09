@@ -40,6 +40,10 @@ _Avoid_: Coerce, convert (D1's storage form is conversion), parse
 An attribute whose values listeners and errors show as `"[FILTERED]"` (passwords, tokens, keys, emails), named by the Model's `filterAttributes`. D1 still gets the real values.
 _Avoid_: Redacted, masked, sensitive field; and "filter" alone, which means a **Scope**'s conditions
 
+**Hidden attribute**:
+An attribute `toJSON()` leaves out, named by the Model's `hiddenAttributes`, by exact name. `attributes()` still has it. Independent of a **Filtered attribute**, which is about logs and errors.
+_Avoid_: Private, protected, excluded
+
 **Snapshot**:
 A Record's attribute values as last loaded from or saved to D1. Changes are measured against it, and `reload()` replaces it.
 _Avoid_: Original, previous values, dirty state

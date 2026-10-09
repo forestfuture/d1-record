@@ -79,6 +79,7 @@ export default {
 ## Where code goes wrong
 
 - **`onQuery` listeners see filtered attributes' values as `"[FILTERED]"`**: passwords, tokens, keys and emails, by Rails' default list. Add names to `static filterAttributes` on the app's base class for other secrets. Values inside `sql` fragments aren't filtered.
+- **`toJSON()` sends every loaded attribute**, so `Response.json(user)` includes `passwordDigest`. List the names to leave out in `static hiddenAttributes` on the app's base class (exact names; a Model's own list replaces it). `attributes()` still has them.
 - **Uniqueness validation is a friendly check, not a guarantee.** Two requests can pass it at once; the table's UNIQUE index decides, and the save then throws `RecordNotUnique`. Declare both.
 - **`record.loaded("posts")` reads what was preloaded or already read**, synchronously, and throws `AssociationNotLoaded` otherwise. `await user.posts().toArray()` loads when needed.
 - **Page a list with `paginate()`, not a hand-built `limit` and `offset`**: `Post.published().paginate({ page: url.searchParams.get("page") })` casts the untrusted page, caps its size at `static maxPerPage`, and sends the count with the page in one round trip. `{ count: false }` skips the `COUNT`, which reads (and bills) every matching row.

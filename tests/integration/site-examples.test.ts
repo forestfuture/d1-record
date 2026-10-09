@@ -25,6 +25,7 @@ import * as models from "../../site/snippets/guide/models.ts";
 import * as untrusted from "../../site/snippets/guide/untrusted-input.ts";
 import * as paginating from "../../site/snippets/guide/paginating.ts";
 import * as filtering from "../../site/snippets/guide/filtering.ts";
+import * as hidden from "../../site/snippets/guide/hidden-attributes.ts";
 import worker from "../../site/snippets/getting-started/src/index.ts";
 import { publishDraftsAndRemove } from "../../site/snippets/getting-started/src/publish.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
@@ -451,5 +452,12 @@ describe("Log queries: keep secrets out of the logs", () => {
       "iban",
       /^dateOfBirth$/,
     ]);
+  });
+});
+
+describe("Serialize records: hide attributes from toJSON", () => {
+  test("a Model adds to the base class's list", () => {
+    expect(hidden.Base.hiddenAttributes).toEqual(["passwordDigest"]);
+    expect(hidden.Account.hiddenAttributes).toEqual(["passwordDigest", "apiKey"]);
   });
 });
