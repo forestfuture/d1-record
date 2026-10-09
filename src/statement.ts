@@ -31,10 +31,7 @@ export class Statement {
     this.#query = query;
   }
 
-  /**
-   * The SQL this Statement sends, and its bound values, without sending it (Rails' `to_sql`).
-   * Values are never inlined into the SQL (ADR-0006), and none are redacted.
-   */
+  /** The SQL this Statement sends and its bound values, unsent: see `Relation#toSql`. */
   toSql(): QuerySql {
     return querySql(this.#query);
   }
