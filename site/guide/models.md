@@ -311,10 +311,8 @@ User { id: 1, name: 'Johnny' (was 'Alice'), email: [FILTERED], role: 'admin' }
 ```
 
 - **Filtered attributes** print as `[FILTERED]`, without quotes so it can’t be mistaken for a string, and in a distinct color when the terminal shows colors. An attribute with no value still prints `null`.
-- **Unsaved changes** print the new value and the old one: `'Johnny' (was 'Alice')`. Once the record is saved, the flag goes. A changed filtered attribute prints `[FILTERED] (changed)`. A new record flags nothing, since all of it is unsaved.
+- **Unsaved changes** print the new value and the old one: `'Johnny' (was 'Alice')`. Once the record is saved, the flag goes. A changed filtered attribute prints `[FILTERED] (changed)`, and so does a column a partial record never loaded: `'Johnny' (changed)`. A new record flags nothing, since all of it is unsaved.
 - **A partial record** prints only the columns it loaded.
-- **Hidden attributes** still print: hiding is for `toJSON()`, and printing is for you.
-- **Associations** aren’t printed, so printing never loads more.
 
 A Relation prints the SELECT it would send, without sending it:
 
@@ -326,6 +324,10 @@ Relation<User> {
 ```
 
 Printing can’t wait for D1, so to see the records, `await` it or call `toArray()`. A filtered attribute’s value in `params` prints as `[FILTERED]`.
+
+::: warning TIP
+Printing shows attributes only, so it never loads an association. [Hidden attributes](#hiding-attributes) still print: they keep values out of `toJSON()`, not out of your console.
+:::
 
 ::: rails Compared with Rails
 A record prints as Rails’ `inspect` does, with `[FILTERED]` for filtered attributes. A Rails Relation runs its query to print its records, which a synchronous `console.log` can’t do here.
