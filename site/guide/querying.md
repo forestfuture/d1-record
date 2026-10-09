@@ -129,9 +129,11 @@ Load only some attributes with `select`. The primary key is always loaded too, s
 
 ## Seeing a query’s SQL
 
-Call `toSql()` on a Relation to see the SQL its `toArray()` would send, without sending it. The values come back apart from the SQL, since they’re always bound:
+See the SQL a Relation’s `toArray()` would send, without sending it, with `toSql()`:
 
 <<< @/snippets/guide/querying.ts#to-sql{ts}
+
+The values come back in `params`, apart from the SQL.
 
 A Statement from `toInsert`, `toUpdateAll`, `toDeleteAll`, and the other `to…` methods has `toSql()` too. A `none()` Relation shows `1 = 0`, the condition that matches nothing.
 

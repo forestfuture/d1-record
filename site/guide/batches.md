@@ -39,6 +39,7 @@ Each bulk write has a `to…` form that prepares it instead of running it: `toIn
 `batch` resolves to each entry’s result, in order.
 
 - **Keys:** rows in one batch can only point at each other through keys that exist before it’s sent, so generate keys in code, with [`generateId`](./models#generating-ids).
+- **Inspecting:** a prepared write’s `toSql()` shows the SQL and values it will send, [without sending them](./querying#seeing-a-query-s-sql).
 - **Databases:** a batch runs on the database its entries were built on. Entries from two databases throw `IncompatibleRelation`.
 
 ::: warning TIP
