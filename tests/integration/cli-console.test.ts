@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-pl
 import { connect, Model, withDatabase } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 import { startSession } from "../../cli/console/session.ts";
-import { drive, terminalStreams } from "../support/console.ts";
+import { drive, terminalStreams, waitFor } from "../support/console.ts";
 
 class Sample extends Model({
   id: { type: "integer", null: false },
@@ -138,9 +138,7 @@ describe("the console session", () => {
       withDatabase: (run) => withDatabase(connect(binding), run),
     });
     terminal.input.write("1 + 1\n");
-    for (let waited = 0; !terminal.transcript().includes("#=>") && waited < 50; waited++) {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
+    await waitFor(() => terminal.transcript().includes("#=>"));
     terminal.input.end();
     await session.closed;
 

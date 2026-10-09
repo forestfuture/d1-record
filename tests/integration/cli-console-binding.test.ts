@@ -1,20 +1,15 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterAll, describe, expect, test } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 import { openLocalBinding } from "../../cli/console/binding.ts";
 import type { TestDatabase } from "../support/d1.ts";
+import { scratchDirs } from "../support/scratch.ts";
 
-// Inside tests/ (gitignored), so the project finds this repo's wrangler, as an app finds its own.
-const scratch = new URL("../.scratch/", import.meta.url).pathname;
-const made: string[] = [];
-afterAll(() => {
-  for (const dir of made) rmSync(dir, { recursive: true, force: true });
-});
+const scratch = scratchDirs();
 
+/** A project in the repo (so it finds this repo's wrangler) with one D1 binding configured. */
 function project(binding: object): string {
-  mkdirSync(scratch, { recursive: true });
-  const dir = mkdtempSync(join(scratch, "console-binding-"));
-  made.push(dir);
+  const dir = scratch("console-binding-");
   writeFileSync(join(dir, "wrangler.jsonc"), JSON.stringify({ d1_databases: [binding] }));
   return dir;
 }
@@ -66,8 +61,7 @@ describe("the console's local database binding", () => {
 
   test("a project without wrangler is told so", async () => {
     // Outside the repo, so no wrangler is in reach.
-    const cwd = mkdtempSync(join(process.env.TMPDIR ?? "/tmp", "console-nowrangler-"));
-    made.push(cwd);
+    const cwd = scratch("console-nowrangler-", true);
     writeFileSync(join(cwd, "wrangler.jsonc"), "{}");
 
     expect(
@@ -76,8 +70,7 @@ describe("the console's local database binding", () => {
   });
 
   test("a wrangler that fails to load is reported as that, not as missing", async () => {
-    const cwd = mkdtempSync(join(process.env.TMPDIR ?? "/tmp", "console-brokenwrangler-"));
-    made.push(cwd);
+    const cwd = scratch("console-brokenwrangler-", true);
     mkdirSync(join(cwd, "node_modules/wrangler"), { recursive: true });
     writeFileSync(
       join(cwd, "node_modules/wrangler/package.json"),

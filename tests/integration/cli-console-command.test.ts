@@ -1,26 +1,21 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { afterAll, describe, expect, onTestFinished, test, vi } from "vite-plus/test";
+import { describe, expect, onTestFinished, test, vi } from "vite-plus/test";
 import { openLocalBinding } from "../../cli/console/binding.ts";
 import { runConsole } from "../../cli/console/command.ts";
 import { main } from "../../cli/main.ts";
-import { terminalStreams } from "../support/console.ts";
+import { terminalStreams, waitFor } from "../support/console.ts";
 import type { TestDatabase } from "../support/d1.ts";
+import { scratchDirs } from "../support/scratch.ts";
 
-// Inside tests/ (gitignored): the project finds this repo's wrangler, and its tsconfig finds the
-// library's source, as an app's finds its own copies.
-const scratch = new URL("../.scratch/", import.meta.url).pathname;
+// Inside the repo, the project finds this repo's wrangler, and its tsconfig finds the library's
+// source, as an app's finds its own copies.
 const library = new URL("../../src/index.ts", import.meta.url).pathname;
-const made: string[] = [];
-afterAll(() => {
-  for (const dir of made) rmSync(dir, { recursive: true, force: true });
-});
+const scratch = scratchDirs();
 
 /** A project with a users table in its local D1, a User Model, and a Wrangler config. */
 async function shop(): Promise<string> {
-  mkdirSync(scratch, { recursive: true });
-  const cwd = mkdtempSync(join(scratch, "console-command-"));
-  made.push(cwd);
+  const cwd = scratch("console-command-");
   const files: Record<string, string> = {
     "wrangler.jsonc": JSON.stringify({
       d1_databases: [{ binding: "DB", database_name: "shop", database_id: "local-shop" }],
@@ -84,8 +79,7 @@ describe("d1-record console", () => {
   }, 90_000);
 
   test("says why it can't start, and exits 1", async () => {
-    const cwd = mkdtempSync(join(scratch, "console-empty-"));
-    made.push(cwd);
+    const cwd = scratch("console-empty-");
     const lines: string[] = [];
 
     const code = await runConsole({ cwd }, (line) => lines.push(line), terminalStreams());
@@ -107,8 +101,7 @@ describe("d1-record console", () => {
   });
 
   test("c is the same command", async () => {
-    const cwd = mkdtempSync(join(scratch, "console-alias-"));
-    made.push(cwd);
+    const cwd = scratch("console-alias-");
     const inProject = vi.spyOn(process, "cwd").mockReturnValue(cwd);
     onTestFinished(() => inProject.mockRestore());
     const lines: string[] = [];
@@ -126,9 +119,7 @@ describe("d1-record console", () => {
     const history = join(cwd, ".wrangler/d1-record-history");
 
     terminal.input.write("1 + 1\n");
-    for (let waited = 0; !existsSync(history) && waited < 100; waited++) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
+    await waitFor(() => existsSync(history));
     terminal.input.end();
     await done;
 
@@ -141,9 +132,7 @@ describe("d1-record console", () => {
     const done = runConsole({ cwd, history: false }, () => {}, { ...terminal, terminal: true });
 
     terminal.input.write("1 + 1\n");
-    for (let waited = 0; !terminal.transcript().includes("#=>") && waited < 100; waited++) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
+    await waitFor(() => terminal.transcript().includes("#=>"));
     await new Promise((resolve) => setTimeout(resolve, 500));
     terminal.input.end();
     await done;

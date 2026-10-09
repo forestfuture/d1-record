@@ -1,23 +1,16 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { afterAll, describe, expect, test } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 import { loadProject } from "../../cli/console/project.ts";
+import { scratchDirs } from "../support/scratch.ts";
 
-// Inside tests/ (gitignored), as the generator's tests are. The library resolves, as an app's
-// does, from a tsconfig `paths` entry (here to this repo's source).
-const scratch = new URL("../.scratch/", import.meta.url).pathname;
+// The library resolves, as an app's does, from a tsconfig `paths` entry (here to this repo's source).
 const library = new URL("../../src/index.ts", import.meta.url).pathname;
-const made: string[] = [];
-afterAll(() => {
-  for (const dir of made) rmSync(dir, { recursive: true, force: true });
-});
+const scratch = scratchDirs();
 
 /** A throwaway project: its files, by path, and a tsconfig that finds the library. */
 function project(files: Record<string, string>, outsideTheRepo = false): string {
-  mkdirSync(scratch, { recursive: true });
-  const dir = mkdtempSync(join(outsideTheRepo ? tmpdir() : scratch, "console-"));
-  made.push(dir);
+  const dir = scratch("console-", outsideTheRepo);
   const all = {
     "tsconfig.json": JSON.stringify({
       compilerOptions: {

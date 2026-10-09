@@ -1,6 +1,13 @@
 import { PassThrough } from "node:stream";
 import { startSession, type SessionOptions } from "../../cli/console/session.ts";
 
+/** Polls until `done` is true, or about `seconds` have passed. */
+export async function waitFor(done: () => boolean, seconds = 10): Promise<void> {
+  for (let waited = 0; !done() && waited < seconds * 20; waited++) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
 /** A console's two ends, as a person at a terminal would use them. */
 export function terminalStreams() {
   const input = new PassThrough();
