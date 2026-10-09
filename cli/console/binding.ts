@@ -29,18 +29,28 @@ export async function openLocalBinding(
   cwd: string,
   { binding, configFile }: ChosenDatabase,
 ): Promise<OpenBinding | string> {
-  let wrangler: Wrangler;
+  let file: string;
   try {
-    const file = createJiti(`${cwd}/`).esmResolve("wrangler");
-    wrangler = (await import(file)) as Wrangler;
+    file = createJiti(`${cwd}/`).esmResolve("wrangler");
   } catch {
     return "wrangler isn't installed here (install it, then run d1-record console again)";
   }
-  const proxy = await wrangler.getPlatformProxy({
-    configPath: configFile,
-    persist: { path: join(dirname(configFile), ".wrangler/state/v3") },
-    remoteBindings: false,
-  });
+  let wrangler: Wrangler;
+  try {
+    wrangler = (await import(file)) as Wrangler;
+  } catch (error) {
+    return `Couldn't load wrangler: ${(error as Error).message}`;
+  }
+  let proxy: Awaited<ReturnType<Wrangler["getPlatformProxy"]>>;
+  try {
+    proxy = await wrangler.getPlatformProxy({
+      configPath: configFile,
+      persist: { path: join(dirname(configFile), ".wrangler/state/v3") },
+      remoteBindings: false,
+    });
+  } catch (error) {
+    return `Wrangler couldn't open ${binding}: ${(error as Error).message}`;
+  }
   return {
     binding: proxy.env[binding],
     description: `Local database ${binding} (.wrangler/state)`,

@@ -30,25 +30,29 @@ function modelFiles(cwd: string, models: string): string[] | string {
     .map((name) => join(path, name));
 }
 
-/**
- * The project's Models and library, loaded as its own code would load them: one `jiti` based in
- * the project reads TypeScript, extensionless imports and `tsconfig.json` paths, and resolves
- * `@forestfuture/d1-record` from the project's `node_modules`, so the Models and the console
- * share a single copy of the library. Or why they can't be loaded.
- */
-export async function loadProject(
-  cwd: string,
-  models = defaultModels,
-): Promise<ConsoleProject | string> {
-  const files = modelFiles(cwd, models);
-  if (typeof files === "string") return files;
-  const jiti = createJiti(`${cwd}/`, { tsconfigPaths: true, fsCache: false, moduleCache: true });
-  let library: Library;
+type Jiti = ReturnType<typeof createJiti>;
+
+/** The project's own `@forestfuture/d1-record`, or why it can't be loaded. */
+async function loadLibrary(jiti: Jiti): Promise<Library | string> {
   try {
-    library = await jiti.import<Library>("@forestfuture/d1-record");
+    jiti.esmResolve("@forestfuture/d1-record");
   } catch {
     return "@forestfuture/d1-record isn't installed here (install it, then run d1-record console again)";
   }
+  try {
+    return await jiti.import<Library>("@forestfuture/d1-record");
+  } catch (error) {
+    return `Couldn't load @forestfuture/d1-record: ${(error as Error).message}`;
+  }
+}
+
+/** The Model classes the files export, by name; or the file that couldn't be loaded. */
+async function loadModels(
+  cwd: string,
+  jiti: Jiti,
+  files: readonly string[],
+  library: Library,
+): Promise<Record<string, unknown> | string> {
   const found: Record<string, unknown> = {};
   for (const file of files) {
     let exported: Record<string, unknown>;
@@ -63,6 +67,26 @@ export async function loadProject(
       }
     }
   }
+  return found;
+}
+
+/**
+ * The project's Models and library, loaded as its own code would load them: one `jiti` based in
+ * the project reads TypeScript, extensionless imports and `tsconfig.json` paths, and resolves
+ * `@forestfuture/d1-record` from the project's `node_modules`, so the Models and the console
+ * share a single copy of the library. Or why they can't be loaded.
+ */
+export async function loadProject(
+  cwd: string,
+  models = defaultModels,
+): Promise<ConsoleProject | string> {
+  const files = modelFiles(cwd, models);
+  if (typeof files === "string") return files;
+  const jiti = createJiti(`${cwd}/`, { tsconfigPaths: true, fsCache: false, moduleCache: true });
+  const library = await loadLibrary(jiti);
+  if (typeof library === "string") return library;
+  const found = await loadModels(cwd, jiti, files, library);
+  if (typeof found === "string") return found;
   if (Object.keys(found).length === 0) {
     return `No Models in ${shown(cwd, resolve(cwd, models))} (run d1-record g model, or pass --models)`;
   }

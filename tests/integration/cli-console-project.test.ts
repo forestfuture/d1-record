@@ -104,6 +104,22 @@ describe("loading a project's Models for the console", () => {
       expect(await loadProject(cwd)).toBe("Couldn't load src/models/broken.ts: boom");
     });
 
+    test("a library that fails to load is reported as that, not as missing", async () => {
+      const cwd = project(
+        {
+          "package.json": '{ "name": "shop", "type": "module" }',
+          "tsconfig.json": "{}",
+          "node_modules/@forestfuture/d1-record/package.json":
+            '{ "name": "@forestfuture/d1-record", "type": "module", "exports": "./index.js" }',
+          "node_modules/@forestfuture/d1-record/index.js": 'throw new Error("boom");',
+          "src/models/user.ts": "export class User {}",
+        },
+        true,
+      );
+
+      expect(await loadProject(cwd)).toBe("Couldn't load @forestfuture/d1-record: boom");
+    });
+
     test("a project without the library", async () => {
       // Outside the repo, whose tsconfig paths would otherwise find the library for it.
       const cwd = project(

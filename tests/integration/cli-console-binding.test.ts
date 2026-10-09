@@ -74,4 +74,45 @@ describe("the console's local database binding", () => {
       await openLocalBinding(cwd, { binding: "DB", configFile: join(cwd, "wrangler.jsonc") }),
     ).toBe("wrangler isn't installed here (install it, then run d1-record console again)");
   });
+
+  test("a wrangler that fails to load is reported as that, not as missing", async () => {
+    const cwd = mkdtempSync(join(process.env.TMPDIR ?? "/tmp", "console-brokenwrangler-"));
+    made.push(cwd);
+    mkdirSync(join(cwd, "node_modules/wrangler"), { recursive: true });
+    writeFileSync(
+      join(cwd, "node_modules/wrangler/package.json"),
+      '{ "name": "wrangler", "type": "module", "exports": "./index.js" }',
+    );
+    writeFileSync(
+      join(cwd, "node_modules/wrangler/index.js"),
+      'throw new Error("engine mismatch");',
+    );
+    writeFileSync(join(cwd, "wrangler.jsonc"), "{}");
+
+    expect(
+      await openLocalBinding(cwd, { binding: "DB", configFile: join(cwd, "wrangler.jsonc") }),
+    ).toBe("Couldn't load wrangler: engine mismatch");
+  });
+
+  test("a config wrangler rejects is reported with wrangler's reason", async () => {
+    const cwd = project({
+      binding: "DB",
+      database_name: "shop",
+      database_id: "local-shop",
+    });
+    writeFileSync(
+      join(cwd, "wrangler.jsonc"),
+      JSON.stringify({
+        compatibility_date: "not-a-date",
+        d1_databases: [{ binding: "DB", database_name: "shop", database_id: "local-shop" }],
+      }),
+    );
+
+    const opened = await openLocalBinding(cwd, {
+      binding: "DB",
+      configFile: join(cwd, "wrangler.jsonc"),
+    });
+
+    expect(opened).toMatch(/^Wrangler couldn't open DB: /);
+  }, 60_000);
 });
