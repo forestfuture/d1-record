@@ -16,6 +16,7 @@ Before writing any test, propose to the human, in one message:
 
 - **The seams under test** (see the `tdd` skill). The default for this repo is the **public API against a real Miniflare D1**. Observe queries only through the public `onQuery` hook. There's no fake executor (ADR-0002). Type tests go in `tests/unit/`.
 - **The build order**: the list of red → green slices you'll work through.
+- **The docs outline**: for each guide page or section the change touches, run the `documentation-writer` skill now and include its answers (Diátaxis type, audience, goal, scope) and an outline, so the human approves them with the seams.
 - **Open decisions**: anything the issue or contract leaves unsettled. Number each one, give a recommendation, and say why (the `grilling` skill's format). If a term is fuzzy or new, sharpen it with the `domain-modeling` skill: update `GLOSSARY.md`, and offer an ADR only for decisions that are hard to reverse, surprising, and a real trade-off.
 
 **Wait for the human's answers.** Postponed ideas become `deferred` issues, one per item, not notes in a comment.
@@ -30,7 +31,7 @@ Follow the `tdd` skill, one vertical slice at a time:
 
 ### Commit messages
 
-- **Title**: 50 characters or less (the `commit-msg` hook warns past 50 and rejects past 72). Imperative, capitalized, no trailing period, no `feat:`-style prefixes. End with the issue number: `(#82)`.
+- **Title**: aim for 50 characters (the `commit-msg` hook warns past 50 and rejects past 72; a few over is fine). Imperative, capitalized, no trailing period, no `feat:`-style prefixes. End with the issue number: `(#82)`.
 - **Body**, after a blank line: what behavior changed and why, in a few short lines or bullets wrapped at 72. The detail goes here, not in the title.
 
 ```text
@@ -49,12 +50,12 @@ Rules that matter here:
 - A test that passes on first run is a **guard**, not a red. Say so.
 - If a size or complexity limit trips, split the code. Don't raise the limit.
 - Update everything a public change touches, as listed in [CONTRIBUTING.md](../../CONTRIBUTING.md#what-a-public-change-touches): the contract, glossary, guide page, exports, `SKILL.md`, README, changeset, and any ADR. If you implement something differently from the contract, update it and tell the human. While on 0.x, a changeset for a breaking change is `minor` and anything else is `patch` (`vp exec changeset`, see `docs/agents/releasing.md`).
-- For a guide page (`site/guide/`): for a new page, or a page's structure, follow the `documentation-writer` skill: decide its Diátaxis type (tutorial, how-to, reference or explanation), audience and goal, and agree its outline with the human before writing. Write its sentences in the guide's voice ([docs-voice.md](docs-voice.md)). Its larger examples live in `site/snippets/`, where `vp check` type-checks them against the library, and each is shown with the imports its code uses (`site/.vitepress/examples.ts`; an inline example must import what it uses from the package); they also run against D1 in `tests/integration/site-examples.test.ts`, on their own schemas (`site/snippets/**/*.sql`).
+- Guide copy (`site/guide/`), new or changed: run the `documentation-writer` skill before writing any of it, working to the outline agreed in step 2. Write its sentences in the guide's voice ([docs-voice.md](docs-voice.md)). Its larger examples live in `site/snippets/`, where `vp check` type-checks them against the library, and each is shown with the imports its code uses (`site/.vitepress/examples.ts`; an inline example must import what it uses from the package); they also run against D1 in `tests/integration/site-examples.test.ts`, on their own schemas (`site/snippets/**/*.sql`).
 - Scope changes (pulling work in from another issue, or pushing it out) get a comment on both issues.
 
 ## 4. Review
 
-Run the `code-review` skill, with the commit before the issue's work as the fixed point and the issue as the spec. Present the Standards and Spec reports to the human, with a proposed fix for each finding. Fix what the human approves, each fix as its own red → green slice (or as a refactor, with tests staying green). Findings deferred on purpose go into issues or comments, not into silence.
+Run the `code-review` skill, with the commit before the issue's work as the fixed point and the issue as the spec. The standards sources are `CONTRIBUTING.md`, `CODING_STANDARDS.md` and [docs-voice.md](docs-voice.md). Commits for other issues often sit inside the range (everything goes to `main`), so give both reviewers the issue's own commits (`git log --grep='(#N)'`) and tell them to ignore the rest. Present the Standards and Spec reports to the human, with a proposed fix for each finding. Fix what the human approves, each fix as its own red → green slice (or as a refactor, with tests staying green). Findings deferred on purpose go into issues or comments, not into silence.
 
 **Security.** When the change touches SQL compilation, attribute assignment or conversion, code generation or file writing in the CLI, or CI and release, also run the `differential-review` skill over the same range, and present its findings as a third report. Write its report file outside the repo. The whole library gets a `security-review` before each release that changes those areas; each one adds a dated entry to the guide's Security page.
 
