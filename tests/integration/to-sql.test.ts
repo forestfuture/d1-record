@@ -13,6 +13,15 @@ class User extends Model({
   posts = hasMany(Post, { foreignKey: "userId" });
 }
 
+// A secret as the primary key: sessions looked up by their token (filtered by default).
+class Session extends Model({
+  token: { type: "string", null: false, column: "id" },
+  label: { type: "string", null: false },
+}) {
+  static tableName = "api_keys";
+  static primaryKey = "token";
+}
+
 class Post extends Model({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
@@ -84,7 +93,56 @@ describe("toSql", () => {
     expect(events[0]?.params).toEqual(["[FILTERED]"]);
   });
 
+  test("is a static on a Model too, with no database", () => {
+    const { sql, params } = User.where({ role: "admin" }).toSql();
+
+    expect(sql).toContain("WHERE");
+    expect(params).toEqual(["admin"]);
+  });
+
+  test("returns a copy, so changing its params leaves the next toSql alone", () => {
+    const users = User.where({ role: "admin" });
+
+    users.toSql().params.push("tampered");
+
+    expect(users.toSql().params).toEqual(["admin"]);
+  });
+
+  test("shows a filtered primary key's real value", () => {
+    expect(Session.where({ token: "s3cret" }).toSql().params).toEqual(["s3cret"]);
+  });
+
+  test("keeps includes and select when none() is chained, and shows an owner's hasMany", async () => {
+    const none = User.select("email").includes("posts").none().toSql();
+    expect(none.sql).toContain('"id"');
+    expect(none.sql).toContain("1 = 0");
+
+    const user = await db().model(User).find(1);
+    const posts = user.posts().toSql();
+    expect(posts.params).toEqual([1]);
+    expect(posts.sql).toContain('FROM "posts"');
+  });
+
   describe("a Statement", () => {
+    test("shows a filtered column's real values in an insert, a multi-row insert, and an update", async () => {
+      const users = db().model(User);
+
+      const one = users.toInsert({ id: 3, email: "c@example.com" }).toSql();
+      const many = users
+        .toInsertAll([
+          { id: 4, email: "d@example.com" },
+          { id: 5, email: "e@example.com" },
+        ])
+        .toSql();
+      const update = users.where({ id: 1 }).toUpdateAll({ email: "f@example.com" }).toSql();
+
+      expect(JSON.stringify(one.params)).toContain("c@example.com");
+      expect(JSON.stringify(many.params)).toContain("d@example.com");
+      expect(JSON.stringify(many.params)).toContain("e@example.com");
+      expect(update.params).toContain("f@example.com");
+      expect(JSON.stringify([one, many, update])).not.toContain("FILTERED");
+    });
+
     test("is the SQL db.batch sends for it, and building or inspecting it sends nothing", async () => {
       const database = db();
       const posts = database.model(Post);
