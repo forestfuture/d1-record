@@ -3,6 +3,19 @@ import { inspect, types } from "node:util";
 import repl from "node:repl";
 import { PassThrough, type Readable, type Writable } from "node:stream";
 
+/** A command of the console itself, typed as `.name` (and `name!` too, when `bang` is set). */
+export interface SessionCommand {
+  /** What `.help` says about it. */
+  help: string;
+  /** Also runs as a line that is just `name!`. */
+  bang?: boolean;
+  /**
+   * Runs it, with what was typed after the name and the session's scope (to change what is
+   * named); resolves with what to print.
+   */
+  run: (argument: string, scope: Record<string, unknown>) => Promise<string> | string;
+}
+
 export interface SessionOptions {
   input: Readable;
   output: Writable;
@@ -12,12 +25,17 @@ export interface SessionOptions {
   historyFile?: string;
   /** What the session can name: the Models, and `db`. */
   scope: Record<string, unknown>;
+  /** The console's own commands, by name. */
+  commands?: Record<string, SessionCommand>;
   /** The project's own `withDatabase`, bound to its database: runs `run` with Models using it. */
   withDatabase: (run: () => void) => Promise<void>;
 }
 
 /** A line that is just `quit` or `exit`: leaves the console, as `.exit` does. */
 const leaving = /^\s*(?:quit|exit)\s*;?\s*$/;
+
+/** A line that is just `name!`: one of the console's commands, as a bare word. */
+const bangLine = /^\s*([A-Za-z_]\w*)!\s*$/;
 
 /**
  * The REPL's lines, run one at a time inside the project's `withDatabase`. The REPL's input events
@@ -32,7 +50,16 @@ function lineQueue() {
   return {
     /** Settles when every line so far has finished; a later line makes the next one. */
     pending: () => tail,
-    attach(server: repl.REPLServer, withDatabase: SessionOptions["withDatabase"]): void {
+    /** Runs `task` after the lines before it, and before the ones after. It must not throw. */
+    enqueue(task: () => Promise<void>): void {
+      tail = tail.then(task);
+    },
+    attach(
+      server: repl.REPLServer,
+      withDatabase: SessionOptions["withDatabase"],
+      /** Runs the line if it is a command typed as `name!`; undefined when it is not. */
+      command: (line: string) => Promise<void> | undefined,
+    ): void {
       const evaluate = server.eval;
       // A line is done when the REPL asks for the next: it doesn't call the eval callback for an
       // `await` that rejects, but it always shows the prompt again.
@@ -57,6 +84,11 @@ function lineQueue() {
           () =>
             new Promise<void>((done) => {
               if (stopped) return done();
+              const ran = command(code);
+              if (ran !== undefined) {
+                void ran.then(done);
+                return;
+              }
               if (leaving.test(code)) {
                 // As `.exit` does: nothing is evaluated, so nothing is printed.
                 stopped = true;
@@ -102,6 +134,7 @@ export function startSession({
   terminal = false,
   historyFile,
   scope,
+  commands = {},
   withDatabase,
 }: SessionOptions): {
   closed: Promise<void>;
@@ -123,7 +156,29 @@ export function startSession({
   });
   if (terminal && historyFile !== undefined) server.setupHistory(historyFile, () => {});
   Object.assign(server.context, scope);
-  lines.attach(server, withDatabase);
+  // The console's own commands run in line order, print what they say, and ask for the next line.
+  const runCommand = async (name: string, argument: string): Promise<void> => {
+    let message: string;
+    try {
+      message = await commands[name]!.run(argument, server.context as Record<string, unknown>);
+    } catch (error) {
+      message = `${name} failed: ${(error as Error).message}`;
+    }
+    output.write(`${message}\n`);
+    server.displayPrompt();
+  };
+  for (const [name, command] of Object.entries(commands)) {
+    server.defineCommand(name, {
+      help: command.help,
+      action() {
+        lines.enqueue(() => runCommand(name, ""));
+      },
+    });
+  }
+  lines.attach(server, withDatabase, (line) => {
+    const name = bangLine.exec(line)?.[1];
+    return name !== undefined && commands[name]?.bang ? runCommand(name, "") : undefined;
+  });
   return {
     closed: new Promise((resolve) => server.on("exit", () => void lines.pending().then(resolve))),
   };

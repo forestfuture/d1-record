@@ -60,9 +60,24 @@ export async function runConsole(
     const database = library.connect(opened.binding);
     print(opened.description);
     print(`Models: ${Object.keys(models).join(", ")}`);
+    let modelNames = Object.keys(models);
     const session = startSession({
       ...io,
       scope: { ...models, db: database },
+      commands: {
+        reload: {
+          help: "Read your Models again, after editing them (also: reload!)",
+          bang: true,
+          run: async (_argument, scope) => {
+            const again = await project.reload();
+            if (typeof again === "string") return again;
+            for (const name of modelNames) delete scope[name];
+            Object.assign(scope, again);
+            modelNames = Object.keys(again);
+            return `Reloaded: ${modelNames.join(", ")}`;
+          },
+        },
+      },
       withDatabase: async (run) => void (await library.withDatabase(database, run)),
       historyFile: options.history === false ? undefined : historyFileFor(chosen.configFile),
     });

@@ -190,4 +190,73 @@ describe("d1-record console", () => {
       }, 90_000);
     },
   );
+
+  describe("reloading Models", () => {
+    const edited = `
+      import { ApplicationRecord } from "./application-record";
+      export class User extends ApplicationRecord("users") { static edited = "yes"; }
+    `;
+
+    /** A running console on a project, and the folder, for edits between lines. */
+    async function running() {
+      const cwd = await shop();
+      const terminal = terminalStreams();
+      const done = runConsole({ cwd }, () => {}, terminal);
+      await terminal.ready();
+      const send = (line: string) => terminal.send(line);
+      const end = () => {
+        terminal.input.end();
+        return done;
+      };
+      return { cwd, send, end };
+    }
+
+    test("reload! picks up an edit, and says which Models it loaded", async () => {
+      const { cwd, send, end } = await running();
+      expect(await send("User.edited")).toBe("#=> undefined");
+      writeFileSync(join(cwd, "src/models/user.ts"), edited);
+
+      expect(await send("reload!")).toBe("Reloaded: User");
+      expect(await send("User.edited")).toBe("#=> 'yes'");
+      await end();
+    }, 90_000);
+
+    test(".reload does the same, and is listed in .help", async () => {
+      const { cwd, send, end } = await running();
+      writeFileSync(join(cwd, "src/models/user.ts"), edited);
+
+      expect(await send(".reload")).toBe("Reloaded: User");
+      expect(await send("User.edited")).toBe("#=> 'yes'");
+      expect(await send(".help")).toMatch(/\.reload +Read your Models again/);
+      await end();
+    }, 90_000);
+
+    test("the database still works for the reloaded Models", async () => {
+      const { cwd, send, end } = await running();
+      writeFileSync(join(cwd, "src/models/user.ts"), edited);
+      await send("reload!");
+
+      expect(await send("(await User.find(1)).name")).toBe("#=> 'Alice'");
+      await end();
+    }, 90_000);
+
+    test("a file that fails says so, and the Models stay as they were", async () => {
+      const { cwd, send, end } = await running();
+      writeFileSync(join(cwd, "src/models/user.ts"), 'throw new Error("mid-edit");');
+
+      expect(await send("reload!")).toBe("Couldn't load src/models/user.ts: mid-edit");
+      expect(await send("(await User.find(1)).name")).toBe("#=> 'Alice'");
+      await end();
+    }, 90_000);
+
+    test("a record you already hold keeps its old class", async () => {
+      const { cwd, send, end } = await running();
+      await send("const user = await User.find(1)");
+      writeFileSync(join(cwd, "src/models/user.ts"), edited);
+      await send("reload!");
+
+      expect(await send("user instanceof User")).toBe("#=> false");
+      await end();
+    }, 90_000);
+  });
 });
