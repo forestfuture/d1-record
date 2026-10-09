@@ -53,13 +53,15 @@
     "docs:dev": "vp run d1-record-site#dev",
     "docs:build": "vp run d1-record-site#build"
   },
+  "dependencies": {
+    "jiti": "^2.7.0"
+  },
   "devDependencies": {
     "@arethetypeswrong/core": "^0.18.5",
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
     "@cloudflare/workers-types": "^5.20261001.1",
     "@types/node": "^24.13.6",
-    "jiti": "^2.7.0",
     "knip": "^6.38.0",
     "miniflare": "^4.20260730.0",
     "publint": "^0.3.24",

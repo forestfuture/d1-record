@@ -1,5 +1,5 @@
 ---
-description: "Reference for d1-record's command line: d1-record schema and its options, the conventions from columns to attributes, d1-record g model and g migration, the column syntax, and what each command refuses."
+description: "Reference for d1-record's command line: d1-record schema and its options, d1-record console, the conventions from columns to attributes, d1-record g model and g migration, the column syntax, and what each command refuses."
 ---
 
 # Command line
@@ -53,6 +53,22 @@ The schema file plays the part of Rails’ `schema.rb`, and each base class is n
 ::: warning Coming from Drizzle or Prisma?
 Their schemas often live at `src/db/schema.ts` or `src/db/schema/`. Write d1-record’s somewhere else, with `--out src/db/d1-record.ts`, and, if `application-record.ts` already exists, point its `import { tables }` at it (a new one is written importing the right file).
 :::
+
+## `d1-record console`
+
+Open your local database with your Models in a console ([Console](./console) shows a session):
+
+```sh
+npx d1-record console
+```
+
+| Option              |                                                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------ |
+| `--database <name>` | The D1 binding to open, when the config has several.                                       |
+| `--models <path>`   | Where the Models are: a folder (`src/models`) or one file (`src/models.ts`).               |
+| `--config <file>`   | Use this Wrangler config instead of finding `wrangler.jsonc`, `wrangler.json`, or `.toml`. |
+
+It reads TypeScript Models and uses your project’s own `wrangler` and `@forestfuture/d1-record`. It opens the local database only, and it refuses, printing why, when there’s no Wrangler config, with several databases and no `--database`, with no Models, or with `wrangler` or the library not installed.
 
 ## Mapping columns to attributes
 

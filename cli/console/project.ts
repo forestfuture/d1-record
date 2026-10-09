@@ -5,7 +5,7 @@ import { createJiti } from "jiti";
 import { defaultModels, oneModelsFile, shown } from "../schema/project.ts";
 
 /** What the console uses of the project's `@forestfuture/d1-record`. */
-export interface Library {
+interface Library {
   connect: (binding: unknown) => unknown;
   withDatabase: (database: unknown, run: () => unknown) => Promise<unknown>;
   Model: { Base: abstract new (...args: never[]) => unknown };

@@ -20,6 +20,10 @@ _Avoid_: Mixin, concern, parent model
 The `d1-record g model` and `g migration` commands: they write a migration (and a Model) from a name and columns, checked against the existing migrations first.
 _Avoid_: Scaffold, codegen
 
+**Console**:
+The interactive session `d1-record console` opens: a REPL on the project's local D1 database, with its Models and `db` in scope and each line run against that database. Local only. A **Generator** writes files; the console works with data.
+_Avoid_: Shell, REPL (in the guide), playground
+
 **Override**:
 A change a Model makes to an attribute of the **Generated schema** (its type, nullability, default, or **Generated id**), or `false` to ignore the column.
 _Avoid_: Patch, customization

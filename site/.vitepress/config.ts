@@ -75,6 +75,7 @@ export default defineConfig({
         text: "How-to guides",
         items: [
           { text: "Generators", link: "/guide/generators" },
+          { text: "Console", link: "/guide/console" },
           { text: "Schema changes", link: "/guide/change-a-table" },
           { text: "Existing databases", link: "/guide/adopt-a-database" },
           { text: "Shared behavior", link: "/guide/shared-behavior" },

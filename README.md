@@ -41,6 +41,7 @@ The generator writes each table’s migration and its Model, as `rails generate 
 npx d1-record g model User 'email:string!:unique' 'isActive:boolean!=true'
 npx d1-record g model Post user:references 'title:string!' publishedAt:datetime
 npx wrangler d1 migrations apply my-app-db --local
+npx d1-record console # try your Models against the local database, as rails console does
 ```
 
 Along with the migrations, it writes `src/db/schema.ts` (every table’s columns, generated from the migrations, like Rails’ `schema.rb`) and your app’s `ApplicationRecord`.

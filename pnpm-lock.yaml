@@ -176,6 +176,10 @@ overrides:
 importers:
 
   .:
+    dependencies:
+      jiti:
+        specifier: ^2.7.0
+        version: 2.7.0
     devDependencies:
       '@arethetypeswrong/core':
         specifier: ^0.18.5
@@ -192,9 +196,6 @@ importers:
       '@types/node':
         specifier: ^24.13.6
         version: 24.13.6
-      jiti:
-        specifier: ^2.7.0
-        version: 2.7.0
       knip:
         specifier: ^6.38.0
         version: 6.38.0
