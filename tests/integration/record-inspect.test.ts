@@ -31,4 +31,17 @@ describe("inspect", () => {
 
     expect(inspect(sample)).toBe("Sample { id: 1, label: 'bolt', quantity: 36 }");
   });
+
+  test("a new record prints every attribute, null where none is assigned yet", () => {
+    const sample = connect(binding).model(Sample).build({ label: "bolt" });
+
+    expect(inspect(sample)).toBe("Sample { id: null, label: 'bolt', quantity: null }");
+  });
+
+  test("a partial record prints only the columns it loaded", async () => {
+    await connect(binding).model(Sample).create({ id: 1, label: "bolt", quantity: 36 });
+    const [sample] = await connect(binding).model(Sample).select("id", "label").toArray();
+
+    expect(inspect(sample)).toBe("Sample { id: 1, label: 'bolt' }");
+  });
 });
