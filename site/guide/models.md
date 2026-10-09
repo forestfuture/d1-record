@@ -266,15 +266,23 @@ A plain string is rejected.
 
 Associations are never included, so a response never loads more than you asked for.
 
-`toJSON()` sends every loaded attribute, so a `passwordDigest` goes out with the rest. List the names it leaves out in `static hiddenAttributes` on your app’s base class:
+## Hiding attributes
+
+Keep an attribute out of `toJSON()` by naming it in `static hiddenAttributes` on your app’s base class:
 
 <<< @/snippets/guide/hidden-attributes.ts#base{ts}
 
-Names are exact, and none are hidden by default. A Model’s own list replaces the base class’s:
+Every Model built on the base class then leaves it out of `Response.json(user)`. By default, nothing is hidden, and each name must match an attribute exactly.
+
+A Model’s own list replaces the base class’s:
 
 <<< @/snippets/guide/hidden-attributes.ts#extend{ts}
 
-A name a Model doesn’t have throws `InvalidModel` when the Model is first used, so a typo can’t leave an attribute in your responses. The base class’s names are the exception: they’re ignored where a Model lacks them. `attributes()` still returns every attribute, for when you do mean to send one.
+`attributes()` still returns every attribute, so you can send a hidden one on purpose.
+
+::: warning TIP
+A name a Model doesn’t have throws `InvalidModel` when the Model is first used, so a typo can’t leave an attribute in your responses. The base class’s names are the exception: a Model without that attribute ignores them.
+:::
 
 ::: warning Beyond Rails
 Rails’ `serializable_hash(except:)` is per call, and `filter_attributes` only covers logs and inspection. d1-record keeps a class-level list, so `Response.json(user)` is safe without each call site remembering to strip the attribute.
@@ -288,7 +296,7 @@ Rails’ `serializable_hash(except:)` is per call, and `filter_attributes` only 
 - **Matching:** a string matches when the attribute’s snake_case name contains it, in any case: `passwordDigest` (`password_digest`) contains `passw`, and `apiKey` (`api_key`) contains `_key`. A RegExp matches the attribute or its snake_case name.
 - **Hidden in `QueryEvent.params`:** the values bound for the attribute in inserts (in a multi-row insert’s JSON, its column in every row), updates, `updateAll`, conditions, lists and comparisons, and a filtered primary key in a record’s `UPDATE` and `DELETE`.
 - **Hidden in errors:** a cast error’s value, and a filtered primary key in `RecordNotFound`.
-- **Not hidden:** values inside `sql` fragments, which have no attribute; and `toJSON()` and `attributes()`, which are your data, not logs.
+- **Not hidden:** values inside `sql` fragments, which have no attribute; and `toJSON()` and `attributes()`, which are your data, not logs ([Hiding attributes](#hiding-attributes) keeps names out of `toJSON()`).
 
 ::: warning Compared with Rails
 The default list is Rails’ own `filter_parameters` list, and the filtered values read as they do in Rails’ logs.
