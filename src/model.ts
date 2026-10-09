@@ -23,6 +23,12 @@ import { associationOf, newRecord } from "./association-fields.ts";
 import { RecordStatement } from "./record-statement.ts";
 import { inferTableNames } from "./table-names.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
+import {
+  inspectCustom,
+  inspectRecord,
+  type Inspect,
+  type InspectOptions,
+} from "./record-inspect.ts";
 import { readyModel, type BelongsTo, type HasOne } from "./associations.ts";
 import type { Relation, Scope, Scoped } from "./relation.ts";
 import type { PaginateStatic } from "./pagination.ts";
@@ -613,6 +619,11 @@ export class ModelBase {
   /** The record's attributes as a plain object of JavaScript values. */
   attributes(): Record<string, unknown> {
     return this[state].attributes();
+  }
+
+  /** Prints as `Name { attribute: value, … }` in a console, a log or a test failure (#104). */
+  [inspectCustom](_depth: number, options: InspectOptions, inspect: Inspect): string {
+    return inspectRecord(modelOf(this).name, this[state].attributes(), options, inspect);
   }
 
   /**
