@@ -302,6 +302,39 @@ Rails’ `serializable_hash(except:)` is per call, and `filter_attributes` only 
 The default list is Rails’ own `filter_parameters` list, and the filtered values read as they do in Rails’ logs.
 :::
 
+## Printing records
+
+`console.log(user)`, a failed test, and the console show a record’s class and attributes:
+
+```text
+User { id: 1, name: 'Johnny' (was 'Alice'), email: [FILTERED], role: 'admin' }
+```
+
+- **Filtered attributes** print as `[FILTERED]`, without quotes so it can’t be mistaken for a string, and in a distinct color when the terminal shows colors. An attribute with no value still prints `null`.
+- **Unsaved changes** print the new value and the old one: `'Johnny' (was 'Alice')`. Once the record is saved, the flag goes. A changed filtered attribute prints `[FILTERED] (changed)`. A new record flags nothing, since all of it is unsaved.
+- **A partial record** prints only the columns it loaded.
+- **Hidden attributes** still print: hiding is for `toJSON()`, and printing is for you.
+- **Associations** aren’t printed, so printing never loads more.
+
+A Relation prints the SELECT it would send, without sending it:
+
+```text
+Relation<User> {
+  sql: 'SELECT * FROM "users" WHERE (("role" = ?))',
+  params: [ 'admin' ]
+}
+```
+
+Printing can’t wait for D1, so to see the records, `await` it or call `toArray()`. A filtered attribute’s value in `params` prints as `[FILTERED]`.
+
+::: rails Compared with Rails
+A record prints as Rails’ `inspect` does, with `[FILTERED]` for filtered attributes. A Rails Relation runs its query to print its records, which a synchronous `console.log` can’t do here.
+:::
+
+::: rails Beyond Rails
+Rails doesn’t mark unsaved changes when it prints a record. d1-record does, so a pending edit is visible in the console before you save it.
+:::
+
 ## Sharing behavior
 
 A subclass, such as `class Admin extends User`, inherits a copy of its parent’s attributes, validations, callbacks, scopes, and associations. Declaring more on the child never changes the parent. Single-table inheritance isn’t supported.

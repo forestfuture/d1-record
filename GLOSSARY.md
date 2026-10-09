@@ -37,7 +37,7 @@ Reading a value given to an attribute as the attribute's type, by how it reaches
 _Avoid_: Coerce, convert (D1's storage form is conversion), parse
 
 **Filtered attribute**:
-An attribute whose values listeners and errors show as `"[FILTERED]"` (passwords, tokens, keys, emails), named by the Model's `filterAttributes`. D1 still gets the real values.
+An attribute whose values listeners, errors, and a printed record show as `"[FILTERED]"` (passwords, tokens, keys, emails), named by the Model's `filterAttributes`. D1 still gets the real values.
 _Avoid_: Redacted, masked, sensitive field; and "filter" alone, which means a **Scope**'s conditions
 
 **Hidden attribute**:
