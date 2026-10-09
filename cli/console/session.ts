@@ -45,6 +45,14 @@ function lineQueue() {
         }
       };
       const inDatabase: repl.REPLEval = (code, context, file, callback) => {
+        // The REPL ends a line it evaluates with a newline. Its completion evaluates the
+        // receiver of what is being typed (`try { await User } catch {}`) through this same
+        // function while a person types: those never end in a prompt, so they must not wait in
+        // the queue (or hold it up), but they still run where Models find their database.
+        if (!code.endsWith("\n")) {
+          void withDatabase(() => evaluate.call(server, code, context, file, callback));
+          return;
+        }
         tail = tail.then(
           () =>
             new Promise<void>((done) => {

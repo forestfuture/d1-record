@@ -173,4 +173,27 @@ describe("the console session", () => {
       expect(await binding.prepare("SELECT COUNT(*) AS n FROM samples").first("n")).toBe(1);
     });
   });
+
+  test("a line typed key by key runs: completion's own evaluations don't block it", async () => {
+    const terminal = terminalStreams();
+    const session = startSession({
+      input: terminal.input,
+      output: terminal.output,
+      terminal: true,
+      scope: { Sample },
+      withDatabase: (run) => withDatabase(connect(binding), run),
+    });
+    // The REPL evaluates the receiver of what is being typed (`try { await Sample } catch {}`)
+    // to offer completions: a person typing gives it the time to, a burst or a pipe does not.
+    for (const key of "await Sample.find(1)") {
+      terminal.input.write(key);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    }
+    terminal.input.write("\n");
+    await waitFor(() => terminal.transcript().includes("#=>"), 5);
+    terminal.input.end();
+
+    expect(terminal.transcript()).toContain("label");
+    await session.closed;
+  });
 });
