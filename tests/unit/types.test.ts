@@ -10,6 +10,7 @@ import {
   Model,
   modelFor,
   type HasMany,
+  type QuerySql,
   type RecordStatement,
   Relation,
   sql,
@@ -438,6 +439,16 @@ describe("types", () => {
       expectTypeOf(countless.total).toBeNumber();
       // @ts-expect-error a countless page has no totalPages
       expectTypeOf(countless.totalPages).toBeNumber();
+    };
+    expectTypeOf(typeOnly).toBeFunction();
+  });
+
+  test("toSql gives the SQL and its bound values, of a Relation, a Model, or a Statement", () => {
+    const typeOnly = () => {
+      expectTypeOf(db.model(User).where({ isActive: true }).toSql()).toEqualTypeOf<QuerySql>();
+      expectTypeOf(User.toSql()).toEqualTypeOf<QuerySql>();
+      expectTypeOf(db.model(User).toDeleteAll().toSql()).toEqualTypeOf<QuerySql>();
+      expectTypeOf<QuerySql>().toEqualTypeOf<{ sql: string; params: unknown[] }>();
     };
     expectTypeOf(typeOnly).toBeFunction();
   });

@@ -102,4 +102,16 @@ describe("toSql", () => {
       expect(sent()).toEqual(shown);
     });
   });
+
+  describe("a record statement", () => {
+    test("throws, saying why: its SQL depends on callbacks that only run in a batch", () => {
+      const user = User.build({ email: "c@example.com" });
+      const statements = [user.toSave(), user.toDestroy()] as unknown as { toSql(): unknown }[];
+
+      for (const statement of statements) {
+        expect(() => statement.toSql()).toThrow(TypeError);
+        expect(() => statement.toSql()).toThrow(/validations and callbacks.*db\.batch/);
+      }
+    });
+  });
 });

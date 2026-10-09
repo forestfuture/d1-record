@@ -25,6 +25,16 @@ export class RecordStatement<R extends ModelBase = ModelBase> {
     this.#kind = kind;
   }
 
+  /**
+   * @internal Hidden from the types so calling it doesn't compile. A Statement has `toSql()`;
+   * this tells whoever calls it anyway, such as from JavaScript, why a record statement has none.
+   */
+  toSql(): never {
+    throw new TypeError(
+      "toSql() isn't available on a record's toSave() or toDestroy(): its SQL depends on validations and callbacks that only run inside db.batch",
+    );
+  }
+
   /** @internal What `db.batch` needs: the record, and whether it's saved or destroyed. */
   get [recordStatementParts](): { record: R; kind: "save" | "destroy" } {
     return { record: this.#record, kind: this.#kind };
