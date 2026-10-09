@@ -1,3 +1,4 @@
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, onTestFinished, test, vi } from "vite-plus/test";
@@ -140,4 +141,53 @@ describe("d1-record console", () => {
 
     expect(existsSync(join(cwd, ".wrangler/d1-record-history"))).toBe(false);
   }, 90_000);
+
+  // pgrep: not on Windows. SIGKILL can't be caught, and does leave workerd running.
+  describe.skipIf(process.platform === "win32").each(["SIGTERM", "SIGHUP"] as const)(
+    "when it is sent %s",
+    (signal) => {
+      /** The pids of a process's children (`workerd`, for the console), or none. */
+      function childrenOf(pid: number): number[] {
+        try {
+          return execFileSync("pgrep", ["-P", String(pid)], { encoding: "utf8" })
+            .split("\n")
+            .filter(Boolean)
+            .map(Number);
+        } catch {
+          return [];
+        }
+      }
+      const alive = (pid: number) => {
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+
+      test("it stops the workerd it started, which would otherwise outlive it", async () => {
+        const cwd = await shop();
+        const bin = new URL("../../cli/bin.ts", import.meta.url).pathname;
+        const child = spawn(process.execPath, [bin, "console", "--no-history"], {
+          cwd,
+          stdio: ["pipe", "pipe", "inherit"],
+        });
+        let printed = "";
+        child.stdout.on("data", (chunk: Buffer) => (printed += chunk.toString()));
+        const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
+        await waitFor(() => printed.includes("Models: User"), 60);
+        const workers = childrenOf(child.pid!);
+
+        child.kill(signal);
+        await exited;
+        await waitFor(() => workers.every((pid) => !alive(pid)), 10);
+        const survivors = workers.filter(alive);
+        for (const pid of survivors) process.kill(pid, "SIGKILL");
+
+        expect(workers.length).toBeGreaterThan(0);
+        expect(survivors).toEqual([]);
+      }, 90_000);
+    },
+  );
 });
