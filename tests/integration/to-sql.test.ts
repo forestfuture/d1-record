@@ -68,6 +68,13 @@ describe("toSql", () => {
     });
   });
 
+  test("a none() Relation shows its 1 = 0 form, with no database", () => {
+    const { sql, params } = User.none().toSql();
+
+    expect(sql).toContain("1 = 0");
+    expect(params).toEqual([]);
+  });
+
   describe("a Statement", () => {
     test("is the SQL db.batch sends for it, and building or inspecting it sends nothing", async () => {
       const database = db();

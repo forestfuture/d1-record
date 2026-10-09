@@ -5,6 +5,7 @@ import { databaseNow, type Executor } from "./executor.ts";
 import { hydrate, primaryKeyOf, type ModelBase, type ModelClass } from "./model.ts";
 import { keysForIncludes, preload } from "./preload.ts";
 import type { QueryDescription } from "./query.ts";
+import { sql } from "./sql.ts";
 
 /**
  * How a Relation's query runs. The one place that knows a `none()` query never reaches D1: its
@@ -96,7 +97,7 @@ async function loadAhead<M extends ModelBase>(
 }
 
 /** The SELECT for `query`'s records. */
-export function selectFor(model: ModelClass, query: QueryDescription): CompiledSql {
+function selectFor(model: ModelClass, query: QueryDescription): CompiledSql {
   // A partial record keeps its primary key, so it keeps its identity — except after
   // distinct(), where adding the key would make every row distinct.
   const loaded =
@@ -104,6 +105,18 @@ export function selectFor(model: ModelClass, query: QueryDescription): CompiledS
       ? [...new Set([model.primaryKey, ...keysForIncludes(model, query.includes), ...query.select])]
       : query.select;
   return compileSelect(query, compileColumns(model, loaded));
+}
+
+/**
+ * The SELECT `toSql()` shows for `query`. A `none()` query is never sent, so it shows what
+ * matching nothing would be: its conditions and `1 = 0`.
+ */
+export function selectToShow(model: ModelClass, query: QueryDescription): CompiledSql {
+  const never = sql`1 = 0`;
+  return selectFor(
+    model,
+    query.none ? { ...query, conditions: [...query.conditions, never] } : query,
+  );
 }
 
 /** `rows` of `query` as records, then its includes preloaded. */
