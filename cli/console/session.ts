@@ -17,6 +17,45 @@ export interface SessionOptions {
 }
 
 /**
+ * The REPL's lines, run one at a time inside the project's `withDatabase`. The REPL's input events
+ * don't inherit an async context, so each line gets its own: the Models' statics find the
+ * session's database, and so do the records they load. Lines pasted or piped arrive together, but
+ * each waits for the one before it (an `await` in the first may be what the second uses).
+ */
+function lineQueue() {
+  let tail: Promise<void> = Promise.resolve();
+  let lineDone: (() => void) | undefined;
+  return {
+    /** Settles when every line so far has finished; a later line makes the next one. */
+    pending: () => tail,
+    attach(server: repl.REPLServer, withDatabase: SessionOptions["withDatabase"]): void {
+      const evaluate = server.eval;
+      // A line is done when the REPL asks for the next: it doesn't call the eval callback for an
+      // `await` that rejects, but it always shows the prompt again.
+      const displayPrompt = server.displayPrompt.bind(server);
+      server.displayPrompt = (preserveCursor) => {
+        try {
+          displayPrompt(preserveCursor);
+        } finally {
+          lineDone?.();
+        }
+      };
+      const inDatabase: repl.REPLEval = (code, context, file, callback) => {
+        tail = tail.then(
+          () =>
+            new Promise<void>((done) => {
+              lineDone = done;
+              void withDatabase(() => evaluate.call(server, code, context, file, callback));
+            }),
+        );
+      };
+      // Typed read-only, but Node's REPL calls `eval` afresh for each line.
+      (server as { eval: repl.REPLEval }).eval = inDatabase;
+    },
+  };
+}
+
+/**
  * Piped input as the REPL sees it: its end waits until every line has finished. The REPL closes at
  * once when its input ends, even with an `await` still running, and then shows no more prompts.
  */
@@ -48,10 +87,10 @@ export function startSession({
 }: SessionOptions): {
   closed: Promise<void>;
 } {
-  let queue: Promise<void> = Promise.resolve();
+  const lines = lineQueue();
   const server = repl.start({
     prompt: "> ",
-    input: terminal ? input : untilDrained(input, () => queue),
+    input: terminal ? input : untilDrained(input, lines.pending),
     output,
     terminal,
     useColors: terminal,
@@ -65,32 +104,8 @@ export function startSession({
   });
   if (terminal && historyFile !== undefined) server.setupHistory(historyFile, () => {});
   Object.assign(server.context, scope);
-  // The REPL's input events don't inherit an async context, so each line runs inside its own
-  // withDatabase: the Models' statics find the session's database, and so do the records they load.
-  const evaluate = server.eval;
-  // Lines pasted or piped arrive together, but each waits for the one before it (an `await` in
-  // the first may be what the second uses), and the session outlasts its input until they're done.
-  // A line is done when the REPL asks for the next: it doesn't call the eval callback for an
-  // `await` that rejects, but it always shows the prompt again.
-  let lineDone: (() => void) | undefined;
-  const displayPrompt = server.displayPrompt.bind(server);
-  server.displayPrompt = (preserveCursor) => {
-    try {
-      displayPrompt(preserveCursor);
-    } finally {
-      lineDone?.();
-    }
+  lines.attach(server, withDatabase);
+  return {
+    closed: new Promise((resolve) => server.on("exit", () => void lines.pending().then(resolve))),
   };
-  const inDatabase: repl.REPLEval = (code, context, file, callback) => {
-    queue = queue.then(
-      () =>
-        new Promise<void>((done) => {
-          lineDone = done;
-          void withDatabase(() => evaluate.call(server, code, context, file, callback));
-        }),
-    );
-  };
-  // Typed read-only, but Node's REPL calls `eval` afresh for each line.
-  (server as { eval: repl.REPLEval }).eval = inDatabase;
-  return { closed: new Promise((resolve) => server.on("exit", () => void queue.then(resolve))) };
 }

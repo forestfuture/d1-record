@@ -4,7 +4,10 @@ import { join, resolve } from "node:path";
 import { createJiti } from "jiti";
 import { defaultModels, oneModelsFile, shown } from "../schema/project.ts";
 
-/** What the console uses of the project's `@forestfuture/d1-record`. */
+/**
+ * What the console uses of the project's `@forestfuture/d1-record`. Typed loosely on purpose: it is
+ * the project's copy, loaded at run time, and not the one this command line was built against.
+ */
 interface Library {
   connect: (binding: unknown) => unknown;
   withDatabase: (database: unknown, run: () => unknown) => Promise<unknown>;
