@@ -121,6 +121,10 @@ class Base extends Model.Base {
   // are Rails' defaults (passwords, tokens, keys, emails…); add yours, or leave one out:
   // static override filterAttributes = [...Model.Base.filterAttributes, "iban"];
 
+  // Attributes toJSON() leaves out, so Response.json(record) never sends them (exact names;
+  // attributes() still has them):
+  // static override hiddenAttributes = ["passwordDigest"];
+
   // How new TEXT keys are made (a UUID by default), e.g. time-ordered ones from a
   // library you choose:
   // static override generateId = () => uuidv7();

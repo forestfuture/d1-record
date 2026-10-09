@@ -97,6 +97,15 @@ export class Product extends ApplicationRecord("products") {}
     );
   });
 
+  test("the generated application-record.ts shows how to hide attributes from toJSON", () => {
+    const cwd = project();
+    generate(cwd, ["model", "User", "email:string!"]);
+
+    expect(read(cwd, "src/models/application-record.ts")).toContain(
+      '// static override hiddenAttributes = ["passwordDigest"];',
+    );
+  });
+
   test("a reference takes its table's key type, and its belongsTo imports the target's file", () => {
     const cwd = project();
     generate(cwd, ["model", "Order", "total:integer"], { integerId: true });
