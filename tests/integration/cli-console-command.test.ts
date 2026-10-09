@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { afterAll, describe, expect, test } from "vite-plus/test";
+import { afterAll, describe, expect, onTestFinished, test, vi } from "vite-plus/test";
 import { openLocalBinding } from "../../cli/console/binding.ts";
 import { runConsole } from "../../cli/console/command.ts";
 import { main } from "../../cli/main.ts";
@@ -100,8 +100,22 @@ describe("d1-record console", () => {
     const lines: string[] = [];
 
     expect(await main(["console", "--help"], (line) => lines.push(line))).toBe(0);
-    expect(lines[0]).toMatch(/d1-record console +Open a console/);
-    expect(lines[0]).toMatch(/--database <name>/);
+    expect(lines[0]).toMatch(/d1-record console \(or c\) +Open a console/);
+    expect(lines[0]).toMatch(/Options for console:\n  --database <name>/);
+    expect(lines[0]).toMatch(/Options for every command:\n  --config <file>/);
+  });
+
+  test("c is the same command", async () => {
+    const cwd = mkdtempSync(join(scratch, "console-alias-"));
+    made.push(cwd);
+    const inProject = vi.spyOn(process, "cwd").mockReturnValue(cwd);
+    onTestFinished(() => inProject.mockRestore());
+    const lines: string[] = [];
+
+    expect(await main(["c"], (line) => lines.push(line))).toBe(1);
+    expect(lines).toEqual([
+      "No wrangler.jsonc, wrangler.json or wrangler.toml here (pass --config)",
+    ]);
   });
 
   test("keeps the history beside the project's local state", async () => {

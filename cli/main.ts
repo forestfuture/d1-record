@@ -8,7 +8,7 @@ const help = `Usage:
   d1-record schema [options]              Generate src/db/schema.ts from your D1 migrations
   d1-record g model <Name> [columns]      Write a CREATE TABLE migration and a Model
   d1-record g migration <Name> [columns]  Write a migration: Create…, Add…To…, Remove…From…, or empty
-  d1-record console                       Open a console on your local D1 database, with your Models
+  d1-record console (or c)                Open a console on your local D1 database, with your Models
 
 Columns are name:type, where the type is string (the default), integer, real, boolean,
 datetime, json or references; then ! for NOT NULL, =value for a default, and :unique or
@@ -33,6 +33,7 @@ Options for console:
   --database <name>   The D1 binding to open, when the config has several
   --models <path>     Where the Models are: a folder (src/models) or one file (src/models.ts)
 
+Options for every command:
   --config <file>     Use this Wrangler config
   -h, --help          Show this help`;
 
