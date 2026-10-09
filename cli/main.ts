@@ -1,5 +1,6 @@
 // The `d1-record` command line. Node only: no Worker imports it (cli/bin.ts runs it).
 import { parseArgs, type ParseArgsOptionsConfig } from "node:util";
+import { runConsole } from "./console/command.ts";
 import { runGenerate } from "./generate/command.ts";
 import { runSchema, watchSchema } from "./schema/command.ts";
 
@@ -7,6 +8,7 @@ const help = `Usage:
   d1-record schema [options]              Generate src/db/schema.ts from your D1 migrations
   d1-record g model <Name> [columns]      Write a CREATE TABLE migration and a Model
   d1-record g migration <Name> [columns]  Write a migration: Create…, Add…To…, Remove…From…, or empty
+  d1-record console                       Open a console on your local D1 database, with your Models
 
 Columns are name:type, where the type is string (the default), integer, real, boolean,
 datetime, json or references; then ! for NOT NULL, =value for a default, and :unique or
@@ -26,6 +28,10 @@ Options for g:
                       ApplicationRecord is imported from the same folder
   --database <name>   The D1 binding to use, when the config has several
   --out <file>        The schema file to regenerate, when it isn't src/db/schema.ts
+
+Options for console:
+  --database <name>   The D1 binding to open, when the config has several
+  --models <path>     Where the Models are: a folder (src/models) or one file (src/models.ts)
 
   --config <file>     Use this Wrangler config
   -h, --help          Show this help`;
@@ -89,6 +95,24 @@ function generate(argv: readonly string[], print: (line: string) => void): numbe
   return runGenerate({ ...options, integerId: id === "integer", timestamps: !noTimestamps }, print);
 }
 
+const consoleOptions = {
+  ...shared,
+  database: { type: "string" },
+  models: { type: "string" },
+} as const satisfies ParseArgsOptionsConfig;
+
+/** `d1-record console`: opens the local database and its Models in a REPL. */
+function openConsole(
+  argv: readonly string[],
+  print: (line: string) => void,
+): number | Promise<number> {
+  const args = argsOf(argv, consoleOptions);
+  if (typeof args === "string") return usage(print, args);
+  if (args.positionals.length > 0) return usage(print, `Unexpected ${args.positionals[0]}`);
+  const { database, models, config } = args.values;
+  return runConsole({ database, models, config }, print);
+}
+
 /** Prints the usage, after what went wrong; 1. */
 function usage(print: (line: string) => void, problem: string): number {
   print(`${problem}\n\n${help}`);
@@ -96,12 +120,24 @@ function usage(print: (line: string) => void, problem: string): number {
 }
 
 /** A command: it runs with the arguments after its name, and returns the exit code. */
-type Command = (argv: readonly string[], print: (line: string) => void) => number | "watching";
+type Command = (
+  argv: readonly string[],
+  print: (line: string) => void,
+) => number | "watching" | Promise<number>;
 
-const commands: Record<string, Command> = { schema, g: generate, generate };
+const commands: Record<string, Command> = {
+  schema,
+  g: generate,
+  generate,
+  console: openConsole,
+  c: openConsole,
+};
 
 /** Runs the command line; resolves to the exit code (or never, while watching). */
-export function main(argv: readonly string[], print = console.log): number | "watching" {
+export function main(
+  argv: readonly string[],
+  print = console.log,
+): number | "watching" | Promise<number> {
   const [command = "", ...rest] = argv;
   const run = Object.hasOwn(commands, command) ? commands[command] : undefined;
   const asked = [command, ...rest].some((arg) => arg === "--help" || arg === "-h");

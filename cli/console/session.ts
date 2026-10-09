@@ -6,6 +6,10 @@ import type { Readable, Writable } from "node:stream";
 export interface SessionOptions {
   input: Readable;
   output: Writable;
+  /** A terminal gets colors, line editing and history; piped input gets plain text. */
+  terminal?: boolean;
+  /** Where to keep what was typed, between sessions; only a terminal has history. */
+  historyFile?: string;
   /** What the session can name: the Models, and `db`. */
   scope: Record<string, unknown>;
   /** The project's own `withDatabase`, bound to its database: runs `run` with Models using it. */
@@ -13,18 +17,27 @@ export interface SessionOptions {
 }
 
 /** Starts the session; `closed` resolves when it ends (end of input, or `.exit`). */
-export function startSession({ input, output, scope, withDatabase }: SessionOptions): {
+export function startSession({
+  input,
+  output,
+  terminal = false,
+  historyFile,
+  scope,
+  withDatabase,
+}: SessionOptions): {
   closed: Promise<void>;
 } {
   const server = repl.start({
     prompt: "> ",
     input,
     output,
-    terminal: false,
+    terminal,
+    useColors: terminal,
     useGlobal: false,
     writer: (value: unknown) =>
       types.isNativeError(value) ? inspect(value) : `#=> ${inspect(value)}`,
   });
+  if (terminal && historyFile !== undefined) server.setupHistory(historyFile, () => {});
   Object.assign(server.context, scope);
   // The REPL's input events don't inherit an async context, so each line runs inside its own
   // withDatabase: the Models' statics find the session's database, and so do the records they load.
