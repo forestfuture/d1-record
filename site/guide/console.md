@@ -26,7 +26,7 @@ Models: Post, User
 #=> undefined
 ```
 
-Leave with `.exit` or Ctrl-D. Ctrl-C stops a line that’s still running. `npx d1-record c` is the short form.
+Leave with `quit`, `exit`, or Ctrl-D. Ctrl-C stops a line that’s still running. `npx d1-record c` is the short form.
 
 ## What you can use
 

@@ -144,4 +144,33 @@ describe("the console session", () => {
 
     expect(terminal.transcript()).toContain("#=> \u001b[33m2\u001b[39m");
   });
+
+  describe.each(["quit", "exit"])("typing %s", (word) => {
+    /** Types the lines, then ends the input; resolves "left", or "stayed" if it never closes. */
+    async function leaves(...lines: string[]): Promise<string> {
+      const terminal = terminalStreams();
+      const session = startSession({
+        input: terminal.input,
+        output: terminal.output,
+        scope: { Sample, db: connect(binding) },
+        withDatabase: (run) => withDatabase(connect(binding), run),
+      });
+      await terminal.ready();
+      terminal.input.write(`${lines.join("\n")}\n`);
+      return Promise.race([
+        session.closed.then(() => "left"),
+        new Promise<string>((resolve) => setTimeout(() => resolve("stayed"), 3000)),
+      ]);
+    }
+
+    test("leaves the console", async () => {
+      expect(await leaves(word)).toBe("left");
+    });
+
+    test("runs no line typed after it", async () => {
+      await leaves(word, 'await Sample.create({ id: 2, label: "late" })');
+
+      expect(await binding.prepare("SELECT COUNT(*) AS n FROM samples").first("n")).toBe(1);
+    });
+  });
 });

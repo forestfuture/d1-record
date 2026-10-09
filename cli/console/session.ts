@@ -16,6 +16,9 @@ export interface SessionOptions {
   withDatabase: (run: () => void) => Promise<void>;
 }
 
+/** A line that is just `quit` or `exit`: leaves the console, as `.exit` does. */
+const leaving = /^\s*(?:quit|exit)\s*;?\s*$/;
+
 /**
  * The REPL's lines, run one at a time inside the project's `withDatabase`. The REPL's input events
  * don't inherit an async context, so each line gets its own: the Models' statics find the
@@ -25,6 +28,7 @@ export interface SessionOptions {
 function lineQueue() {
   let tail: Promise<void> = Promise.resolve();
   let lineDone: (() => void) | undefined;
+  let stopped = false;
   return {
     /** Settles when every line so far has finished; a later line makes the next one. */
     pending: () => tail,
@@ -44,6 +48,13 @@ function lineQueue() {
         tail = tail.then(
           () =>
             new Promise<void>((done) => {
+              if (stopped) return done();
+              if (leaving.test(code)) {
+                // As `.exit` does: nothing is evaluated, so nothing is printed.
+                stopped = true;
+                server.close();
+                return done();
+              }
               lineDone = done;
               void withDatabase(() => evaluate.call(server, code, context, file, callback));
             }),
