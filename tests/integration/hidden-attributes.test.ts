@@ -84,14 +84,18 @@ describe("hiddenAttributes", () => {
       class Account extends ApplicationRecord("users") {
         static override hiddenAttributes = [...Base.hiddenAttributes, "role"];
       }
+      const account = await connect(binding).model(Account).create(row);
+
+      expect(account.toJSON()).toEqual({ id: 1 });
+    });
+
+    test("an empty list of its own hides nothing", async () => {
       class Reader extends ApplicationRecord("users") {
         static override hiddenAttributes = [];
       }
-      const db = connect(binding);
+      const reader = await connect(binding).model(Reader).create(row);
 
-      expect((await db.model(Account).create(row)).toJSON()).toEqual({ id: 1 });
-      await binding.prepare("DELETE FROM users").run();
-      expect((await db.model(Reader).create(row)).toJSON()).toEqual(row);
+      expect(reader.toJSON()).toEqual(row);
     });
   });
 
@@ -123,5 +127,48 @@ describe("hiddenAttributes", () => {
       expect(() => db.model(Plain)).not.toThrow();
       expect(() => db.model(Extended)).not.toThrow();
     });
+
+    test("is ignored when Model.Base's list does", () => {
+      const before = Model.Base.hiddenAttributes;
+      Model.Base.hiddenAttributes = ["nickname"];
+      try {
+        class Plain extends Model({ id: "integer", role: "string" }) {
+          static override tableName = "users";
+        }
+
+        expect(() => connect(binding).model(Plain)).not.toThrow();
+      } finally {
+        Model.Base.hiddenAttributes = before;
+      }
+    });
+
+    test("in its own list is still an InvalidModel when the base class has a list", () => {
+      class Typo extends ApplicationRecord("users") {
+        static override hiddenAttributes = [...Base.hiddenAttributes, "rol"];
+      }
+
+      expect(() => connect(binding).model(Typo)).toThrow(InvalidModel);
+    });
+
+    test("is fine for a Model that extends another Model, which has the parent's attributes", () => {
+      class Account extends ApplicationRecord("users") {}
+      class Admin extends Account {
+        static override hiddenAttributes = ["role"];
+      }
+
+      expect(() => connect(binding).model(Admin)).not.toThrow();
+    });
+  });
+
+  test("the list is read each time, so a change after first use applies", async () => {
+    class Live extends Model({ id: "integer", email: "string", role: "string" }) {
+      static override tableName = "users";
+    }
+    const live = await connect(binding)
+      .model(Live)
+      .create({ id: 1, email: "ada@example.com", role: "admin" });
+    Live.hiddenAttributes = ["role"];
+
+    expect(live.toJSON()).toEqual({ id: 1, email: "ada@example.com" });
   });
 });

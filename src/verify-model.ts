@@ -1,5 +1,5 @@
 // Checks a Model's declaration the first time it's used, then seals its declarations.
-// It checks the table, the primary key, the attribute names, generated ids, and page sizes.
+// It checks the table, the primary key, the attribute names, generated ids, hidden attributes, and page sizes.
 import { ancestors } from "./ancestors.ts";
 import { declarationIn, probeOf } from "./association-fields.ts";
 import { seal } from "./declarations.ts";
@@ -77,22 +77,26 @@ function rejectBadPageSizes(model: ModelClass): void {
  * apply to the Models that have them (#101).
  */
 function rejectUnknownHiddenAttributes(model: ModelClass): void {
-  const shared = new Set(
-    ancestors(model)
-      .slice(1)
-      .filter((each) => !Object.hasOwn(each, "attributeDefinitions"))
-      .flatMap((each) =>
-        Object.hasOwn(each, "hiddenAttributes") ? (each as ModelClass).hiddenAttributes : [],
-      ),
-  );
+  const inherited = namesListedByAttributelessAncestors(model);
   for (const name of model.hiddenAttributes) {
-    if (!shared.has(name) && !model.attributeDefinitions.has(name)) {
+    if (!inherited.has(name) && !model.attributeDefinitions.has(name)) {
       throw new InvalidModel(
         `${model.name} hides "${name}" from toJSON, but has no such attribute; ` +
           "hiddenAttributes names attributes exactly",
       );
     }
   }
+}
+
+/** The `hiddenAttributes` of the classes above `model` that have no attributes of their own. */
+function namesListedByAttributelessAncestors(model: ModelClass): Set<string> {
+  const names = new Set<string>();
+  for (const each of ancestors(model).slice(1) as Partial<ModelClass>[]) {
+    if (Object.hasOwn(each, "hiddenAttributes") && each.attributeDefinitions?.size === 0) {
+      each.hiddenAttributes?.forEach((name) => names.add(name));
+    }
+  }
+  return names;
 }
 
 function rejectShadowingFields(model: ModelClass): void {
