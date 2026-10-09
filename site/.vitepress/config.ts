@@ -18,6 +18,8 @@ export default defineConfig({
   outDir: ".vitepress/dist/d1-record",
   cleanUrls: true,
   lastUpdated: true,
+  // Written to the outDir as sitemap.xml; the hostname carries the base so each <loc> is the page's real URL.
+  sitemap: { hostname: `https://docs.forestfuture.dev${base}` },
   srcExclude: ["snippets/**"],
   markdown: {
     config: (md) => {
