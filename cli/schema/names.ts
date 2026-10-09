@@ -46,3 +46,8 @@ export function classify(name: string): string {
 export function moduleName(className: string): string {
   return underscore(className).replaceAll("_", "-");
 }
+
+/** `"A"`, `"A or B"`, `"A, B or C"`. */
+export function listed(names: readonly string[]): string {
+  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} or ${names.at(-1)}`;
+}

@@ -15,7 +15,7 @@ import { readProject, type DatabaseSnapshot, type ProjectSnapshot } from "../sch
 import { parseColumns, type ColumnArg } from "./columns.ts";
 import { migrationFileName, migrationFor, type KeyType } from "./migration.ts";
 import { appendModel, modelFileName, modelSource, type ModelToWrite } from "./model-file.ts";
-import { classify } from "../schema/names.ts";
+import { classify, listed } from "../schema/names.ts";
 import { migrationNameError, modelName, tableize } from "./names.ts";
 
 export interface GenerateOptions {
@@ -75,11 +75,6 @@ function unusable(error: string): Plan {
 /** Whether a step's result is a refusal, rather than what it checked. */
 function isPlan(value: object): value is Plan {
   return "steps" in value;
-}
-
-/** `"A"`, `"A or B"`, `"A, B or C"`. */
-function listed(names: readonly string[]): string {
-  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} or ${names.at(-1)}`;
 }
 
 /** The database to generate for: the only one, or the one `--database` names. */

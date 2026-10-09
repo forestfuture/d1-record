@@ -15,7 +15,7 @@ export interface DatabaseConfig {
 }
 
 export type ConfigResult =
-  | { ok: true; dir: string; databases: DatabaseConfig[] }
+  | { ok: true; file: string; dir: string; databases: DatabaseConfig[] }
   | { ok: false; error: string };
 
 const candidates = ["wrangler.jsonc", "wrangler.json", "wrangler.toml"];
@@ -121,5 +121,5 @@ export function readWranglerConfig(cwd: string, configPath?: string): ConfigResu
   if (entries.some((entry) => typeof entry.binding !== "string")) {
     return { ok: false, error: `${basename(file)} has a d1_databases entry with no binding` };
   }
-  return { ok: true, dir: dirname(file), databases: entries.map(databaseOf) };
+  return { ok: true, file, dir: dirname(file), databases: entries.map(databaseOf) };
 }
