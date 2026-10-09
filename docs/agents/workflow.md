@@ -14,9 +14,9 @@ The skills named below are in `.claude/skills/`. Claude Code loads them automati
 
 Before writing any test, propose to the human, in one message:
 
-- **The seams under test** (see the `tdd` skill). The default for this repo is the **public API against a real Miniflare D1**. Observe queries only through the public `onQuery` hook. There's no fake executor (ADR-0002). Type tests go in `tests/unit/`.
+- **The seams under test** (see the `tdd` skill). The default for this repo is the **public API against a real Miniflare D1**. Observe queries only through the public `onQuery` hook. There's no fake executor (ADR-0002). Type tests go in `tests/unit/`. To write an integration test, copy the setup in `tests/integration/to-sql.test.ts`: `createTestDatabase` from `tests/support/d1.ts`, an `onQuery` events array, and `order({ email: "asc" })` / `where({ ... })` taking objects (plain strings throw).
 - **The build order**: the list of red → green slices you'll work through.
-- **The docs outline**: for each guide page or section the change touches, run the `documentation-writer` skill now and include its answers (Diátaxis type, audience, goal, scope) and an outline, so the human approves them with the seams.
+- **The docs outline**: invoke the `documentation-writer` skill for each guide page or section the change touches, before this message. The message gives its four answers (Diátaxis type, audience, goal, scope) and an outline, so the human approves them with the seams.
 - **Open decisions**: anything the issue or contract leaves unsettled. Number each one, give a recommendation, and say why (the `grilling` skill's format). If a term is fuzzy or new, sharpen it with the `domain-modeling` skill: update `GLOSSARY.md`, and offer an ADR only for decisions that are hard to reverse, surprising, and a real trade-off.
 
 **Wait for the human's answers.** Postponed ideas become `deferred` issues, one per item, not notes in a comment.
@@ -27,7 +27,7 @@ Follow the `tdd` skill, one vertical slice at a time:
 
 1. Write **one** failing test. Run it and confirm it fails for the expected reason (red).
 2. Write the least code that makes it pass (green).
-3. Run `vp check` (format, lint, types, complexity limits) and `vp test`. When a slice passes, **commit it** to `main` (repo convention), with a message saying what behavior was added (see [Commit messages](#commit-messages)).
+3. Run `vp check --fix` (format, lint, types, complexity limits) and `vp test`. Without `--fix`, a formatting error hides the lint errors, and the pre-commit hook then rejects the commit. `src/relation.ts` and `src/model.ts` sit at the 500-line cap, so adding to either means moving code to another module in the same commit. When a slice passes, **commit it** to `main` (repo convention), with a message saying what behavior was added (see [Commit messages](#commit-messages)).
 
 ### Commit messages
 
@@ -50,7 +50,7 @@ Rules that matter here:
 - A test that passes on first run is a **guard**, not a red. Say so.
 - If a size or complexity limit trips, split the code. Don't raise the limit.
 - Update everything a public change touches, as listed in [CONTRIBUTING.md](../../CONTRIBUTING.md#what-a-public-change-touches): the contract, glossary, guide page, exports, `SKILL.md`, README, changeset, and any ADR. If you implement something differently from the contract, update it and tell the human. While on 0.x, a changeset for a breaking change is `minor` and anything else is `patch` (`vp exec changeset`, see `docs/agents/releasing.md`).
-- Guide copy (`site/guide/`), new or changed: run the `documentation-writer` skill before writing any of it, working to the outline agreed in step 2. Write its sentences in the guide's voice ([docs-voice.md](docs-voice.md)). Its larger examples live in `site/snippets/`, where `vp check` type-checks them against the library, and each is shown with the imports its code uses (`site/.vitepress/examples.ts`; an inline example must import what it uses from the package); they also run against D1 in `tests/integration/site-examples.test.ts`, on their own schemas (`site/snippets/**/*.sql`).
+- Guide copy (`site/guide/`), new or changed: run the `documentation-writer` skill before writing any of it, working to the outline agreed in step 2 (that approval stands; the skill needn't ask again). Write its sentences in the guide's voice ([docs-voice.md](docs-voice.md)). Its larger examples live in `site/snippets/`, where `vp check` type-checks them against the library, and each is shown with the imports its code uses (`site/.vitepress/examples.ts`; an inline example must import what it uses from the package); they also run against D1 in `tests/integration/site-examples.test.ts`, on their own schemas (`site/snippets/**/*.sql`).
 - Scope changes (pulling work in from another issue, or pushing it out) get a comment on both issues.
 
 ## 4. Review

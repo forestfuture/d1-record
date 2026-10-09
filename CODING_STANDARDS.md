@@ -8,6 +8,7 @@ Judgement calls the `code-review` skill's Standards axis checks, beyond what `vp
 - **Assert results**, such as the records that come back. Assert SQL text only for safety properties, and query counts through `onQuery`.
 - **One behavior per test.** A second `await` of a different Model in the same test, or a `DELETE` between assertions, means two tests.
 - **A test that passes on first run is a guard.** Say so in the commit body.
+- **Type tests see `@internal` members.** Tests compile against `src`, and only the built `.d.ts` hides them. Don't ask for a source-level `@ts-expect-error` test of one; `vp run check:public-types` covers it.
 
 ## Names and comments
 
