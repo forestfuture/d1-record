@@ -57,7 +57,7 @@ Here’s the migration for posts:
 
 <<< @/snippets/getting-started/migrations/0002_create_posts.sql{sql} [migrations/0002_create_posts.sql]
 
-::: warning Compared with Rails
+::: rails Compared with Rails
 Each `id` is a UUID generated in code, not an auto-incrementing integer, so a user and their posts save together atomically. [Generators](./generators#adding-a-table) covers integer keys.
 :::
 

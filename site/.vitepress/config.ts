@@ -1,3 +1,4 @@
+import container from "markdown-it-container";
 import { defineConfig } from "vitepress";
 import { examples, site } from "./examples.ts";
 import { llms, tidyLlmsTxt } from "./llms.ts";
@@ -18,6 +19,19 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
   srcExclude: ["snippets/**"],
+  markdown: {
+    config: (md) => {
+      // `::: rails Beyond Rails` is a red box for what Rails does or doesn't do (custom.css).
+      const render: NonNullable<container.ContainerOpts["render"]> = (tokens, index) => {
+        const token = tokens[index]!;
+        if (token.nesting !== 1) return "</div>\n";
+        const title = token.info.trim().slice("rails".length).trim() || "Rails";
+        return `<div class="rails custom-block"><p class="custom-block-title">${md.utils.escapeHtml(title)}</p>\n`;
+      };
+      // VitePress' MarkdownRenderer and @types/markdown-it's MarkdownIt are separate declarations.
+      container(md as unknown as Parameters<typeof container>[0], "rails", { render });
+    },
+  },
   head: [["meta", { name: "theme-color", content: "#2f6b3f" }]],
   themeConfig: {
     nav: [

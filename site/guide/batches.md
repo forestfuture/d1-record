@@ -26,7 +26,7 @@ Insert many rows in one statement with `insertAll`:
 - **`{ onDuplicate: "skip" }`** skips rows that clash with a unique index.
 - **`upsert(attrs)`** and **`upsertAll(rows)`** update a row that clashes with the primary key, or with the unique index named by `uniqueBy`. Only the attributes you give are updated, and `updatedAt` is set.
 
-::: warning Compared with Rails
+::: rails Compared with Rails
 These are Rails’ `insert_all`, `upsert_all`, `update_all`, and `delete_all`, with two differences. Declared defaults fill what an insert isn’t given, since on D1 defaults are where keys are generated. And skipping duplicates is something you opt in to, so a duplicate is never silently lost.
 :::
 
@@ -59,7 +59,7 @@ When the batch runs:
 
 A record’s autosaved associations and `dependent` strategies join the same batch. A record listed twice, or already saved by its owner’s autosave, is written once.
 
-::: warning Compared with Rails
+::: rails Compared with Rails
 In a Rails transaction, one record’s `after_save` runs before the next record’s `before_save`. In a batch, every before-callback runs first.
 :::
 

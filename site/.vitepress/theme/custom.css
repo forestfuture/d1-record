@@ -15,3 +15,51 @@
   --vp-c-brand-soft: rgba(140, 199, 154, 0.16);
   --vp-home-hero-name-background: linear-gradient(120deg, #8cc79a 20%, #c5e3a5);
 }
+
+/* The Rails boxes (`::: rails Beyond Rails`, `::: rails Compared with Rails`): Ruby red, set
+   apart from the amber warnings and tips. */
+:root {
+  --rails-title: #b32a24;
+  --rails-bg: rgba(204, 52, 45, 0.08);
+  --rails-code-bg: rgba(204, 52, 45, 0.12);
+}
+
+.dark {
+  --rails-title: #ff8f89;
+  --rails-bg: rgba(244, 100, 94, 0.14);
+  --rails-code-bg: rgba(244, 100, 94, 0.22);
+}
+
+.vp-doc .custom-block.rails {
+  border-color: transparent;
+  background-color: var(--rails-bg);
+  color: var(--vp-c-text-1);
+}
+
+.vp-doc .custom-block.rails .custom-block-title {
+  color: var(--rails-title);
+}
+
+/* A little Ruby gem (the Devicon/IcePanel Ruby logo) before the title. */
+.vp-doc .custom-block.rails .custom-block-title::before {
+  content: "";
+  display: inline-block;
+  width: 1.15em;
+  height: 1.15em;
+  margin-right: 0.45em;
+  vertical-align: -0.25em;
+  background: url("./ruby.svg") center / contain no-repeat;
+}
+
+.vp-doc .custom-block.rails code {
+  background-color: var(--rails-code-bg);
+  color: var(--vp-c-text-1);
+}
+
+.vp-doc .custom-block.rails a > code {
+  color: var(--rails-title);
+}
+
+.vp-doc .custom-block.rails a {
+  color: var(--rails-title);
+}

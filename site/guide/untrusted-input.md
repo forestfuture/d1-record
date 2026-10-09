@@ -18,7 +18,7 @@ Only permit the fields you want from a request:
 
 Permitted values are cast to their attribute’s types, so `"42"` becomes `42` for an integer. [Models](./models#casting-assigned-values) lists what each type accepts. A page number from a query string can go straight to [`paginate`](./querying#paginating), which casts it too.
 
-::: warning Beyond Rails
+::: rails Beyond Rails
 Rails’ `params.permit` only filters keys. d1-record’s also casts each value, and checks that each name is an attribute.
 :::
 

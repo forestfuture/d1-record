@@ -74,6 +74,6 @@ For a rule the validators don’t cover, add errors in a `beforeValidation` or `
 
 Each validation run, from `isValid()`, `save()`, or `saveOrThrow()`, starts by clearing `errors`. So an error added outside a validation callback is gone by the next save.
 
-::: warning Compared with Rails
+::: rails Compared with Rails
 Rails’ `errors.add(:ends_at, :after_start)` takes a type and looks up its message with I18n. d1-record has no I18n yet, so the message is always yours to give, and the type is an option. When Rails is given a message instead, that text is the type too; here the type is still `"invalid"`. Rails’ `message:` and `strict:` options and its procs aren’t here.
 :::

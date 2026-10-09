@@ -32,7 +32,7 @@ The table is `products`, with an `id` generated in code, `created_at`, and `upda
 - **`--id integer`** gives it a key D1 generates instead.
 - **`--no-timestamps`** leaves out the timestamps.
 
-::: warning Compared with Rails
+::: rails Compared with Rails
 Keys are UUIDs, not auto-incrementing integers. With `--id integer`, a record and the records built through it no longer save atomically. See [Autosaving](./associations#autosaving).
 :::
 
@@ -56,7 +56,7 @@ The [column syntax](./command-line#column-syntax) lists every type.
 Quote columns that contain `!`, so bash and zsh leave it alone.
 :::
 
-::: warning Beyond Rails
+::: rails Beyond Rails
 Rails’ generators have no syntax for a column’s default. d1-record adds `=value` (`=0`, `=true`, `=draft`), because SQLite can’t add a required (`NOT NULL`) column to an existing table without one.
 :::
 
@@ -92,7 +92,7 @@ SQLite can’t add a required column without a default, so the generator refuses
 
 <<< @/snippets/guide/generators.ts#self-reference{ts}
 
-::: warning Compared with Rails
+::: rails Compared with Rails
 Rails writes `belongs_to :parent, class_name: "Category", optional: true`. Here the association takes the class itself, so there’s no `class_name`, and whether a parent is required comes from the column: `parentId` can be `null` because the migration allows it.
 :::
 

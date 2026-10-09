@@ -78,7 +78,7 @@ These callbacks aren’t in d1-record yet. The code shows the shape they’re li
 - **`record.touch()` and `afterTouch`** ([#50](https://github.com/forestfuture/d1-record/issues/50)): sets `updatedAt` without a full save.
 - **`on: "create"` and `on: "update"`** ([#51](https://github.com/forestfuture/d1-record/issues/51)): `this.validates("password", { presence: true, on: "create" })`. Until then, check `record.isNewRecord()` in an `if` option or a callback.
 
-::: warning Compared with Rails
+::: rails Compared with Rails
 There’s no `after_commit` or `after_rollback`. In Rails, `after_save` runs before the save’s transaction commits. Here, D1 has already committed before any after-callback runs, so every after-callback is already “after commit”. In a [batch](./batches#batching-records), they run once the whole batch is written. When D1 refuses a write, nothing was written, and the save throws the [constraint error](./errors#constraint-errors).
 
 Rails’ `if:` and `unless:` options for callbacks aren’t needed: write the condition inside the callback.

@@ -31,7 +31,7 @@ Instead of returning `false`, they throw:
 - `RecordNotSaved` when a callback aborted a save, with the abort’s reason as its message.
 - `RecordNotDestroyed` from `destroyOrThrow()`, when a callback aborted the destroy or a `restrictWithError` association refused it.
 
-::: warning Compared with Rails
+::: rails Compared with Rails
 The `OrThrow` methods are Rails’ `save!`, `create!`, `update!`, and `destroy!`.
 :::
 

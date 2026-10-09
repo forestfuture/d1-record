@@ -91,7 +91,7 @@ By default, a page holds 25 records, and none holds more than 100. To change bot
 D1 limits neither the rows a query returns nor the size of its response. `maxPerPage` keeps one request from reading, and paying for, too many rows, within a Worker’s 128 MB of memory and a query’s 30 seconds.
 :::
 
-::: warning Beyond Rails
+::: rails Beyond Rails
 Rails leaves pagination to gems such as Kaminari and Pagy. d1-record builds it in, and sends the count and the page to D1 together.
 :::
 
@@ -107,7 +107,7 @@ Run a query with one of these methods:
 - `count()` always agrees with what `toArray()` returns, even with `limit`, `offset`, or `distinct`.
 - `size()`, `isEmpty()`, and `hasAny()` count records, or check for any. On a loaded association, they answer without a query.
 
-::: warning Compared with Rails
+::: rails Compared with Rails
 `size()`, `isEmpty()`, and `hasAny()` are Rails’ `size`, `empty?`, and `any?`.
 :::
 
@@ -155,7 +155,7 @@ const recent = User.order({ createdAt: "desc" }).limit(10);
 const admins = await User.where({ role: "admin" }).merge(recent).toArray();
 ```
 
-::: warning Compared with Rails
+::: rails Compared with Rails
 Rails adds the argument’s order to the receiver’s. d1-record replaces it.
 :::
 

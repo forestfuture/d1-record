@@ -91,6 +91,6 @@ class Base extends Model.Base {
 
 A value inside an `sql` fragment has no attribute, so it’s logged as given. Compare secrets with a condition, such as `where({ token })`, which is filtered, or leave `params` out of what you log.
 
-::: warning Compared with Rails
+::: rails Compared with Rails
 Rails filters by its app-wide `filter_parameters`, against parameter and column names. d1-record keeps the list on the Model (`static filterAttributes`, inherited from your base class), and matches each entry against the attribute’s snake_case name, so `"_key"` filters `apiKey`. A RegExp may match either form. It also hides filtered values in cast errors and in `RecordNotFound`, which Rails’ filter doesn’t cover.
 :::

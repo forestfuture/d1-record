@@ -39,7 +39,7 @@ It applies your migrations, in order, to an in-memory SQLite database, and write
 - **The base class**, `application-record.ts`, when it’s missing: `ApplicationRecord = modelFor(tables, Base)`, with the binding set on `Base`. It’s never written over, so it’s yours to edit.
 - **With several databases:** one schema file per binding (`src/db/DB.ts`, `src/db/LOGS.ts`), and one base class each, named after it (`DB` → `DbRecord`, `LOGS` → `LogsRecord`).
 
-::: warning Compared with Rails
+::: rails Compared with Rails
 The schema file plays the part of Rails’ `schema.rb`, and each base class is named as Rails names a second database’s.
 :::
 
@@ -128,7 +128,7 @@ npx d1-record g migration <Name> [columns] [options]
 - **`:unique`** adds a unique index, and **`:index`** an index, named like `index_products_on_sku`.
 - **Names** can be written `priceCents` or `price_cents`; columns are always snake_case. Names SQLite reserves (`order`, `group`) are quoted.
 
-::: warning Beyond Rails
+::: rails Beyond Rails
 `=value` is d1-record’s own addition: Rails’ generators can’t give a column a default.
 :::
 

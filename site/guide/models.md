@@ -144,7 +144,7 @@ Conditions are cast the same way, so `where({ quantity: "42" })` finds 42. A con
 - A condition reads a number as its digits for a `string` attribute, and a record built from that Relation starts with what it matched: `where({ label: 7 }).build()` has the label `"7"`.
 - A key copied from another record through an association is cast too, so an integer key written into a text foreign key becomes its digits.
 
-::: warning Beyond Rails
+::: rails Beyond Rails
 Rails casts leniently: `"12abc"` becomes `12`, `1.7` becomes `1`, any other text is `true`, and `""` is `nil`. d1-record refuses each, so `isAdmin=no` from a form can’t save `true`, and an empty field can’t silently become `null`.
 :::
 
@@ -221,7 +221,7 @@ In a Model you declare yourself, write it on the attribute: `id: { type: "string
 For one attribute with its own format, use a `default`: ``shareToken: { default: () => `share_${uuidv7()}` }``. A value made from other attributes, such as a slug, belongs in a [callback](./callbacks), since `generateId` never sees the record.
 :::
 
-::: warning Beyond Rails
+::: rails Beyond Rails
 Rails has no `generateId`. Its UUID keys come from the database (`gen_random_uuid()` in PostgreSQL), which D1 can’t do for a key a batch needs before the row is written. See [Primary keys](./coming-from-rails#primary-keys).
 :::
 
@@ -284,7 +284,7 @@ A Model’s own list replaces the base class’s:
 A name a Model doesn’t have throws `InvalidModel` when the Model is first used, so a typo can’t leave an attribute in your responses. The base class’s names are the exception: a Model without that attribute ignores them.
 :::
 
-::: warning Beyond Rails
+::: rails Beyond Rails
 Rails’ `serializable_hash(except:)` is per call, and `filter_attributes` only covers logs and inspection. d1-record keeps a class-level list, so `Response.json(user)` is safe without each call site remembering to strip the attribute.
 :::
 
@@ -298,7 +298,7 @@ Rails’ `serializable_hash(except:)` is per call, and `filter_attributes` only 
 - **Hidden in errors:** a cast error’s value, and a filtered primary key in `RecordNotFound`.
 - **Not hidden:** values inside `sql` fragments, which have no attribute; and `toJSON()` and `attributes()`, which are your data, not logs ([Hiding attributes](#hiding-attributes) keeps names out of `toJSON()`).
 
-::: warning Compared with Rails
+::: rails Compared with Rails
 The default list is Rails’ own `filter_parameters` list, and the filtered values read as they do in Rails’ logs.
 :::
 
