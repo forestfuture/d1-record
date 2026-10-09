@@ -623,7 +623,10 @@ export class ModelBase {
 
   /** Prints as `Name { attribute: value, … }` in a console, a log or a test failure (#104). */
   [inspectCustom](depth: number, options: InspectOptions, inspect: Inspect): string {
-    return inspectRecord(modelOf(this), this[state].attributes(), [depth, options, inspect]);
+    const record = this[state];
+    // A new record's attributes are all unsaved, so only a persisted record flags its changes.
+    const changes = record.isPersisted ? record.changes() : {};
+    return inspectRecord(modelOf(this), record.attributes(), changes, [depth, options, inspect]);
   }
 
   /**

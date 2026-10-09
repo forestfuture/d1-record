@@ -101,4 +101,39 @@ describe("inspect", () => {
     expect(inspect({ sample }, { depth: 0 })).toBe("{ sample: [Sample] }");
     expect(inspect({ sample }, { depth: 1 })).toContain("sample: Sample { id: 1,");
   });
+
+  describe("an unsaved change", () => {
+    test("is flagged with the value it had", async () => {
+      const sample = await connect(binding)
+        .model(Sample)
+        .create({ id: 1, label: "bolt", quantity: 36 });
+      sample.label = "nut";
+
+      expect(inspect(sample)).toBe("Sample { id: 1, label: 'nut' (was 'bolt'), quantity: 36 }");
+    });
+
+    test("is not flagged once saved", async () => {
+      const sample = await connect(binding)
+        .model(Sample)
+        .create({ id: 1, label: "bolt", quantity: 36 });
+      await sample.update({ label: "nut" });
+
+      expect(inspect(sample)).toBe("Sample { id: 1, label: 'nut', quantity: 36 }");
+    });
+
+    test("is not flagged on a new record, where everything is unsaved", () => {
+      const sample = connect(binding).model(Sample).build({ label: "bolt" });
+
+      expect(inspect(sample)).toBe("Sample { id: null, label: 'bolt', quantity: null }");
+    });
+
+    test("in a filtered attribute says only that it changed", async () => {
+      const user = await connect(binding)
+        .model(User)
+        .create({ id: 1, email: "ada@example.com", role: "admin" });
+      user.email = "grace@example.com";
+
+      expect(inspect(user)).toBe("User { id: 1, email: [FILTERED] (changed), role: 'admin' }");
+    });
+  });
 });

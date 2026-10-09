@@ -1,6 +1,7 @@
 // How a record prints in a console, a log or a test failure: its class and attributes (#104).
 import { FILTERED, isFiltered } from "./filtering.ts";
 import type { ModelClass } from "./model.ts";
+import type { Changes } from "./record-state.ts";
 
 /** What Node's `util.inspect` passes a custom inspector; `src/` doesn't import Node's types. */
 export interface InspectOptions {
@@ -20,8 +21,22 @@ function styled(options: InspectOptions, text: string): string {
 
 /** A filtered value's stand-in: prints unquoted, so it isn't taken for a string, as a special value. */
 class Redacted {
+  constructor(private readonly changed: boolean) {}
+
   [inspectCustom](_depth: number, options: InspectOptions): string {
-    return styled(options, FILTERED);
+    return styled(options, FILTERED) + (this.changed ? " (changed)" : "");
+  }
+}
+
+/** An unsaved change: the new value, and the one the record was loaded or saved with. */
+class Unsaved {
+  constructor(
+    private readonly after: unknown,
+    private readonly before: unknown,
+  ) {}
+
+  [inspectCustom](_depth: number, options: InspectOptions, inspect: Inspect): string {
+    return `${inspect(this.after, options)} (was ${inspect(this.before, options)})`;
   }
 }
 
@@ -29,16 +44,18 @@ class Redacted {
 export function inspectRecord(
   model: ModelClass,
   attributes: Record<string, unknown>,
+  changes: Changes,
   [depth, options, inspect]: [number, InspectOptions, Inspect],
 ): string {
   // Nested deeper than `depth` allows: just the name, as Node prints any class instance.
   if (depth < 0) return styled(options, `[${model.name}]`);
   const innerDepth = options.depth == null ? options.depth : options.depth - 1;
   const shown = Object.fromEntries(
-    Object.entries(attributes).map(([name, value]) => [
-      name,
-      value !== null && isFiltered(model, name) ? new Redacted() : value,
-    ]),
+    Object.entries(attributes).map(([name, value]) => {
+      const change = changes[name];
+      if (value !== null && isFiltered(model, name)) return [name, new Redacted(!!change)];
+      return [name, change ? new Unsaved(value, change[0]) : value];
+    }),
   );
   return `${model.name} ${inspect(shown, { ...options, depth: innerDepth })}`;
 }
