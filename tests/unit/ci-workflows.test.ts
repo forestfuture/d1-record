@@ -69,11 +69,24 @@ describe("CI's permissions", () => {
 describe("CI's release jobs, and every job that can write", () => {
   const jobs = () => workflows().flatMap((file) => partsOf(file).jobs);
 
-  test("are the release jobs", () => {
+  test("are the release jobs, and Scorecard's", () => {
     const writing = jobs().filter(([, job]) => writes.test(job));
 
     expect(writing.length).toBeGreaterThan(0);
-    expect(writing.every(([name]) => name.startsWith("release-"))).toBe(true);
+    expect(writing.every(([name]) => name.startsWith("release-") || name === "scorecard")).toBe(
+      true,
+    );
+  });
+
+  // Scorecard publishes its result with `id-token: write` (#111), so its job runs nothing of ours:
+  // only pinned third-party actions, with no `run:` step and no local action.
+  test("Scorecard's job runs only third-party actions", () => {
+    const scorecard = jobs().filter(([name]) => name === "scorecard");
+
+    expect(scorecard).toHaveLength(1);
+    const [, job] = scorecard[0]!;
+    expect(job).not.toMatch(/^\s*(?:-\s*)?run:/m);
+    expect(job).not.toMatch(/uses:\s*\.\//);
   });
 
   test("install dependencies without their install scripts or the shared cache", () => {
