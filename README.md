@@ -1,6 +1,7 @@
 # d1-record
 
 [![CI](https://github.com/forestfuture/d1-record/actions/workflows/ci.yml/badge.svg)](https://github.com/forestfuture/d1-record/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/forestfuture/d1-record/badge)](https://scorecard.dev/viewer/?uri=github.com/forestfuture/d1-record)
 
 A Rails-inspired Active Record for [Cloudflare Workers](https://developers.cloudflare.com/workers/) and [D1](https://developers.cloudflare.com/d1/).
 
