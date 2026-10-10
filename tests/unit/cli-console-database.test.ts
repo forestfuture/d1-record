@@ -111,13 +111,21 @@ describe("the remote database a binding points at", () => {
     });
   });
 
-  test("falls back to the binding for a name, and has no id when the config gives none", () => {
-    const entry = { binding: "DB" };
+  test("is named by the binding when the config gives no database_name", () => {
+    const entry = { binding: "DB", database_id: "1a2b" };
 
-    expect(remoteTarget({ binding: "DB", entry, configFile })).toEqual({
-      name: "DB",
-      id: undefined,
-      preview: false,
-    });
+    expect(remoteTarget({ binding: "DB", entry, configFile }).name).toBe("DB");
+  });
+
+  test("is named by the binding when the database_name is empty", () => {
+    const entry = { binding: "DB", database_name: "", database_id: "1a2b" };
+
+    expect(remoteTarget({ binding: "DB", entry, configFile }).name).toBe("DB");
+  });
+
+  test("has no id when the config gives none", () => {
+    const entry = { binding: "DB", database_name: "shop" };
+
+    expect(remoteTarget({ binding: "DB", entry, configFile }).id).toBeUndefined();
   });
 });

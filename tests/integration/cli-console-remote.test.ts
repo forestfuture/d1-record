@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
-import { runConsole } from "../../cli/console/command.ts";
+import { runConsole, standardIo } from "../../cli/console/command.ts";
 import { main } from "../../cli/main.ts";
 import { terminalStreams, waitFor } from "../support/console.ts";
 import { scratchDirs } from "../support/scratch.ts";
@@ -58,20 +58,43 @@ function onATerminal() {
 
 // `d1-record console --remote` (#104): the same console on the real database, after asking.
 describe("d1-record console --remote", () => {
-  test("--yes opens it, says which database, and marks the prompt", async () => {
+  test("--yes opens it through wrangler's remote proxy", async () => {
     const { cwd, asked } = await remoteShop();
+    const terminal = terminalStreams();
+
+    const done = runConsole({ cwd, remote: true, yes: true }, () => {}, terminal);
+    await terminal.ready();
+
+    expect(asked()).toEqual([{ remoteBindings: true, persist: false }]);
+    expect(await terminal.send("(await User.find(1)).name")).toBe("#=> 'Alice'");
+    terminal.input.end();
+    expect(await done).toBe(0);
+  }, 90_000);
+
+  test("says which database it opened", async () => {
+    const { cwd } = await remoteShop();
     const terminal = terminalStreams();
     const lines: string[] = [];
 
     const done = runConsole({ cwd, remote: true, yes: true }, (line) => lines.push(line), terminal);
     await terminal.ready();
+    terminal.input.end();
+    await done;
 
     expect(lines).toEqual(["Remote database DB (shop, id local-shop)", "Models: User"]);
-    expect(asked()).toEqual([{ remoteBindings: true, persist: false }]);
-    expect(await terminal.send("(await User.find(1)).name")).toBe("#=> 'Alice'");
-    expect(terminal.transcript()).toContain("remote> ");
+  }, 90_000);
+
+  test("marks its prompt remote", async () => {
+    const { cwd } = await remoteShop();
+    const terminal = terminalStreams();
+    const done = runConsole({ cwd, remote: true, yes: true }, () => {}, terminal);
+    await terminal.ready();
+
+    await terminal.send("1 + 1");
+
+    expect(terminal.transcript()).toContain("\nremote> ");
     terminal.input.end();
-    expect(await done).toBe(0);
+    await done;
   }, 90_000);
 
   test("is refused off a terminal without --yes, before wrangler is asked for anything", async () => {
@@ -105,6 +128,26 @@ describe("d1-record console --remote", () => {
     expect(await done).toBe(0);
     expect(asked()).toHaveLength(1);
     expect(lines[0]).toBe("Remote database DB (shop, id local-shop)");
+  }, 90_000);
+
+  test("on a terminal, what is typed behind the name is dropped, not run", async () => {
+    const { cwd } = await remoteShop();
+    const { terminal, lines, io } = onATerminal();
+
+    const done = runConsole({ cwd, remote: true }, (line) => lines.push(line), io);
+    await waitFor(() => terminal.transcript().includes("Type its name to continue"));
+    terminal.input.write("shop\n");
+    // A terminal delivers a paste a line at a time, while the connection is still being made.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    terminal.input.write('await User.create({ id: 2, name: "pasted", email: "p@example.com" })\n');
+    await waitFor(() => lines.includes("Models: User"));
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    terminal.input.write("await User.count()\n");
+    await waitFor(() => terminal.transcript().includes("#=>"), 20);
+    terminal.input.write("quit\n");
+
+    expect(await done).toBe(0);
+    expect(terminal.transcript()).toContain("#=> \u001b[33m1\u001b[39m");
   }, 90_000);
 
   test("on a terminal, isn't opened by any other answer", async () => {
@@ -150,7 +193,7 @@ describe("d1-record console --remote", () => {
     expect(existsSync(join(cwd, ".wrangler/d1-record-history"))).toBe(false);
   }, 90_000);
 
-  test("keeps it when asked to", async () => {
+  test("keeps what you type, in a file of its own, when asked to", async () => {
     const { cwd } = await remoteShop();
     const { terminal, lines, io } = onATerminal();
     const done = runConsole(
@@ -158,7 +201,7 @@ describe("d1-record console --remote", () => {
       (line) => lines.push(line),
       io,
     );
-    const history = join(cwd, ".wrangler/d1-record-history");
+    const history = join(cwd, ".wrangler/d1-record-history-remote");
 
     await waitFor(() => lines.includes("Models: User"));
     terminal.input.write("1 + 1\n");
@@ -167,6 +210,7 @@ describe("d1-record console --remote", () => {
     await done;
 
     expect(readFileSync(history, "utf8")).toContain("1 + 1");
+    expect(existsSync(join(cwd, ".wrangler/d1-record-history"))).toBe(false);
   }, 90_000);
 });
 
@@ -182,6 +226,41 @@ describe("the local console's prompt", () => {
     terminal.input.end();
     await done;
   }, 90_000);
+});
+
+describe("what counts as a terminal", () => {
+  /** `standardIo` with the process's stdin and stdout each a terminal or not. */
+  function ioWhen(stdin: boolean, stdout: boolean) {
+    const was = {
+      stdin: Object.getOwnPropertyDescriptor(process.stdin, "isTTY"),
+      stdout: Object.getOwnPropertyDescriptor(process.stdout, "isTTY"),
+    };
+    Object.defineProperty(process.stdin, "isTTY", { value: stdin, configurable: true });
+    Object.defineProperty(process.stdout, "isTTY", { value: stdout, configurable: true });
+    try {
+      return standardIo().terminal;
+    } finally {
+      for (const [stream, key] of [
+        [process.stdin, "stdin"],
+        [process.stdout, "stdout"],
+      ] as const) {
+        if (was[key] === undefined) delete (stream as { isTTY?: boolean }).isTTY;
+        else Object.defineProperty(stream, "isTTY", was[key]);
+      }
+    }
+  }
+
+  test("is both: a person at the keyboard and a screen", () => {
+    expect(ioWhen(true, true)).toBe(true);
+  });
+
+  test("is not a terminal when stdin is piped, so a pipe can't answer for a person", () => {
+    expect(ioWhen(false, true)).toBe(false);
+  });
+
+  test("is not a terminal when stdout is piped", () => {
+    expect(ioWhen(true, false)).toBe(false);
+  });
 });
 
 describe("--remote on the command line", () => {

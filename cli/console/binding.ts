@@ -61,8 +61,8 @@ interface Opening {
   remoteBindings: boolean;
   /** What to tell the person it is, given the binding's name. */
   describe: (binding: string) => string;
-  /** Wrangler's reason, as a message. */
-  refused: (binding: string, reason: string) => string;
+  /** What to say when Wrangler can't open it, given its reason. */
+  failure: (binding: string, reason: string) => string;
 }
 
 async function open(
@@ -82,14 +82,20 @@ async function open(
     });
   } catch (error) {
     config.remove();
-    return opening.refused(binding, (error as Error).message);
+    return opening.failure(binding, (error as Error).message);
   }
+  // A process that exits before `dispose` (a signal Wrangler turns into an exit) leaves no config.
+  process.once("exit", config.remove);
   return {
     binding: proxy.env[binding],
     description: opening.describe(binding),
     dispose: async () => {
-      await proxy.dispose();
-      config.remove();
+      process.off("exit", config.remove);
+      try {
+        await proxy.dispose();
+      } finally {
+        config.remove();
+      }
     },
   };
 }
@@ -109,11 +115,11 @@ export function openLocalBinding(
     persist: { path: join(dirname(chosen.configFile), ".wrangler/state/v3") },
     remoteBindings: false,
     describe: (binding) => `Local database ${binding} (.wrangler/state)`,
-    refused: (binding, reason) => `Wrangler couldn't open ${binding}: ${reason}`,
+    failure: (binding, reason) => `Wrangler couldn't open ${binding}: ${reason}`,
   });
 }
 
-const signIn =
+const signInHint =
   "Sign in with 'wrangler login', or set CLOUDFLARE_API_TOKEN (and CLOUDFLARE_ACCOUNT_ID).";
 
 /**
@@ -131,7 +137,7 @@ export function openRemoteBinding(
     persist: false,
     remoteBindings: true,
     describe: (binding) => remoteDescription(binding, target),
-    refused: (binding, reason) =>
-      `Wrangler couldn't open ${binding} remotely: ${reason}\n${signIn}`,
+    failure: (binding, reason) =>
+      `Wrangler couldn't open ${binding} remotely: ${reason}\n${signInHint}`,
   });
 }

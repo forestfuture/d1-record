@@ -1,4 +1,4 @@
-// Which D1 database the console opens: the only one in the Wrangler config, or the one named.
+// Which D1 database the console opens, and what a remote open reaches: the only one in the Wrangler config, or the one named.
 import { listed } from "../schema/names.ts";
 import { readWranglerConfig } from "../schema/wrangler.ts";
 
@@ -23,7 +23,7 @@ export interface RemoteTarget {
 
 /** The remote database this binding's entry points at. */
 export function remoteTarget({ binding, entry }: ChosenDatabase): RemoteTarget {
-  const text = (value: unknown) => (typeof value === "string" ? value : undefined);
+  const text = (value: unknown) => (typeof value === "string" && value !== "" ? value : undefined);
   const preview = text(entry.preview_database_id);
   return {
     name: text(entry.database_name) ?? binding,

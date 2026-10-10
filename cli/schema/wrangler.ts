@@ -1,4 +1,4 @@
-// Reads a Worker's Wrangler config: its D1 databases and their migrations folders.
+// Reads a Worker's Wrangler config: its D1 databases, their migrations folders, and its account_id.
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 

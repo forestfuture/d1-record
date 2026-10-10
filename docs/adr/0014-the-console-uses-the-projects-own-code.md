@@ -1,6 +1,6 @@
 # The console loads the project's own library, and reads its TypeScript through jiti
 
-`d1-record console` evaluates the project's Models against its local database. Two choices decide whether that works, and both are easy to get wrong without noticing.
+`d1-record console` evaluates the project's Models against its database: the local one, or the remote one with `--remote`. Two choices decide whether that works, and both are easy to get wrong without noticing.
 
 **It resolves `@forestfuture/d1-record` and `wrangler` from the project, not from the CLI.** `npx d1-record` may run a different copy of the library than the one the Models import (a global install, a different version in a monorepo). Two copies are two `withDatabase` `AsyncLocalStorage` stores and two `Model` base classes: a Model from one would not see the database the console set up with the other, and `instanceof Model.Base` would fail. One `jiti` instance, based in the project, imports the Models and the library, so they resolve to the same module. Wrangler is the project's own dependency (it runs `wrangler dev`), so d1-record gains none for it.
 

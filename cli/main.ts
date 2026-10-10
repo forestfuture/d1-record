@@ -8,7 +8,7 @@ const help = `Usage:
   d1-record schema [options]              Generate src/db/schema.ts from your D1 migrations
   d1-record g model <Name> [columns]      Write a CREATE TABLE migration and a Model
   d1-record g migration <Name> [columns]  Write a migration: Create…, Add…To…, Remove…From…, or empty
-  d1-record console (or c)                Open a console on your local D1 database, with your Models
+  d1-record console (or c)                Open a console on your D1 database, with your Models
 
 Columns are name:type, where the type is string (the default), integer, real, boolean,
 datetime, json or references; then ! for NOT NULL, =value for a default, and :unique or
@@ -112,7 +112,7 @@ const consoleOptions = {
   yes: { type: "boolean" },
 } as const satisfies ParseArgsOptionsConfig;
 
-/** `d1-record console`: opens the local database and its Models in a REPL. */
+/** `d1-record console`: opens the project's database (local, or remote with `--remote`) and its Models in a REPL. */
 function openConsole(
   argv: readonly string[],
   print: (line: string) => void,
@@ -124,7 +124,7 @@ function openConsole(
   const { remote, yes } = args.values;
   if (history && noHistory) return usage(print, "Use --history or --no-history, not both");
   if (yes && !remote) return usage(print, "--yes only goes with --remote");
-  const keep = noHistory ? false : history ? true : undefined;
+  const keep = noHistory ? false : history || undefined;
   return runConsole({ database, models, config, history: keep, verbose, remote, yes }, print);
 }
 

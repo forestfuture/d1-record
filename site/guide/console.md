@@ -4,7 +4,7 @@ description: "How to open a console on your D1 database with your Models loaded:
 
 # Console
 
-Open a console on your local database, with your Models loaded, to try a query or fix a record by hand. Run it from the folder with your Wrangler config:
+Open a console on your local database, with your Models loaded, to try a query or fix a record by hand, or on your remote one with [`--remote`](#opening-your-remote-database). Run it from the folder with your Wrangler config:
 
 ```sh
 npx d1-record console
@@ -30,7 +30,7 @@ Leave with `quit`, `exit`, or Ctrl-D. Ctrl-C stops a line that’s still running
 
 ## What you can use
 
-- **Your Models,** by class name, from every file in `src/models`. They query your local database with no `db` to pass.
+- **Your Models,** by class name, from every file in `src/models`. They query your database, local unless you pass `--remote`, with no `db` to pass.
 - **`db`,** your connected database, for `db.batch([...])` and `db.model(...)`.
 - **Top-level `await`,** and `const` and `let`, which last until you leave.
 
@@ -104,7 +104,7 @@ On a terminal, what you type is kept in `.wrangler/d1-record-history`, which Wra
 npx d1-record console --remote
 ```
 
-It names the database and waits for you to type its name. Anything else, including `y`, cancels and opens nothing:
+It names the database and waits for you to type its name. Anything else, including `y`, cancels and opens nothing. Anything you type or paste after the name is dropped, so a pasted block can’t run on the real database before you’ve seen the prompt:
 
 ```text
 Remote database DB (shop, id 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d)
@@ -122,15 +122,27 @@ remote> await User.count()
 #=> 42
 ```
 
-::: danger Changes are real
-There’s no copy and no undo. `await user.destroy()` deletes that row from your remote database, and `User.deleteAll()` deletes them all.
+::: warning Changes can’t be undone
+A change is made to the real database, for good. `await user.destroy()` deletes that row from your remote database.
 :::
 
-- **Signing in.** The console uses your Wrangler login, or `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the environment. It takes the account from `account_id` in your Wrangler config when it names one. Opening a remote database starts a temporary preview Worker, as `wrangler dev` does for a remote binding, so the token needs **D1: Edit** and **Workers Scripts: Edit**, and the account needs a `workers.dev` subdomain. When Cloudflare refuses, the console prints its reason and how to sign in.
-- **Without a terminal.** There’s no one to type the name, so it refuses unless you add `--yes`, which is how a script opens it: `echo 'await User.count()' | npx d1-record console --remote --yes`.
-- **The database it opens.** The binding needs a `database_id`. When it also has a `preview_database_id`, Wrangler opens that one in place of `database_id`, and the console says so: `Remote preview database DB (…)`.
-- **No history.** What you type isn’t kept unless you add `--history`.
-- **Local files.** Nothing is written to `.wrangler/state`; the local database isn’t touched.
+The console signs in with your Wrangler login, or with `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the environment, and takes the account from `account_id` in your Wrangler config when it names one. When Cloudflare refuses, the console prints its reason and how to sign in.
+
+There’s no one to type the name unless both your input and output are a terminal, so a piped session refuses unless you add `--yes`, which is how a script opens it:
+
+```sh
+echo 'await User.count()' | npx d1-record console --remote --yes
+```
+
+What you type isn’t kept unless you add `--history`, and then it goes in `.wrangler/d1-record-history-remote`, a file of its own, so the up arrow never offers a local session a line you typed against the real database.
+
+::: warning TIP
+The binding needs a `database_id`. If it also has a `preview_database_id`, Wrangler opens that one in place of `database_id`, and the console says so: `Remote preview database DB (…)`.
+:::
+
+::: warning TIP
+A token needs **D1: Edit** and **Workers Scripts: Edit**, and the account needs a `workers.dev` subdomain, as `wrangler dev` needs for a remote binding.
+:::
 
 ## Running a few lines at once
 

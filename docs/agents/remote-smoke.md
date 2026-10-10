@@ -12,7 +12,7 @@ Without the three environment variables below the suite is skipped, so `vp test`
    ```sh
    pnpm dlx wrangler d1 create d1-record-smoke
    ```
-   Note the `database_id` it prints. The name isn't used; the suite connects by id.
+   Note the `database_id` it prints. The suite connects by id; the name only labels it in the console smoke test's config (`d1-record-smoke` there has no effect).
 2. **Turn on read replication** for it, so the Session test proves read-your-writes: without replicas every read goes to the primary, and the test would pass whatever the library did. In the Cloudflare dashboard, open the database's **Settings** page and turn on **Read replication (Beta)**. (Or through the API: `PUT /accounts/{account_id}/d1/database/{database_id}` with `{"read_replication": {"mode": "auto"}}`.)
 3. **An API token** (Cloudflare dashboard → My Profile → API Tokens → Create Custom Token), scoped to the one account, with the permissions below (every token and secret the repository uses is listed in [cloudflare-tokens.md](cloudflare-tokens.md)):
    - Account → **D1** → Edit

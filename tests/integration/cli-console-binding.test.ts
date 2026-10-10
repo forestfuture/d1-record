@@ -156,7 +156,9 @@ interface Call {
 
 declare global {
   // eslint-disable-next-line no-var
-  var __fakeWrangler: { calls: Call[]; disposed: number; fail?: string } | undefined;
+  var __fakeWrangler:
+    | { calls: Call[]; disposed: number; fail?: string; failDispose?: boolean }
+    | undefined;
 }
 
 /** A project outside the repo whose own `wrangler` records the call it gets, and says no on cue. */
@@ -178,7 +180,7 @@ function projectWithFakeWrangler(config: object = {}): string {
          config: JSON.parse(readFileSync(options.configPath, "utf8")),
        });
        if (seen.fail !== undefined) throw new Error(seen.fail);
-       return { env: { DB: "the remote binding" }, dispose: async () => { seen.disposed += 1; } };
+       return { env: { DB: "the remote binding" }, dispose: async () => { seen.disposed += 1; if (seen.failDispose) throw new Error("proxy would not stop"); } };
      }`,
   );
   writeFileSync(join(cwd, "wrangler.jsonc"), JSON.stringify(config));
@@ -280,6 +282,33 @@ describe("the console's remote database binding", () => {
 
     expect(globalThis.__fakeWrangler!.disposed).toBe(1);
     expect(existsSync(configPath)).toBe(false);
+  });
+
+  test("removes its temporary config even when the proxy fails to stop", async () => {
+    const cwd = projectWithFakeWrangler();
+    globalThis.__fakeWrangler!.failDispose = true;
+    const opened = await openRemoteBinding(cwd, remote(cwd));
+    if (typeof opened === "string") throw new Error(opened);
+    const { configPath } = globalThis.__fakeWrangler!.calls[0]!;
+
+    await expect(opened.dispose()).rejects.toThrow("proxy would not stop");
+
+    expect(existsSync(configPath)).toBe(false);
+  });
+
+  test("removes its temporary config if the process exits first, and leaves no listener behind", async () => {
+    const cwd = projectWithFakeWrangler();
+    const before = process.listenerCount("exit");
+    const opened = await openRemoteBinding(cwd, remote(cwd));
+    if (typeof opened === "string") throw new Error(opened);
+    const { configPath } = globalThis.__fakeWrangler!.calls[0]!;
+    expect(process.listenerCount("exit")).toBe(before + 1);
+
+    process.listeners("exit").at(-1)!.call(process, 0);
+    expect(existsSync(configPath)).toBe(false);
+
+    await opened.dispose();
+    expect(process.listenerCount("exit")).toBe(before);
   });
 
   test("a refusal from Cloudflare comes with how to sign in", async () => {
