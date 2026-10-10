@@ -5,7 +5,8 @@ import { openLocalBinding, openRemoteBinding, type OpenBinding } from "./binding
 import { consoleCommands } from "./commands.ts";
 import { confirmRemote } from "./confirm.ts";
 import { databaseFor, remoteTarget, type ChosenDatabase } from "./database.ts";
-import { loadProject } from "./project.ts";
+import { loadProject, type ConsoleProject } from "./project.ts";
+import { runScript } from "./script.ts";
 import { startSession } from "./session.ts";
 
 export interface ConsoleOptions {
@@ -25,12 +26,19 @@ export interface ConsoleOptions {
   yes?: boolean;
   /** Print each statement as it runs, to begin with; `.verbose` turns it on and off. */
   verbose?: boolean;
+  /**
+   * Run this code and exit, instead of opening a session: its result goes to the output, and
+   * everything else the console says (the database, the SQL, a failure) goes to the error stream.
+   */
+  eval?: string;
 }
 
 /** The two ends of the console, and whether they are a terminal (colors, line editing, history). */
 export interface ConsoleIo {
   input: Readable;
   output: Writable;
+  /** Where a script's diagnostics go: the process's stderr by default. */
+  error?: Writable;
   terminal?: boolean;
 }
 
@@ -38,7 +46,7 @@ export interface ConsoleIo {
 export function standardIo(): ConsoleIo {
   // Both: a pipe on either end means no person is there to answer for what a console may change.
   const terminal = process.stdin.isTTY === true && process.stdout.isTTY === true;
-  return { input: process.stdin, output: process.stdout, terminal };
+  return { input: process.stdin, output: process.stdout, error: process.stderr, terminal };
 }
 
 /**
@@ -98,45 +106,112 @@ async function openRemote(
   return opened;
 }
 
+/** Whether a stream is a terminal, which colors what is written to it. */
+function isTerminal(stream: Writable): boolean {
+  return (stream as { isTTY?: boolean }).isTTY === true;
+}
+
+/** What a session needs from the open database: the scope, and how to run a line inside it. */
+interface Opened {
+  scope: Record<string, unknown>;
+  commands: ReturnType<typeof consoleCommands>["commands"];
+  withDatabase: (run: () => void) => Promise<void>;
+}
+
+/** Runs `code` once, and writes its result and its failure where each belongs; the exit code. */
+async function runOnce(code: string, opened: Opened, io: ConsoleIo, errors: Writable) {
+  const result = await runScript({
+    code,
+    ...opened,
+    colors: { result: isTerminal(io.output), error: isTerminal(errors) },
+  });
+  io.output.write(result.stdout);
+  errors.write(result.stderr);
+  return result.exitCode;
+}
+
+/** What opening the console found: the database chosen, the project's Models, the open binding. */
+interface Prepared {
+  chosen: ChosenDatabase;
+  project: ConsoleProject;
+  opened: OpenBinding;
+}
+
+/** Everything that has to be true before a session starts, or why it isn't. */
+async function prepare(
+  options: ConsoleOptions,
+  io: ConsoleIo,
+  errors: Writable,
+): Promise<Prepared | string> {
+  const cwd = options.cwd ?? process.cwd();
+  const chosen = databaseFor(cwd, options);
+  if (typeof chosen === "string") return chosen;
+  const project = await loadProject(cwd, options.models);
+  if (typeof project === "string") return project;
+  // A script's output is its result alone, so the confirmation's question goes to stderr.
+  const asking = options.eval === undefined ? io : { ...io, output: errors };
+  const opened = await (options.remote === true
+    ? openRemote(cwd, chosen, options, asking)
+    : openLocalBinding(cwd, chosen));
+  return typeof opened === "string" ? opened : { chosen, project, opened };
+}
+
+/** Where a console talks: its own ends, what it says besides results, and its error stream. */
+interface Talk {
+  io: ConsoleIo;
+  say: (line: string) => void;
+  errors: Writable;
+}
+
+/** The session, or the one piece of code, on the open database; the exit code. */
+async function converse(
+  options: ConsoleOptions,
+  { chosen, project, opened }: Prepared,
+  { io, say, errors }: Talk,
+): Promise<number> {
+  const scripted = options.eval !== undefined;
+  const remote = options.remote === true;
+  const { library, models } = project;
+  const { commands, onQuery } = consoleCommands(project, {
+    verbose: options.verbose === true,
+    write: scripted ? say : (line) => io.output.write(`${line}\n`),
+    dim: scripted ? isTerminal(errors) : io.terminal === true,
+  });
+  const database = library.connect(opened.binding, { onQuery });
+  say(opened.description);
+  say(`Models: ${Object.keys(models).join(", ")}`);
+  const inside: Opened = {
+    scope: { ...models, db: database },
+    commands,
+    withDatabase: async (run) => void (await library.withDatabase(database, run)),
+  };
+  if (options.eval !== undefined) return runOnce(options.eval, inside, io, errors);
+  const session = startSession({
+    ...io,
+    ...inside,
+    prompt: promptFor(remote, io.terminal === true),
+    // What is typed against a real database stays out of the history unless it is asked for.
+    historyFile:
+      (options.history ?? !remote) ? historyFileFor(chosen.configFile, remote) : undefined,
+  });
+  await session.closed;
+  return 0;
+}
+
 /** Runs the console until its input ends; the exit code. */
 export async function runConsole(
   options: ConsoleOptions,
   print: (line: string) => void,
   io: ConsoleIo = standardIo(),
 ): Promise<number> {
-  const cwd = options.cwd ?? process.cwd();
-  const chosen = databaseFor(cwd, options);
-  if (typeof chosen === "string") return refused(print, chosen);
-  const project = await loadProject(cwd, options.models);
-  if (typeof project === "string") return refused(print, project);
-  const remote = options.remote === true;
-  const opened = await (remote
-    ? openRemote(cwd, chosen, options, io)
-    : openLocalBinding(cwd, chosen));
-  if (typeof opened === "string") return refused(print, opened);
+  const errors = io.error ?? process.stderr;
+  // A script's output is its result alone: all else it says (even a refusal) goes to stderr.
+  const say = options.eval === undefined ? print : (line: string) => void errors.write(`${line}\n`);
+  const prepared = await prepare(options, io, errors);
+  if (typeof prepared === "string") return refused(say, prepared);
   try {
-    const { library, models } = project;
-    const { commands, onQuery } = consoleCommands(project, {
-      verbose: options.verbose === true,
-      write: (line) => io.output.write(`${line}\n`),
-      dim: io.terminal === true,
-    });
-    const database = library.connect(opened.binding, { onQuery });
-    print(opened.description);
-    print(`Models: ${Object.keys(models).join(", ")}`);
-    const session = startSession({
-      ...io,
-      scope: { ...models, db: database },
-      commands,
-      withDatabase: async (run) => void (await library.withDatabase(database, run)),
-      prompt: promptFor(remote, io.terminal === true),
-      // What is typed against a real database stays out of the history unless it is asked for.
-      historyFile:
-        (options.history ?? !remote) ? historyFileFor(chosen.configFile, remote) : undefined,
-    });
-    await session.closed;
+    return await converse(options, prepared, { io, say, errors });
   } finally {
-    await opened.dispose();
+    await prepared.opened.dispose();
   }
-  return 0;
 }

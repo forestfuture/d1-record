@@ -1,6 +1,6 @@
 // The `d1-record` command line. Node only: no Worker imports it (cli/bin.ts runs it).
 import { parseArgs, type ParseArgsOptionsConfig } from "node:util";
-import { runConsole } from "./console/command.ts";
+import { runConsole, type ConsoleOptions } from "./console/command.ts";
 import { runGenerate } from "./generate/command.ts";
 import { runSchema, watchSchema } from "./schema/command.ts";
 
@@ -37,6 +37,7 @@ Options for console:
   --history           Keep what you type, which a remote session doesn't unless asked
   --no-history        Don't keep what you type in .wrangler/d1-record-history
   --verbose           Print each statement a line runs (.verbose toggles it while it runs)
+  -e, --eval <code>   Run this code, print its result and exit (the database goes to stderr)
 
 Options for every command:
   --config <file>     Use this Wrangler config
@@ -110,9 +111,40 @@ const consoleOptions = {
   verbose: { type: "boolean" },
   remote: { type: "boolean" },
   yes: { type: "boolean" },
+  eval: { type: "string", short: "e", multiple: true },
 } as const satisfies ParseArgsOptionsConfig;
 
-/** `d1-record console`: opens the project's database (local, or remote with `--remote`) and its Models in a REPL. */
+/** The console's parsed flags. */
+interface ConsoleFlags {
+  database?: string;
+  models?: string;
+  config?: string;
+  history?: boolean;
+  "no-history"?: boolean;
+  verbose?: boolean;
+  remote?: boolean;
+  yes?: boolean;
+  eval?: string[];
+}
+
+/** What is wrong with the flags together, if anything. */
+function flagProblem(values: ConsoleFlags): string | undefined {
+  if (values.history && values["no-history"]) return "Use --history or --no-history, not both";
+  if (values.yes && !values.remote) return "--yes only goes with --remote";
+  const code = values.eval ?? [];
+  if (code.length > 1) return "Use -e once; join statements with ;";
+  if (code[0]?.trim() === "") return "-e needs some code to run";
+  return undefined;
+}
+
+/** The console's options from its parsed flags. */
+function consoleChoices(values: ConsoleFlags): ConsoleOptions {
+  const { database, models, config, verbose, remote, yes } = values;
+  const history = values["no-history"] ? false : values.history || undefined;
+  return { database, models, config, history, verbose, remote, yes, eval: values.eval?.[0] };
+}
+
+/** `d1-record console`: opens the project's database (local, or remote) and its Models in a REPL. */
 function openConsole(
   argv: readonly string[],
   print: (line: string) => void,
@@ -120,12 +152,9 @@ function openConsole(
   const args = argsOf(argv, consoleOptions);
   if (typeof args === "string") return usage(print, args);
   if (args.positionals.length > 0) return usage(print, `Unexpected ${args.positionals[0]}`);
-  const { database, models, config, history, "no-history": noHistory, verbose } = args.values;
-  const { remote, yes } = args.values;
-  if (history && noHistory) return usage(print, "Use --history or --no-history, not both");
-  if (yes && !remote) return usage(print, "--yes only goes with --remote");
-  const keep = noHistory ? false : history || undefined;
-  return runConsole({ database, models, config, history: keep, verbose, remote, yes }, print);
+  const problem = flagProblem(args.values);
+  if (problem !== undefined) return usage(print, problem);
+  return runConsole(consoleChoices(args.values), print);
 }
 
 /** Prints the usage, after what went wrong; 1. */

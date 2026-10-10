@@ -25,10 +25,11 @@ export async function runScript({
   scope,
   commands,
   withDatabase,
-  colors = false,
+  colors = { result: false, error: false },
 }: {
   code: string;
-  colors?: boolean;
+  /** Whether the result, and a failure, are colored: each goes to a stream of its own. */
+  colors?: { result: boolean; error: boolean };
 } & Pick<SessionOptions, "scope" | "commands" | "withDatabase">): Promise<ScriptResult> {
   let last: LineOutcome | undefined;
   const session = startSession({
@@ -44,12 +45,16 @@ export async function runScript({
   });
   await session.closed;
   if (last?.ok === false) {
-    return { exitCode: 1, stdout: "", stderr: `${inspect(last.error, { colors })}\n` };
+    return {
+      exitCode: 1,
+      stdout: "",
+      stderr: `${inspect(last.error, { colors: colors.error })}\n`,
+    };
   }
   const value = last?.value;
   return {
     exitCode: 0,
-    stdout: value === undefined ? "" : `${shown(value, colors)}\n`,
+    stdout: value === undefined ? "" : `${shown(value, colors.result)}\n`,
     stderr: "",
   };
 }

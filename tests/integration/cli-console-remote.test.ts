@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { PassThrough } from "node:stream";
 import { describe, expect, test } from "vite-plus/test";
 import { runConsole, standardIo } from "../../cli/console/command.ts";
 import { main } from "../../cli/main.ts";
@@ -225,6 +226,66 @@ describe("the local console's prompt", () => {
     expect(terminal.transcript()).toContain("\nlocal> ");
     terminal.input.end();
     await done;
+  }, 90_000);
+});
+
+// `-e` with `--remote` (#105): the same consent as a session, with the result alone on stdout.
+describe("d1-record console -e --remote", () => {
+  /** A script's streams: what it wrote to each, and a terminal flag for the confirmation. */
+  function streams(terminal: boolean) {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const error = new PassThrough();
+    const seen = { stdout: "", stderr: "" };
+    output.on("data", (chunk: Buffer) => (seen.stdout += chunk.toString()));
+    error.on("data", (chunk: Buffer) => (seen.stderr += chunk.toString()));
+    return { io: { input, output, error, terminal }, seen };
+  }
+
+  test("is refused without --yes when stdout is not a terminal, as $(…) makes it", async () => {
+    const { cwd, asked } = await remoteShop();
+    const { io, seen } = streams(false);
+
+    const code = await runConsole({ cwd, remote: true, eval: "1 + 1" }, () => {}, io);
+
+    expect(code).toBe(1);
+    expect(seen.stdout).toBe("");
+    expect(seen.stderr).toBe(
+      "Opening a remote database asks you to confirm it: run this on a terminal, or add --yes\n",
+    );
+    expect(asked()).toEqual([]);
+  }, 90_000);
+
+  test("with --yes prints the result alone on stdout, and names the database on stderr", async () => {
+    const { cwd, asked } = await remoteShop();
+    const { io, seen } = streams(false);
+
+    const code = await runConsole(
+      { cwd, remote: true, yes: true, eval: "(await User.find(1)).name" },
+      () => {},
+      io,
+    );
+
+    expect(code).toBe(0);
+    expect(seen.stdout).toBe("Alice\n");
+    expect(seen.stderr).toBe("Remote database DB (shop, id local-shop)\nModels: User\n");
+    expect(asked()).toEqual([{ remoteBindings: true, persist: false }]);
+  }, 90_000);
+
+  test("on a terminal asks on stderr, so stdout still holds only the result", async () => {
+    const { cwd } = await remoteShop();
+    const { io, seen } = streams(true);
+
+    const running = runConsole(
+      { cwd, remote: true, eval: "(await User.find(1)).name" },
+      () => {},
+      io,
+    );
+    await waitFor(() => seen.stderr.includes("Type its name to continue"));
+    io.input.write("shop\n");
+
+    expect(await running).toBe(0);
+    expect(seen.stdout).toBe("Alice\n");
   }, 90_000);
 });
 
