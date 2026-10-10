@@ -32,6 +32,11 @@ export function remoteTarget({ binding, entry }: ChosenDatabase): RemoteTarget {
   };
 }
 
+/** "Remote database DB (shop, id 1a2b)": what a remote binding is, for a person to read. */
+export function remoteDescription(binding: string, { name, id, preview }: RemoteTarget): string {
+  return `Remote ${preview ? "preview database" : "database"} ${binding} (${name}, id ${id})`;
+}
+
 /** The database for `--database` (and `--config`), or why there isn't one to open. */
 export function databaseFor(
   cwd: string,
