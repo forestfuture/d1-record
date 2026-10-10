@@ -1,3 +1,5 @@
+import { writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import container from "markdown-it-container";
 import { defineConfig } from "vitepress";
 import { examples, site } from "./examples.ts";
@@ -9,7 +11,15 @@ const base = "/d1-record/";
 export default defineConfig({
   // Examples are expanded with their imports first, so the llms plugin reads them expanded too.
   vite: { plugins: [examples(site), llms()] },
-  buildEnd: ({ outDir }) => tidyLlmsTxt(outDir),
+  buildEnd: ({ outDir }) => {
+    tidyLlmsTxt(outDir);
+    // The Worker's assets root is outDir's parent, so this is served at docs.forestfuture.dev/robots.txt
+    // (a second route in wrangler.jsonc). Crawlers only read robots.txt from a host's root.
+    writeFileSync(
+      join(dirname(outDir), "robots.txt"),
+      `User-agent: *\nAllow: /\n\nSitemap: https://docs.forestfuture.dev${base}sitemap.xml\n`,
+    );
+  },
   title: "d1-record",
   description: "A Rails-inspired Active Record for Cloudflare Workers and D1.",
   // Served at docs.forestfuture.dev/d1-record: built into dist/d1-record so the Worker's
