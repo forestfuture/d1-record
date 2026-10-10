@@ -1,6 +1,6 @@
 // Loads (and reloads) a project's TypeScript Models and its own copy of the library for the console (#104).
 import { existsSync, readdirSync, statSync } from "node:fs";
-import { join, resolve, sep } from "node:path";
+import { join, resolve } from "node:path";
 import { createJiti } from "jiti";
 import { defaultModels, oneModelsFile, shown } from "../schema/project.ts";
 import type { StatementEvent } from "./verbose.ts";
@@ -41,17 +41,32 @@ function modelFiles(cwd: string, models: string): string[] | string {
 
 type Jiti = ReturnType<typeof createJiti>;
 
-/** The project's own `@forestfuture/d1-record`, or why it can't be loaded. */
-async function loadLibrary(jiti: Jiti): Promise<Library | string> {
+const libraryName = "@forestfuture/d1-record";
+
+/** Whether `error` is the loader failing to find `name` itself, not something it imports. */
+function isMissing(error: unknown, name: string): boolean {
+  const { code, message } = error as { code?: unknown; message?: unknown };
+  return (
+    (code === "MODULE_NOT_FOUND" || code === "ERR_MODULE_NOT_FOUND") &&
+    String(message).startsWith(`Cannot find module '${name}'`)
+  );
+}
+
+/**
+ * The project's own `@forestfuture/d1-record`, or why it can't be loaded. It is imported from a
+ * file in the project, as its Models import it, because only imports made inside a file follow a
+ * `tsconfig.json` path (a workspace link), and so the Models and the console get one copy.
+ */
+async function loadLibrary(cwd: string, jiti: Jiti): Promise<Library | string> {
   try {
-    jiti.esmResolve("@forestfuture/d1-record");
-  } catch {
-    return "@forestfuture/d1-record isn't installed here (install it, then run d1-record console again)";
-  }
-  try {
-    return await jiti.import<Library>("@forestfuture/d1-record");
+    const source = `export * from "${libraryName}";`;
+    const filename = join(cwd, "d1-record-console.ts");
+    return (await jiti.evalModule(source, { filename, async: true })) as Library;
   } catch (error) {
-    return `Couldn't load @forestfuture/d1-record: ${(error as Error).message}`;
+    if (isMissing(error, libraryName)) {
+      return `${libraryName} isn't installed here (install it, then run d1-record console again)`;
+    }
+    return `Couldn't load ${libraryName}: ${(error as Error).message}`;
   }
 }
 
@@ -96,11 +111,18 @@ async function modelsIn(
   return found;
 }
 
-/** Forgets the project's own modules, so they are read again. Dependencies stay as they are. */
-function forgetProjectFiles(cwd: string, jiti: Jiti): void {
-  const folder = `${resolve(cwd)}${sep}`;
+/** A path with forward slashes, to compare file names whatever the system's separator is. */
+const slashed = (path: string): string => path.replaceAll("\\", "/");
+
+/**
+ * Forgets the project's own modules, so they are read again. Its dependencies stay as they are,
+ * and so do `keep` (the library's files, which may sit under the project's folder).
+ */
+function forgetProjectFiles(cwd: string, jiti: Jiti, keep: ReadonlySet<string>): void {
+  const folder = `${slashed(resolve(cwd))}/`;
   for (const file of Object.keys(jiti.cache)) {
-    if (file.startsWith(folder) && !file.includes(`${sep}node_modules${sep}`)) {
+    const name = slashed(file);
+    if (name.startsWith(folder) && !name.includes("/node_modules/") && !keep.has(file)) {
       delete jiti.cache[file];
     }
   }
@@ -120,15 +142,17 @@ export async function loadProject(
   const files = modelFiles(cwd, models);
   if (typeof files === "string") return files;
   const jiti = createJiti(`${cwd}/`, { tsconfigPaths: true, fsCache: false, moduleCache: true });
-  const library = await loadLibrary(jiti);
+  const loadedBefore = new Set(Object.keys(jiti.cache));
+  const library = await loadLibrary(cwd, jiti);
   if (typeof library === "string") return library;
+  const libraryFiles = new Set(Object.keys(jiti.cache).filter((file) => !loadedBefore.has(file)));
   const found = await modelsIn(cwd, models, jiti, library);
   if (typeof found === "string") return found;
   const project: ConsoleProject = {
     library,
     models: found,
     reload: async () => {
-      forgetProjectFiles(cwd, jiti);
+      forgetProjectFiles(cwd, jiti, libraryFiles);
       const again = await modelsIn(cwd, models, jiti, library);
       if (typeof again !== "string") project.models = again;
       return again;

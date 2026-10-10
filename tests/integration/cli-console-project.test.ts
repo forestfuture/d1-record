@@ -228,6 +228,41 @@ describe("loading a project's Models for the console", () => {
       },
     );
 
+    test("keeps the library even when it resolves to a file inside the project", async () => {
+      // Outside the repo, so only the project's own tsconfig paths can supply the library.
+      const cwd = project(
+        {
+          "tsconfig.json": JSON.stringify({
+            compilerOptions: {
+              baseUrl: ".",
+              paths: { "@forestfuture/d1-record": ["./vendor/library.ts"] },
+            },
+          }),
+          // A stand-in with what the console needs of the library, for a library that is a
+          // workspace link or a copy under the project's own folder.
+          "vendor/library.ts": `
+            export class Base {}
+            export const Model = { Base };
+            export const connect = () => ({});
+            export const withDatabase = async (_db: unknown, run: () => unknown) => run();
+          `,
+          "src/models/user.ts": `
+            import { Model } from "@forestfuture/d1-record";
+            export class User extends Model.Base {}
+          `,
+        },
+        true,
+      );
+      const first = await loadProject(cwd);
+      if (typeof first === "string") throw new Error(first);
+
+      const again = await first.reload();
+
+      if (typeof again === "string") throw new Error(again);
+      const User = again.User as { prototype: object };
+      expect(User.prototype instanceof first.library.Model.Base).toBe(true);
+    });
+
     test("keeps the library: a reloaded Model is still a Model of the same library", async () => {
       const { first } = await loaded();
 
