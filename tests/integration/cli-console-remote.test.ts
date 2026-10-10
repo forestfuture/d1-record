@@ -1,60 +1,15 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
 import { runConsole, standardIo } from "../../cli/console/command.ts";
 import { main } from "../../cli/main.ts";
 import { capturedStreams, terminalStreams, waitFor } from "../support/console.ts";
 import { scratchDirs } from "../support/scratch.ts";
-import { shop } from "../support/shop.ts";
+import { remoteProject } from "../support/shop.ts";
 
 const scratch = scratchDirs();
 
-/**
- * A project whose own `wrangler` is the repo's, except that every `getPlatformProxy` is logged
- * and answered from the project's local database: a stand-in for Cloudflare, so a "remote"
- * session can be driven without an account. Returns the folder and what wrangler was asked.
- */
-async function remoteShop(entry?: Record<string, unknown>) {
-  const cwd = await shop(scratch);
-  if (entry !== undefined)
-    writeFileSync(join(cwd, "wrangler.jsonc"), JSON.stringify({ d1_databases: [entry] }));
-  const real = import.meta.resolve("wrangler");
-  const log = join(cwd, "wrangler-calls.jsonl");
-  mkdirSync(join(cwd, "node_modules/wrangler"), { recursive: true });
-  writeFileSync(
-    join(cwd, "node_modules/wrangler/package.json"),
-    '{ "name": "wrangler", "type": "module", "exports": "./index.js" }',
-  );
-  writeFileSync(
-    join(cwd, "node_modules/wrangler/index.js"),
-    `import { appendFileSync, existsSync } from "node:fs";
-     import { getPlatformProxy as real } from ${JSON.stringify(real)};
-     export async function getPlatformProxy(options) {
-       const { remoteBindings, persist } = options;
-       appendFileSync(${JSON.stringify(log)}, JSON.stringify({ remoteBindings, persist }) + "\\n");
-       const proxy = await real({
-         ...options,
-         remoteBindings: false,
-         persist: { path: ${JSON.stringify(join(cwd, ".wrangler/state/v3"))} },
-       });
-       return {
-         ...proxy,
-         dispose: async () => {
-           await proxy.dispose();
-           if (existsSync(${JSON.stringify(join(cwd, "wont-stop"))})) throw new Error("proxy would not stop");
-         },
-       };
-     }`,
-  );
-  const asked = () =>
-    existsSync(log)
-      ? readFileSync(log, "utf8")
-          .trim()
-          .split("\n")
-          .map((line) => JSON.parse(line) as object)
-      : [];
-  return { cwd, asked };
-}
+const remoteShop = (entry?: Record<string, unknown>) => remoteProject(scratch, entry);
 
 /** A console on a terminal that has been asked for its first line, with what it printed. */
 function onATerminal() {

@@ -1,7 +1,7 @@
 // A project for the console's tests: a users table in its local D1, a User Model, and a Wrangler
 // config. Inside the repo, it finds this repo's wrangler, and its tsconfig finds the library's
 // source, as an app's finds its own copies.
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { openLocalBinding } from "../../cli/console/binding.ts";
 import type { ChosenDatabase } from "../../cli/console/database.ts";
@@ -47,4 +47,54 @@ export async function shop(scratch: (prefix: string) => string): Promise<string>
   await db.exec("INSERT INTO users (id, name, email) VALUES (1, 'Alice', 'alice@example.com')");
   await opened.dispose();
   return cwd;
+}
+
+/**
+ * A project whose own `wrangler` is the repo's, except that every `getPlatformProxy` is logged
+ * and answered from the project's local database: a stand-in for Cloudflare, so a "remote"
+ * session can be driven without an account. Returns the folder and what wrangler was asked.
+ */
+export async function remoteProject(
+  scratch: (prefix: string) => string,
+  entry?: Record<string, unknown>,
+) {
+  const cwd = await shop(scratch);
+  if (entry !== undefined)
+    writeFileSync(join(cwd, "wrangler.jsonc"), JSON.stringify({ d1_databases: [entry] }));
+  const real = import.meta.resolve("wrangler");
+  const log = join(cwd, "wrangler-calls.jsonl");
+  mkdirSync(join(cwd, "node_modules/wrangler"), { recursive: true });
+  writeFileSync(
+    join(cwd, "node_modules/wrangler/package.json"),
+    '{ "name": "wrangler", "type": "module", "exports": "./index.js" }',
+  );
+  writeFileSync(
+    join(cwd, "node_modules/wrangler/index.js"),
+    `import { appendFileSync, existsSync } from "node:fs";
+     import { getPlatformProxy as real } from ${JSON.stringify(real)};
+     export async function getPlatformProxy(options) {
+       const { remoteBindings, persist } = options;
+       appendFileSync(${JSON.stringify(log)}, JSON.stringify({ remoteBindings, persist }) + "\\n");
+       const proxy = await real({
+         ...options,
+         remoteBindings: false,
+         persist: { path: ${JSON.stringify(join(cwd, ".wrangler/state/v3"))} },
+       });
+       return {
+         ...proxy,
+         dispose: async () => {
+           await proxy.dispose();
+           if (existsSync(${JSON.stringify(join(cwd, "wont-stop"))})) throw new Error("proxy would not stop");
+         },
+       };
+     }`,
+  );
+  const asked = () =>
+    existsSync(log)
+      ? readFileSync(log, "utf8")
+          .trim()
+          .split("\n")
+          .map((line) => JSON.parse(line) as object)
+      : [];
+  return { cwd, asked };
 }
