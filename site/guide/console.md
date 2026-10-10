@@ -49,7 +49,11 @@ Reloaded: Post, User
 
 `.reload` does the same. A Model you added appears, and one whose file you removed goes. Records and values you already hold keep their old class, so run the lines that made them again.
 
-If a file fails to load, say a syntax error in the middle of an edit, the console names the file and keeps the Models you had. Only files in your project’s folder are read again. Your database connection and `@forestfuture/d1-record` stay as they are.
+If a file fails to load, say a syntax error in the middle of an edit, the console names the file and keeps the Models you had.
+
+::: warning TIP
+Only files in your project’s folder are read again. Your database connection and `@forestfuture/d1-record` stay as they are.
+:::
 
 ## Seeing the SQL
 
@@ -65,7 +69,9 @@ SQL logging on
 
 Each line shows the Model, the time, the SQL, and the values it bound. Filtered attributes show as `[FILTERED]`, as they do in `onQuery`. A statement that fails prints `failed` and the reason in place of the time. `verbose!` toggles it too, and `.verbose on` and `.verbose off` set it explicitly.
 
-It uses the database’s own `onQuery`, so a listener you set on your base class still runs as well.
+::: warning TIP
+The SQL comes from the database’s own `onQuery`, so a listener you set on your base class still runs as well.
+:::
 
 ## Choosing what to open
 

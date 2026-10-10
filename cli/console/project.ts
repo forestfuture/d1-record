@@ -116,8 +116,9 @@ export async function loadProject(
   cwd: string,
   models = defaultModels,
 ): Promise<ConsoleProject | string> {
-  const folder = modelFiles(cwd, models);
-  if (typeof folder === "string") return folder;
+  // A missing models folder is reported before a missing library, as it always has been.
+  const files = modelFiles(cwd, models);
+  if (typeof files === "string") return files;
   const jiti = createJiti(`${cwd}/`, { tsconfigPaths: true, fsCache: false, moduleCache: true });
   const library = await loadLibrary(jiti);
   if (typeof library === "string") return library;

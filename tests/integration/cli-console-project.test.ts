@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
 import { loadProject } from "../../cli/console/project.ts";
@@ -203,6 +203,30 @@ describe("loading a project's Models for the console", () => {
       if (typeof again === "string") throw new Error(again);
       expect(Object.keys(again)).toEqual(["Post"]);
     });
+
+    test.skipIf(process.platform === "win32")(
+      "picks up an edit when the project's folder is reached through a symlink",
+      async () => {
+        const { cwd } = await loaded();
+        const link = `${cwd}-link`;
+        symlinkSync(cwd, link);
+        const first = await loadProject(link);
+        if (typeof first === "string") throw new Error(first);
+        writeFileSync(
+          join(cwd, "src/models/user.ts"),
+          `
+            import { ApplicationRecord } from "./application-record";
+            export class User extends ApplicationRecord("users") { static edited = true; }
+          `,
+        );
+
+        const again = await first.reload();
+        rmSync(link);
+
+        if (typeof again === "string") throw new Error(again);
+        expect((again.User as unknown as { edited: boolean }).edited).toBe(true);
+      },
+    );
 
     test("keeps the library: a reloaded Model is still a Model of the same library", async () => {
       const { first } = await loaded();
