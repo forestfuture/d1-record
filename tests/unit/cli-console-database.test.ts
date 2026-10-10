@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vite-plus/test";
-import { databaseFor } from "../../cli/console/database.ts";
+import { databaseFor, remoteTarget } from "../../cli/console/database.ts";
 
 const made: string[] = [];
 afterAll(() => {
@@ -47,6 +47,31 @@ describe("the database the console opens", () => {
     );
   });
 
+  test("carries the config's account_id, which the temporary config would otherwise lose", () => {
+    const cwd = project("DB");
+    writeFileSync(
+      join(cwd, "wrangler.jsonc"),
+      JSON.stringify({ account_id: "acct-1", d1_databases: [{ binding: "DB" }] }),
+    );
+
+    expect(databaseFor(cwd, {})).toMatchObject({ accountId: "acct-1" });
+  });
+
+  test("has no account id when the config names none", () => {
+    expect(databaseFor(project("DB"), {})).not.toHaveProperty("accountId");
+  });
+
+  test("reads account_id from a TOML config", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "console-db-"));
+    made.push(cwd);
+    writeFileSync(
+      join(cwd, "wrangler.toml"),
+      'name = "shop"\naccount_id = "acct-2"\n\n[[d1_databases]]\nbinding = "DB"\n',
+    );
+
+    expect(databaseFor(cwd, {})).toMatchObject({ accountId: "acct-2" });
+  });
+
   test("no config says so", () => {
     const cwd = mkdtempSync(join(tmpdir(), "console-db-"));
     made.push(cwd);
@@ -54,5 +79,45 @@ describe("the database the console opens", () => {
     expect(databaseFor(cwd, {})).toBe(
       "No wrangler.jsonc, wrangler.json or wrangler.toml here (pass --config)",
     );
+  });
+});
+
+// What `--remote` would open, which it names before asking and before any sign-in.
+describe("the remote database a binding points at", () => {
+  const configFile = "/project/wrangler.jsonc";
+
+  test("is its database_id, named by its database_name", () => {
+    const entry = { binding: "DB", database_name: "shop", database_id: "1a2b" };
+
+    expect(remoteTarget({ binding: "DB", entry, configFile })).toEqual({
+      name: "shop",
+      id: "1a2b",
+      preview: false,
+    });
+  });
+
+  test("is the preview_database_id when there is one, as Wrangler uses it", () => {
+    const entry = {
+      binding: "DB",
+      database_name: "shop",
+      database_id: "1a2b",
+      preview_database_id: "9z",
+    };
+
+    expect(remoteTarget({ binding: "DB", entry, configFile })).toEqual({
+      name: "shop",
+      id: "9z",
+      preview: true,
+    });
+  });
+
+  test("falls back to the binding for a name, and has no id when the config gives none", () => {
+    const entry = { binding: "DB" };
+
+    expect(remoteTarget({ binding: "DB", entry, configFile })).toEqual({
+      name: "DB",
+      id: undefined,
+      preview: false,
+    });
   });
 });

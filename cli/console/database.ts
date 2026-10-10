@@ -8,6 +8,28 @@ export interface ChosenDatabase {
   /** Its `d1_databases` entry, as the config has it. */
   entry: Record<string, unknown>;
   configFile: string;
+  /** The config's `account_id`, which a Wrangler config of the console's own would lose. */
+  accountId?: string;
+}
+
+/** What opening a binding remotely reaches: named for a person, before anything is opened. */
+export interface RemoteTarget {
+  /** Its `database_name`, or the binding when the config has none. */
+  name: string;
+  /** The id Wrangler opens: `preview_database_id` when there is one, as `wrangler dev` does. */
+  id: string | undefined;
+  preview: boolean;
+}
+
+/** The remote database this binding's entry points at. */
+export function remoteTarget({ binding, entry }: ChosenDatabase): RemoteTarget {
+  const text = (value: unknown) => (typeof value === "string" ? value : undefined);
+  const preview = text(entry.preview_database_id);
+  return {
+    name: text(entry.database_name) ?? binding,
+    id: preview ?? text(entry.database_id),
+    preview: preview !== undefined,
+  };
 }
 
 /** The database for `--database` (and `--config`), or why there isn't one to open. */
@@ -25,7 +47,8 @@ export function databaseFor(
         : undefined
       : config.databases.find((database) => database.binding === options.database);
   if (chosen !== undefined) {
-    return { binding: chosen.binding, entry: chosen.entry, configFile: config.file };
+    const found = { binding: chosen.binding, entry: chosen.entry, configFile: config.file };
+    return config.accountId === undefined ? found : { ...found, accountId: config.accountId };
   }
   return options.database === undefined
     ? `This config has several D1 databases; choose one with --database (${listed(bindings)})`

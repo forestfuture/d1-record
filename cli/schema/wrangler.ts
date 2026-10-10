@@ -17,7 +17,7 @@ export interface DatabaseConfig {
 }
 
 export type ConfigResult =
-  | { ok: true; file: string; dir: string; databases: DatabaseConfig[] }
+  | { ok: true; file: string; dir: string; databases: DatabaseConfig[]; accountId?: string }
   | { ok: false; error: string };
 
 const candidates = ["wrangler.jsonc", "wrangler.json", "wrangler.toml"];
@@ -60,26 +60,34 @@ function basicString(body: string): string {
   ) as string;
 }
 
-/** The `[[d1_databases]]` entries of a wrangler.toml: only the keys this command reads. */
-function parseToml(text: string): { d1_databases: Record<string, string>[] } {
+/** A TOML line's `key = "string"` as `[key, value]`, or undefined for any other line. */
+function tomlPair(line: string): [string, string] | undefined {
+  const pair = /^([\w-]+)\s*=\s*(?:"((?:[^"\\]|\\.)*)"|'([^']*)')/.exec(line);
+  if (pair === null) return undefined;
+  return [pair[1]!, pair[2] === undefined ? pair[3]! : basicString(pair[2])];
+}
+
+/** The `[[d1_databases]]` entries and top-level `account_id` of a wrangler.toml: the keys read. */
+function parseToml(text: string): { d1_databases: Record<string, string>[]; account_id?: string } {
   const databases: Record<string, string>[] = [];
-  let current: Record<string, string> | undefined;
+  const topLevel: Record<string, string> = {};
+  let current: Record<string, string> | undefined = topLevel;
   for (const line of text.split("\n").map((each) => each.trim())) {
     if (line.startsWith("[")) {
       current = /^\[\[\s*d1_databases\s*\]\](\s*#.*)?$/.test(line) ? {} : undefined;
       if (current !== undefined) databases.push(current);
       continue;
     }
-    const pair = /^([\w-]+)\s*=\s*(?:"((?:[^"\\]|\\.)*)"|'([^']*)')/.exec(line);
-    if (current !== undefined && pair !== null) {
-      current[pair[1]!] = pair[2] === undefined ? pair[3]! : basicString(pair[2]);
-    }
+    const pair = tomlPair(line);
+    if (current !== undefined && pair !== undefined) current[pair[0]] = pair[1];
   }
-  return { d1_databases: databases };
+  return { d1_databases: databases, account_id: topLevel.account_id };
 }
 
 /** The parsed config file, or why it couldn't be read. */
-function parsed(file: string): { d1_databases?: Record<string, unknown>[] } | string {
+function parsed(
+  file: string,
+): { d1_databases?: Record<string, unknown>[]; account_id?: unknown } | string {
   const text = readFileSync(file, "utf8");
   try {
     return file.endsWith(".toml") ? parseToml(text) : (parseJsonc(text) as object);
@@ -124,5 +132,6 @@ export function readWranglerConfig(cwd: string, configPath?: string): ConfigResu
   if (entries.some((entry) => typeof entry.binding !== "string")) {
     return { ok: false, error: `${basename(file)} has a d1_databases entry with no binding` };
   }
-  return { ok: true, file, dir: dirname(file), databases: entries.map(databaseOf) };
+  const found = { ok: true, file, dir: dirname(file), databases: entries.map(databaseOf) } as const;
+  return typeof config.account_id === "string" ? { ...found, accountId: config.account_id } : found;
 }

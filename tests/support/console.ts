@@ -41,7 +41,7 @@ export function terminalStreams() {
       printed = "";
       input.write(`${line}\n`);
       await ready();
-      return printed.replace(/> $/, "").trim();
+      return printed.replace(/(?:^|\n)(?:local|remote)?> $/, "").trim();
     },
   };
 }
