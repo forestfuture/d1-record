@@ -75,16 +75,17 @@ The SQL comes from the database’s own `onQuery`, so a listener you set on your
 
 ## Choosing what to open
 
-| Option              |                                                                                            |
-| ------------------- | ------------------------------------------------------------------------------------------ |
-| `--database <name>` | The D1 binding to open, when your Wrangler config has several.                             |
-| `--models <path>`   | Where your Models are: a folder (`src/models` by default) or one file (`src/models.ts`).   |
-| `--config <file>`   | Use this Wrangler config instead of finding `wrangler.jsonc`, `wrangler.json`, or `.toml`. |
-| `--no-history`      | Don’t keep what you type in the history file.                                              |
-| `--verbose`         | Print each statement a line runs, to begin with. `.verbose` turns it on and off.           |
-| `--remote`          | Open your remote database instead, after you type its name. See below.                     |
-| `--yes`             | With `--remote`, don’t ask first. It’s also how to open it without a terminal.             |
-| `--history`         | Keep what you type in a remote session, which isn’t kept unless you ask.                   |
+| Option              |                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------ |
+| `--database <name>` | The D1 binding to open, when your Wrangler config has several.                                         |
+| `--models <path>`   | Where your Models are: a folder (`src/models` by default) or one file (`src/models.ts`).               |
+| `--config <file>`   | Use this Wrangler config instead of finding `wrangler.jsonc`, `wrangler.json`, or `.toml`.             |
+| `--no-history`      | Don’t keep what you type in the history file.                                                          |
+| `--verbose`         | Print each statement a line runs, to begin with. `.verbose` turns it on and off.                       |
+| `-e, --eval <code>` | Run this code, print its result and exit. See [Running one piece of code](#running-one-piece-of-code). |
+| `--remote`          | Open your remote database instead, after you type its name. See below.                                 |
+| `--yes`             | With `--remote`, don’t ask first. It’s also how to open it without a terminal.                         |
+| `--history`         | Keep what you type in a remote session, which isn’t kept unless you ask.                               |
 
 ## Where your data lives
 
@@ -144,6 +145,28 @@ The binding needs a `database_id`. If it also has a `preview_database_id`, Wrang
 A token needs **D1: Edit** and **Workers Scripts: Edit**, and the account needs a `workers.dev` subdomain, as `wrangler dev` needs for a remote binding.
 :::
 
+## Running one piece of code
+
+`-e` runs one piece of code with your Models and `db` in scope, prints its result and exits, which is how to use the console from a script:
+
+```sh
+npx d1-record console -e 'await User.count()'
+```
+
+```text
+42
+```
+
+- **The result alone is on stdout.** A string prints as it is, without quotes, so `$(…)` captures it, and anything else prints as the console prints it, without `#=> `. `undefined` prints nothing.
+- **Everything else is on stderr:** which database and Models it opened, the SQL with `--verbose`, and a refusal to start.
+- **A failure exits 1.** Its stack goes to stderr, nothing goes to stdout, and no statement after it runs. Success exits 0.
+- **Join statements with `;`.** The last value is the result: `-e 'await User.create({ name: "Dan" }); await User.count()'`.
+- **It keeps no history,** and ignores what is piped to it.
+
+::: warning TIP
+Put the code in single quotes, so your shell leaves `$`, `!` and backticks alone. With `--remote`, `$(…)` makes stdout a pipe, so there is no terminal to ask: add `--yes`, as in `npx d1-record console --remote --yes -e 'await User.count()'`.
+:::
+
 ## Running a few lines at once
 
 Lines you paste or pipe run in order, each after the one before, and the console finishes them before it exits:
@@ -151,6 +174,8 @@ Lines you paste or pipe run in order, each after the one before, and the console
 ```sh
 echo 'await User.count()' | npx d1-record console
 ```
+
+That prints the same transcript a session does (the database, a prompt before each line, `#=> ` before each result) and exits 0 even when a line fails. For a script that checks the result or the exit code, use `-e`.
 
 ::: warning TIP
 The console reads your TypeScript Models directly, including extensionless imports and `tsconfig.json` paths, so it works in TypeScript projects. It needs Node.js 22.13 or later, and `wrangler` and `@forestfuture/d1-record` installed in your project. It uses your copies, so your Models and the console share one library.
@@ -161,7 +186,7 @@ The console runs your project’s code: your Models, and the `wrangler` and `@fo
 :::
 
 ::: rails Compared with Rails
-This is `rails console` for D1: your Models in scope, and records printed as `inspect` prints them.
+This is `rails console` for D1: your Models in scope, and records printed as `inspect` prints them. `-e` is `rails runner` with the last value printed, which `rails runner` leaves to you.
 :::
 
 ::: rails Beyond Rails
