@@ -5,6 +5,7 @@ import { openLocalBinding } from "./binding.ts";
 import { databaseFor } from "./database.ts";
 import { loadProject } from "./project.ts";
 import { startSession } from "./session.ts";
+import { statementLine } from "./verbose.ts";
 
 export interface ConsoleOptions {
   /** The project's folder; the current one by default. */
@@ -17,6 +18,8 @@ export interface ConsoleOptions {
   models?: string;
   /** Keep what is typed on a terminal in the history file; on unless `false`. */
   history?: boolean;
+  /** Print each statement as it runs, to begin with; `.verbose` turns it on and off. */
+  verbose?: boolean;
 }
 
 /** The two ends of the console, and whether they are a terminal (colors, line editing, history). */
@@ -57,7 +60,12 @@ export async function runConsole(
   if (typeof opened === "string") return refused(print, opened);
   try {
     const { library, models } = project;
-    const database = library.connect(opened.binding);
+    let verbose = options.verbose === true;
+    const database = library.connect(opened.binding, {
+      onQuery: (event) => {
+        if (verbose) io.output.write(`${statementLine(event, io.terminal === true)}\n`);
+      },
+    });
     print(opened.description);
     print(`Models: ${Object.keys(models).join(", ")}`);
     let modelNames = Object.keys(models);
@@ -65,6 +73,14 @@ export async function runConsole(
       ...io,
       scope: { ...models, db: database },
       commands: {
+        verbose: {
+          help: "Show the SQL each line runs: .verbose, .verbose on, or .verbose off",
+          run: (argument) => {
+            const word = argument.trim();
+            verbose = word === "on" ? true : word === "off" ? false : !verbose;
+            return `SQL logging ${verbose ? "on" : "off"}`;
+          },
+        },
         reload: {
           help: "Read your Models again, after editing them (also: reload!)",
           bang: true,

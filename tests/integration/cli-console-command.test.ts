@@ -259,4 +259,77 @@ describe("d1-record console", () => {
       await end();
     }, 90_000);
   });
+
+  describe("showing the SQL", () => {
+    /** A running console on a project, with these options. */
+    async function running(options: { verbose?: boolean } = {}) {
+      const cwd = await shop();
+      const terminal = terminalStreams();
+      const done = runConsole({ cwd, ...options }, () => {}, terminal);
+      await terminal.ready();
+      const send = (line: string) => terminal.send(line);
+      const end = () => {
+        terminal.input.end();
+        return done;
+      };
+      return { send, end };
+    }
+
+    test("--verbose prints each statement before the result, with its Model and time", async () => {
+      const { send, end } = await running({ verbose: true });
+
+      const printed = await send("await User.find(1)");
+
+      expect(printed).toMatch(
+        /^User +\d+\.\dms +SELECT \* FROM "users" WHERE .*\[ 1, 1 \]\n#=> User \{/,
+      );
+      await end();
+    }, 90_000);
+
+    test("it prints nothing extra without the flag", async () => {
+      const { send, end } = await running();
+
+      expect(await send("await User.find(1)")).toMatch(/^#=> User \{/);
+      await end();
+    }, 90_000);
+
+    test("a filtered value shows as [FILTERED], as in onQuery", async () => {
+      const { send, end } = await running({ verbose: true });
+
+      const printed = await send('await User.where({ email: "alice@example.com" }).toArray()');
+
+      expect(printed).toMatch(/^User +\d+\.\dms +SELECT .*\[ '\[FILTERED\]' \]\n/);
+      expect(printed).not.toContain("alice@example.com");
+      await end();
+    }, 90_000);
+
+    test("a statement that fails says so, with D1's reason", async () => {
+      const { send, end } = await running({ verbose: true });
+
+      const printed = await send(
+        'await User.create({ id: 1, name: "Dup", email: "d@example.com" })',
+      );
+
+      expect(printed).toMatch(/^User +failed +INSERT INTO "users"/);
+      await end();
+    }, 90_000);
+
+    test(".verbose turns it on and off while the console runs", async () => {
+      const { send, end } = await running();
+
+      expect(await send(".verbose")).toBe("SQL logging on");
+      expect(await send("await User.find(1)")).toMatch(/^User /);
+      expect(await send(".verbose off")).toBe("SQL logging off");
+      expect(await send("await User.find(1)")).toMatch(/^#=> User \{/);
+      expect(await send(".verbose on")).toBe("SQL logging on");
+      await end();
+    }, 90_000);
+
+    test(".verbose is in .help", async () => {
+      const { send, end } = await running();
+
+      expect(await send(".help")).toMatch(/\.verbose +Show the SQL/);
+      await end();
+    }, 90_000);
+  });
 });

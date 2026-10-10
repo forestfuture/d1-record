@@ -33,6 +33,7 @@ Options for console:
   --database <name>   The D1 binding to open, when the config has several
   --models <path>     Where the Models are: a folder (src/models) or one file (src/models.ts)
   --no-history        Don't keep what you type in .wrangler/d1-record-history
+  --verbose           Print each statement a line runs (.verbose toggles it while it runs)
 
 Options for every command:
   --config <file>     Use this Wrangler config
@@ -102,6 +103,7 @@ const consoleOptions = {
   database: { type: "string" },
   models: { type: "string" },
   "no-history": { type: "boolean" },
+  verbose: { type: "boolean" },
 } as const satisfies ParseArgsOptionsConfig;
 
 /** `d1-record console`: opens the local database and its Models in a REPL. */
@@ -112,8 +114,8 @@ function openConsole(
   const args = argsOf(argv, consoleOptions);
   if (typeof args === "string") return usage(print, args);
   if (args.positionals.length > 0) return usage(print, `Unexpected ${args.positionals[0]}`);
-  const { database, models, config, "no-history": noHistory } = args.values;
-  return runConsole({ database, models, config, history: !noHistory }, print);
+  const { database, models, config, "no-history": noHistory, verbose } = args.values;
+  return runConsole({ database, models, config, history: !noHistory, verbose }, print);
 }
 
 /** Prints the usage, after what went wrong; 1. */
