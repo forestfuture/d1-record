@@ -27,7 +27,7 @@ Follow the `tdd` skill, one vertical slice at a time:
 
 1. Write **one** failing test. Run it and confirm it fails for the expected reason (red). A red test that opens a console, a server or a process waits out its timeout, so run it with `--bail 1 --test-timeout 20000` and raise the timeout only once it is green.
 2. Write the least code that makes it pass (green).
-3. Run `vp check --fix` (format, lint, types, complexity limits) and `vp test`. Without `--fix`, a formatting error hides the lint errors, and the pre-commit hook then rejects the commit. `src/relation.ts` and `src/model.ts` sit at the 500-line cap, so adding to either means moving code to another module in the same commit. When a slice passes, **commit it** to `main` (repo convention), with a message saying what behavior was added (see [Commit messages](#commit-messages)).
+3. Run `vp check --fix` (format, lint, types, complexity limits) and `vp test`. Without `--fix`, a formatting error hides the lint errors, and the pre-commit hook then rejects the commit. `src/relation.ts` and `src/model.ts` sit at the 500-line cap, so adding to either means moving code to another module in the same commit. When a slice passes, **commit it** on the issue's branch, named `<issue>-<slug>` (`main` takes pull requests only), with a message saying what behavior was added (see [Commit messages](#commit-messages)).
 
 ### Commit messages
 
@@ -57,20 +57,20 @@ Rules that matter here:
 
 ## 4. Review
 
-Run the `code-review` skill, with the commit before the issue's work as the fixed point and the issue as the spec. The standards sources are `CONTRIBUTING.md`, `CODING_STANDARDS.md` and [docs-voice.md](docs-voice.md). Commits for other issues often sit inside the range (everything goes to `main`), so give both reviewers the issue's own commits (`git log --grep='(#N)'`) and tell them to ignore the rest. Present the Standards and Spec reports to the human, with a proposed fix for each finding. Fix what the human approves, each fix as its own red → green slice (or as a refactor, with tests staying green). Findings deferred on purpose go into issues or comments, not into silence.
+Run the `code-review` skill, with `main` (the branch's merge-base) as the fixed point and the issue as the spec. The standards sources are `CONTRIBUTING.md`, `CODING_STANDARDS.md` and [docs-voice.md](docs-voice.md). Commits from before the pull-request flow sit inside older ranges, so for those, give both reviewers the issue's own commits (`git log --grep='(#N)'`) and tell them to ignore the rest. Present the Standards and Spec reports to the human, with a proposed fix for each finding. Fix what the human approves, each fix as its own red → green slice (or as a refactor, with tests staying green). Findings deferred on purpose go into issues or comments, not into silence.
 
 **Security.** When the change touches SQL compilation, attribute assignment or conversion, code generation or file writing in the CLI, or CI and release, also run the `differential-review` skill over the same range, and present its findings as a third report. Write its report file outside the repo. The whole library gets a `security-review` before each release that changes those areas; each one adds a dated entry to the guide's Security page.
 
 ## 5. Finish — ✋ human checkpoint
 
-- Full validation: `vp run validate` runs these in CI's order and prints one line per step (the failing step's output after it): `vp check`, `vp test`, `vp pack` (with attw and publint), `vp run check:public-types` (after `vp pack`: the published types expose no internals; mark internals `/** @internal */`), `vp run knip`, `vp run docs:build` (the site builds with no dead links), `vp run check:package`. After a push to `main`, CI deploys the site once the checks pass (the Cloudflare tokens it uses are in [cloudflare-tokens.md](cloudflare-tokens.md)).
-- **Never push without the human's approval.** Pushing over SSH may need the human to unlock their key. If a push fails with `agent refused operation`, ask them to run `git push` themselves.
-- After the push, wait for CI to pass (`gh run watch`), then close the issue with a summary comment: what was delivered, the decisions made (link any `deferred` issues), and what the review found and fixed.
-- When work goes through a pull request, write its body with the `pr` skill.
+- Full validation: `vp run validate` runs these in CI's order and prints one line per step (the failing step's output after it): `vp check`, `vp test`, `vp pack` (with attw and publint), `vp run check:public-types` (after `vp pack`: the published types expose no internals; mark internals `/** @internal */`), `vp run knip`, `vp run docs:build` (the site builds with no dead links), `vp run check:package`. After a merge to `main`, CI deploys the site once the checks pass (the Cloudflare tokens it uses are in [cloudflare-tokens.md](cloudflare-tokens.md)).
+- **Never push or merge without the human's approval.** Pushing over SSH may need the human to unlock their key. If a push fails with `agent refused operation`, ask them to run `git push` themselves.
+- Push the branch and open a pull request that says `Closes #<issue>`, with its body written by the `pr` skill. `main` allows a pull request only, merged by rebase once `check` passes.
+- After the merge, wait for CI on `main` to pass (`gh run watch`), then close the issue with a summary comment (if `Closes` didn't): what was delivered, the decisions made (link any `deferred` issues), and what the review found and fixed.
 - The human may then run `/retro` on the session. It suggests changes to the agent's environment (checks, standards, steering files), not to the code.
 
 ## Shortcuts
 
 The `implement` skill chains steps 3–4 (`tdd`, then `code-review`). This document adds the repo-specific parts around it: the checkpoints, the D1 seam, the contract, and closing the issue.
 
-For a parent issue with sub-issues, the human can run `/implement-spec` instead. It builds the sub-issues in parallel worktrees and merges them onto one integration branch. Agree the seams and open decisions for each sub-issue first (step 2), and treat merging the integration branch into `main` like a push: only with the human's approval.
+For a parent issue with sub-issues, the human can run `/implement-spec` instead. It builds the sub-issues in parallel worktrees and merges them onto one integration branch. Agree the seams and open decisions for each sub-issue first (step 2), and treat opening and merging the pull request from the integration branch like a push: only with the human's approval.
