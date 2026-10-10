@@ -6,6 +6,8 @@ It connects through Wrangler's remote bindings (`getPlatformProxy` with a `remot
 
 Without the three environment variables below the suite is skipped, so `vp test` stays local.
 
+**Agents ask first.** Having the variables set in the shell is not permission: the suite reaches a real Cloudflare account, so an agent asks the human before running `vp test --project remote` (or `vp run test:remote`), and says what it ran afterwards.
+
 ## One-time setup (a human)
 
 1. **A dedicated test database**, used for nothing else:

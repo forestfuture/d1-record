@@ -31,6 +31,7 @@ The rules that matter most:
 - **Every public behavior has a test**, through the public API, and integration tests prove it against D1 (there's no fake database).
 - **Library code runs on Cloudflare Workers.** `src/` uses no Node APIs, and is type-checked against `@cloudflare/workers-types` only.
 - **Size limits mean splitting code.** `vp check` enforces complexity, function-length, and module-length limits; split code that hits them rather than raising them.
+- **Examples are neutral.** Tests, comments, docs, commit messages and changesets use neutral names (`User`, `Post`, `Product`). Nothing in them comes from a project you tried d1-record in.
 - **Rails is the precedent.** When a behavior is open, d1-record does what Rails' Active Record does, unless D1 or TypeScript gets in the way.
 
 The pre-commit hook runs `vp check --fix` on the staged files, and the commit-msg hook checks the title's length. Run `vp test` yourself before pushing.

@@ -16,7 +16,7 @@ Before writing any test, propose to the human, in one message:
 
 - **The seams under test** (see the `tdd` skill). The default for this repo is the **public API against a real Miniflare D1**. Observe queries only through the public `onQuery` hook. There's no fake executor (ADR-0002). Type tests go in `tests/unit/`. To write an integration test, copy the setup in `tests/integration/to-sql.test.ts`: `createTestDatabase` from `tests/support/d1.ts`, an `onQuery` events array, and `order({ email: "asc" })` / `where({ ... })` taking objects (plain strings throw).
 - **The build order**: the list of red → green slices you'll work through.
-- **The docs outline**: invoke the `documentation-writer` skill for each guide page or section the change touches, before this message. The message gives its four answers (Diátaxis type, audience, goal, scope) and an outline, so the human approves them with the seams.
+- **The docs outline**, for each guide page or section the change touches: its four answers (Diátaxis type, audience, goal, scope) and an outline, so the human approves them with the seams. The `documentation-writer` skill runs in step 3, when the copy is written.
 - **Open decisions**: anything the issue or contract leaves unsettled. Number each one, give a recommendation, and say why (the `grilling` skill's format). If a term is fuzzy or new, sharpen it with the `domain-modeling` skill: update `GLOSSARY.md`, and offer an ADR only for decisions that are hard to reverse, surprising, and a real trade-off.
 
 **Wait for the human's answers.** Postponed ideas become `deferred` issues, one per item, not notes in a comment.
@@ -25,13 +25,13 @@ Before writing any test, propose to the human, in one message:
 
 Follow the `tdd` skill, one vertical slice at a time:
 
-1. Write **one** failing test. Run it and confirm it fails for the expected reason (red).
+1. Write **one** failing test. Run it and confirm it fails for the expected reason (red). A red test that opens a console, a server or a process waits out its timeout, so run it with `--bail 1 --test-timeout 20000` and raise the timeout only once it is green.
 2. Write the least code that makes it pass (green).
 3. Run `vp check --fix` (format, lint, types, complexity limits) and `vp test`. Without `--fix`, a formatting error hides the lint errors, and the pre-commit hook then rejects the commit. `src/relation.ts` and `src/model.ts` sit at the 500-line cap, so adding to either means moving code to another module in the same commit. When a slice passes, **commit it** to `main` (repo convention), with a message saying what behavior was added (see [Commit messages](#commit-messages)).
 
 ### Commit messages
 
-- **Title**: aim for 50 characters (the `commit-msg` hook warns past 50 and rejects past 72; a few over is fine). Imperative, capitalized, no trailing period, no `feat:`-style prefixes. End with the issue number: `(#82)`.
+- **Title**: aim for 50 characters (the `commit-msg` hook warns past 60 and rejects past 72; a few over is fine). Imperative, capitalized, no trailing period, no `feat:`-style prefixes. End with the issue number: `(#82)`.
 - **Body**, after a blank line: what behavior changed and why, in a few short lines or bullets wrapped at 72. The detail goes here, not in the title.
 
 ```text
@@ -48,7 +48,9 @@ Rules that matter here:
 
 - Assert **results**, such as the records that come back. Assert SQL text only for safety properties (bound values, quoted identifiers). Assert query counts through `onQuery`.
 - A test that passes on first run is a **guard**, not a red. Say so.
+- Behavior that depends on a **terminal** (typing, a paste, Ctrl-C or Ctrl-D, colors, a prompt) is checked in a `tests/integration/*-pty.test.ts` through `tests/support/pty.ts`, which plays steps at a real pseudo-terminal. Piped streams can't show it: a paste reaches a process a line at a time, and typing triggers completion. Write one-off terminal scripts there instead of in a scratch folder.
 - If a size or complexity limit trips, split the code. Don't raise the limit.
+- When a change falsifies a claim ("local only", "never", "only", "alone"), grep the guide, README, help text, ADRs, glossary and changeset for that **stale claim** before the docs commit.
 - Update everything a public change touches, as listed in [CONTRIBUTING.md](../../CONTRIBUTING.md#what-a-public-change-touches): the contract, glossary, guide page, exports, `SKILL.md`, README, changeset, and any ADR. If you implement something differently from the contract, update it and tell the human. While on 0.x, a changeset for a breaking change is `minor` and anything else is `patch` (`vp exec changeset`, see `docs/agents/releasing.md`).
 - Guide copy (`site/guide/`), new or changed: run the `documentation-writer` skill before writing any of it, working to the outline agreed in step 2 (that approval stands; the skill needn't ask again). Write its sentences in the guide's voice ([docs-voice.md](docs-voice.md)). Its larger examples live in `site/snippets/`, where `vp check` type-checks them against the library, and each is shown with the imports its code uses (`site/.vitepress/examples.ts`; an inline example must import what it uses from the package); they also run against D1 in `tests/integration/site-examples.test.ts`, on their own schemas (`site/snippets/**/*.sql`).
 - Scope changes (pulling work in from another issue, or pushing it out) get a comment on both issues.
@@ -61,7 +63,7 @@ Run the `code-review` skill, with the commit before the issue's work as the fixe
 
 ## 5. Finish — ✋ human checkpoint
 
-- Full validation: `vp check`, `vp test`, `vp pack` (with attw and publint), `vp run check:public-types` (after `vp pack`: the published types expose no internals; mark internals `/** @internal */`), `vp run knip`, `vp run docs:build` (the site builds with no dead links). After a push to `main`, CI deploys the site once the checks pass (the Cloudflare tokens it uses are in [cloudflare-tokens.md](cloudflare-tokens.md)).
+- Full validation: `vp run validate` runs these in CI's order and prints one line per step (the failing step's output after it): `vp check`, `vp test`, `vp pack` (with attw and publint), `vp run check:public-types` (after `vp pack`: the published types expose no internals; mark internals `/** @internal */`), `vp run knip`, `vp run docs:build` (the site builds with no dead links), `vp run check:package`. After a push to `main`, CI deploys the site once the checks pass (the Cloudflare tokens it uses are in [cloudflare-tokens.md](cloudflare-tokens.md)).
 - **Never push without the human's approval.** Pushing over SSH may need the human to unlock their key. If a push fails with `agent refused operation`, ask them to run `git push` themselves.
 - After the push, wait for CI to pass (`gh run watch`), then close the issue with a summary comment: what was delivered, the decisions made (link any `deferred` issues), and what the review found and fixed.
 - When work goes through a pull request, write its body with the `pr` skill.

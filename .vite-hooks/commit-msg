@@ -1,4 +1,4 @@
-# Commit titles: aim for 50 characters, never more than 72.
+# Commit titles: aim for 50 characters, warn past 60, never more than 72.
 # See "Commit messages" in docs/agents/workflow.md.
 title=$(grep -v '^#' "$1" | sed -n '/[^[:space:]]/{p;q;}')
 length=${#title}
@@ -10,6 +10,6 @@ if [ "$length" -gt 72 ]; then
   exit 1
 fi
 
-if [ "$length" -gt 50 ]; then
+if [ "$length" -gt 60 ]; then
   echo "Warning: commit title is $length characters; aim for 50 or less."
 fi
