@@ -1,4 +1,5 @@
 // A console session: a REPL on any streams, with the project's Models and database in scope (#104).
+import { AsyncLocalStorage } from "node:async_hooks";
 import { inspect, types } from "node:util";
 import repl from "node:repl";
 import { PassThrough, type Readable, type Writable } from "node:stream";
@@ -61,6 +62,14 @@ function lineQueue() {
       command: (line: string) => Promise<void> | undefined,
     ): void {
       const evaluate = server.eval;
+      // While a line awaits, the REPL holds the next one back and then runs it from inside that
+      // line's async context, where the database is already registered. Wrapping it again would
+      // register it twice, which reads as "several databases": so a line already inside one isn't.
+      const wrapped = new AsyncLocalStorage<true>();
+      const inTheDatabase = (task: () => void): void => {
+        if (wrapped.getStore() === true) task();
+        else void withDatabase(() => wrapped.run(true, task));
+      };
       // A line is done when the REPL asks for the next: it doesn't call the eval callback for an
       // `await` that rejects, but it always shows the prompt again.
       const displayPrompt = server.displayPrompt.bind(server);
@@ -77,7 +86,7 @@ function lineQueue() {
         // function while a person types: those never end in a prompt, so they must not wait in
         // the queue (or hold it up), but they still run where Models find their database.
         if (!code.endsWith("\n")) {
-          void withDatabase(() => evaluate.call(server, code, context, file, callback));
+          inTheDatabase(() => evaluate.call(server, code, context, file, callback));
           return;
         }
         tail = tail.then(
@@ -96,7 +105,7 @@ function lineQueue() {
                 return done();
               }
               lineDone = done;
-              void withDatabase(() => evaluate.call(server, code, context, file, callback));
+              inTheDatabase(() => evaluate.call(server, code, context, file, callback));
             }),
         );
       };

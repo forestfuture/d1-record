@@ -222,4 +222,27 @@ describe("the console session", () => {
 
     expect(ran).toEqual([]);
   });
+
+  test("a line typed while an await is running runs against the database when it finishes", async () => {
+    const terminal = terminalStreams();
+    const session = startSession({
+      input: terminal.input,
+      output: terminal.output,
+      terminal: true,
+      scope: { Sample },
+      withDatabase: (run) => withDatabase(connect(binding), run),
+    });
+
+    terminal.input.write("await new Promise((resolve) => setTimeout(resolve, 400))\n");
+    // Typed once the first line is awaiting: the REPL holds it back, then runs it from inside
+    // the first line's async context.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    terminal.input.write("await Sample.find(1)\n");
+    await waitFor(() => /Sample \{|NoDatabase/.test(terminal.transcript()), 4);
+    terminal.input.end();
+
+    expect(terminal.transcript()).toContain("Sample {");
+    expect(terminal.transcript()).not.toContain("NoDatabase");
+    await session.closed;
+  });
 });
