@@ -45,17 +45,13 @@ These are done once, in this order.
 1. **Allow Actions to open pull requests.** In the `forestfuture` organization's settings, then in the repository's: Settings → Actions → General → Workflow permissions → **Allow GitHub Actions to create and approve pull requests**. Both have to allow it.
 2. **Make the repository public.** npm only attaches provenance to packages published from a public repository.
 3. **Edit anything that says the package isn't published yet**, in a pull request to `main`: the "Not on npm yet" warning in `site/guide/getting-started.md`.
-4. **The first release uses a temporary token**, because npm only lets a trusted publisher be set on a package that already exists:
-   1. On npmjs.com: avatar → Access Tokens → Generate New Token → **Granular Access Token**. Name it `d1-record first release`, with the shortest expiry. Give it Read and write for the `@forestfuture` scope, and no organization access. Tick "Bypass two-factor authentication" if offered: CI can't answer a 2FA prompt.
-   2. `gh secret set NPM_TOKEN`, and paste the token when it asks.
-   3. Merge the Version Packages pull request. CI publishes `0.1.0`. Only the step that writes `~/.npmrc` sees the token.
-   4. Check the package page on npmjs.com shows the version, and a provenance badge linking to the commit.
-   5. If the publish fails because pnpm tried trusted publishing first (an OIDC or token-exchange error), nothing was published. Delete the tag and release if they were created, then re-run the failed `release-publish` job.
+4. **The first release used a temporary token**, because npm only lets a trusted publisher be set on a package that already exists. `0.1.0` went out this way on 2026-10-10: a granular access token named `d1-record first release` (Read and write for the `@forestfuture` scope, the shortest expiry, "Bypass two-factor authentication" ticked), stored with `gh secret set NPM_TOKEN`, and written to `~/.npmrc` by a step in `release-publish` that has since been removed. If a publish fails because pnpm tried trusted publishing first (an OIDC or token-exchange error), nothing was published: delete the tag and release if they were created, then re-run the failed `release-publish` job.
 5. **Then switch to trusted publishing:**
    1. On npmjs.com, the package's Settings → **Trusted Publisher** → GitHub Actions: organization `forestfuture`, repository `d1-record`, workflow `ci.yml`, no environment.
    2. Delete the secret (`gh secret delete NPM_TOKEN`) and the token on npmjs.com.
    3. In the package's Settings → Publishing access, choose **Require two-factor authentication and disallow tokens**.
    4. In the `forestfuture` organization's settings, require 2FA for members.
+6. **Check each release for provenance.** The package page on npmjs.com shows a provenance badge linking to the commit, and the version has `dist.attestations`. `0.1.0` has none (#109), so confirm the first release published with no token has one.
 
 From then on, only CI in `forestfuture/d1-record`, from `ci.yml`, can publish.
 
