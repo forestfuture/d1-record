@@ -23,7 +23,27 @@ function* strings(maxLength: number): Generator<string> {
   }
 }
 
+// A name can come from a request (an error added under a submitted key), so humanizing it must not
+// take time that grows with the square of its length: the old rule took about 6 s for 100,000
+// characters, and this takes about a millisecond (#116).
+const LIMIT_MS = 250;
+
+function milliseconds(run: () => unknown): number {
+  const start = performance.now();
+  run();
+  return performance.now() - start;
+}
+
 describe("underscore", () => {
+  test.each([
+    ["digits", "0"],
+    ["capitals", "A"],
+  ])("takes linear time on a long run of %s", (_, character) => {
+    const name = character.repeat(100_000);
+
+    expect(milliseconds(() => underscore(name))).toBeLessThan(LIMIT_MS);
+  });
+
   test("gives the names Rails' rule gives, for every short string", () => {
     const different: string[] = [];
     for (const name of strings(7)) {
