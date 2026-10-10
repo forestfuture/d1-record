@@ -41,8 +41,8 @@ The library’s guarantees are tested against a real D1 database (through Minifl
 
 ## Supply chain
 
-- **No runtime dependencies.** Installing `@forestfuture/d1-record` installs only d1-record’s own code, so no other package’s compromise can reach your Worker through it.
-- **Releases are built by CI.** The npm package is built and published by the repository’s release workflow, never from a laptop, so what’s on npm is what’s in the repository. The first release sets up npm’s trusted publishing and provenance, so each version can be traced to the commit and workflow that built it.
+- **No runtime dependencies in your Worker.** The library imports no other package, so no other package’s compromise can reach your Worker through it. The command line, a development tool, depends on `jiti` to load your Models; installing the package installs it, and your Worker doesn’t bundle it.
+- **Releases are built by CI.** The npm package is built and published by the repository’s release workflow, never from a laptop, so what’s on npm is what’s in the repository. Publishing uses npm’s trusted publishing, so no npm token is stored anywhere. Version 0.1.0 was published before that was set up, and has no provenance attestation linking it to its commit ([#109](https://github.com/forestfuture/d1-record/issues/109)).
 - **CI is pinned.** Every third-party GitHub Action is pinned to a commit, not a tag that could be moved, because a moved tag would run someone else’s code in the job that publishes. A test fails if one isn’t.
 - **Release jobs run no install scripts.** The jobs that decide, build, version, and publish a release install dependencies without running their install scripts and without a shared cache, so a compromised development dependency can’t change what’s built or published.
 - **Dependencies are watched.** Dependabot proposes updates weekly, waiting a week after each release, since a compromised release is usually caught within days. `pnpm audit` is part of each security review.

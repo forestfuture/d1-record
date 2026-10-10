@@ -156,14 +156,6 @@ jobs:
       - uses: ./.github/actions/setup-vp
         with:
           release: true
-      # Only for the first release, before npm allows a trusted publisher; then delete the secret.
-      # The token reaches this step alone, not the install or the publish's other steps.
-      - run: |
-          if [ -n "$NPM_TOKEN" ]; then
-            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
-          fi
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       - uses: changesets/action/publish@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
           pack-dir-artifact-id: ${{ needs.release-pack.outputs.pack-dir-artifact-id }}
