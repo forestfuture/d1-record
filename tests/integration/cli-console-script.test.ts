@@ -40,10 +40,13 @@ describe("running one piece of code in the console's scope", () => {
     });
   });
 
-  test("prints anything else as the console's inspect does, with no #=>", async () => {
+  test("prints a record as the console's inspect does, with no #=>", async () => {
     expect((await run("await Sample.find(1)")).stdout).toBe(
       "Sample { id: 1, label: 'bolt', quantity: 36 }\n",
     );
+  });
+
+  test("prints a number as the console's inspect does", async () => {
     expect((await run("await Sample.count()")).stdout).toBe("1\n");
   });
 
@@ -55,12 +58,17 @@ describe("running one piece of code in the console's scope", () => {
     expect((await run("await Sample.count()")).exitCode).toBe(0);
   });
 
-  test("prints the last statement's value, and what ran before it took effect", async () => {
+  test("prints the last statement's value", async () => {
     const result = await run(
       'await Sample.create({ id: 2, label: "nut", quantity: 5 }); await Sample.count()',
     );
 
     expect(result.stdout).toBe("2\n");
+  });
+
+  test("a statement before the last one has taken effect in the database", async () => {
+    await run('await Sample.create({ id: 2, label: "nut", quantity: 5 }); 1');
+
     expect(await binding.prepare("SELECT COUNT(*) AS n FROM samples").first("n")).toBe(2);
   });
 
@@ -72,7 +80,7 @@ describe("running one piece of code in the console's scope", () => {
     expect(result.stderr).toMatch(/^Error: boom\n\s+at /);
   });
 
-  test("a rejected await fails the same way", async () => {
+  test("a rejected await prints its stack on stderr, nothing on stdout, and fails", async () => {
     const result = await run("await Sample.find(99)");
 
     expect(result.exitCode).toBe(1);
@@ -101,6 +109,23 @@ describe("running one piece of code in the console's scope", () => {
 
     expect(result.exitCode).toBe(1);
     expect(await binding.prepare("SELECT COUNT(*) AS n FROM samples").first("n")).toBe(1);
+  });
+
+  test("a console command line runs and prints nothing, without failing", async () => {
+    const result = await runScript({
+      code: "verbose!",
+      scope: { Sample },
+      commands: {
+        verbose: { help: "Toggles SQL logging", bang: true, run: () => "SQL logging on" },
+      },
+      withDatabase: (inside) => withDatabase(connect(binding), inside),
+    });
+
+    expect(result).toEqual({ exitCode: 0, stdout: "", stderr: "" });
+  });
+
+  test("a REPL command line runs and prints nothing, without failing", async () => {
+    expect(await run(".help")).toEqual({ exitCode: 0, stdout: "", stderr: "" });
   });
 
   test("a failure after a result prints no partial result", async () => {

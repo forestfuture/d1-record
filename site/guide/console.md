@@ -75,17 +75,17 @@ The SQL comes from the database’s own `onQuery`, so a listener you set on your
 
 ## Choosing what to open
 
-| Option              |                                                                                                        |
-| ------------------- | ------------------------------------------------------------------------------------------------------ |
-| `--database <name>` | The D1 binding to open, when your Wrangler config has several.                                         |
-| `--models <path>`   | Where your Models are: a folder (`src/models` by default) or one file (`src/models.ts`).               |
-| `--config <file>`   | Use this Wrangler config instead of finding `wrangler.jsonc`, `wrangler.json`, or `.toml`.             |
-| `--no-history`      | Don’t keep what you type in the history file.                                                          |
-| `--verbose`         | Print each statement a line runs, to begin with. `.verbose` turns it on and off.                       |
-| `-e, --eval <code>` | Run this code, print its result and exit. See [Running one piece of code](#running-one-piece-of-code). |
-| `--remote`          | Open your remote database instead, after you type its name. See below.                                 |
-| `--yes`             | With `--remote`, don’t ask first. It’s also how to open it without a terminal.                         |
-| `--history`         | Keep what you type in a remote session, which isn’t kept unless you ask.                               |
+| Option              |                                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------- |
+| `--database <name>` | The D1 binding to open, when your Wrangler config has several.                                          |
+| `--models <path>`   | Where your Models are: a folder (`src/models` by default) or one file (`src/models.ts`).                |
+| `--config <file>`   | Use this Wrangler config instead of finding `wrangler.jsonc`, `wrangler.json`, or `.toml`.              |
+| `--no-history`      | Don’t keep what you type in the history file.                                                           |
+| `--verbose`         | Print each statement a line runs, to begin with. `.verbose` turns it on and off.                        |
+| `-e, --eval <code>` | Run this code, print its result, and exit. See [Running one piece of code](#running-one-piece-of-code). |
+| `--remote`          | Open your remote database instead, after you type its name. See below.                                  |
+| `--yes`             | With `--remote`, don’t ask first. It’s also how to open it without a terminal.                          |
+| `--history`         | Keep what you type in a remote session, which isn’t kept unless you ask.                                |
 
 ## Where your data lives
 
@@ -147,7 +147,7 @@ A token needs **D1: Edit** and **Workers Scripts: Edit**, and the account needs 
 
 ## Running one piece of code
 
-`-e` runs one piece of code with your Models and `db` in scope, prints its result and exits, which is how to use the console from a script:
+`-e` runs one piece of code with your Models and `db` in scope, prints its result, and exits, which is how to use the console from a script:
 
 ```sh
 npx d1-record console -e 'await User.count()'
@@ -164,7 +164,7 @@ npx d1-record console -e 'await User.count()'
 - **It keeps no history,** and ignores what is piped to it.
 
 ::: warning TIP
-Put the code in single quotes, so your shell leaves `$`, `!` and backticks alone. With `--remote`, `$(…)` makes stdout a pipe, so there is no terminal to ask: add `--yes`, as in `npx d1-record console --remote --yes -e 'await User.count()'`.
+Put the code in single quotes, so your shell leaves `$`, `!`, and backticks alone. With `--remote`, `$(…)` makes stdout a pipe, so there is no terminal to ask: add `--yes`, as in `npx d1-record console --remote --yes -e 'await User.count()'`.
 :::
 
 ## Running a few lines at once

@@ -37,7 +37,7 @@ Options for console:
   --history           Keep what you type, which a remote session doesn't unless asked
   --no-history        Don't keep what you type in .wrangler/d1-record-history
   --verbose           Print each statement a line runs (.verbose toggles it while it runs)
-  -e, --eval <code>   Run this code, print its result and exit (the database goes to stderr)
+  -e, --eval <code>   Run this code, print its result, and exit (only the result goes to stdout)
 
 Options for every command:
   --config <file>     Use this Wrangler config

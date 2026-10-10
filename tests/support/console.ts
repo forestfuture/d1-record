@@ -59,3 +59,14 @@ export async function drive(options: Omit<SessionOptions, "input" | "output">) {
     },
   };
 }
+
+/** A script's three streams, as `-e` writes to them: what each has been given, as text. */
+export function capturedStreams() {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  const error = new PassThrough();
+  const seen = { stdout: "", stderr: "" };
+  output.on("data", (chunk: Buffer) => (seen.stdout += chunk.toString()));
+  error.on("data", (chunk: Buffer) => (seen.stderr += chunk.toString()));
+  return { input, output, error, seen };
+}

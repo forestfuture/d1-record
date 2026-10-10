@@ -1,13 +1,14 @@
-// `d1-record console`: opens the project's D1, local or remote, with its Models, in a REPL (#104).
+// `d1-record console`: opens the project's D1, local or remote, with its Models, and runs a REPL or one piece of code (#104, #105).
 import { basename, dirname, join } from "node:path";
 import type { Readable, Writable } from "node:stream";
+import { WriteStream } from "node:tty";
 import { openLocalBinding, openRemoteBinding, type OpenBinding } from "./binding.ts";
 import { consoleCommands } from "./commands.ts";
 import { confirmRemote } from "./confirm.ts";
 import { databaseFor, remoteTarget, type ChosenDatabase } from "./database.ts";
 import { loadProject, type ConsoleProject } from "./project.ts";
 import { runScript } from "./script.ts";
-import { startSession } from "./session.ts";
+import { startSession, type SessionOptions } from "./session.ts";
 
 export interface ConsoleOptions {
   /** The project's folder; the current one by default. */
@@ -108,15 +109,11 @@ async function openRemote(
 
 /** Whether a stream is a terminal, which colors what is written to it. */
 function isTerminal(stream: Writable): boolean {
-  return (stream as { isTTY?: boolean }).isTTY === true;
+  return stream instanceof WriteStream;
 }
 
 /** What a session needs from the open database: the scope, and how to run a line inside it. */
-interface Opened {
-  scope: Record<string, unknown>;
-  commands: ReturnType<typeof consoleCommands>["commands"];
-  withDatabase: (run: () => void) => Promise<void>;
-}
+type Opened = Pick<SessionOptions, "scope" | "commands" | "withDatabase">;
 
 /** Runs `code` once, and writes its result and its failure where each belongs; the exit code. */
 async function runOnce(code: string, opened: Opened, io: ConsoleIo, errors: Writable) {

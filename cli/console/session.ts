@@ -1,4 +1,4 @@
-// A console session: a REPL on any streams, with the project's Models and database in scope (#104).
+// A console session: a REPL on any streams (or a script, one outcome per line), with the project's Models and database in scope (#104, #105).
 import { AsyncLocalStorage } from "node:async_hooks";
 import { inspect, types } from "node:util";
 import repl from "node:repl";
@@ -42,10 +42,16 @@ export interface SessionOptions {
   onLine?: (outcome: LineOutcome) => void;
 }
 
+/** The callback the REPL gives `eval`, which is called with a line's error or its result. */
+type EvalCallback = Parameters<repl.REPLEval>[3];
+
 /** How a script session hears of each line: what it came to, and the last thing the REPL wrote. */
 interface Script {
   report: (outcome: LineOutcome) => void;
-  written: () => unknown;
+  /** What the REPL wrote for the line in flight (boxed, as undefined is a value); none if nothing. */
+  written: () => { value: unknown } | undefined;
+  /** Forgets what was written: a new line begins. */
+  reset: () => void;
 }
 
 /** A line that is just `quit` or `exit`: leaves the console, as `.exit` does. */
@@ -78,15 +84,16 @@ function scripted(script: Script | undefined, close: () => void) {
   let unfinished = false;
   return {
     /** The callback to evaluate the next line with. */
-    start(callback: repl.REPLEval extends (...a: infer P) => void ? P[3] : never) {
+    start(callback: EvalCallback): EvalCallback {
       outcome = undefined;
       unfinished = false;
+      script?.reset();
       if (script === undefined) return callback;
-      return ((error, result) => {
+      return (error, result) => {
         if (error instanceof repl.Recoverable) unfinished = true;
         else outcome = error === null ? { ok: true, value: result } : { ok: false, error };
         callback(error, result);
-      }) as typeof callback;
+      };
     },
     /** The input ended: a statement left unfinished is a failure, as the REPL would drop it. */
     ended(): void {
@@ -97,7 +104,11 @@ function scripted(script: Script | undefined, close: () => void) {
     /** The REPL asked for the next line: the one in flight is over. */
     finish(): void {
       if (script === undefined || unfinished) return;
-      const reported = outcome ?? { ok: false, error: script.written() };
+      // No callback and nothing written is a console command or a REPL's own (`.help`): it ran.
+      const wrote = script.written();
+      const reported: LineOutcome =
+        outcome ??
+        (wrote === undefined ? { ok: true, value: undefined } : { ok: false, error: wrote.value });
       script.report(reported);
       if (!reported.ok) close();
     },
@@ -252,7 +263,7 @@ export function startSession({
   closed: Promise<void>;
 } {
   const lines = lineQueue();
-  let written: unknown;
+  let written: { value: unknown } | undefined;
   const server = repl.start({
     prompt,
     input: terminal ? input : untilDrained(input, lines.pending),
@@ -264,7 +275,7 @@ export function startSession({
     useGlobal: false,
     writer(this: repl.REPLServer, value: unknown) {
       if (onLine !== undefined) {
-        written = value;
+        written = { value };
         return "";
       }
       const shown = inspect(value, { colors: this.useColors });
@@ -274,7 +285,13 @@ export function startSession({
   if (terminal && historyFile !== undefined) server.setupHistory(historyFile, () => {});
   Object.assign(server.context, scope);
   const bang = defineCommands(server, commands, lines, output);
-  const script = onLine && { report: onLine, written: () => written };
+  const script = onLine && {
+    report: onLine,
+    written: () => written,
+    reset: () => {
+      written = undefined;
+    },
+  };
   lines.attach(server, withDatabase, bang, script);
   return {
     closed: new Promise((resolve) => server.on("exit", () => void lines.pending().then(resolve))),

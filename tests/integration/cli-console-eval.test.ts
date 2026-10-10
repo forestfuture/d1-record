@@ -1,9 +1,9 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { PassThrough } from "node:stream";
-import { describe, expect, onTestFinished, test, vi } from "vite-plus/test";
+import { describe, expect, test, vi } from "vite-plus/test";
 import { runConsole } from "../../cli/console/command.ts";
 import { main } from "../../cli/main.ts";
+import { capturedStreams } from "../support/console.ts";
 import { scratchDirs } from "../support/scratch.ts";
 import { shop } from "../support/shop.ts";
 
@@ -12,21 +12,33 @@ const scratch = scratchDirs();
 /** What `console -e` printed on each stream, and its exit code. */
 async function evaluating(code: string, options: { verbose?: boolean; cwd?: string } = {}) {
   const cwd = options.cwd ?? (await shop(scratch));
-  const input = new PassThrough();
-  const output = new PassThrough();
-  const error = new PassThrough();
+  const { input, output, error, seen } = capturedStreams();
   const said: string[] = [];
-  let stdout = "";
-  let stderr = "";
-  output.on("data", (chunk: Buffer) => (stdout += chunk.toString()));
-  error.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
 
   const exitCode = await runConsole(
     { cwd, eval: code, verbose: options.verbose },
     (line) => said.push(line),
     { input, output, error },
   );
-  return { cwd, exitCode, stdout, stderr, said };
+  return { cwd, exitCode, ...seen, said };
+}
+
+/** `main` run in a project of its own, with what it wrote to stdout. */
+async function mainInShop(...args: string[]) {
+  const cwd = await shop(scratch);
+  const inProject = vi.spyOn(process, "cwd").mockReturnValue(cwd);
+  const written: string[] = [];
+  const out = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+    written.push(String(chunk));
+    return true;
+  });
+  try {
+    const code = await main(args, () => {});
+    return { code, stdout: written.join("") };
+  } finally {
+    inProject.mockRestore();
+    out.mockRestore();
+  }
 }
 
 // `d1-record console -e` (#105): one piece of code, its result on stdout, everything else on stderr.
@@ -97,35 +109,15 @@ describe("-e on the command line", () => {
   });
 
   test("runs the code, and prints the result", async () => {
-    const cwd = await shop(scratch);
-    const inProject = vi.spyOn(process, "cwd").mockReturnValue(cwd);
-    const written: string[] = [];
-    const out = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
-      written.push(String(chunk));
-      return true;
-    });
-    onTestFinished(() => {
-      inProject.mockRestore();
-      out.mockRestore();
-    });
+    const run = await mainInShop("console", "-e", "(await User.find(1)).email");
 
-    const code = await main(["console", "-e", "(await User.find(1)).email"], () => {});
-    out.mockRestore();
-
-    expect(code).toBe(0);
-    expect(written.join("")).toBe("alice@example.com\n");
+    expect(run).toEqual({ code: 0, stdout: "alice@example.com\n" });
   }, 90_000);
 
-  test("takes --eval as well", async () => {
-    const cwd = await shop(scratch);
-    const inProject = vi.spyOn(process, "cwd").mockReturnValue(cwd);
-    const out = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-    onTestFinished(() => {
-      inProject.mockRestore();
-      out.mockRestore();
-    });
+  test("--eval is the long form of -e", async () => {
+    const run = await mainInShop("console", "--eval", "1 + 1");
 
-    expect(await main(["console", "--eval", "1 + 1"], () => {})).toBe(0);
+    expect(run).toEqual({ code: 0, stdout: "2\n" });
   }, 90_000);
 
   test("once only: join statements with a semicolon", async () => {

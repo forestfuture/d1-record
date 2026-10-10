@@ -69,7 +69,7 @@ npx d1-record console
 | `--config <file>`   | Use this Wrangler config instead of finding `wrangler.jsonc`, `wrangler.json`, or `.toml`. |
 | `--no-history`      | Don’t keep what you type in `.wrangler/d1-record-history`.                                 |
 | `--verbose`         | Print each statement a line runs. `.verbose` turns it on and off in the console.           |
-| `-e, --eval <code>` | Run this code, print its result (alone, on stdout) and exit; a failure exits 1.            |
+| `-e, --eval <code>` | Run this code, print its result (alone, on stdout), and exit; a failure exits 1.           |
 | `--remote`          | Open your remote database instead, after you type its name.                                |
 | `--yes`             | With `--remote`, don’t ask first (also how to open it without a terminal).                 |
 | `--history`         | Keep what you type in a remote session, which isn’t kept unless you ask.                   |

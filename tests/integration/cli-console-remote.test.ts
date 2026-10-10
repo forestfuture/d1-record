@@ -1,10 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { PassThrough } from "node:stream";
 import { describe, expect, test } from "vite-plus/test";
 import { runConsole, standardIo } from "../../cli/console/command.ts";
 import { main } from "../../cli/main.ts";
-import { terminalStreams, waitFor } from "../support/console.ts";
+import { capturedStreams, terminalStreams, waitFor } from "../support/console.ts";
 import { scratchDirs } from "../support/scratch.ts";
 import { shop } from "../support/shop.ts";
 
@@ -231,14 +230,9 @@ describe("the local console's prompt", () => {
 
 // `-e` with `--remote` (#105): the same consent as a session, with the result alone on stdout.
 describe("d1-record console -e --remote", () => {
-  /** A script's streams: what it wrote to each, and a terminal flag for the confirmation. */
+  /** A script's streams, with a terminal flag for the confirmation. */
   function streams(terminal: boolean) {
-    const input = new PassThrough();
-    const output = new PassThrough();
-    const error = new PassThrough();
-    const seen = { stdout: "", stderr: "" };
-    output.on("data", (chunk: Buffer) => (seen.stdout += chunk.toString()));
-    error.on("data", (chunk: Buffer) => (seen.stderr += chunk.toString()));
+    const { input, output, error, seen } = capturedStreams();
     return { io: { input, output, error, terminal }, seen };
   }
 
