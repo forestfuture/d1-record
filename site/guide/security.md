@@ -33,6 +33,7 @@ The library’s guarantees are tested against a real D1 database (through Minifl
 | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
 | Values are bound, identifiers are quoted, and plain strings are refused as SQL | [`sql-safety`](https://github.com/forestfuture/d1-record/blob/main/tests/integration/sql-safety.test.ts)               |
 | Assigned and condition values are cast, or refused, in linear time             | [`attribute-casting`](https://github.com/forestfuture/d1-record/blob/main/tests/integration/attribute-casting.test.ts) |
+| Naming an attribute, table or key takes linear time in the name’s length       | [`naming`](https://github.com/forestfuture/d1-record/blob/main/tests/unit/naming.test.ts)                              |
 | Only a Model’s own names are attributes or associations                        | [`name-lookups`](https://github.com/forestfuture/d1-record/blob/main/tests/integration/name-lookups.test.ts)           |
 | `permit` keeps only the named attributes, reading own keys only                | [`permit`](https://github.com/forestfuture/d1-record/blob/main/tests/integration/permit.test.ts)                       |
 | Filtered attributes’ values never reach listeners or errors                    | [`filter-attributes`](https://github.com/forestfuture/d1-record/blob/main/tests/integration/filter-attributes.test.ts) |
