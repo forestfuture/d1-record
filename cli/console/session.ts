@@ -4,7 +4,7 @@ import repl from "node:repl";
 import { PassThrough, type Readable, type Writable } from "node:stream";
 
 /** A command of the console itself, typed as `.name` (and `name!` too, when `bang` is set). */
-export interface SessionCommand {
+interface SessionCommand {
   /** What `.help` says about it. */
   help: string;
   /** Also runs as a line that is just `name!`. */

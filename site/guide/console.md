@@ -26,7 +26,7 @@ Models: Post, User
 #=> undefined
 ```
 
-Leave with `quit`, `exit`, or Ctrl-D. Ctrl-C stops a line that’s still running. `npx d1-record c` is the short form.
+Leave with `quit`, `exit`, or Ctrl-D. Ctrl-C stops a line that’s still running. `.help` lists the console’s own commands, and `npx d1-record c` is the short form.
 
 ## What you can use
 
@@ -37,6 +37,35 @@ Leave with `quit`, `exit`, or Ctrl-D. Ctrl-C stops a line that’s still running
 A record prints as it does in a log: its class and attributes, with a filtered attribute as `[FILTERED]` and an unsaved change next to the value it had. [Printing records](./models#printing-records) has the details.
 
 An error prints and the console carries on.
+
+## Reloading your Models
+
+After you edit a Model, or a file it imports, read them again without leaving:
+
+```text
+> reload!
+Reloaded: Post, User
+```
+
+`.reload` does the same. A Model you added appears, and one whose file you removed goes. Records and values you already hold keep their old class, so run the lines that made them again.
+
+If a file fails to load, say a syntax error in the middle of an edit, the console names the file and keeps the Models you had. Only files in your project’s folder are read again. Your database connection and `@forestfuture/d1-record` stay as they are.
+
+## Seeing the SQL
+
+Start with `--verbose` to see each statement a line runs, or turn it on and off while you work with `.verbose`:
+
+```text
+> .verbose
+SQL logging on
+> await User.find(1)
+  User  1.2ms  SELECT * FROM "users" WHERE (("id" = ?)) LIMIT ?  [ 1, 1 ]
+#=> User { id: 1, name: 'Alice', email: [FILTERED] }
+```
+
+Each line shows the Model, the time, the SQL, and the values it bound. Filtered attributes show as `[FILTERED]`, as they do in `onQuery`. A statement that fails prints `failed` and the reason in place of the time. `.verbose on` and `.verbose off` set it explicitly.
+
+It uses the database’s own `onQuery`, so a listener you set on your base class still runs as well.
 
 ## Choosing what to open
 
