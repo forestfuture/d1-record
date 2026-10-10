@@ -63,7 +63,7 @@ SQL logging on
 #=> User { id: 1, name: 'Alice', email: [FILTERED] }
 ```
 
-Each line shows the Model, the time, the SQL, and the values it bound. Filtered attributes show as `[FILTERED]`, as they do in `onQuery`. A statement that fails prints `failed` and the reason in place of the time. `.verbose on` and `.verbose off` set it explicitly.
+Each line shows the Model, the time, the SQL, and the values it bound. Filtered attributes show as `[FILTERED]`, as they do in `onQuery`. A statement that fails prints `failed` and the reason in place of the time. `verbose!` toggles it too, and `.verbose on` and `.verbose off` set it explicitly.
 
 It uses the database’s own `onQuery`, so a listener you set on your base class still runs as well.
 

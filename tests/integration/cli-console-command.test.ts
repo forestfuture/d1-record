@@ -325,6 +325,15 @@ describe("d1-record console", () => {
       await end();
     }, 90_000);
 
+    test("verbose! as a bare line toggles it too", async () => {
+      const { send, end } = await running();
+
+      expect(await send("verbose!")).toBe("SQL logging on");
+      expect(await send("await User.find(1)")).toMatch(/^User /);
+      expect(await send("verbose!")).toBe("SQL logging off");
+      await end();
+    }, 90_000);
+
     test(".verbose is in .help", async () => {
       const { send, end } = await running();
 

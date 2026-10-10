@@ -74,7 +74,8 @@ export async function runConsole(
       scope: { ...models, db: database },
       commands: {
         verbose: {
-          help: "Show the SQL each line runs: .verbose, .verbose on, or .verbose off",
+          help: "Show the SQL each line runs: .verbose, .verbose on, or .verbose off (also: verbose!)",
+          bang: true,
           run: (argument) => {
             const word = argument.trim();
             verbose = word === "on" ? true : word === "off" ? false : !verbose;
