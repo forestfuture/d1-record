@@ -1,4 +1,5 @@
 // `record.errors`: the validation failures a record collects.
+import { inspectCustom, printed, type Inspect, type InspectOptions } from "./inspect-support.ts";
 import { underscore } from "./naming.ts";
 
 /** One validation failure: which attribute (or `"base"`), what kind, and the message. */
@@ -51,6 +52,11 @@ export class Errors {
 
   get size(): number {
     return this.#entries.length;
+  }
+
+  /** `Errors [ { attribute, type, message }, … ]`, so a console shows what `#entries` holds (#104). */
+  [inspectCustom](depth: number, options: InspectOptions, inspect: Inspect): string {
+    return printed("Errors", "Errors", () => this.toArray(), { depth, options, inspect });
   }
 
   /** @internal Called at the start of each validation run. */

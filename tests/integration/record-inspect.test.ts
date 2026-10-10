@@ -45,6 +45,18 @@ class Post extends Model({
   static tableName = "posts";
 }
 
+// Validations that fail without a value: a presence check on its label.
+class Checked extends Model({
+  id: { type: "integer", null: false },
+  label: "string",
+}) {
+  static tableName = "samples";
+
+  static {
+    this.validates("label", { presence: true });
+  }
+}
+
 class Hider extends Model({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
@@ -222,6 +234,30 @@ describe("inspect", () => {
       const relation = connect(binding).model(Sample);
 
       expect(inspect({ relation }, { depth: 0 })).toBe("{ relation: [Relation] }");
+    });
+  });
+
+  describe("a record's errors", () => {
+    test("print each failure's attribute, type and message", async () => {
+      const checked = connect(binding).model(Checked).build({ id: 1 });
+      await checked.isValid();
+
+      expect(inspect(checked.errors)).toBe(
+        "Errors [ { attribute: 'label', type: 'blank', message: \"can't be blank\" } ]",
+      );
+    });
+
+    test("print as an empty list when there are none", () => {
+      const checked = connect(binding).model(Checked).build({ id: 1, label: "bolt" });
+
+      expect(inspect(checked.errors)).toBe("Errors []");
+    });
+
+    test("past depth, print as [Errors]", async () => {
+      const checked = connect(binding).model(Checked).build({ id: 1 });
+      await checked.isValid();
+
+      expect(inspect({ errors: checked.errors }, { depth: 0 })).toBe("{ errors: [Errors] }");
     });
   });
 

@@ -60,7 +60,7 @@ A record’s `errors` hold each failed rule:
 
 <<< @/snippets/guide/validations.ts#errors{ts}
 
-`fullMessages()` puts the attribute’s name in front, so `createdAt` reads as “Created at”. Errors on the record as a whole go on `"base"`, and read without a prefix.
+Printing `errors`, in the console or a log, lists each failure’s attribute, type, and message. `fullMessages()` puts the attribute’s name in front, so `createdAt` reads as “Created at”. Errors on the record as a whole go on `"base"`, and read without a prefix.
 
 ## Adding errors
 

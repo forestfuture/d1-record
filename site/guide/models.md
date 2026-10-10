@@ -323,6 +323,15 @@ Relation<User> {
 }
 ```
 
+A record’s `errors` print each failure, so a failed `save()` shows why in the console:
+
+```text
+Errors [
+  { attribute: 'name', type: 'blank', message: "can't be blank" },
+  { attribute: 'email', type: 'too_short', message: 'is too short' }
+]
+```
+
 Printing can’t wait for D1, so to see the records, `await` it or call `toArray()`. A filtered attribute’s value in `params` prints as `[FILTERED]`.
 
 ::: warning TIP
