@@ -44,7 +44,7 @@ These are done once, in this order.
 
 1. **Allow Actions to open pull requests.** In the `forestfuture` organization's settings, then in the repository's: Settings → Actions → General → Workflow permissions → **Allow GitHub Actions to create and approve pull requests**. Both have to allow it.
 2. **Make the repository public.** npm only attaches provenance to packages published from a public repository.
-3. **Edit anything that says the package isn't published yet**, on `main`: the "Not on npm yet" warning in `site/guide/getting-started.md`.
+3. **Edit anything that says the package isn't published yet**, in a pull request to `main`: the "Not on npm yet" warning in `site/guide/getting-started.md`.
 4. **The first release uses a temporary token**, because npm only lets a trusted publisher be set on a package that already exists:
    1. On npmjs.com: avatar → Access Tokens → Generate New Token → **Granular Access Token**. Name it `d1-record first release`, with the shortest expiry. Give it Read and write for the `@forestfuture` scope, and no organization access. Tick "Bypass two-factor authentication" if offered: CI can't answer a 2FA prompt.
    2. `gh secret set NPM_TOKEN`, and paste the token when it asks.

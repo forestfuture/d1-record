@@ -6,8 +6,8 @@ description: "From an empty Worker to two related Models in about ten minutes: i
 
 d1-record turns each table in your [D1](https://developers.cloudflare.com/d1/) database into a Model, so your [Worker](https://developers.cloudflare.com/workers/) works with records instead of rows. In this tutorial you’ll build the start of a small blog: users, and the posts they write.
 
-::: warning Not on npm yet
-d1-record hasn’t been published yet. Its behavior is tested against real D1, but the API may change before 1.0.
+::: warning Version 0.x
+d1-record is before 1.0. Its behavior is tested against real D1, but the API may still change. A breaking change ships in a new minor version, so `^0.1.0` never takes one.
 :::
 
 ## Prerequisites
