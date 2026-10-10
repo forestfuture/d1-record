@@ -32,6 +32,9 @@ Options for g:
 Options for console:
   --database <name>   The D1 binding to open, when the config has several
   --models <path>     Where the Models are: a folder (src/models) or one file (src/models.ts)
+  --remote            Open your remote database instead, after asking you to type its name
+  --yes               Don't ask first (with --remote); also how to open it without a terminal
+  --history           Keep what you type, which a remote session doesn't unless asked
   --no-history        Don't keep what you type in .wrangler/d1-record-history
   --verbose           Print each statement a line runs (.verbose toggles it while it runs)
 
@@ -102,8 +105,11 @@ const consoleOptions = {
   ...shared,
   database: { type: "string" },
   models: { type: "string" },
+  history: { type: "boolean" },
   "no-history": { type: "boolean" },
   verbose: { type: "boolean" },
+  remote: { type: "boolean" },
+  yes: { type: "boolean" },
 } as const satisfies ParseArgsOptionsConfig;
 
 /** `d1-record console`: opens the local database and its Models in a REPL. */
@@ -114,8 +120,12 @@ function openConsole(
   const args = argsOf(argv, consoleOptions);
   if (typeof args === "string") return usage(print, args);
   if (args.positionals.length > 0) return usage(print, `Unexpected ${args.positionals[0]}`);
-  const { database, models, config, "no-history": noHistory, verbose } = args.values;
-  return runConsole({ database, models, config, history: !noHistory, verbose }, print);
+  const { database, models, config, history, "no-history": noHistory, verbose } = args.values;
+  const { remote, yes } = args.values;
+  if (history && noHistory) return usage(print, "Use --history or --no-history, not both");
+  if (yes && !remote) return usage(print, "--yes only goes with --remote");
+  const keep = noHistory ? false : history ? true : undefined;
+  return runConsole({ database, models, config, history: keep, verbose, remote, yes }, print);
 }
 
 /** Prints the usage, after what went wrong; 1. */

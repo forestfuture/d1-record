@@ -1,0 +1,213 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, test } from "vite-plus/test";
+import { runConsole } from "../../cli/console/command.ts";
+import { main } from "../../cli/main.ts";
+import { terminalStreams, waitFor } from "../support/console.ts";
+import { scratchDirs } from "../support/scratch.ts";
+import { shop } from "../support/shop.ts";
+
+const scratch = scratchDirs();
+
+/**
+ * A project whose own `wrangler` is the repo's, except that every `getPlatformProxy` is logged
+ * and answered from the project's local database: a stand-in for Cloudflare, so a "remote"
+ * session can be driven without an account. Returns the folder and what wrangler was asked.
+ */
+async function remoteShop(entry?: Record<string, unknown>) {
+  const cwd = await shop(scratch);
+  if (entry !== undefined)
+    writeFileSync(join(cwd, "wrangler.jsonc"), JSON.stringify({ d1_databases: [entry] }));
+  const real = import.meta.resolve("wrangler");
+  const log = join(cwd, "wrangler-calls.jsonl");
+  mkdirSync(join(cwd, "node_modules/wrangler"), { recursive: true });
+  writeFileSync(
+    join(cwd, "node_modules/wrangler/package.json"),
+    '{ "name": "wrangler", "type": "module", "exports": "./index.js" }',
+  );
+  writeFileSync(
+    join(cwd, "node_modules/wrangler/index.js"),
+    `import { appendFileSync } from "node:fs";
+     import { getPlatformProxy as real } from ${JSON.stringify(real)};
+     export async function getPlatformProxy(options) {
+       const { remoteBindings, persist } = options;
+       appendFileSync(${JSON.stringify(log)}, JSON.stringify({ remoteBindings, persist }) + "\\n");
+       return real({
+         ...options,
+         remoteBindings: false,
+         persist: { path: ${JSON.stringify(join(cwd, ".wrangler/state/v3"))} },
+       });
+     }`,
+  );
+  const asked = () =>
+    existsSync(log)
+      ? readFileSync(log, "utf8")
+          .trim()
+          .split("\n")
+          .map((line) => JSON.parse(line) as object)
+      : [];
+  return { cwd, asked };
+}
+
+/** A console on a terminal that has been asked for its first line, with what it printed. */
+function onATerminal() {
+  const terminal = terminalStreams();
+  const lines: string[] = [];
+  return { terminal, lines, io: { ...terminal, terminal: true } };
+}
+
+// `d1-record console --remote` (#104): the same console on the real database, after asking.
+describe("d1-record console --remote", () => {
+  test("--yes opens it, says which database, and marks the prompt", async () => {
+    const { cwd, asked } = await remoteShop();
+    const terminal = terminalStreams();
+    const lines: string[] = [];
+
+    const done = runConsole({ cwd, remote: true, yes: true }, (line) => lines.push(line), terminal);
+    await terminal.ready();
+
+    expect(lines).toEqual(["Remote database DB (shop, id local-shop)", "Models: User"]);
+    expect(asked()).toEqual([{ remoteBindings: true, persist: false }]);
+    expect(await terminal.send("(await User.find(1)).name")).toBe("#=> 'Alice'");
+    expect(terminal.transcript()).toContain("remote> ");
+    terminal.input.end();
+    expect(await done).toBe(0);
+  }, 90_000);
+
+  test("is refused off a terminal without --yes, before wrangler is asked for anything", async () => {
+    const { cwd, asked } = await remoteShop();
+    const lines: string[] = [];
+
+    const code = await runConsole(
+      { cwd, remote: true },
+      (line) => lines.push(line),
+      terminalStreams(),
+    );
+
+    expect(code).toBe(1);
+    expect(lines).toEqual([
+      "Opening a remote database asks you to confirm it: run this on a terminal, or add --yes",
+    ]);
+    expect(asked()).toEqual([]);
+  }, 90_000);
+
+  test("on a terminal, opens once the database's name is typed", async () => {
+    const { cwd, asked } = await remoteShop();
+    const { terminal, lines, io } = onATerminal();
+
+    const done = runConsole({ cwd, remote: true }, (line) => lines.push(line), io);
+    await waitFor(() => terminal.transcript().includes("Type its name to continue"));
+    expect(asked()).toEqual([]);
+    terminal.input.write("shop\n");
+    await waitFor(() => lines.includes("Models: User"));
+    terminal.input.write("quit\n");
+
+    expect(await done).toBe(0);
+    expect(asked()).toHaveLength(1);
+    expect(lines[0]).toBe("Remote database DB (shop, id local-shop)");
+  }, 90_000);
+
+  test("on a terminal, isn't opened by any other answer", async () => {
+    const { cwd, asked } = await remoteShop();
+    const { terminal, lines, io } = onATerminal();
+
+    const done = runConsole({ cwd, remote: true }, (line) => lines.push(line), io);
+    await waitFor(() => terminal.transcript().includes("Type its name to continue"));
+    terminal.input.write("y\n");
+
+    expect(await done).toBe(1);
+    expect(lines).toEqual(["Not opened."]);
+    expect(asked()).toEqual([]);
+  }, 90_000);
+
+  test("is refused when the config gives no database id", async () => {
+    const { cwd, asked } = await remoteShop({ binding: "DB", database_name: "shop" });
+    const lines: string[] = [];
+
+    const code = await runConsole(
+      { cwd, remote: true, yes: true },
+      (line) => lines.push(line),
+      terminalStreams(),
+    );
+
+    expect(code).toBe(1);
+    expect(lines).toEqual(["DB has no database_id in wrangler.jsonc, which --remote needs"]);
+    expect(asked()).toEqual([]);
+  }, 90_000);
+
+  test("keeps no history of what you type", async () => {
+    const { cwd } = await remoteShop();
+    const { terminal, lines, io } = onATerminal();
+    const done = runConsole({ cwd, remote: true, yes: true }, (line) => lines.push(line), io);
+
+    await waitFor(() => lines.includes("Models: User"));
+    terminal.input.write("1 + 1\n");
+    await waitFor(() => terminal.transcript().includes("#=>"));
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    terminal.input.end();
+    await done;
+
+    expect(existsSync(join(cwd, ".wrangler/d1-record-history"))).toBe(false);
+  }, 90_000);
+
+  test("keeps it when asked to", async () => {
+    const { cwd } = await remoteShop();
+    const { terminal, lines, io } = onATerminal();
+    const done = runConsole(
+      { cwd, remote: true, yes: true, history: true },
+      (line) => lines.push(line),
+      io,
+    );
+    const history = join(cwd, ".wrangler/d1-record-history");
+
+    await waitFor(() => lines.includes("Models: User"));
+    terminal.input.write("1 + 1\n");
+    await waitFor(() => existsSync(history));
+    terminal.input.end();
+    await done;
+
+    expect(readFileSync(history, "utf8")).toContain("1 + 1");
+  }, 90_000);
+});
+
+describe("the local console's prompt", () => {
+  test("says local", async () => {
+    const { cwd } = await remoteShop();
+    const terminal = terminalStreams();
+    const done = runConsole({ cwd }, () => {}, terminal);
+    await terminal.ready();
+    await terminal.send("1 + 1");
+
+    expect(terminal.transcript()).toContain("\nlocal> ");
+    terminal.input.end();
+    await done;
+  }, 90_000);
+});
+
+describe("--remote on the command line", () => {
+  test("is in the help, with --yes and --history", async () => {
+    const lines: string[] = [];
+
+    await main(["console", "--help"], (line) => lines.push(line));
+
+    expect(lines[0]).toMatch(/--remote +Open your remote database/);
+    expect(lines[0]).toMatch(/--yes +Don't ask first/);
+    expect(lines[0]).toMatch(/--history +Keep what you type/);
+  });
+
+  test("--yes without --remote is a mistake, since it would skip nothing", async () => {
+    const lines: string[] = [];
+
+    expect(await main(["console", "--yes"], (line) => lines.push(line))).toBe(1);
+    expect(lines[0]).toMatch(/^--yes only goes with --remote/);
+  });
+
+  test("--history and --no-history together are a mistake", async () => {
+    const lines: string[] = [];
+
+    expect(await main(["console", "--history", "--no-history"], (line) => lines.push(line))).toBe(
+      1,
+    );
+    expect(lines[0]).toMatch(/^Use --history or --no-history, not both/);
+  });
+});

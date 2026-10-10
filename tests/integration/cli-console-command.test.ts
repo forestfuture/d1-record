@@ -1,59 +1,17 @@
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, onTestFinished, test, vi } from "vite-plus/test";
 import { openLocalBinding } from "../../cli/console/binding.ts";
-import type { ChosenDatabase } from "../../cli/console/database.ts";
 import { runConsole } from "../../cli/console/command.ts";
 import { main } from "../../cli/main.ts";
 import { terminalStreams, waitFor } from "../support/console.ts";
 import type { TestDatabase } from "../support/d1.ts";
 import { scratchDirs } from "../support/scratch.ts";
+import { chosen, shop as makeShop } from "../support/shop.ts";
 
-// Inside the repo, the project finds this repo's wrangler, and its tsconfig finds the library's
-// source, as an app's finds its own copies.
-const library = new URL("../../src/index.ts", import.meta.url).pathname;
 const scratch = scratchDirs();
-
-/** The project's one D1 binding, as the console would choose it. */
-function chosen(cwd: string): ChosenDatabase {
-  const entry = { binding: "DB", database_name: "shop", database_id: "local-shop" };
-  return { binding: "DB", entry, configFile: join(cwd, "wrangler.jsonc") };
-}
-
-/** A project with a users table in its local D1, a User Model, and a Wrangler config. */
-async function shop(): Promise<string> {
-  const cwd = scratch("console-command-");
-  const files: Record<string, string> = {
-    "wrangler.jsonc": JSON.stringify({
-      d1_databases: [{ binding: "DB", database_name: "shop", database_id: "local-shop" }],
-    }),
-    "tsconfig.json": JSON.stringify({
-      compilerOptions: { paths: { "@forestfuture/d1-record": [library] } },
-    }),
-    "src/models/application-record.ts": `
-      import { modelFor } from "@forestfuture/d1-record";
-      export const ApplicationRecord = modelFor({
-        users: { attributes: { id: "integer", name: "string", email: "string" }, primaryKey: "id" },
-      } as const);
-    `,
-    "src/models/user.ts": `
-      import { ApplicationRecord } from "./application-record";
-      export class User extends ApplicationRecord("users") {}
-    `,
-  };
-  for (const [path, text] of Object.entries(files)) {
-    mkdirSync(dirname(join(cwd, path)), { recursive: true });
-    writeFileSync(join(cwd, path), text);
-  }
-  const opened = await openLocalBinding(cwd, chosen(cwd));
-  if (typeof opened === "string") throw new Error(opened);
-  const db = opened.binding as TestDatabase;
-  await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)");
-  await db.exec("INSERT INTO users (id, name, email) VALUES (1, 'Alice', 'alice@example.com')");
-  await opened.dispose();
-  return cwd;
-}
+const shop = () => makeShop(scratch);
 
 /** A running console on a project (with these options), and its folder for edits between lines. */
 async function running(options: { verbose?: boolean } = {}) {

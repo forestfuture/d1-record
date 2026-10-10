@@ -24,6 +24,8 @@ export interface SessionOptions {
   terminal?: boolean;
   /** Where to keep what was typed, between sessions; only a terminal has history. */
   historyFile?: string;
+  /** What is shown before each line; `> ` by default. */
+  prompt?: string;
   /** What the session can name: the Models, and `db`. */
   scope: Record<string, unknown>;
   /** The console's own commands, by name. */
@@ -142,6 +144,7 @@ export function startSession({
   output,
   terminal = false,
   historyFile,
+  prompt = "> ",
   scope,
   commands = {},
   withDatabase,
@@ -150,7 +153,7 @@ export function startSession({
 } {
   const lines = lineQueue();
   const server = repl.start({
-    prompt: "> ",
+    prompt,
     input: terminal ? input : untilDrained(input, lines.pending),
     output,
     terminal,

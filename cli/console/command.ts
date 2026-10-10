@@ -1,9 +1,10 @@
-// `d1-record console`: opens the project's local D1 with its Models, in a REPL (#104).
-import { dirname, join } from "node:path";
+// `d1-record console`: opens the project's D1, local or remote, with its Models, in a REPL (#104).
+import { basename, dirname, join } from "node:path";
 import type { Readable, Writable } from "node:stream";
-import { openLocalBinding } from "./binding.ts";
+import { openLocalBinding, openRemoteBinding, type OpenBinding } from "./binding.ts";
 import { consoleCommands } from "./commands.ts";
-import { databaseFor } from "./database.ts";
+import { confirmRemote } from "./confirm.ts";
+import { databaseFor, remoteTarget, type ChosenDatabase } from "./database.ts";
 import { loadProject } from "./project.ts";
 import { startSession } from "./session.ts";
 
@@ -16,8 +17,12 @@ export interface ConsoleOptions {
   database?: string;
   /** Where the Models are: a folder or one file (`src/models`). */
   models?: string;
-  /** Keep what is typed on a terminal in the history file; on unless `false`. */
+  /** Keep what is typed on a terminal in the history file; on, unless remote, by default. */
   history?: boolean;
+  /** Open the project's real D1 database instead of the local one, after asking. */
+  remote?: boolean;
+  /** With `remote`: don't ask first, which is also how to open it without a terminal. */
+  yes?: boolean;
   /** Print each statement as it runs, to begin with; `.verbose` turns it on and off. */
   verbose?: boolean;
 }
@@ -45,6 +50,47 @@ function refused(print: (line: string) => void, problem: string): number {
   return 1;
 }
 
+/** Red on a terminal, so a session on the real database can't be taken for a local one. */
+function promptFor(remote: boolean, terminal: boolean): string {
+  const prompt = remote ? "remote> " : "local> ";
+  return remote && terminal ? `\u001b[31m${prompt}\u001b[39m` : prompt;
+}
+
+/** Why a remote database can't be opened yet (or, after asking, the answer was no); else nothing. */
+async function remoteRefusal(
+  chosen: ChosenDatabase,
+  yes: boolean,
+  io: ConsoleIo,
+): Promise<string | undefined> {
+  const target = remoteTarget(chosen);
+  if (target.id === undefined) {
+    return `${chosen.binding} has no database_id in ${basename(chosen.configFile)}, which --remote needs`;
+  }
+  if (yes) return undefined;
+  if (io.terminal !== true) {
+    return "Opening a remote database asks you to confirm it: run this on a terminal, or add --yes";
+  }
+  const confirmed = await confirmRemote({
+    input: io.input,
+    output: io.output,
+    binding: chosen.binding,
+    target,
+  });
+  return confirmed ? undefined : "Not opened.";
+}
+
+/** The database to open, after the confirmation a remote one needs; or why not. */
+async function openDatabase(
+  cwd: string,
+  chosen: ChosenDatabase,
+  options: ConsoleOptions,
+  io: ConsoleIo,
+): Promise<OpenBinding | string> {
+  if (options.remote !== true) return openLocalBinding(cwd, chosen);
+  const refusal = await remoteRefusal(chosen, options.yes === true, io);
+  return refusal ?? openRemoteBinding(cwd, chosen);
+}
+
 /** Runs the console until its input ends; the exit code. */
 export async function runConsole(
   options: ConsoleOptions,
@@ -56,8 +102,9 @@ export async function runConsole(
   if (typeof chosen === "string") return refused(print, chosen);
   const project = await loadProject(cwd, options.models);
   if (typeof project === "string") return refused(print, project);
-  const opened = await openLocalBinding(cwd, chosen);
+  const opened = await openDatabase(cwd, chosen, options, io);
   if (typeof opened === "string") return refused(print, opened);
+  const remote = options.remote === true;
   try {
     const { library, models } = project;
     const { commands, onQuery } = consoleCommands(project, {
@@ -73,7 +120,9 @@ export async function runConsole(
       scope: { ...models, db: database },
       commands,
       withDatabase: async (run) => void (await library.withDatabase(database, run)),
-      historyFile: options.history === false ? undefined : historyFileFor(chosen.configFile),
+      prompt: promptFor(remote, io.terminal === true),
+      // What is typed against a real database stays out of the history unless it is asked for.
+      historyFile: (options.history ?? !remote) ? historyFileFor(chosen.configFile) : undefined,
     });
     await session.closed;
   } finally {
