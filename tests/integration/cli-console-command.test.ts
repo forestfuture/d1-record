@@ -325,6 +325,30 @@ describe("d1-record console", () => {
       await end();
     }, 90_000);
 
+    test(".verbose on stays on when it is already on", async () => {
+      const { send, end } = await running({ verbose: true });
+
+      expect(await send(".verbose on")).toBe("SQL logging on");
+      expect(await send("await User.find(1)")).toMatch(/^User /);
+      await end();
+    }, 90_000);
+
+    test(".verbose off stays off when it is already off", async () => {
+      const { send, end } = await running();
+
+      expect(await send(".verbose off")).toBe("SQL logging off");
+      expect(await send("await User.find(1)")).toMatch(/^#=> User \{/);
+      await end();
+    }, 90_000);
+
+    test(".verbose with an argument it doesn't know says so and changes nothing", async () => {
+      const { send, end } = await running({ verbose: true });
+
+      expect(await send(".verbose banana")).toBe("Use .verbose, .verbose on, or .verbose off");
+      expect(await send("await User.find(1)")).toMatch(/^User /);
+      await end();
+    }, 90_000);
+
     test("verbose! as a bare line toggles it too", async () => {
       const { send, end } = await running();
 

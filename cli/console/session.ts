@@ -4,7 +4,7 @@ import repl from "node:repl";
 import { PassThrough, type Readable, type Writable } from "node:stream";
 
 /** A command of the console itself, typed as `.name` (and `name!` too, when `bang` is set). */
-interface SessionCommand {
+export interface SessionCommand {
   /** What `.help` says about it. */
   help: string;
   /** Also runs as a line that is just `name!`. */
@@ -170,8 +170,8 @@ export function startSession({
   for (const [name, command] of Object.entries(commands)) {
     server.defineCommand(name, {
       help: command.help,
-      action() {
-        lines.enqueue(() => runCommand(name, ""));
+      action(argument) {
+        lines.enqueue(() => runCommand(name, argument));
       },
     });
   }

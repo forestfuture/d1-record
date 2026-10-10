@@ -2,10 +2,10 @@
 import { dirname, join } from "node:path";
 import type { Readable, Writable } from "node:stream";
 import { openLocalBinding } from "./binding.ts";
+import { consoleCommands } from "./commands.ts";
 import { databaseFor } from "./database.ts";
 import { loadProject } from "./project.ts";
 import { startSession } from "./session.ts";
-import { statementLine } from "./verbose.ts";
 
 export interface ConsoleOptions {
   /** The project's folder; the current one by default. */
@@ -60,41 +60,18 @@ export async function runConsole(
   if (typeof opened === "string") return refused(print, opened);
   try {
     const { library, models } = project;
-    let verbose = options.verbose === true;
-    const database = library.connect(opened.binding, {
-      onQuery: (event) => {
-        if (verbose) io.output.write(`${statementLine(event, io.terminal === true)}\n`);
-      },
+    const { commands, onQuery } = consoleCommands(project, {
+      verbose: options.verbose === true,
+      write: (line) => io.output.write(`${line}\n`),
+      dim: io.terminal === true,
     });
+    const database = library.connect(opened.binding, { onQuery });
     print(opened.description);
     print(`Models: ${Object.keys(models).join(", ")}`);
-    let modelNames = Object.keys(models);
     const session = startSession({
       ...io,
       scope: { ...models, db: database },
-      commands: {
-        verbose: {
-          help: "Show the SQL each line runs: .verbose, .verbose on, or .verbose off (also: verbose!)",
-          bang: true,
-          run: (argument) => {
-            const word = argument.trim();
-            verbose = word === "on" ? true : word === "off" ? false : !verbose;
-            return `SQL logging ${verbose ? "on" : "off"}`;
-          },
-        },
-        reload: {
-          help: "Read your Models again, after editing them (also: reload!)",
-          bang: true,
-          run: async (_argument, scope) => {
-            const again = await project.reload();
-            if (typeof again === "string") return again;
-            for (const name of modelNames) delete scope[name];
-            Object.assign(scope, again);
-            modelNames = Object.keys(again);
-            return `Reloaded: ${modelNames.join(", ")}`;
-          },
-        },
-      },
+      commands,
       withDatabase: async (run) => void (await library.withDatabase(database, run)),
       historyFile: options.history === false ? undefined : historyFileFor(chosen.configFile),
     });
