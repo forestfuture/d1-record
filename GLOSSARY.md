@@ -21,7 +21,7 @@ The `d1-record g model` and `g migration` commands: they write a migration (and 
 _Avoid_: Scaffold, codegen
 
 **Console**:
-The interactive session `d1-record console` opens: a REPL on the project's local D1 database, with its Models and `db` in scope and each line run against that database. Local only. A **Generator** writes files; the console works with data.
+The interactive session `d1-record console` opens: a REPL on the project's local D1 database, with its Models and `db` in scope and each line run against that database. Local unless `--remote`, which opens the real database after its name is typed. A **Generator** writes files; the console works with data.
 _Avoid_: Shell, REPL (in the guide), playground
 
 **Override**:

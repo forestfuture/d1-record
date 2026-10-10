@@ -1,5 +1,5 @@
 ---
-description: "How to open a console on your local D1 database with your Models loaded: d1-record console, what is in scope, its options, and where its data and history live."
+description: "How to open a console on your D1 database with your Models loaded: d1-record console, what is in scope, its options, opening the remote database with --remote, and where its data and history live."
 ---
 
 # Console
@@ -16,13 +16,13 @@ It prints which database and Models it opened, then waits for a line:
 Local database DB (.wrangler/state)
 Models: Post, User
 
-> const user = await User.find("c5c765b4-b7e1-428e-aa00-88d58f622c71")
+local> const user = await User.find("c5c765b4-b7e1-428e-aa00-88d58f622c71")
 #=> undefined
-> user
+local> user
 #=> User { id: 'c5c765b4-b7e1-428e-aa00-88d58f622c71', name: 'Alice', email: [FILTERED] }
-> await user.update({ name: "Johnny" })
+local> await user.update({ name: "Johnny" })
 #=> true
-> const admins = await User.where({ role: "admin" }).toArray()
+local> const admins = await User.where({ role: "admin" }).toArray()
 #=> undefined
 ```
 
@@ -82,16 +82,55 @@ The SQL comes from the database’s own `onQuery`, so a listener you set on your
 | `--config <file>`   | Use this Wrangler config instead of finding `wrangler.jsonc`, `wrangler.json`, or `.toml`. |
 | `--no-history`      | Don’t keep what you type in the history file.                                              |
 | `--verbose`         | Print each statement a line runs, to begin with. `.verbose` turns it on and off.           |
+| `--remote`          | Open your remote database instead, after you type its name. See below.                     |
+| `--yes`             | With `--remote`, don’t ask first. It’s also how to open it without a terminal.             |
+| `--history`         | Keep what you type in a remote session, which isn’t kept unless you ask.                   |
 
 ## Where your data lives
 
 The console opens the local database in `.wrangler/state`, beside your Wrangler config. It’s the same one `wrangler dev` and `wrangler d1 migrations apply --local` use, so apply your migrations first, and what you change in the console is what your dev server sees.
 
-It never opens your remote database, even for a binding your config marks `remote: true`.
+It opens your remote database only when you ask with `--remote`, and never for a binding your config marks `remote: true` by itself.
 
 It starts only that D1 binding. The rest of your Wrangler config (Durable Objects, services, `vars`, and the secrets in `.dev.vars`) isn’t started, so it can’t warn or fail on them, and your Models can’t reach them either.
 
 On a terminal, what you type is kept in `.wrangler/d1-record-history`, which Wrangler projects already ignore. A line can hold a token or an email, so add `--no-history` when you’d rather it wasn’t kept.
+
+## Opening your remote database
+
+`--remote` opens the real database your binding points at, to look at production data or fix one record by hand:
+
+```sh
+npx d1-record console --remote
+```
+
+It names the database and waits for you to type its name. Anything else, including `y`, cancels and opens nothing:
+
+```text
+Remote database DB (shop, id 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d)
+What you change in the console is changed in this database, not a copy.
+Type its name to continue, anything else cancels: shop
+```
+
+Once it’s open, the prompt says `remote>` (in red on a terminal) where a local session says `local>`, so the two can’t be mistaken for each other:
+
+```text
+Remote database DB (shop, id 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d)
+Models: Post, User
+
+remote> await User.count()
+#=> 42
+```
+
+::: danger Changes are real
+There’s no copy and no undo. `await user.destroy()` deletes that row from your remote database, and `User.deleteAll()` deletes them all.
+:::
+
+- **Signing in.** The console uses your Wrangler login, or `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the environment. It takes the account from `account_id` in your Wrangler config when it names one. Opening a remote database starts a temporary preview Worker, as `wrangler dev` does for a remote binding, so the token needs **D1: Edit** and **Workers Scripts: Edit**, and the account needs a `workers.dev` subdomain. When Cloudflare refuses, the console prints its reason and how to sign in.
+- **Without a terminal.** There’s no one to type the name, so it refuses unless you add `--yes`, which is how a script opens it: `echo 'await User.count()' | npx d1-record console --remote --yes`.
+- **The database it opens.** The binding needs a `database_id`. When it also has a `preview_database_id`, Wrangler opens that one in place of `database_id`, and the console says so: `Remote preview database DB (…)`.
+- **No history.** What you type isn’t kept unless you add `--history`.
+- **Local files.** Nothing is written to `.wrangler/state`; the local database isn’t touched.
 
 ## Running a few lines at once
 
@@ -111,4 +150,8 @@ The console runs your project’s code: your Models, and the `wrangler` and `@fo
 
 ::: rails Compared with Rails
 This is `rails console` for D1: your Models in scope, and records printed as `inspect` prints them.
+:::
+
+::: rails Beyond Rails
+`rails console` opens whichever environment you start it in, without asking. `--remote` asks you to type the database’s name first, and its prompt says `remote>`.
 :::

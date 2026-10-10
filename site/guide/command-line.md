@@ -56,7 +56,7 @@ Their schemas often live at `src/db/schema.ts` or `src/db/schema/`. Write d1-rec
 
 ## `d1-record console`
 
-Open your local database with your Models in a console, or `d1-record c` for short ([Console](./console) shows a session):
+Open your database with your Models in a console, or `d1-record c` for short ([Console](./console) shows a session). It opens the local one unless you pass `--remote`:
 
 ```sh
 npx d1-record console
@@ -69,8 +69,11 @@ npx d1-record console
 | `--config <file>`   | Use this Wrangler config instead of finding `wrangler.jsonc`, `wrangler.json`, or `.toml`. |
 | `--no-history`      | Don’t keep what you type in `.wrangler/d1-record-history`.                                 |
 | `--verbose`         | Print each statement a line runs. `.verbose` turns it on and off in the console.           |
+| `--remote`          | Open your remote database instead, after you type its name.                                |
+| `--yes`             | With `--remote`, don’t ask first (also how to open it without a terminal).                 |
+| `--history`         | Keep what you type in a remote session, which isn’t kept unless you ask.                   |
 
-It reads TypeScript Models and uses your project’s own `wrangler` and `@forestfuture/d1-record`. It opens the local database only, and it refuses, printing why, when there’s no Wrangler config, with several databases and no `--database`, with no Models, or with `wrangler` or the library not installed.
+It reads TypeScript Models and uses your project’s own `wrangler` and `@forestfuture/d1-record`. It refuses, printing why, when there’s no Wrangler config, with several databases and no `--database`, with no Models, with `wrangler` or the library not installed, or with `--remote` when the binding has no `database_id`, or when you don’t confirm it (or aren’t on a terminal and didn’t pass `--yes`). `--yes` only goes with `--remote`, and `--history` can’t be combined with `--no-history`.
 
 ## Mapping columns to attributes
 
