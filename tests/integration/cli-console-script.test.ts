@@ -128,6 +128,29 @@ describe("running one piece of code in the console's scope", () => {
     expect(await run(".help")).toEqual({ exitCode: 0, stdout: "", stderr: "" });
   });
 
+  test("console.log goes to stdout and console.error to stderr, before the result", async () => {
+    const result = await run('console.log("one"); console.error("two"); "three"');
+
+    expect(result).toEqual({ exitCode: 0, stdout: "one\nthree\n", stderr: "two\n" });
+  });
+
+  test("what was logged before a failure is still printed, though no result is", async () => {
+    const result = await run('console.log("seen"); throw new Error("then this")');
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("seen\n");
+  });
+
+  test("a rejection nobody awaits fails the script when it arrives while the code still runs", async () => {
+    const result = await run(
+      "Sample.find(99); await new Promise((resolve) => setTimeout(resolve, 150)); 1",
+    );
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toMatch(/RecordNotFound/);
+  });
+
   test("a failure after a result prints no partial result", async () => {
     const result = await run('"first"\nthrow new Error("then this")');
 

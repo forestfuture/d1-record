@@ -157,11 +157,15 @@ npx d1-record console -e 'await User.count()'
 42
 ```
 
-- **The result alone is on stdout.** A string prints as it is, without quotes, so `$(…)` captures it, and anything else prints as the console prints it, without `#=> `. `undefined` prints nothing.
+- **The result is on stdout.** A string prints as it is, without quotes, so `$(…)` captures it, and anything else prints as the console prints it, without `#=> `. `undefined` prints nothing. What your code logs with `console.log` comes first, and `console.error` goes to stderr, as in `node -e`.
 - **Everything else is on stderr:** which database and Models it opened, the SQL with `--verbose`, and a refusal to start.
-- **A failure exits 1.** Its stack goes to stderr, nothing goes to stdout, and no statement after it runs. Success exits 0.
+- **A failure exits 1.** Its stack goes to stderr, no result goes to stdout, and no statement after it runs. Success exits 0.
 - **Join statements with `;`.** The last value is the result: `-e 'await User.create({ name: "Dan" }); await User.count()'`.
-- **It keeps no history,** and ignores what is piped to it.
+- **It keeps no history,** ignores what is piped to it, and has no time limit: stop it with Ctrl-C, or run it under `timeout`.
+
+::: warning TIP
+Await every call. `User.find(1)` without `await` prints `Promise { <pending> }`, and a promise you don’t await may not finish before the console exits, and its failure isn’t reported.
+:::
 
 ::: warning TIP
 Put the code in single quotes, so your shell leaves `$`, `!`, and backticks alone. With `--remote`, `$(…)` makes stdout a pipe, so there is no terminal to ask: add `--yes`, as in `npx d1-record console --remote --yes -e 'await User.count()'`.

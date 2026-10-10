@@ -115,16 +115,20 @@ function isTerminal(stream: Writable): boolean {
 /** What a session needs from the open database: the scope, and how to run a line inside it. */
 type Opened = Pick<SessionOptions, "scope" | "commands" | "withDatabase">;
 
-/** Runs `code` once, and writes its result and its failure where each belongs; the exit code. */
-async function runOnce(code: string, opened: Opened, io: ConsoleIo, errors: Writable) {
-  const result = await runScript({
+/** What a console run came to: its exit code, and what it has for stdout and for stderr. */
+interface Finished {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}
+
+/** Runs `code` once, and returns its output rather than writing it: that waits until it is closed. */
+function runOnce(code: string, opened: Opened, io: ConsoleIo, errors: Writable): Promise<Finished> {
+  return runScript({
     code,
     ...opened,
     colors: { result: isTerminal(io.output), error: isTerminal(errors) },
   });
-  io.output.write(result.stdout);
-  errors.write(result.stderr);
-  return result.exitCode;
 }
 
 /** What opening the console found: the database chosen, the project's Models, the open binding. */
@@ -135,20 +139,14 @@ interface Prepared {
 }
 
 /** Everything that has to be true before a session starts, or why it isn't. */
-async function prepare(
-  options: ConsoleOptions,
-  io: ConsoleIo,
-  errors: Writable,
-): Promise<Prepared | string> {
+async function prepare(options: ConsoleOptions, io: ConsoleIo): Promise<Prepared | string> {
   const cwd = options.cwd ?? process.cwd();
   const chosen = databaseFor(cwd, options);
   if (typeof chosen === "string") return chosen;
   const project = await loadProject(cwd, options.models);
   if (typeof project === "string") return project;
-  // A script's output is its result alone, so the confirmation's question goes to stderr.
-  const asking = options.eval === undefined ? io : { ...io, output: errors };
   const opened = await (options.remote === true
-    ? openRemote(cwd, chosen, options, asking)
+    ? openRemote(cwd, chosen, options, io)
     : openLocalBinding(cwd, chosen));
   return typeof opened === "string" ? opened : { chosen, project, opened };
 }
@@ -165,7 +163,7 @@ async function converse(
   options: ConsoleOptions,
   { chosen, project, opened }: Prepared,
   { io, say, errors }: Talk,
-): Promise<number> {
+): Promise<Finished> {
   const scripted = options.eval !== undefined;
   const remote = options.remote === true;
   const { library, models } = project;
@@ -192,7 +190,7 @@ async function converse(
       (options.history ?? !remote) ? historyFileFor(chosen.configFile, remote) : undefined,
   });
   await session.closed;
-  return 0;
+  return { exitCode: 0, stdout: "", stderr: "" };
 }
 
 /** Runs the console until its input ends; the exit code. */
@@ -204,11 +202,24 @@ export async function runConsole(
   const errors = io.error ?? process.stderr;
   // A script's output is its result alone: all else it says (even a refusal) goes to stderr.
   const say = options.eval === undefined ? print : (line: string) => void errors.write(`${line}\n`);
-  const prepared = await prepare(options, io, errors);
+  const prepared = await prepare(options, io);
   if (typeof prepared === "string") return refused(say, prepared);
+  let finished: Finished;
+  let closing: unknown;
   try {
-    return await converse(options, prepared, { io, say, errors });
+    finished = await converse(options, prepared, { io, say, errors });
   } finally {
-    await prepared.opened.dispose();
+    // Closed before a script's result is written: a database that won't close is no success.
+    closing = await prepared.opened.dispose().then(
+      () => undefined,
+      (error: unknown) => error,
+    );
   }
+  if (closing !== undefined) {
+    say(`Couldn't close the database: ${(closing as Error).message}`);
+    return 1;
+  }
+  io.output.write(finished.stdout);
+  errors.write(finished.stderr);
+  return finished.exitCode;
 }

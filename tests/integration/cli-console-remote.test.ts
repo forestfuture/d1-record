@@ -27,16 +27,23 @@ async function remoteShop(entry?: Record<string, unknown>) {
   );
   writeFileSync(
     join(cwd, "node_modules/wrangler/index.js"),
-    `import { appendFileSync } from "node:fs";
+    `import { appendFileSync, existsSync } from "node:fs";
      import { getPlatformProxy as real } from ${JSON.stringify(real)};
      export async function getPlatformProxy(options) {
        const { remoteBindings, persist } = options;
        appendFileSync(${JSON.stringify(log)}, JSON.stringify({ remoteBindings, persist }) + "\\n");
-       return real({
+       const proxy = await real({
          ...options,
          remoteBindings: false,
          persist: { path: ${JSON.stringify(join(cwd, ".wrangler/state/v3"))} },
        });
+       return {
+         ...proxy,
+         dispose: async () => {
+           await proxy.dispose();
+           if (existsSync(${JSON.stringify(join(cwd, "wont-stop"))})) throw new Error("proxy would not stop");
+         },
+       };
      }`,
   );
   const asked = () =>
@@ -266,7 +273,23 @@ describe("d1-record console -e --remote", () => {
     expect(asked()).toEqual([{ remoteBindings: true, persist: false }]);
   }, 90_000);
 
-  test("on a terminal asks on stderr, so stdout still holds only the result", async () => {
+  test("fails, with no result, when the proxy won't stop", async () => {
+    const { cwd } = await remoteShop();
+    writeFileSync(join(cwd, "wont-stop"), "");
+    const { io, seen } = streams(false);
+
+    const code = await runConsole(
+      { cwd, remote: true, yes: true, eval: "(await User.find(1)).name" },
+      () => {},
+      io,
+    );
+
+    expect(code).toBe(1);
+    expect(seen.stdout).toBe("");
+    expect(seen.stderr).toContain("proxy would not stop");
+  }, 90_000);
+
+  test("on a terminal asks where the person is looking, then prints the result", async () => {
     const { cwd } = await remoteShop();
     const { io, seen } = streams(true);
 
@@ -275,11 +298,12 @@ describe("d1-record console -e --remote", () => {
       () => {},
       io,
     );
-    await waitFor(() => seen.stderr.includes("Type its name to continue"));
+    await waitFor(() => seen.stdout.includes("Type its name to continue"));
     io.input.write("shop\n");
 
     expect(await running).toBe(0);
-    expect(seen.stdout).toBe("Alice\n");
+    expect(seen.stdout).toMatch(/Type its name to continue, anything else cancels: Alice\n$/);
+    expect(seen.stderr).not.toContain("Type its name");
   }, 90_000);
 });
 

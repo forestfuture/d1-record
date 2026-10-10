@@ -1,4 +1,5 @@
 // Running one piece of code in the console's scope and reporting what it came to: `console -e` (#105).
+import { Console } from "node:console";
 import { Readable, Writable } from "node:stream";
 import { inspect } from "node:util";
 import { startSession, type LineOutcome, type SessionOptions } from "./session.ts";
@@ -10,6 +11,16 @@ export interface ScriptResult {
   stderr: string;
 }
 
+/** A stream that collects what is written to it, as text. */
+function collecting(into: string[]): Writable {
+  return new Writable({
+    write(chunk, _encoding, done) {
+      into.push(String(chunk));
+      done();
+    },
+  });
+}
+
 /** The result as `node -p` prints it: a string as it is, anything else as inspect shows it. */
 function shown(value: unknown, colors: boolean): string {
   return typeof value === "string" ? value : inspect(value, { colors });
@@ -17,8 +28,10 @@ function shown(value: unknown, colors: boolean): string {
 
 /**
  * Runs `code` as the console would run a line (top-level `await`, the Models and `db` in scope,
- * each statement inside the project's `withDatabase`). The last result is printed unless it is
- * undefined; a failure prints nothing on stdout, and its stack on stderr, and no later line runs.
+ * each statement inside the project's `withDatabase`). The code's own `console.log` goes to
+ * stdout and `console.error` to stderr, as in `node -e`. The last result is printed after them
+ * unless it is undefined; a failure prints no result, and its stack on stderr, and no later line
+ * runs.
  */
 export async function runScript({
   code,
@@ -32,11 +45,16 @@ export async function runScript({
   colors?: { result: boolean; error: boolean };
 } & Pick<SessionOptions, "scope" | "commands" | "withDatabase">): Promise<ScriptResult> {
   let last: LineOutcome | undefined;
+  const logged: string[] = [];
+  const complained: string[] = [];
   const session = startSession({
     input: Readable.from([`${code}\n`]),
     // The REPL's own prompts and echoes have nowhere to go: the outcome is reported instead.
     output: new Writable({ write: (_chunk, _encoding, done) => done() }),
-    scope,
+    scope: {
+      ...scope,
+      console: new Console({ stdout: collecting(logged), stderr: collecting(complained) }),
+    },
     commands,
     withDatabase,
     onLine: (outcome) => {
@@ -44,17 +62,13 @@ export async function runScript({
     },
   });
   await session.closed;
+  const stdout = logged.join("");
+  const stderr = complained.join("");
   if (last?.ok === false) {
-    return {
-      exitCode: 1,
-      stdout: "",
-      stderr: `${inspect(last.error, { colors: colors.error })}\n`,
-    };
+    const stack = inspect(last.error, { colors: colors.error });
+    return { exitCode: 1, stdout, stderr: `${stderr}${stack}\n` };
   }
   const value = last?.value;
-  return {
-    exitCode: 0,
-    stdout: value === undefined ? "" : `${shown(value, colors.result)}\n`,
-    stderr: "",
-  };
+  const result = value === undefined ? "" : `${shown(value, colors.result)}\n`;
+  return { exitCode: 0, stdout: `${stdout}${result}`, stderr };
 }
