@@ -173,7 +173,7 @@ _Guide:_ [console](../site/guide/console.md), [command-line](../site/guide/comma
 - **Ctrl-C** on a terminal stops a line that is still running (`breakEvalOnSigint`), such as an `await` that never ends; the session carries on.
 - **When it can't start** it prints why and exits 1: a binding Wrangler can't open (with Wrangler's reason), or `wrangler` or the library that is found but throws on load (named as that, not as "not installed").
 - **Needs** Node 22.13 or later (as every command). It starts by printing the database (`Local database DB (.wrangler/state)`) and the Models (`Models: Post, User`).
-- Not yet (#104): `--sandbox`; and a one-shot `-e` (#105).
+- Not yet: `--sandbox` (#107, which records why it is a discardable copy and not a transaction); and a one-shot `-e` (#105).
 
 ## Scopes
 
