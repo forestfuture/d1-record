@@ -52,7 +52,7 @@ function lineQueue() {
     pending: () => tail,
     /** Runs `task` after the lines before it, and before the ones after. It must not throw. */
     enqueue(task: () => Promise<void>): void {
-      tail = tail.then(task);
+      tail = tail.then(() => (stopped ? undefined : task()));
     },
     attach(
       server: repl.REPLServer,

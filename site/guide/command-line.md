@@ -68,6 +68,7 @@ npx d1-record console
 | `--models <path>`   | Where the Models are: a folder (`src/models`) or one file (`src/models.ts`).               |
 | `--config <file>`   | Use this Wrangler config instead of finding `wrangler.jsonc`, `wrangler.json`, or `.toml`. |
 | `--no-history`      | Don’t keep what you type in `.wrangler/d1-record-history`.                                 |
+| `--verbose`         | Print each statement a line runs. `.verbose` turns it on and off in the console.           |
 
 It reads TypeScript Models and uses your project’s own `wrangler` and `@forestfuture/d1-record`. It opens the local database only, and it refuses, printing why, when there’s no Wrangler config, with several databases and no `--database`, with no Models, or with `wrangler` or the library not installed.
 

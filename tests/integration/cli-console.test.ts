@@ -196,4 +196,30 @@ describe("the console session", () => {
     expect(terminal.transcript()).toContain("label");
     await session.closed;
   });
+
+  test("a command typed after quit does not run", async () => {
+    const ran: string[] = [];
+    const terminal = terminalStreams();
+    const session = startSession({
+      input: terminal.input,
+      output: terminal.output,
+      scope: {},
+      commands: {
+        ping: {
+          help: "Does nothing",
+          run: () => {
+            ran.push("ping");
+            return "pong";
+          },
+        },
+      },
+      withDatabase: (run) => withDatabase(connect(binding), run),
+    });
+    await terminal.ready();
+
+    terminal.input.write("quit\n.ping\n");
+    await Promise.race([session.closed, new Promise((resolve) => setTimeout(resolve, 2000))]);
+
+    expect(ran).toEqual([]);
+  });
 });

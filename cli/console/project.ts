@@ -1,4 +1,4 @@
-// Loads a project's TypeScript Models and its own copy of the library for the console (#104).
+// Loads (and reloads) a project's TypeScript Models and its own copy of the library for the console (#104).
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { createJiti } from "jiti";
