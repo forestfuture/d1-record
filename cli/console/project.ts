@@ -1,6 +1,6 @@
 // Loads (and reloads) a project's TypeScript Models and its own copy of the library for the console (#104).
 import { existsSync, readdirSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { createJiti } from "jiti";
 import { defaultModels, oneModelsFile, shown } from "../schema/project.ts";
 import type { StatementEvent } from "./verbose.ts";
@@ -83,7 +83,9 @@ async function loadModels(
     try {
       exported = await jiti.import<Record<string, unknown>>(file);
     } catch (error) {
-      return `Couldn't load ${shown(cwd, file)}: ${(error as Error).message}`;
+      // Syntax errors name the file by its full path; the project's own folder is implied.
+      const message = (error as Error).message.replaceAll(`${resolve(cwd)}${sep}`, "");
+      return `Couldn't load ${shown(cwd, file)}: ${message}`;
     }
     for (const [name, value] of Object.entries(exported)) {
       if (typeof value === "function" && value.prototype instanceof library.Model.Base) {

@@ -16,7 +16,9 @@ export interface StatementEvent {
  * and values. Dim on a terminal, so it reads as background to the results.
  */
 export function statementLine(event: StatementEvent, dim: boolean): string {
-  const { model, sql, params, durationMs, error } = event;
+  const { model, params, durationMs, error } = event;
+  // SQL that spans lines would break the one-line shape (and the dim span around it).
+  const sql = event.sql.replace(/\s*\n\s*/g, " ");
   let line = `  ${model}  `;
   if (error !== undefined) {
     line += `failed  ${sql}  ${error instanceof Error ? error.message : inspect(error)}`;

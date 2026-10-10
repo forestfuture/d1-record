@@ -36,7 +36,7 @@ export interface SessionOptions {
 const leaving = /^\s*(?:quit|exit)\s*;?\s*$/;
 
 /** A line that is just `name!`: one of the console's commands, as a bare word. */
-const bangLine = /^\s*([A-Za-z_]\w*)!\s*$/;
+const bangLine = /^\s*([A-Za-z_]\w*)!\s*;?\s*$/;
 
 /**
  * The REPL's lines, run one at a time inside the project's `withDatabase`. The REPL's input events

@@ -271,6 +271,24 @@ describe("d1-record console", () => {
       await end();
     }, 90_000);
 
+    test("reload! waits for a line that is still running", async () => {
+      const cwd = await shop();
+      const terminal = terminalStreams();
+      const done = runConsole({ cwd }, () => {}, terminal);
+      await terminal.ready();
+
+      // All typed at once, as pasted: the edit lands while the first line is still awaiting,
+      // so a reload that ran straight away would not see it.
+      terminal.input.write("await new Promise((resolve) => setTimeout(resolve, 600))\n");
+      terminal.input.write("reload!\nUser.edited\n");
+      terminal.input.end();
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      writeFileSync(join(cwd, "src/models/user.ts"), edited);
+      await done;
+
+      expect(terminal.transcript()).toContain("#=> 'yes'");
+    }, 90_000);
+
     test("a record you already hold keeps its old class", async () => {
       const { cwd, send, end } = await running();
       await send("const user = await User.find(1)");
@@ -363,6 +381,13 @@ describe("d1-record console", () => {
       expect(await send("verbose!")).toBe("SQL logging on");
       expect(await send("await User.find(1)")).toMatch(/^User /);
       expect(await send("verbose!")).toBe("SQL logging off");
+      await end();
+    }, 90_000);
+
+    test("verbose!; with a semicolon is the same line", async () => {
+      const { send, end } = await running();
+
+      expect(await send("verbose!;")).toBe("SQL logging on");
       await end();
     }, 90_000);
 

@@ -80,6 +80,8 @@ The SQL comes from the database’s own `onQuery`, so a listener you set on your
 | `--database <name>` | The D1 binding to open, when your Wrangler config has several.                             |
 | `--models <path>`   | Where your Models are: a folder (`src/models` by default) or one file (`src/models.ts`).   |
 | `--config <file>`   | Use this Wrangler config instead of finding `wrangler.jsonc`, `wrangler.json`, or `.toml`. |
+| `--no-history`      | Don’t keep what you type in the history file.                                              |
+| `--verbose`         | Print each statement a line runs, to begin with. `.verbose` turns it on and off.           |
 
 ## Where your data lives
 

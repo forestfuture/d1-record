@@ -273,6 +273,29 @@ describe("loading a project's Models for the console", () => {
       expect(User.prototype instanceof first.library.Model.Base).toBe(true);
     });
 
+    test("a syntax error is reported with the file's place in the project, not its full path", async () => {
+      const { cwd, first } = await loaded();
+      writeFileSync(join(cwd, "src/models/user.ts"), "export class {");
+
+      const message = await first.reload();
+
+      expect(message).toMatch(/^Couldn't load src\/models\/user\.ts: /);
+      expect(message).not.toContain(cwd);
+    });
+
+    test("an export that isn't a Model class is left out", async () => {
+      const { cwd, first } = await loaded();
+      writeFileSync(
+        join(cwd, "src/models/helpers.ts"),
+        "export class Helper {}\nexport const answer = 42;\nexport function f() {}",
+      );
+
+      const again = await first.reload();
+
+      if (typeof again === "string") throw new Error(again);
+      expect(Object.keys(again)).toEqual(["User"]);
+    });
+
     test("says which file fails to load", async () => {
       const { cwd, first } = await loaded();
       writeFileSync(join(cwd, "src/models/user.ts"), 'throw new Error("mid-edit");');
