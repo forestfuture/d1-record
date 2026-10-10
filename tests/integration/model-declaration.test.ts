@@ -46,17 +46,26 @@ describe("model declaration", () => {
     const e = class extends Model({ id: "integer" }) {};
     const db = connect(binding);
 
-    const read = db.model(e).toArray();
-    const written = db.batch([db.model(e).toInsert({ id: 1 })]);
+    // Both start now, so each gets its handler now: one left unhandled while the other is
+    // asserted on would be reported as an unhandled rejection if it settled first (#106).
+    const errors = await Promise.all(
+      [db.model(e).toArray(), db.batch([db.model(e).toInsert({ id: 1 })])].map((attempt) =>
+        attempt.then(
+          () => undefined,
+          (error: unknown) => error,
+        ),
+      ),
+    );
 
-    for (const attempt of [read, written]) {
-      await expect(attempt).rejects.toThrow(InvalidModel);
-      await expect(attempt).rejects.toHaveProperty(
-        "cause.message",
-        expect.stringMatching(/no such table: es/),
-      );
-      await expect(attempt).rejects.toThrow(
-        /e's table "es" doesn't exist in D1 \(inferred from the class name e; create it, set static tableName, or keep class names if your bundler renames them\)/,
+    expect(errors).toHaveLength(2);
+    for (const error of errors) {
+      expect(error).toBeInstanceOf(InvalidModel);
+      expect(error).toHaveProperty("cause.message", expect.stringMatching(/no such table: es/));
+      expect(error).toHaveProperty(
+        "message",
+        expect.stringMatching(
+          /e's table "es" doesn't exist in D1 \(inferred from the class name e; create it, set static tableName, or keep class names if your bundler renames them\)/,
+        ),
       );
     }
   });
