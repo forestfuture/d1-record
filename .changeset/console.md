@@ -1,5 +1,0 @@
----
-"@forestfuture/d1-record": patch
----
-
-`npx d1-record console` opens your local D1 database in a console with your Models loaded: `const user = await User.find(id)`, `await user.update({ name: "Johnny" })`, then `user` to see it. It takes `--database`, `--models`, and `--config`, keeps its history in `.wrangler/d1-record-history` (`--no-history` turns that off), leaves with `quit`, `exit`, or Ctrl-D, reads edited Models again with `reload!` (or `.reload`), runs one piece of code with `-e` (its result alone on stdout, a failure on stderr with exit code 1), shows the SQL of each line with `--verbose` (or `.verbose`, `verbose!` while it runs), opens your remote database only with `--remote` (after you type its name; `--yes` skips that; its prompt says `remote>` and it keeps no history unless `--history`), and reads TypeScript Models (extensionless imports and `tsconfig.json` paths included) through `jiti`, now a dependency of the command line. A record's `errors` print their failures (`Errors [ { attribute, type, message } ]`) instead of `Errors {}`. The guide has a new Console page.
