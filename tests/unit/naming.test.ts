@@ -1,5 +1,13 @@
 import { describe, expect, test } from "vite-plus/test";
+import { connect, Model } from "../../src/index.ts";
 import { underscore } from "../../src/naming.ts";
+
+class User extends Model({ id: { type: "integer", null: false } }) {
+  static tableName = "users";
+}
+
+// No D1 needed: building a record and reading its errors never queries.
+const users = connect({} as never).model(User);
 
 /** `underscore` as it was written before #116: two regexes, quadratic on a long run of capitals. */
 function original(name: string): string {
@@ -42,6 +50,13 @@ describe("underscore", () => {
     const name = character.repeat(100_000);
 
     expect(milliseconds(() => underscore(name))).toBeLessThan(LIMIT_MS);
+  });
+
+  test("humanizes an error's long attribute name in linear time", () => {
+    const user = users.build({ id: 1 });
+    user.errors.add("0".repeat(100_000), "is bad");
+
+    expect(milliseconds(() => user.errors.fullMessages())).toBeLessThan(LIMIT_MS);
   });
 
   test("gives the names Rails' rule gives, for every short string", () => {
