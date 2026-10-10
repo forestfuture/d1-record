@@ -1,0 +1,112 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
+import { connect, Model, withDatabase } from "../../src/index.ts";
+import { runScript } from "../../cli/console/script.ts";
+import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
+
+class Sample extends Model({
+  id: { type: "integer", null: false },
+  label: "string",
+  quantity: "integer",
+}) {
+  static tableName = "samples";
+}
+
+// `d1-record console -e` (#105): one piece of code, its result on stdout, its failure on stderr.
+describe("running one piece of code in the console's scope", () => {
+  let binding: TestDatabase;
+  let dispose: () => Promise<void>;
+
+  beforeAll(async () => {
+    ({ db: binding, dispose } = await createTestDatabase());
+  });
+  afterAll(() => dispose());
+  beforeEach(async () => {
+    await binding.prepare("DELETE FROM samples").run();
+    await binding.prepare("INSERT INTO samples (id, label, quantity) VALUES (1, 'bolt', 36)").run();
+  });
+
+  const run = (code: string) =>
+    runScript({
+      code,
+      scope: { Sample, db: connect(binding) },
+      withDatabase: (inside) => withDatabase(connect(binding), inside),
+    });
+
+  test("prints a string as it is, without quotes", async () => {
+    expect(await run("(await Sample.find(1)).label")).toEqual({
+      exitCode: 0,
+      stdout: "bolt\n",
+      stderr: "",
+    });
+  });
+
+  test("prints anything else as the console's inspect does, with no #=>", async () => {
+    expect((await run("await Sample.find(1)")).stdout).toBe(
+      "Sample { id: 1, label: 'bolt', quantity: 36 }\n",
+    );
+    expect((await run("await Sample.count()")).stdout).toBe("1\n");
+  });
+
+  test("prints nothing for undefined", async () => {
+    expect(await run("const unused = 1")).toEqual({ exitCode: 0, stdout: "", stderr: "" });
+  });
+
+  test("a Model's statics need no database argument", async () => {
+    expect((await run("await Sample.count()")).exitCode).toBe(0);
+  });
+
+  test("prints the last statement's value, and what ran before it took effect", async () => {
+    const result = await run(
+      'await Sample.create({ id: 2, label: "nut", quantity: 5 }); await Sample.count()',
+    );
+
+    expect(result.stdout).toBe("2\n");
+    expect(await binding.prepare("SELECT COUNT(*) AS n FROM samples").first("n")).toBe(2);
+  });
+
+  test("a throw prints its stack on stderr, nothing on stdout, and fails", async () => {
+    const result = await run('throw new Error("boom")');
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toMatch(/^Error: boom\n\s+at /);
+  });
+
+  test("a rejected await fails the same way", async () => {
+    const result = await run("await Sample.find(99)");
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toMatch(/RecordNotFound/);
+  });
+
+  test("a rejection with something other than an error prints that", async () => {
+    const result = await run('await Promise.reject("plain")');
+
+    expect(result).toEqual({ exitCode: 1, stdout: "", stderr: "'plain'\n" });
+  });
+
+  test("code that isn't finished fails", async () => {
+    const result = await run("const f = () => {");
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).not.toBe("");
+  });
+
+  test("after a failure, the lines behind it don't run", async () => {
+    const result = await run(
+      'throw new Error("stop")\nawait Sample.create({ id: 3, label: "late", quantity: 1 })',
+    );
+
+    expect(result.exitCode).toBe(1);
+    expect(await binding.prepare("SELECT COUNT(*) AS n FROM samples").first("n")).toBe(1);
+  });
+
+  test("a failure after a result prints no partial result", async () => {
+    const result = await run('"first"\nthrow new Error("then this")');
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+  });
+});

@@ -17,6 +17,9 @@ export interface SessionCommand {
   run: (argument: string, scope: Record<string, unknown>) => Promise<string> | string;
 }
 
+/** What one line came to: its value, or what it threw (or was rejected with). */
+export type LineOutcome = { ok: true; value: unknown } | { ok: false; error: unknown };
+
 export interface SessionOptions {
   input: Readable;
   output: Writable;
@@ -32,6 +35,17 @@ export interface SessionOptions {
   commands?: Record<string, SessionCommand>;
   /** The project's own `withDatabase`, bound to its database: runs `run` with Models using it. */
   withDatabase: (run: () => void) => Promise<void>;
+  /**
+   * Makes the session a script: each line's outcome goes here, and nothing is printed for it. The
+   * first line that fails ends the session, so the lines behind it never run.
+   */
+  onLine?: (outcome: LineOutcome) => void;
+}
+
+/** How a script session hears of each line: what it came to, and the last thing the REPL wrote. */
+interface Script {
+  report: (outcome: LineOutcome) => void;
+  written: () => unknown;
 }
 
 /** A line that is just `quit` or `exit`: leaves the console, as `.exit` does. */
@@ -39,6 +53,56 @@ const leaving = /^\s*(?:quit|exit)\s*;?\s*$/;
 
 /** A line that is just `name!`: one of the console's commands, as a bare word. */
 const bangLine = /^\s*([A-Za-z_]\w*)!\s*;?\s*$/;
+
+/**
+ * Runs a task inside the project's database. While a line awaits, the REPL holds the next one back
+ * and then runs it from inside that line's async context, where the database is already
+ * registered. Wrapping it again would register it twice, which reads as "several databases": so a
+ * task already inside one isn't wrapped.
+ */
+function databaseRunner(withDatabase: SessionOptions["withDatabase"]): (task: () => void) => void {
+  const wrapped = new AsyncLocalStorage<true>();
+  return (task) => {
+    if (wrapped.getStore() === true) task();
+    else void withDatabase(() => wrapped.run(true, task));
+  };
+}
+
+/**
+ * What each line of a script came to. A line's callback has its value or what it threw; a rejected
+ * `await` never calls back, so then it is what the REPL wrote. Half a statement (a `Recoverable`)
+ * is not an outcome: the REPL waits for the rest of it. The first failure closes the session.
+ */
+function scripted(script: Script | undefined, close: () => void) {
+  let outcome: LineOutcome | undefined;
+  let unfinished = false;
+  return {
+    /** The callback to evaluate the next line with. */
+    start(callback: repl.REPLEval extends (...a: infer P) => void ? P[3] : never) {
+      outcome = undefined;
+      unfinished = false;
+      if (script === undefined) return callback;
+      return ((error, result) => {
+        if (error instanceof repl.Recoverable) unfinished = true;
+        else outcome = error === null ? { ok: true, value: result } : { ok: false, error };
+        callback(error, result);
+      }) as typeof callback;
+    },
+    /** The input ended: a statement left unfinished is a failure, as the REPL would drop it. */
+    ended(): void {
+      if (script !== undefined && unfinished) {
+        script.report({ ok: false, error: new SyntaxError("Unexpected end of input") });
+      }
+    },
+    /** The REPL asked for the next line: the one in flight is over. */
+    finish(): void {
+      if (script === undefined || unfinished) return;
+      const reported = outcome ?? { ok: false, error: script.written() };
+      script.report(reported);
+      if (!reported.ok) close();
+    },
+  };
+}
 
 /**
  * The REPL's lines, run one at a time inside the project's `withDatabase`. The REPL's input events
@@ -62,23 +126,23 @@ function lineQueue() {
       withDatabase: SessionOptions["withDatabase"],
       /** Runs the line if it is a command typed as `name!`; undefined when it is not. */
       command: (line: string) => Promise<void> | undefined,
+      script?: Script,
     ): void {
       const evaluate = server.eval;
-      // While a line awaits, the REPL holds the next one back and then runs it from inside that
-      // line's async context, where the database is already registered. Wrapping it again would
-      // register it twice, which reads as "several databases": so a line already inside one isn't.
-      const wrapped = new AsyncLocalStorage<true>();
-      const inTheDatabase = (task: () => void): void => {
-        if (wrapped.getStore() === true) task();
-        else void withDatabase(() => wrapped.run(true, task));
-      };
+      const inTheDatabase = databaseRunner(withDatabase);
       // A line is done when the REPL asks for the next: it doesn't call the eval callback for an
       // `await` that rejects, but it always shows the prompt again.
       const displayPrompt = server.displayPrompt.bind(server);
+      const tracker = scripted(script, () => {
+        stopped = true;
+        server.close();
+      });
+      server.once("exit", () => tracker.ended());
       server.displayPrompt = (preserveCursor) => {
         try {
           displayPrompt(preserveCursor);
         } finally {
+          tracker.finish();
           lineDone?.();
         }
       };
@@ -107,7 +171,8 @@ function lineQueue() {
                 return done();
               }
               lineDone = done;
-              inTheDatabase(() => evaluate.call(server, code, context, file, callback));
+              const settled = tracker.start(callback);
+              inTheDatabase(() => evaluate.call(server, code, context, file, settled));
             }),
         );
       };
@@ -138,37 +203,16 @@ function untilDrained(input: Readable, pending: () => Promise<void>): Readable {
   return gated;
 }
 
-/** Starts the session; `closed` resolves when it ends (end of input, or `.exit`). */
-export function startSession({
-  input,
-  output,
-  terminal = false,
-  historyFile,
-  prompt = "> ",
-  scope,
-  commands = {},
-  withDatabase,
-}: SessionOptions): {
-  closed: Promise<void>;
-} {
-  const lines = lineQueue();
-  const server = repl.start({
-    prompt,
-    input: terminal ? input : untilDrained(input, lines.pending),
-    output,
-    terminal,
-    useColors: terminal,
-    // Ctrl-C stops a running line, even an `await` that never finishes.
-    breakEvalOnSigint: terminal,
-    useGlobal: false,
-    writer(this: repl.REPLServer, value: unknown) {
-      const shown = inspect(value, { colors: this.useColors });
-      return types.isNativeError(value) ? shown : `#=> ${shown}`;
-    },
-  });
-  if (terminal && historyFile !== undefined) server.setupHistory(historyFile, () => {});
-  Object.assign(server.context, scope);
-  // The console's own commands run in line order, print what they say, and ask for the next line.
+/**
+ * The console's own commands, which run in line order, print what they say and ask for the next
+ * line. Returns the function that runs a line typed as `name!`, or undefined when it isn't one.
+ */
+function defineCommands(
+  server: repl.REPLServer,
+  commands: Record<string, SessionCommand>,
+  lines: ReturnType<typeof lineQueue>,
+  output: Writable,
+): (line: string) => Promise<void> | undefined {
   const runCommand = async (name: string, argument: string): Promise<void> => {
     let message: string;
     try {
@@ -187,10 +231,51 @@ export function startSession({
       },
     });
   }
-  lines.attach(server, withDatabase, (line) => {
+  return (line) => {
     const name = bangLine.exec(line)?.[1];
     return name !== undefined && commands[name]?.bang ? runCommand(name, "") : undefined;
+  };
+}
+
+/** Starts the session; `closed` resolves when it ends (end of input, or `.exit`). */
+export function startSession({
+  input,
+  output,
+  terminal = false,
+  historyFile,
+  prompt = "> ",
+  scope,
+  commands = {},
+  withDatabase,
+  onLine,
+}: SessionOptions): {
+  closed: Promise<void>;
+} {
+  const lines = lineQueue();
+  let written: unknown;
+  const server = repl.start({
+    prompt,
+    input: terminal ? input : untilDrained(input, lines.pending),
+    output,
+    terminal,
+    useColors: terminal,
+    // Ctrl-C stops a running line, even an `await` that never finishes.
+    breakEvalOnSigint: terminal,
+    useGlobal: false,
+    writer(this: repl.REPLServer, value: unknown) {
+      if (onLine !== undefined) {
+        written = value;
+        return "";
+      }
+      const shown = inspect(value, { colors: this.useColors });
+      return types.isNativeError(value) ? shown : `#=> ${shown}`;
+    },
   });
+  if (terminal && historyFile !== undefined) server.setupHistory(historyFile, () => {});
+  Object.assign(server.context, scope);
+  const bang = defineCommands(server, commands, lines, output);
+  const script = onLine && { report: onLine, written: () => written };
+  lines.attach(server, withDatabase, bang, script);
   return {
     closed: new Promise((resolve) => server.on("exit", () => void lines.pending().then(resolve))),
   };
