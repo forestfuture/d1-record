@@ -171,7 +171,23 @@ describe("loading a project's Models for the console", () => {
       expect((again.User as unknown as { greeting: string }).greeting).toBe("bonjour");
     });
 
-    test("finds a Model file added since, and drops one that was removed", async () => {
+    test("finds a Model file added since", async () => {
+      const { cwd, first } = await loaded();
+      writeFileSync(
+        join(cwd, "src/models/post.ts"),
+        `
+          import { ApplicationRecord } from "./application-record";
+          export class Post extends ApplicationRecord("posts") {}
+        `,
+      );
+
+      const again = await first.reload();
+
+      if (typeof again === "string") throw new Error(again);
+      expect(Object.keys(again).sort()).toEqual(["Post", "User"]);
+    });
+
+    test("drops a Model whose file was removed", async () => {
       const { cwd, first } = await loaded();
       writeFileSync(
         join(cwd, "src/models/post.ts"),
@@ -198,20 +214,38 @@ describe("loading a project's Models for the console", () => {
       expect(User.prototype instanceof first.library.Model.Base).toBe(true);
     });
 
-    test("says which file fails, and leaves the loaded Models as they were", async () => {
+    test("says which file fails to load", async () => {
       const { cwd, first } = await loaded();
       writeFileSync(join(cwd, "src/models/user.ts"), 'throw new Error("mid-edit");');
 
       expect(await first.reload()).toBe("Couldn't load src/models/user.ts: mid-edit");
+    });
+
+    test("leaves the loaded Models as they were when a file fails", async () => {
+      const { cwd, first } = await loaded();
+      const before = first.models.User;
+      writeFileSync(join(cwd, "src/models/user.ts"), 'throw new Error("mid-edit");');
+      await first.reload();
+
+      expect(first.models.User).toBe(before);
+    });
+
+    test("loads again once the file is fixed", async () => {
+      const { cwd, first } = await loaded();
+      writeFileSync(join(cwd, "src/models/user.ts"), 'throw new Error("mid-edit");');
+      await first.reload();
       writeFileSync(
         join(cwd, "src/models/user.ts"),
         `
           import { ApplicationRecord } from "./application-record";
-          export class User extends ApplicationRecord("users") {}
+          export class User extends ApplicationRecord("users") { static fixed = true; }
         `,
       );
-      expect(typeof (await first.reload())).toBe("object");
-      expect(Object.keys(first.models)).toEqual(["User"]);
+
+      const again = await first.reload();
+
+      if (typeof again === "string") throw new Error(again);
+      expect((again.User as unknown as { fixed: boolean }).fixed).toBe(true);
     });
   });
 });

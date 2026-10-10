@@ -55,6 +55,20 @@ async function shop(): Promise<string> {
   return cwd;
 }
 
+/** A running console on a project (with these options), and its folder for edits between lines. */
+async function running(options: { verbose?: boolean } = {}) {
+  const cwd = await shop();
+  const terminal = terminalStreams();
+  const done = runConsole({ cwd, ...options }, () => {}, terminal);
+  await terminal.ready();
+  const send = (line: string) => terminal.send(line);
+  const end = () => {
+    terminal.input.end();
+    return done;
+  };
+  return { cwd, send, end };
+}
+
 describe("d1-record console", () => {
   test("opens the project's local database with its Models, and persists what you do", async () => {
     const cwd = await shop();
@@ -197,36 +211,36 @@ describe("d1-record console", () => {
       export class User extends ApplicationRecord("users") { static edited = "yes"; }
     `;
 
-    /** A running console on a project, and the folder, for edits between lines. */
-    async function running() {
-      const cwd = await shop();
-      const terminal = terminalStreams();
-      const done = runConsole({ cwd }, () => {}, terminal);
-      await terminal.ready();
-      const send = (line: string) => terminal.send(line);
-      const end = () => {
-        terminal.input.end();
-        return done;
-      };
-      return { cwd, send, end };
-    }
-
-    test("reload! picks up an edit, and says which Models it loaded", async () => {
+    test("reload! says which Models it loaded", async () => {
       const { cwd, send, end } = await running();
-      expect(await send("User.edited")).toBe("#=> undefined");
       writeFileSync(join(cwd, "src/models/user.ts"), edited);
 
       expect(await send("reload!")).toBe("Reloaded: User");
+      await end();
+    }, 90_000);
+
+    test("reload! picks up an edit to a Model", async () => {
+      const { cwd, send, end } = await running();
+      expect(await send("User.edited")).toBe("#=> undefined");
+      writeFileSync(join(cwd, "src/models/user.ts"), edited);
+      await send("reload!");
+
       expect(await send("User.edited")).toBe("#=> 'yes'");
       await end();
     }, 90_000);
 
-    test(".reload does the same, and is listed in .help", async () => {
+    test(".reload picks up an edit to a Model", async () => {
       const { cwd, send, end } = await running();
       writeFileSync(join(cwd, "src/models/user.ts"), edited);
 
       expect(await send(".reload")).toBe("Reloaded: User");
       expect(await send("User.edited")).toBe("#=> 'yes'");
+      await end();
+    }, 90_000);
+
+    test(".reload is listed in .help", async () => {
+      const { send, end } = await running();
+
       expect(await send(".help")).toMatch(/\.reload +Read your Models again/);
       await end();
     }, 90_000);
@@ -240,11 +254,19 @@ describe("d1-record console", () => {
       await end();
     }, 90_000);
 
-    test("a file that fails says so, and the Models stay as they were", async () => {
+    test("a Model file that throws is named, with its message", async () => {
       const { cwd, send, end } = await running();
       writeFileSync(join(cwd, "src/models/user.ts"), 'throw new Error("mid-edit");');
 
       expect(await send("reload!")).toBe("Couldn't load src/models/user.ts: mid-edit");
+      await end();
+    }, 90_000);
+
+    test("after a reload that fails, the Models are as they were", async () => {
+      const { cwd, send, end } = await running();
+      writeFileSync(join(cwd, "src/models/user.ts"), 'throw new Error("mid-edit");');
+      await send("reload!");
+
       expect(await send("(await User.find(1)).name")).toBe("#=> 'Alice'");
       await end();
     }, 90_000);
@@ -261,20 +283,6 @@ describe("d1-record console", () => {
   });
 
   describe("showing the SQL", () => {
-    /** A running console on a project, with these options. */
-    async function running(options: { verbose?: boolean } = {}) {
-      const cwd = await shop();
-      const terminal = terminalStreams();
-      const done = runConsole({ cwd, ...options }, () => {}, terminal);
-      await terminal.ready();
-      const send = (line: string) => terminal.send(line);
-      const end = () => {
-        terminal.input.end();
-        return done;
-      };
-      return { send, end };
-    }
-
     test("--verbose prints each statement before the result, with its Model and time", async () => {
       const { send, end } = await running({ verbose: true });
 
@@ -286,7 +294,7 @@ describe("d1-record console", () => {
       await end();
     }, 90_000);
 
-    test("it prints nothing extra without the flag", async () => {
+    test("without --verbose, a result has no statement line before it", async () => {
       const { send, end } = await running();
 
       expect(await send("await User.find(1)")).toMatch(/^#=> User \{/);
@@ -349,7 +357,7 @@ describe("d1-record console", () => {
       await end();
     }, 90_000);
 
-    test("verbose! as a bare line toggles it too", async () => {
+    test("verbose! toggles it as a bare line", async () => {
       const { send, end } = await running();
 
       expect(await send("verbose!")).toBe("SQL logging on");
