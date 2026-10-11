@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { connect, Model } from "../../src/index.ts";
 import { underscore } from "../../src/naming.ts";
+import { originalUnderscore } from "../support/naming-oracle.ts";
 
 class User extends Model({ id: { type: "integer", null: false } }) {
   static tableName = "users";
@@ -8,14 +9,6 @@ class User extends Model({ id: { type: "integer", null: false } }) {
 
 // No D1 needed: building a record and reading its errors never queries.
 const users = connect({} as never).model(User);
-
-/** `underscore` as it was written before #116: two regexes, quadratic on a long run of capitals. */
-function original(name: string): string {
-  return name
-    .replace(/([A-Z\d]+)([A-Z][a-z])/g, "$1_$2")
-    .replace(/([a-z\d])([A-Z])/g, "$1_$2")
-    .toLowerCase();
-}
 
 // Letters of both cases, a digit and an underscore, so every neighbouring pair the rules look at
 // (capital after lowercase, capital after digit, run of capitals before a lowercase) comes up.
@@ -62,7 +55,7 @@ describe("underscore", () => {
   test("gives the names Rails' rule gives, for every short string", () => {
     const different: string[] = [];
     for (const name of strings(7)) {
-      if (underscore(name) !== original(name)) different.push(name);
+      if (underscore(name) !== originalUnderscore(name)) different.push(name);
       if (different.length === 5) break;
     }
 
