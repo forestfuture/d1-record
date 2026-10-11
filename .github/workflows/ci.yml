@@ -15,7 +15,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-vp
       - run: vp check
-      - run: vp test
+      # Every test, and branch coverage of the library and command line above its floor
+      # (vite.config.ts), which the Best Practices dynamic analysis criterion relies on.
+      - run: vp run coverage
       - run: vp pack
       # The published types show only the public interface, no library internals.
       - run: vp run check:public-types
