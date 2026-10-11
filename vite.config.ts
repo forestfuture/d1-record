@@ -36,6 +36,14 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   test: {
+    // `vp run coverage` fails when branch coverage of the library and command line drops below the
+    // floor, and CI runs it (#121). The Best Practices `dynamic_analysis` criterion asks for 80%.
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.ts", "cli/**/*.ts"],
+      reporter: ["text-summary"],
+      thresholds: { branches: 90 },
+    },
     projects: [
       {
         extends: true,
