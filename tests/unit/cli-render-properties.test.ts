@@ -3,32 +3,7 @@ import { runInThisContext } from "node:vm";
 import { describe, expect, test } from "vite-plus/test";
 import { renderSchema } from "../../cli/schema/render.ts";
 import { schemaOf } from "../../cli/schema/schema.ts";
-
-// A column's JSON default is data the generator copies into source: whatever it holds, the
-// generated default must be that value, key for key (#119, #122).
-const keys = fc.oneof(
-  fc.constantFrom("__proto__", "constructor", "toString", "prototype", "a", "b", "0", "1"),
-  fc.string({ maxLength: 6 }),
-);
-
-/** A JSON value, with the keys that mean something to an object among the object keys. */
-const jsonValues = fc.letrec<{ value: unknown; array: unknown[]; object: object }>((tie) => ({
-  value: fc.oneof(
-    { depthSize: "small" },
-    fc.constant(null),
-    fc.boolean(),
-    fc.integer(),
-    fc.double({ noNaN: true, noDefaultInfinity: true }).filter((number) => !Object.is(number, -0)),
-    fc.string({ maxLength: 8 }),
-    tie("array"),
-    tie("object"),
-  ),
-  array: fc.array(tie("value"), { maxLength: 3 }),
-  object: fc
-    .array(fc.tuple(keys, tie("value")), { maxLength: 3 })
-    // fromEntries makes `__proto__` an own key, as JSON.parse does.
-    .map((entries) => Object.fromEntries(entries)),
-})).value;
+import { jsonValues } from "../support/json-values.ts";
 
 /** The generated schema.ts as a value: its `export`s and `as const`s dropped, then run. */
 function generated(source: string): Record<string, { attributes: Record<string, unknown> }> {
@@ -50,6 +25,8 @@ function defaultOf(value: unknown): unknown {
   return settings.default();
 }
 
+// A column's JSON default is data the generator copies into source: whatever it holds, the
+// generated default must be that value, key for key (#119, #122).
 describe("a JSON column's default, in the generated schema", () => {
   test("is the value the migration declared, key for key", () => {
     fc.assert(
