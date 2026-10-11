@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 
 const steps = [
   { name: "check", args: ["check"] },
-  { name: "test", args: ["test"] },
+  { name: "test and coverage", args: ["run", "coverage"] },
   { name: "pack", args: ["pack"] },
   { name: "public types", args: ["run", "check:public-types"] },
   { name: "knip", args: ["run", "knip"] },
