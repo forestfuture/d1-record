@@ -52,7 +52,7 @@ These are done once, in this order.
    2. Delete the secret (`gh secret delete NPM_TOKEN`) and the token on npmjs.com.
    3. In the package's Settings → Publishing access, choose **Require two-factor authentication and disallow tokens**.
    4. In the `forestfuture` organization's settings, require 2FA for members.
-6. **Check each release for provenance.** The package page on npmjs.com shows a provenance badge linking to the commit, and the version has `dist.attestations`. `0.1.0` has none (#109), because a token published it. `0.1.1` was the first published through the trusted publisher, and has one (2026-10-11). The registry can take a few minutes to list a version just published: a 404 straight after a green `release-publish` is that lag, and `npm view @forestfuture/d1-record@<version> --prefer-online` settles it.
+6. **Check each release for provenance.** The package page on npmjs.com shows a provenance badge linking to the commit, and the version has `dist.attestations`. `0.1.0` has none (#109), because a token published it. `0.1.1` was the first published through the trusted publisher, and has one (2026-10-10). The registry can take a few minutes to list a version just published: a 404 straight after a green `release-publish` is that lag, and `npm view @forestfuture/d1-record@<version> --prefer-online` settles it.
 
 From then on, only CI in `forestfuture/d1-record`, from `ci.yml`, can publish.
 

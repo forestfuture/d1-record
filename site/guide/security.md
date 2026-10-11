@@ -77,6 +77,23 @@ Each security review adds an entry here: what it covered, how, what it found, an
 
 **Not covered:** the source of the third-party Actions at their pinned commits; D1 and workerd themselves; isolation between concurrent requests beyond the existing tests; apps’ own code.
 
+### 2026-10-10: CodeQL’s alerts on the public repository
+
+**Scope:** the library (`src/`), the command line (`cli/`) and the tests, as CodeQL’s default setup (JavaScript/TypeScript and Actions) scans them on every push and weekly.
+
+**Method:** each alert from the first scans of `main`, read against the code, then either fixed with a test or dismissed with a written reason on the alert.
+
+**Findings:**
+
+| Severity | Finding                                                                                                    | Outcome                                                                                                           | Link                                                                                                                                                         |
+| -------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| High     | Naming an attribute, table or key took quadratic time in the name’s length (ReDoS)                         | Fixed test-first, and checked against the old rule on every short string                                          | [#116](https://github.com/forestfuture/d1-record/issues/116), [alert 1](https://github.com/forestfuture/d1-record/security/code-scanning/1)                  |
+| High     | A test helper strips HTML tags from the guide’s own pages with a regular expression                        | Dismissed: test-only code, and its output is never rendered                                                       | [alert 2](https://github.com/forestfuture/d1-record/security/code-scanning/2)                                                                                |
+| Medium   | The command line writes a column’s default into generated source (two alerts)                              | Dismissed as false positives: every value goes through `JSON.stringify` or an identifier check, then is only data | [alert 3](https://github.com/forestfuture/d1-record/security/code-scanning/3), [alert 4](https://github.com/forestfuture/d1-record/security/code-scanning/4) |
+| Low      | Found while triaging alert 4: a `__proto__` key in a JSON column default is lost from the generated schema | Open: a wrong default value, not code execution                                                                   | [#119](https://github.com/forestfuture/d1-record/issues/119)                                                                                                 |
+
+**Not covered:** the Scorecard findings, which are about the project’s practices, not its code, and the dependencies’ own code.
+
 ## Reporting a vulnerability
 
 Please report a security problem privately, as the [security policy](https://github.com/forestfuture/.github/blob/main/SECURITY.md) describes, never in a public issue.
