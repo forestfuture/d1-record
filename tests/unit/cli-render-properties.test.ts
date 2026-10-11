@@ -4,6 +4,7 @@ import { describe, expect, test } from "vite-plus/test";
 import { renderSchema } from "../../cli/schema/render.ts";
 import { schemaOf } from "../../cli/schema/schema.ts";
 import { jsonValues } from "../support/json-values.ts";
+import { PURE_RUNS } from "../support/properties.ts";
 
 /** The generated schema.ts as a value: its `export`s and `as const`s dropped, then run. */
 function generated(source: string): Record<string, { attributes: Record<string, unknown> }> {
@@ -34,7 +35,7 @@ describe("a JSON column's default, in the generated schema", () => {
         // JSON text compares key order and every own key; `toEqual` would forgive a prototype.
         expect(JSON.stringify(defaultOf(value))).toBe(JSON.stringify(value));
       }),
-      { numRuns: 500 },
+      PURE_RUNS,
     );
   });
 

@@ -1,6 +1,8 @@
 import fc from "fast-check";
 import { describe, expect, test } from "vite-plus/test";
-import { Model } from "../../src/index.ts";
+import { connect, Model } from "../../src/index.ts";
+import { objectKeys } from "../support/json-values.ts";
+import { PURE_RUNS } from "../support/properties.ts";
 
 class User extends Model({
   id: { type: "integer", null: false },
@@ -15,23 +17,13 @@ class User extends Model({
 type Name = "email" | "role" | "isActive" | "age";
 const attributeNames: Name[] = ["email", "role", "isActive", "age"];
 
+// No D1 needed: building a record casts what's assigned and never queries.
+const users = connect({} as never).model(User);
+
 // A request body as JSON gives it: any keys, including the ones that mean something to an
 // object (`__proto__`, `constructor`), as own properties (JSON.parse makes them so), and values
 // of any JSON shape (#82, #122).
-const keys = fc.oneof(
-  fc.constantFrom(
-    ...attributeNames,
-    "__proto__",
-    "constructor",
-    "prototype",
-    "toString",
-    "hasOwnProperty",
-    "id",
-    "token",
-    "isAdmin",
-  ),
-  fc.string({ maxLength: 12 }),
-);
+const keys = fc.oneof(fc.constantFrom(...attributeNames, "id", "token", "isAdmin"), objectKeys);
 const bodies = fc
   .array(fc.tuple(keys, fc.jsonValue()), { maxLength: 8 })
   .map((entries) => Object.fromEntries(entries));
@@ -39,43 +31,65 @@ const bodies = fc
 // The attributes a controller names: some of them, in any order.
 const named = fc.subarray(attributeNames, { minLength: 1 });
 
-const runs = { numRuns: 1000 };
+const runs = PURE_RUNS;
+
+/** What assigning `value` to `name` gives, or that it was refused (the same cast permit uses). */
+function assigned(name: Name, value: unknown): { value: unknown } | "refused" {
+  try {
+    return { value: users.build({ [name]: value as never })[name] };
+  } catch {
+    return "refused";
+  }
+}
+
+/** `permit`'s result, or that it was refused. */
+function permitted(body: object, names: Name[]): Record<string, unknown> | "refused" {
+  try {
+    return User.permit(body, ...names) as Record<string, unknown>;
+  } catch (error) {
+    expect(error).toBeInstanceOf(TypeError);
+    return "refused";
+  }
+}
 
 describe("Model.permit, for any request body", () => {
-  test("returns only the named attributes the body has as its own keys, or is refused", () => {
+  test("is refused exactly when assigning one of the named values it has would be", () => {
     fc.assert(
       fc.property(bodies, named, (body, names) => {
-        let permitted: Record<string, unknown>;
-        try {
-          permitted = User.permit(body, ...names) as Record<string, unknown>;
-        } catch (error) {
-          // A value that isn't the attribute's type is refused, as an assignment is.
-          expect(error).toBeInstanceOf(TypeError);
-          return;
-        }
-
         const own = names.filter((name) => Object.hasOwn(body, name));
-        expect(Object.keys(permitted).sort()).toEqual([...own].sort());
-        expect(Object.getPrototypeOf(permitted)).toBe(Object.prototype);
+        const wouldRefuse = own.some((name) => assigned(name, body[name]) === "refused");
+
+        expect(permitted(body, names) === "refused").toBe(wouldRefuse);
       }),
       runs,
     );
   });
 
-  test("never changes Object.prototype, whatever the body's keys", () => {
+  test("returns exactly the named attributes the body has as its own keys, cast as assigned", () => {
     fc.assert(
       fc.property(bodies, named, (body, names) => {
-        try {
-          User.permit(body, ...names);
-        } catch {
-          // Refused values are covered above.
-        }
+        const result = permitted(body, names);
+        fc.pre(result !== "refused");
 
-        const probe = {} as Record<string, unknown>;
-        for (const name of [...attributeNames, "isAdmin", "token", "role"]) {
-          expect(probe[name]).toBeUndefined();
+        const own = names.filter((name) => Object.hasOwn(body, name));
+        expect(Object.keys(result as object).sort()).toEqual([...own].sort());
+        for (const name of own) {
+          expect((result as Record<string, unknown>)[name]).toEqual(
+            (assigned(name, body[name]) as { value: unknown }).value,
+          );
         }
-        expect(Object.keys(Object.prototype)).toEqual([]);
+      }),
+      runs,
+    );
+  });
+
+  test("returns a plain object, whatever the body's keys", () => {
+    fc.assert(
+      fc.property(bodies, named, (body, names) => {
+        const result = permitted(body, names);
+        fc.pre(result !== "refused");
+
+        expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
       }),
       runs,
     );

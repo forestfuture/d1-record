@@ -1,6 +1,8 @@
 import fc from "fast-check";
 import { describe, expect, test } from "vite-plus/test";
 import { connect, Model } from "../../src/index.ts";
+import { PURE_RUNS } from "../support/properties.ts";
+import { values } from "../support/values.ts";
 
 // Assigned values come from outside (JSON, a form, a query string), so for a value of any shape an
 // attribute is the type it declares or the assignment is refused, and the refusal is a TypeError
@@ -11,6 +13,7 @@ const declared = {
   ratio: "real",
   enabled: "boolean",
   stamp: "datetime",
+  settings: "json",
 } as const;
 
 class Sample extends Model({ id: { type: "integer", null: false }, ...declared }) {
@@ -22,34 +25,6 @@ const samples = connect({} as never).model(Sample);
 
 type Attribute = keyof typeof declared;
 const attributes = Object.keys(declared) as Attribute[];
-
-/** Values of every shape a request can carry, and a few that only code can: BigInt, `Symbol`, … */
-const values = fc.oneof(
-  fc.anything({
-    withBigInt: true,
-    withDate: true,
-    withNullPrototype: true,
-    withBoxedValues: true,
-    withTypedArray: true,
-    withSparseArray: true,
-  }),
-  fc.string({ unit: "binary", maxLength: 200 }),
-  fc.double(),
-  fc.integer().map(String),
-  fc.double().map(String),
-  fc.date({ noInvalidDate: false }),
-  fc.constantFrom(
-    "",
-    " ",
-    "1e3",
-    "0x10",
-    -0,
-    Number.MAX_SAFE_INTEGER + 1,
-    Symbol("value"),
-    () => 1,
-    undefined,
-  ),
-);
 
 /** The two refusals: a value that isn't the type, and `undefined` (which isn't NULL). */
 function refusal(attribute: Attribute): RegExp {
@@ -71,11 +46,16 @@ function isOfType(attribute: Attribute, value: unknown): boolean {
       return typeof value === "boolean";
     case "datetime":
       return value instanceof Date && !Number.isNaN(value.getTime());
+    case "json":
+      // Any value is JSON-able as far as assigning goes; saving it is the round-trip property's.
+      return true;
   }
 }
 
-// A thousand values per property; building a record is cheap and needs no database.
-const runs = { numRuns: 1000 };
+const runs = PURE_RUNS;
+
+/** How much of a value an error shows (`SHOWN_LENGTH` in src/attribute-values.ts). */
+const SHOWN_LENGTH = 60;
 
 describe("assigning a value of any shape to an attribute", () => {
   test("gives the attribute's type or is refused with a TypeError that names it", () => {
@@ -102,8 +82,11 @@ describe("assigning a value of any shape to an attribute", () => {
         try {
           samples.build({ [attribute]: value as never });
         } catch (error) {
-          // "Sample: " and ` isn't a datetime for "quantity"` around the shown value and its …
-          expect((error as Error).message.length).toBeLessThanOrEqual(61 + 60);
+          // The value as the message shows it: up to 60 characters, and an ellipsis after them.
+          const shown = /^Sample: (.*) isn't an? \w+ for "\w+"$/s.exec(
+            (error as Error).message,
+          )?.[1];
+          if (shown !== undefined) expect(shown.length).toBeLessThanOrEqual(SHOWN_LENGTH + 1);
         }
       }),
       runs,
