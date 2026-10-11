@@ -81,14 +81,15 @@ describe("a text value of any content, in a query", { timeout: TIMEOUT }, () => 
   let dispose: () => Promise<void>;
   const queries: QueryEvent[] = [];
   const samples = () => connect(binding, { onQuery: (event) => queries.push(event) }).model(Sample);
+  type Relation = ReturnType<typeof samples>;
 
   beforeAll(async () => {
     ({ db: binding, dispose } = await createTestDatabase());
   });
   afterAll(() => dispose());
 
-  /** Replaces the table's rows with `labels`, then returns the ids of rows with this label. */
-  async function idsFor(labels: string[], run: (relation: ReturnType<typeof samples>) => unknown) {
+  /** Replaces the table's rows with `labels`, runs `run`, and gives the ids and statements. */
+  async function runAgainst(labels: string[], run: (relation: Relation) => Promise<Sample[]>) {
     await binding.prepare("DELETE FROM samples").run();
     const inserts = labels.map((label, index) =>
       binding.prepare("INSERT INTO samples (id, label) VALUES (?, ?)").bind(index + 1, label),
@@ -96,63 +97,88 @@ describe("a text value of any content, in a query", { timeout: TIMEOUT }, () => 
     // D1 refuses an empty batch.
     if (inserts.length > 0) await binding.batch(inserts);
     queries.length = 0;
-    const rows = (await run(samples())) as Sample[];
+    const rows = await run(samples());
     return {
       ids: rows.map((row) => row.id).sort((a, b) => a - b),
-      sql: queries.map((query) => query.sql),
+      statements: queries.map((query) => query.sql),
     };
   }
 
-  /** The statement text for a plain, harmless value: every other value must give the same. */
-  async function plainStatement(): Promise<string[]> {
-    const { sql: statement } = await idsFor(["x"], (s) => s.where({ label: "x" }).toArray());
-    return statement;
-  }
+  /** The INSERT statements run since `queries` was last cleared. */
+  const inserts = () =>
+    queries.map((query) => query.sql).filter((text) => text.startsWith("INSERT"));
 
   test("is bound: the statement is the same, and the rows are those an exact match gives", async () => {
-    const plain = await plainStatement();
+    const { statements: plain } = await runAgainst(["x"], (s) => s.where({ label: "x" }).toArray());
 
     await fc.assert(
       fc.asyncProperty(scenarios, async ({ labels, needle }) => {
-        const found = await idsFor(labels, (s) => s.where({ label: needle }).toArray());
+        const found = await runAgainst(labels, (s) => s.where({ label: needle }).toArray());
 
-        expect(found.sql).toEqual(plain);
+        expect(found.statements).toEqual(plain);
         expect(found.ids).toEqual(matching(labels, needle));
       }),
       runs,
     );
   });
 
-  test("is bound when interpolated into an sql fragment too", async () => {
-    const { sql: plain } = await idsFor(["x"], (s) => s.where(sql`label = ${"x"}`).toArray());
+  test("is bound when interpolated into an sql fragment", async () => {
+    const { statements: plain } = await runAgainst(["x"], (s) =>
+      s.where(sql`label = ${"x"}`).toArray(),
+    );
 
     await fc.assert(
       fc.asyncProperty(scenarios, async ({ labels, needle }) => {
-        const found = await idsFor(labels, (s) => s.where(sql`label = ${needle}`).toArray());
+        const found = await runAgainst(labels, (s) => s.where(sql`label = ${needle}`).toArray());
 
-        expect(found.sql).toEqual(plain);
+        expect(found.statements).toEqual(plain);
         expect(found.ids).toEqual(matching(labels, needle));
       }),
       runs,
     );
   });
 
-  test("is stored and read back as it was, and its statement is the same", async () => {
-    await binding.prepare("DELETE FROM samples").run();
+  test("is bound in a list of values: the statement is the same, and each exact match is found", async () => {
+    const { statements: plain } = await runAgainst(["x", "y"], (s) =>
+      s.where({ label: ["x", "y"] }).toArray(),
+    );
+
+    await fc.assert(
+      fc.asyncProperty(scenarios, texts, async ({ labels, needle }, other) => {
+        const found = await runAgainst(labels, (s) =>
+          s.where({ label: [needle, other] }).toArray(),
+        );
+        const expected = [...new Set([...matching(labels, needle), ...matching(labels, other)])];
+
+        expect(found.statements).toEqual(plain);
+        expect(found.ids).toEqual(expected.sort((a, b) => a - b));
+      }),
+      runs,
+    );
+  });
+
+  test("is stored and read back as it was", async () => {
+    await fc.assert(
+      fc.asyncProperty(texts, async (label) => {
+        const created = await samples().create({ label });
+
+        expect((await samples().find(created.id)).label).toBe(label);
+      }),
+      runs,
+    );
+  });
+
+  test("is inserted with the statement a harmless value gives", async () => {
     queries.length = 0;
     await samples().create({ label: "x" });
-    const plain = queries.map((query) => query.sql).filter((text) => text.startsWith("INSERT"));
+    const plain = inserts();
 
     await fc.assert(
       fc.asyncProperty(texts, async (label) => {
         queries.length = 0;
-        const created = await samples().create({ label });
-        const reloaded = await samples().find(created.id);
+        await samples().create({ label });
 
-        expect(reloaded.label).toBe(label);
-        expect(
-          queries.map((query) => query.sql).filter((text) => text.startsWith("INSERT")),
-        ).toEqual(plain);
+        expect(inserts()).toEqual(plain);
       }),
       runs,
     );
