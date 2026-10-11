@@ -1,5 +1,13 @@
 # @forestfuture/d1-record
 
+## 0.1.2
+
+### Patch Changes
+
+- [#124](https://github.com/forestfuture/d1-record/pull/124) [`62c7fe5`](https://github.com/forestfuture/d1-record/commit/62c7fe58aed3ea31e0c8e9fe7698803f32ed50be) Thanks [@christopherstyles](https://github.com/christopherstyles)! - `d1-record schema` keeps a `__proto__` key in a JSON column's default. The generated `schema.ts` wrote it as `__proto__: …`, which in an object literal sets the object's prototype and drops the key, so a default such as `{"__proto__":{"a":1},"b":2}` came out as `{"b":2}`. It's now written as a computed key, and the default is the value the migration declared.
+
+- [#124](https://github.com/forestfuture/d1-record/pull/124) [`e886cfa`](https://github.com/forestfuture/d1-record/commit/e886cfa99082ffcc87eaa17e6742026b62f6e159) Thanks [@christopherstyles](https://github.com/christopherstyles)! - Assigning a value with no JSON form and no string form (a BigInt inside an array that also holds an object with no prototype) to an attribute is now refused with the usual `TypeError` naming the model and attribute, such as `isn't a string for "label"`. The error's own text for the value threw `Cannot convert object to primitive value` first, which hid which attribute was refused. Values from JSON, a form or a query string were never affected.
+
 ## 0.1.1
 
 ### Patch Changes
