@@ -24,13 +24,35 @@ describe("underscore, for any name", () => {
     );
   });
 
-  test("gives lowercase, and leaves a lowercase name as it is", () => {
+  test("gives lowercase", () => {
+    fc.assert(
+      fc.property(names, (name) => underscore(name) === underscore(name).toLowerCase()),
+      runs,
+    );
+  });
+
+  test("leaves a name it has already converted as it is", () => {
     fc.assert(
       fc.property(names, (name) => {
         const column = underscore(name);
-        return column === column.toLowerCase() && underscore(column) === column;
+        return underscore(column) === column;
       }),
       runs,
+    );
+  });
+
+  // Names the 60-character ones don't reach: a long run of one kind of character is what made the
+  // old rule quadratic (#116). The original rule is slow on it, so fewer and shorter than 100,000.
+  test("gives what the original rule gives, for names of up to 2,000 characters", () => {
+    const longNames = fc.string({
+      unit: fc.constantFrom("a", "A", "B", "0", "_"),
+      minLength: 200,
+      maxLength: 2000,
+    });
+
+    fc.assert(
+      fc.property(longNames, (name) => underscore(name) === originalUnderscore(name)),
+      { numRuns: 100 },
     );
   });
 });

@@ -33,7 +33,6 @@ const inheritedNames = [
   ...Object.getOwnPropertyNames(Function.prototype),
   ...Object.getOwnPropertyNames(Array.prototype),
   "prototype",
-  "__defineGetter__",
 ];
 const names = fc
   .oneof(fc.constantFrom(...inheritedNames), fc.string({ maxLength: 16 }))
