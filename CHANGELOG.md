@@ -1,5 +1,11 @@
 # @forestfuture/d1-record
 
+## 0.1.1
+
+### Patch Changes
+
+- [#117](https://github.com/forestfuture/d1-record/pull/117) [`2938e67`](https://github.com/forestfuture/d1-record/commit/2938e675bb9173662316175a9593755e60afc27e) Thanks [@christopherstyles](https://github.com/christopherstyles)! - A very long attribute name no longer takes time that grows with the square of its length. `record.errors.fullMessages()` turned an attribute name into words with a rule that took about 6 seconds for a 100,000-character name, so an app that adds an error under a submitted key could be slowed by a long one. It now takes about a millisecond, and every name comes out as before.
+
 ## 0.1.0
 
 ### Minor Changes
