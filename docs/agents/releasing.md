@@ -48,10 +48,11 @@ These are done once, in this order.
 4. **The first release used a temporary token**, because npm only lets a trusted publisher be set on a package that already exists. `0.1.0` went out this way on 2026-10-10: a granular access token named `d1-record first release` (Read and write for the `@forestfuture` scope, the shortest expiry, "Bypass two-factor authentication" ticked), stored with `gh secret set NPM_TOKEN`, and written to `~/.npmrc` by a step in `release-publish` that has since been removed. If a publish fails because pnpm tried trusted publishing first (an OIDC or token-exchange error), nothing was published: delete the tag and release if they were created, then re-run the failed `release-publish` job.
 5. **Then switch to trusted publishing:**
    1. On npmjs.com, the package's Settings → **Trusted Publisher** → GitHub Actions: organization `forestfuture`, repository `d1-record`, workflow `ci.yml`, no environment.
+      Allow **publish**, not only staged publish: with only `stage publish`, a publish fails with `403 Forbidden: OIDC permission denied for this action`. From a terminal outside the repo (npm refuses to run inside it, because of `devEngines`), `npm trust list @forestfuture/d1-record` shows the entry, and `npm trust github @forestfuture/d1-record --file ci.yml --repo forestfuture/d1-record --allow-publish` creates one.
    2. Delete the secret (`gh secret delete NPM_TOKEN`) and the token on npmjs.com.
    3. In the package's Settings → Publishing access, choose **Require two-factor authentication and disallow tokens**.
    4. In the `forestfuture` organization's settings, require 2FA for members.
-6. **Check each release for provenance.** The package page on npmjs.com shows a provenance badge linking to the commit, and the version has `dist.attestations`. `0.1.0` has none (#109), so confirm the first release published with no token has one.
+6. **Check each release for provenance.** The package page on npmjs.com shows a provenance badge linking to the commit, and the version has `dist.attestations`. `0.1.0` has none (#109), because a token published it. `0.1.1` was the first published through the trusted publisher, and has one (2026-10-11). The registry can take a few minutes to list a version just published: a 404 straight after a green `release-publish` is that lag, and `npm view @forestfuture/d1-record@<version> --prefer-online` settles it.
 
 From then on, only CI in `forestfuture/d1-record`, from `ci.yml`, can publish.
 
