@@ -29,18 +29,18 @@ These are the project’s own reviews, not an independent audit. Each says what 
 
 The library’s guarantees are tested against a real D1 database (through Miniflare), and CI’s by a test that reads its workflows. CI runs every test on every change.
 
-| Guarantee                                                                                            | Tests                                                                                                                         |
-| ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Values are bound, identifiers are quoted, and plain strings are refused as SQL                       | [`sql-safety`](https://github.com/forestfuture/d1-record/blob/main/tests/integration/sql-safety.test.ts)                      |
-| Assigned and condition values are cast, or refused, in linear time                                   | [`attribute-casting`](https://github.com/forestfuture/d1-record/blob/main/tests/integration/attribute-casting.test.ts)        |
-| Naming an attribute, table or key takes linear time in the name’s length                             | [`naming`](https://github.com/forestfuture/d1-record/blob/main/tests/unit/naming.test.ts)                                     |
-| Only a Model’s own names are attributes or associations                                              | [`name-lookups`](https://github.com/forestfuture/d1-record/blob/main/tests/integration/name-lookups.test.ts)                  |
-| `permit` keeps only the named attributes, reading own keys only                                      | [`permit`](https://github.com/forestfuture/d1-record/blob/main/tests/integration/permit.test.ts)                              |
-| Filtered attributes’ values never reach listeners or errors                                          | [`filter-attributes`](https://github.com/forestfuture/d1-record/blob/main/tests/integration/filter-attributes.test.ts)        |
-| A request’s database stays with that request                                                         | [`current-database`](https://github.com/forestfuture/d1-record/blob/main/tests/integration/current-database.test.ts)          |
-| Names, assigned values, bound text, permitted keys and JSON hold for any input, not only chosen ones | [`properties`](https://github.com/forestfuture/d1-record/tree/main/tests) (`*-properties.test.ts`, generated with fast-check) |
-| The tests cover at least 90% of the library’s and command line’s branches, and CI fails below that   | [`coverage`](https://github.com/forestfuture/d1-record/blob/main/vite.config.ts)                                              |
-| CI’s actions are pinned, and release jobs run no install scripts                                     | [`ci-workflows`](https://github.com/forestfuture/d1-record/blob/main/tests/unit/ci-workflows.test.ts)                         |
+| Guarantee                                                                                                         | Tests                                                                                                                         |
+| ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Values are bound, identifiers are quoted, and plain strings are refused as SQL                                    | [`sql-safety`](https://github.com/forestfuture/d1-record/blob/main/tests/integration/sql-safety.test.ts)                      |
+| Assigned and condition values are cast, or refused, in linear time                                                | [`attribute-casting`](https://github.com/forestfuture/d1-record/blob/main/tests/integration/attribute-casting.test.ts)        |
+| Naming an attribute, table or key takes linear time in the name’s length                                          | [`naming`](https://github.com/forestfuture/d1-record/blob/main/tests/unit/naming.test.ts)                                     |
+| Only a Model’s own names are attributes or associations                                                           | [`name-lookups`](https://github.com/forestfuture/d1-record/blob/main/tests/integration/name-lookups.test.ts)                  |
+| `permit` keeps only the named attributes, reading own keys only                                                   | [`permit`](https://github.com/forestfuture/d1-record/blob/main/tests/integration/permit.test.ts)                              |
+| Filtered attributes’ values never reach listeners or errors                                                       | [`filter-attributes`](https://github.com/forestfuture/d1-record/blob/main/tests/integration/filter-attributes.test.ts)        |
+| A request’s database stays with that request                                                                      | [`current-database`](https://github.com/forestfuture/d1-record/blob/main/tests/integration/current-database.test.ts)          |
+| Names, assigned values, conditions, bound text, permitted keys, and JSON hold for any input, not only chosen ones | [`properties`](https://github.com/forestfuture/d1-record/tree/main/tests) (`*-properties.test.ts`, generated with fast-check) |
+| The tests cover at least 90% of the library’s and command line’s branches, and CI fails below that                | [`coverage`](https://github.com/forestfuture/d1-record/blob/main/vite.config.ts)                                              |
+| CI’s actions are pinned, and release jobs run no install scripts                                                  | [`ci-workflows`](https://github.com/forestfuture/d1-record/blob/main/tests/unit/ci-workflows.test.ts)                         |
 
 ## Supply chain
 
