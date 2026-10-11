@@ -10,6 +10,7 @@ d1-record is built with [Vite+](https://viteplus.dev/guide/), whose `vp` command
 vp install   # dependencies; pnpm is downloaded if you don't have it
 vp check     # format, lint, type check
 vp test      # every test
+vp run coverage   # every test, and fails if branch coverage is under its floor (90%)
 ```
 
 `vp test --project unit` runs the tests that need no database, and `--project integration` the ones that run against a real D1 through Miniflare. A third suite runs against a remote D1; it's skipped unless configured, so you don't need it ([remote-smoke.md](docs/agents/remote-smoke.md)).
@@ -21,7 +22,7 @@ Every change goes through a pull request, maintainers' included:
 1. **Start from an issue**, or a Discussion that reached a decision. Use the issue templates.
 2. **Agree the design in the issue before writing tests**: the behavior to test and any open decisions. Read [`GLOSSARY.md`](GLOSSARY.md) (the glossary), [`docs/contract.md`](docs/contract.md) (the agreed behavior) and the ADRs in [`docs/adr/`](docs/adr/) first.
 3. **Build it test-first**, one red → green slice per commit, on a branch named `<issue>-<slug>` (`79-contributing`).
-4. **Open the pull request** with `Closes #<issue>`. CI runs `vp check`, `vp test`, the package build and its checks, `vp run knip` and the docs build, and must pass to merge. On a first contribution, CI waits for a maintainer to approve the run.
+4. **Open the pull request** with `Closes #<issue>`. CI runs `vp check`, the tests with a branch-coverage floor (`vp run coverage`), the package build and its checks, `vp run knip` and the docs build, and must pass to merge. On a first contribution, CI waits for a maintainer to approve the run.
 
 Pull requests are merged by rebasing, so each commit stays on `main`: make each one pass on its own, with a message saying what behavior it adds or changes: a title of 50 characters or less, and the detail in the body ([commit messages](docs/agents/workflow.md#commit-messages)). [`docs/agents/workflow.md`](docs/agents/workflow.md) has the process in full.
 
