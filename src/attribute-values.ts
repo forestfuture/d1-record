@@ -116,6 +116,15 @@ function textOf(value: unknown): string {
   try {
     return JSON.stringify(value) ?? String(value);
   } catch {
+    return plainText(value);
+  }
+}
+
+/** `String(value)`, or its tag (`[object Array]`) when it has no string form: building the refusal mustn't throw. */
+function plainText(value: unknown): string {
+  try {
     return String(value);
+  } catch {
+    return Object.prototype.toString.call(value);
   }
 }
