@@ -2,6 +2,7 @@ import fc from "fast-check";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { connect, Model, sql, type QueryEvent } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
+import { SLOW_RUNS, SLOW_TIMEOUT } from "../support/properties.ts";
 
 class Sample extends Model({ id: { type: "integer", null: false }, label: "string" }) {
   static tableName = "samples";
@@ -52,8 +53,7 @@ const texts = fc.oneof(
   fc.tuple(fc.string({ unit: sqlCharacters, maxLength: 6 }), fragments).map((p) => p.join("")),
 );
 
-// Each run starts a fresh table and queries a real D1: a hundred runs per property (#122).
-const runs = { numRuns: 100 };
+const runs = SLOW_RUNS;
 
 /** Stored labels, and a needle that is one of them half the time, so a match is common. */
 const scenarios = fc
@@ -73,10 +73,7 @@ function matching(labels: string[], needle: string): number[] {
   return labels.flatMap((label, index) => (label === needle ? [index + 1] : []));
 }
 
-// A hundred queries take about a second alone, and several times that beside the other suites.
-const TIMEOUT = 30_000;
-
-describe("a text value of any content, in a query", { timeout: TIMEOUT }, () => {
+describe("a text value of any content, in a query", { timeout: SLOW_TIMEOUT }, () => {
   let binding: TestDatabase;
   let dispose: () => Promise<void>;
   const queries: QueryEvent[] = [];

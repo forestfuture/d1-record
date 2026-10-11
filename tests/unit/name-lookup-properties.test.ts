@@ -1,6 +1,7 @@
 import fc from "fast-check";
 import { describe, expect, test } from "vite-plus/test";
 import { connect, hasMany, Model, UnknownAssociation, UnknownAttribute } from "../../src/index.ts";
+import { PURE_RUNS } from "../support/properties.ts";
 
 class Post extends Model({
   id: { type: "integer", null: false },
@@ -38,7 +39,7 @@ const names = fc
   .oneof(fc.constantFrom(...inheritedNames), fc.string({ maxLength: 16 }))
   .filter((name) => !own.has(name));
 
-const runs = { numRuns: 1000 };
+const runs = PURE_RUNS;
 
 /** A JSON body's key, which may be an own "__proto__". */
 const keyed = (name: string) => JSON.parse(`{${JSON.stringify(name)}: 1}`) as never;

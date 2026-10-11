@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { connect, Model } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 import { jsonValues } from "../support/json-values.ts";
+import { SLOW_RUNS, SLOW_TIMEOUT } from "../support/properties.ts";
 
 class Sample extends Model({ id: { type: "integer", null: false }, settings: "json" }) {
   static tableName = "samples";
@@ -20,7 +21,7 @@ describe("a JSON attribute, saved and read back through D1", () => {
   });
   afterAll(() => dispose());
 
-  test("is the value that was saved, key for key", { timeout: 30_000 }, async () => {
+  test("is the value that was saved, key for key", { timeout: SLOW_TIMEOUT }, async () => {
     await fc.assert(
       fc.asyncProperty(jsonValues, async (value) => {
         const created = await samples().create({ settings: value as never });
@@ -29,7 +30,7 @@ describe("a JSON attribute, saved and read back through D1", () => {
         // JSON text compares key order and every own key; `toEqual` would forgive a prototype.
         expect(JSON.stringify(reloaded.settings)).toBe(JSON.stringify(value));
       }),
-      { numRuns: 100 },
+      SLOW_RUNS,
     );
   });
 });

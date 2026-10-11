@@ -2,6 +2,7 @@ import fc from "fast-check";
 import { describe, test } from "vite-plus/test";
 import { camelize, underscore } from "../../src/naming.ts";
 import { originalUnderscore } from "../support/naming-oracle.ts";
+import { SLOW_RUNS, PURE_RUNS } from "../support/properties.ts";
 
 // Names reach these functions from a request (an error added under a submitted key), so they're
 // checked on strings nobody wrote by hand: ones built from the characters the rules look at, and
@@ -13,8 +14,7 @@ const ruleCharacters = fc.string({
 const anyCharacters = fc.string({ unit: "binary", maxLength: 60 });
 const names = fc.oneof(ruleCharacters, anyCharacters);
 
-// Pure functions: a thousand names each, well under a second (#122).
-const runs = { numRuns: 1000 };
+const runs = PURE_RUNS;
 
 describe("underscore, for any name", () => {
   test("gives the names the original two-rule definition gives", () => {
@@ -52,7 +52,7 @@ describe("underscore, for any name", () => {
 
     fc.assert(
       fc.property(longNames, (name) => underscore(name) === originalUnderscore(name)),
-      { numRuns: 100 },
+      SLOW_RUNS,
     );
   });
 });
