@@ -1,5 +1,5 @@
 import fc from "fast-check";
-import { describe, test } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 import { connect, hasMany, Model, UnknownAssociation, UnknownAttribute } from "../../src/index.ts";
 
 class Post extends Model({
@@ -40,50 +40,44 @@ const names = fc
 
 const runs = { numRuns: 1000 };
 
-/** Whether `call` throws exactly `error`, and not another error or nothing. */
-function throwsOnly(error: new (...args: never[]) => Error, call: () => unknown): boolean {
-  try {
-    call();
-  } catch (thrown) {
-    return thrown instanceof error;
-  }
-  return false;
-}
+/** A JSON body's key, which may be an own "__proto__". */
+const keyed = (name: string) => JSON.parse(`{${JSON.stringify(name)}: 1}`) as never;
+
+// One property per call, so a counterexample names the call that accepted the name.
+const associationCalls: [string, (name: string) => unknown][] = [
+  ["includes(name)", (name) => users.includes(name as never)],
+  ["includes({ [name]: ... })", (name) => users.includes({ [name]: "posts" } as never)],
+  ["includes({ posts: name })", (name) => users.includes({ posts: name } as never)],
+  ["loaded(name)", (name) => user.loaded(name as never)],
+  ["isLoaded(name)", (name) => user.isLoaded(name as never)],
+];
+
+const attributeCalls: [string, (name: string) => unknown][] = [
+  ["attributeWas(name)", (name) => user.attributeWas(name as never)],
+  ["isAttributeChanged(name)", (name) => user.isAttributeChanged(name as never)],
+  ["restoreAttributes([name])", (name) => user.restoreAttributes([name as never])],
+  ["select(name)", (name) => users.select(name as never)],
+  ["order({ [name]: 'asc' })", (name) => users.order({ [name]: "asc" } as never)],
+  ["where({ [name]: 1 }), as a JSON body", (name) => users.where(keyed(name))],
+  ["build({ [name]: 1 }), as a JSON body", (name) => users.build(keyed(name))],
+  ["assign({ [name]: 1 }), as a JSON body", (name) => user.assign(keyed(name))],
+  ["permit({}, name)", (name) => User.permit({}, name as never)],
+];
 
 describe("a name that isn't the Model's own, of any kind", () => {
-  test("is UnknownAssociation where an association is named", () => {
+  test.each(associationCalls)("%s is UnknownAssociation", (_label, call) => {
     fc.assert(
       fc.property(names, (name) => {
-        const unknown = name as never;
-        return (
-          throwsOnly(UnknownAssociation, () => users.includes(unknown)) &&
-          throwsOnly(UnknownAssociation, () => users.includes({ [name]: "posts" } as never)) &&
-          throwsOnly(UnknownAssociation, () => users.includes({ posts: name } as never)) &&
-          throwsOnly(UnknownAssociation, () => user.loaded(unknown)) &&
-          throwsOnly(UnknownAssociation, () => user.isLoaded(unknown))
-        );
+        expect(() => call(name)).toThrow(UnknownAssociation);
       }),
       runs,
     );
   });
 
-  test("is UnknownAttribute where an attribute is named", () => {
+  test.each(attributeCalls)("%s is UnknownAttribute", (_label, call) => {
     fc.assert(
       fc.property(names, (name) => {
-        const unknown = name as never;
-        // A JSON body's key, which may be an own "__proto__".
-        const keyed = JSON.parse(`{${JSON.stringify(name)}: 1}`) as never;
-        return (
-          throwsOnly(UnknownAttribute, () => user.attributeWas(unknown)) &&
-          throwsOnly(UnknownAttribute, () => user.isAttributeChanged(unknown)) &&
-          throwsOnly(UnknownAttribute, () => user.restoreAttributes([unknown])) &&
-          throwsOnly(UnknownAttribute, () => users.select(unknown)) &&
-          throwsOnly(UnknownAttribute, () => users.order({ [name]: "asc" } as never)) &&
-          throwsOnly(UnknownAttribute, () => users.where(keyed)) &&
-          throwsOnly(UnknownAttribute, () => users.build(keyed)) &&
-          throwsOnly(UnknownAttribute, () => user.assign(keyed)) &&
-          throwsOnly(UnknownAttribute, () => User.permit({}, unknown))
-        );
+        expect(() => call(name)).toThrow(UnknownAttribute);
       }),
       runs,
     );
