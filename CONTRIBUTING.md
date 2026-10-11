@@ -30,6 +30,7 @@ The rules that matter most:
 
 - **The contract is the source of truth.** A change in behavior updates `docs/contract.md` in the same pull request, and everything else it touches ([below](#what-a-public-change-touches)).
 - **Every public behavior has a test**, through the public API, and integration tests prove it against D1 (there's no fake database).
+- **Input from outside gets a property, not only examples.** Where untrusted input reaches d1-record (names, assigned values, bound text, permitted keys, JSON), a `*-properties.test.ts` states what must hold for any input, and [fast-check](https://fast-check.dev/) generates them. A failure prints a counterexample and its `seed` and `path`: pass both to `fc.assert` to replay it, then keep the counterexample as an example test.
 - **Library code runs on Cloudflare Workers.** `src/` uses no Node APIs, and is type-checked against `@cloudflare/workers-types` only.
 - **Size limits mean splitting code.** `vp check` enforces complexity, function-length, and module-length limits; split code that hits them rather than raising them.
 - **Examples are neutral.** Tests, comments, docs, commit messages and changesets use neutral names (`User`, `Post`, `Product`). Nothing in them comes from a project you tried d1-record in.
