@@ -4,8 +4,15 @@
   "public_key": "pk_bJAmxfR5pjyhpbAlvUg8v",
   "projectTitle": "d1-record",
   "description": "A Rails-inspired Active Record for Cloudflare Workers and D1: models with validations, callbacks, associations, and change tracking; lazy, composable queries; and a predictable save lifecycle.",
-  "folders": ["site/guide"],
-  "excludeFiles": ["CONTRIBUTING.md", "CODING_STANDARDS.md", "AGENTS.md", "CHANGELOG.md"],
+  "folders": ["site/guide", "docs"],
+  "excludeFolders": ["docs/agents", "docs/adr"],
+  "excludeFiles": [
+    "CONTRIBUTING.md",
+    "CODING_STANDARDS.md",
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "brief.md"
+  ],
   "rules": [
     "Never pass a request's whole body, form or query string to a Model: name the fields, with destructuring or Model.permit(body, ...names).",
     "Name attributes in camelCase everywhere (where, order, pluck, foreignKey); snake_case column names appear only inside sql fragments.",
