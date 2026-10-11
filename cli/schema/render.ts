@@ -11,8 +11,13 @@ import type { GeneratedTable } from "./schema.ts";
  */
 const format = 2;
 
-/** An object key: bare when it's an identifier, quoted otherwise (`"first name"`). */
+/**
+ * An object key: bare when it's an identifier, quoted otherwise (`"first name"`). `__proto__` is
+ * computed, since in an object literal a bare or quoted one sets the prototype and the key is
+ * lost (#119).
+ */
 function keySource(name: string): string {
+  if (name === "__proto__") return '["__proto__"]';
   return isIdentifier(name) ? name : JSON.stringify(name);
 }
 
