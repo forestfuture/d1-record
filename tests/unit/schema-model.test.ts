@@ -129,10 +129,64 @@ describe("modelFor: the generated Model", () => {
     expect(db.model(Product).build().id).toBe("key");
   });
 
+  test("an override makes a column a datetime with a storage (#73)", () => {
+    class Product extends Model("products", {
+      flags: { type: "datetime", storage: "unixSeconds", null: false },
+    }) {}
+
+    expect(Product.attributeDefinitions.get("flags")).toMatchObject({
+      type: "datetime",
+      storage: "unixSeconds",
+    });
+    expectTypeOf<Product["flags"]>().toEqualTypeOf<Date>();
+    expect(() => {
+      // @ts-expect-error a storage is for a datetime
+      Model("products", { flags: { type: "integer", storage: "unixSeconds" } });
+    }).toThrow(InvalidModel);
+    expect(() => {
+      // @ts-expect-error a storage is seconds or milliseconds
+      Model("products", { flags: { type: "datetime", storage: "minutes" } });
+    }).toThrow(InvalidModel);
+  });
+
+  test("a new type drops a generated storage, which was for a datetime (#73)", () => {
+    const Stored = modelFor({
+      entries: {
+        attributes: {
+          id: { type: "integer", null: false },
+          at: { type: "datetime", storage: "unixSeconds" },
+        },
+        primaryKey: "id",
+      },
+    } as const);
+
+    class Kept extends Stored("entries") {}
+    class Retyped extends Stored("entries", { at: "integer" }) {}
+
+    expect(Kept.attributeDefinitions.get("at")).toMatchObject({ storage: "unixSeconds" });
+    expect(Retyped.attributeDefinitions.get("at")).toEqual(
+      expect.not.objectContaining({ storage: expect.anything() }),
+    );
+  });
+
+  test("a storage on another type, or that isn't one, is an InvalidModel, past the types too (#73)", () => {
+    const flags = (override: unknown) => () => Model("products", { flags: override } as never);
+
+    expect(flags({ type: "integer", storage: "unixSeconds" })).toThrow(
+      new InvalidModel(
+        'products.flags is "integer", so it can\'t have a storage: only a datetime is stored as an epoch',
+      ),
+    );
+    expect(flags({ type: "datetime", storage: "minutes" })).toThrow(InvalidModel);
+    const Plain = LibraryModel({ at: { type: "string", storage: "unixSeconds" } } as never);
+    class Note extends (Plain as never as typeof LibraryModel.Base) {}
+    expect(() => db.model(Note)).toThrow(InvalidModel);
+  });
+
   test("an override past the types is checked too: the column, or anything but a spec, is an InvalidModel", () => {
     const message = (attribute: string) =>
       new InvalidModel(
-        `products.${attribute}: an override is a type name, { type, null, default, generateId }, or false`,
+        `products.${attribute}: an override is a type name, { type, null, default, generateId, storage }, or false`,
       );
 
     expect(() => Model("products", { sku: { column: "code" } } as never)).toThrow(message("sku"));

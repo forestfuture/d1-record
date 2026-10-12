@@ -4,7 +4,7 @@ import { ancestors } from "./ancestors.ts";
 import { declarationIn, probeOf } from "./association-fields.ts";
 import { seal } from "./declarations.ts";
 import { InvalidModel } from "./errors.ts";
-import { generateIdProblem } from "./metadata.ts";
+import { generateIdProblem, storageProblem } from "./metadata.ts";
 import { ModelBase, type ModelClass } from "./model.ts";
 import { rejectAbstract, requireTableName } from "./table-names.ts";
 
@@ -20,6 +20,7 @@ export function verifyModel(model: ModelClass): void {
   requirePrimaryKeyAttribute(model);
   rejectReservedAttributeNames(model);
   rejectBadGeneratedIds(model);
+  rejectBadStorage(model);
   rejectUnknownHiddenAttributes(model);
   rejectShadowingFields(model);
   rejectBadPageSizes(model);
@@ -55,6 +56,14 @@ function rejectReservedAttributeNames(model: ModelClass): void {
 function rejectBadGeneratedIds(model: ModelClass): void {
   for (const [name, definition] of model.attributeDefinitions) {
     const problem = generateIdProblem(`${model.name}.${name}`, definition);
+    if (problem !== undefined) throw new InvalidModel(problem);
+  }
+}
+
+/** Only a datetime has a storage, and it's seconds or milliseconds (#73). */
+function rejectBadStorage(model: ModelClass): void {
+  for (const [name, definition] of model.attributeDefinitions) {
+    const problem = storageProblem(`${model.name}.${name}`, definition);
     if (problem !== undefined) throw new InvalidModel(problem);
   }
 }

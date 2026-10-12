@@ -406,6 +406,20 @@ describe("types", () => {
     expectTypeOf([Uuidv7Base, PrefixBase, NumberBase, OwnIds]).toBeArray();
   });
 
+  test("storage is for datetime attributes, as seconds or milliseconds (#73)", () => {
+    class Entry extends Model({
+      at: { type: "datetime", storage: "unixSeconds" },
+      until: { type: "datetime", storage: "unixMilliseconds", null: false },
+    }) {}
+    expectTypeOf<Entry["at"]>().toEqualTypeOf<Date | null>();
+    expectTypeOf<Entry["until"]>().toEqualTypeOf<Date>();
+
+    // @ts-expect-error only a datetime is stored as an epoch
+    Model({ at: { type: "integer", storage: "unixSeconds" } });
+    // @ts-expect-error a storage is seconds or milliseconds
+    Model({ at: { type: "datetime", storage: "minutes" } });
+  });
+
   test("a misspelled key in a spec or override is a compile error", () => {
     const ApplicationRecord = modelFor({
       notes: {

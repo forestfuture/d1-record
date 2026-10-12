@@ -166,6 +166,24 @@ export function generateIdProblem(
   return undefined;
 }
 
+/**
+ * Why an attribute can't have this `storage`, or undefined if it can: only a datetime is stored
+ * as a Unix epoch, in seconds or milliseconds (#73). `where` names it (`Event.at`).
+ */
+export function storageProblem(
+  where: string,
+  { type, storage }: Pick<SpecObject, "type" | "storage">,
+): string | undefined {
+  if (storage === undefined) return undefined;
+  if (storage !== "unixSeconds" && storage !== "unixMilliseconds") {
+    return `${where} has storage ${JSON.stringify(storage)}; use "unixSeconds" or "unixMilliseconds"`;
+  }
+  if (type !== "datetime") {
+    return `${where} is "${type}", so it can't have a storage: only a datetime is stored as an epoch`;
+  }
+  return undefined;
+}
+
 /** `undefined` would silently store NULL, so writing it throws `TypeError` (use `null`). */
 export function requireDefined(model: ModelClass, name: string, value: unknown): void {
   if (value === undefined) {
