@@ -111,6 +111,7 @@ Also:
 
 - an `INTEGER` read as a `boolean` from its name;
 - for migrations written by Drizzle or Prisma (recognized by their config files or the lines they write): a note naming the tool, then one for each column worth checking, such as an `INTEGER` named `…_at` that may hold a Unix timestamp (the note shows the [`storage` override](./adopt-a-database#reading-unix-timestamps) for it), or a `TEXT` named like JSON without a `json_valid` check;
+- a `DATETIME` column whose default is a number or `unixepoch()`, with the [`storage` override](./adopt-a-database#reading-unix-timestamps);
 - migrations in folders with no `migrations_pattern` to find them.
 
 ## `d1-record g model` and `g migration`
