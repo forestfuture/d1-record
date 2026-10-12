@@ -25,7 +25,7 @@ jobs:
       - run: vp run knip
       # The documentation site builds, with no dead links.
       - run: vp run docs:build
-      # The tarball holds exactly the library, its docs for agents (llms-full.txt, SKILL.md) and metadata.
+      # The tarball holds exactly the library, its docs for agents (llms-full.txt, skills/d1-record/SKILL.md) and metadata.
       - run: vp run check:package
 
   # Packs the library as release-pack does (#80): dependencies installed without their install

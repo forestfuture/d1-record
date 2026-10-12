@@ -5,11 +5,11 @@ import { absoluteLinks } from "./llms-links.ts";
 
 const site = "https://docs.forestfuture.dev/d1-record";
 
-/** The rules for agents, kept once in the agent skill (SKILL.md's "rules" region). */
+/** The rules for agents, kept once in the agent skill (skills/d1-record/SKILL.md's "rules" region). */
 function agentRules(): string {
-  const skill = readFileSync(new URL("../../SKILL.md", import.meta.url), "utf8");
+  const skill = readFileSync(new URL("../../skills/d1-record/SKILL.md", import.meta.url), "utf8");
   const rules = /<!-- #region rules -->\r?\n([\s\S]*?)<!-- #endregion rules -->/.exec(skill)?.[1];
-  if (rules === undefined) throw new Error("SKILL.md has no rules region");
+  if (rules === undefined) throw new Error("skills/d1-record/SKILL.md has no rules region");
   return rules.trim();
 }
 
@@ -34,7 +34,7 @@ ${agentRules()}
 ## Optional
 
 - [Behavior contract](https://github.com/forestfuture/d1-record/blob/main/docs/contract.md): every rule the tests prove, tersely.
-- [Agent skill](https://github.com/forestfuture/d1-record/blob/main/SKILL.md): install with \`npx skills add forestfuture/d1-record\`.
+- [Agent skill](https://github.com/forestfuture/d1-record/blob/main/skills/d1-record/SKILL.md): install with \`npx skills add forestfuture/d1-record\`.
 `,
   });
 }

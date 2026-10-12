@@ -7,12 +7,12 @@ import { readFileSync } from "node:fs";
 const expected = [
   "LICENSE",
   "README.md",
-  "SKILL.md",
   "dist/cli.mjs",
   "dist/index.d.mts",
   "dist/index.mjs",
   "llms-full.txt",
   "package.json",
+  "skills/d1-record/SKILL.md",
 ];
 
 execFileSync("node", [new URL("pack-docs.mjs", import.meta.url).pathname], { stdio: "inherit" });
