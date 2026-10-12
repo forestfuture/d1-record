@@ -354,7 +354,8 @@ function compileFragment(
     if (value instanceof ColumnReference) {
       text += quoteIdentifier(attributeOf(model, value.attribute).column);
     } else if (value instanceof ColumnValue) {
-      params.push(storedAs("assigned", { model, attribute: value.attribute }, value.value));
+      const of: ValueOf = { model, attribute: value.attribute };
+      bindAs(params, of, storedAs("assigned", of, value.value));
       text += "?";
     } else {
       params.push(writeUntypedValue(value));
