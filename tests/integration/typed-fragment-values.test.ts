@@ -35,6 +35,8 @@ class Stamp extends Model({
 describe("a typed value in an sql fragment (#142)", () => {
   let binding: TestDatabase;
   let dispose: () => Promise<void>;
+  // One database, since `or` needs its relations on the same one.
+  let shared: ReturnType<typeof connect>;
 
   beforeAll(async () => {
     ({ db: binding, dispose } = await createTestDatabase());
@@ -51,6 +53,7 @@ describe("a typed value in an sql fragment (#142)", () => {
   });
   afterAll(() => dispose());
   beforeEach(async () => {
+    shared = connect(binding);
     await binding.batch([
       binding.prepare("DELETE FROM stamps"),
       binding.prepare("DELETE FROM typed_samples"),
@@ -60,53 +63,64 @@ describe("a typed value in an sql fragment (#142)", () => {
     ]);
   });
 
+  const stamps = () => shared.model(Stamp).order({ id: "asc" });
   const names = async (relation: { toArray(): Promise<Stamp[]> }) =>
     (await relation.toArray()).map((stamp) => stamp.name ?? "");
-  // One database, since `or` needs its relations on the same one.
-  let shared: ReturnType<typeof connect>;
-  beforeEach(() => {
-    shared = connect(binding);
-  });
-  const stamps = () => shared.model(Stamp).order({ id: "asc" });
+  const rawStamps = async () =>
+    (await binding.prepare("SELECT * FROM stamps ORDER BY id").all()).results;
+  const countSamples = (condition: ReturnType<typeof sql>) =>
+    shared.model(Sample).where(condition).count();
 
-  test("a Date as an integer-stored attribute's value compares with its column", async () => {
-    const second = new Date("2026-01-02T00:00:00.000Z");
+  const day = new Date("2026-01-02T00:00:00.000Z");
+
+  test("a Date for a unixSeconds attribute compares with its column as an integer", async () => {
     const seconds = column("seconds");
-    const milliseconds = column("milliseconds");
 
-    expect(await names(stamps().where(sql`${seconds} >= ${seconds.value(second)}`))).toEqual([
+    expect(await names(stamps().where(sql`${seconds} >= ${seconds.value(day)}`))).toEqual([
       "b",
       "c",
     ]);
-    expect(
-      await names(stamps().where(sql`${milliseconds} < ${milliseconds.value(second)}`)),
-    ).toEqual(["a"]);
   });
 
-  test("an ISO datetime, a boolean and json are written as those attributes store them", async () => {
+  test("a Date for a unixMilliseconds attribute compares with its column as an integer", async () => {
+    const milliseconds = column("milliseconds");
+
+    expect(await names(stamps().where(sql`${milliseconds} < ${milliseconds.value(day)}`))).toEqual([
+      "a",
+    ]);
+  });
+
+  test("a Date for an ISO datetime is ISO text", async () => {
     await binding
-      .prepare(
-        `INSERT INTO typed_samples VALUES (1, 'a', 1, '{"theme":"dark"}', '2026-01-02T03:04:05.000Z', NULL)`,
-      )
+      .prepare("INSERT INTO typed_samples (id, stamp) VALUES (1, '2026-01-02T03:04:05.000Z')")
       .run();
-    const samples = connect(binding).model(Sample);
-    const enabled = column("enabled");
-    const settings = column("settings");
     const stamp = column("stamp");
-    const count = (condition: ReturnType<typeof sql>) => samples.where(condition).count();
+    const moment = new Date("2026-01-02T03:04:05.000Z");
 
-    expect(await count(sql`${enabled} = ${enabled.value("on")}`)).toBe(1);
-    expect(await count(sql`${settings} = ${settings.value({ theme: "dark" })}`)).toBe(1);
-    expect(await count(sql`${stamp} = ${stamp.value(new Date("2026-01-02T03:04:05.000Z"))}`)).toBe(
-      1,
-    );
+    expect(await countSamples(sql`${stamp} = ${stamp.value(moment)}`)).toBe(1);
   });
 
-  test("a value the attribute can't cast throws TypeError naming the Model and attribute", () => {
+  test("a boolean's value is 0 or 1, from the forms an assignment accepts", async () => {
+    await binding.prepare("INSERT INTO typed_samples (id, enabled) VALUES (1, 1)").run();
+    const enabled = column("enabled");
+
+    expect(await countSamples(sql`${enabled} = ${enabled.value("on")}`)).toBe(1);
+  });
+
+  test("a json attribute's value is JSON text", async () => {
+    await binding
+      .prepare(`INSERT INTO typed_samples (id, settings) VALUES (1, '{"theme":"dark"}')`)
+      .run();
+    const settings = column("settings");
+
+    expect(await countSamples(sql`${settings} = ${settings.value({ theme: "dark" })}`)).toBe(1);
+  });
+
+  test("a value the attribute can't cast throws TypeError naming the Model and attribute, when the fragment is used", () => {
     const seconds = column("seconds");
     const condition = sql`${seconds} > ${seconds.value("yesterday")}`;
 
-    expect(() => stamps().where(condition).toSql()).toThrow(
+    expect(() => stamps().where(condition)).toThrow(
       new TypeError('Stamp: "yesterday" isn\'t a datetime for "seconds"'),
     );
   });
@@ -118,43 +132,62 @@ describe("a typed value in an sql fragment (#142)", () => {
     expect(() => stamps().where(condition)).toThrow(UnknownAttribute);
   });
 
-  test("a filtered attribute's value is hidden from onQuery, and D1 still gets it", async () => {
+  test("a filtered attribute's value is hidden from onQuery", async () => {
     await binding.prepare("INSERT INTO typed_samples (id, secret) VALUES (1, 's3cret')").run();
     const events: { params: unknown[] }[] = [];
     const samples = connect(binding, { onQuery: (event) => events.push(event) }).model(Sample);
     const secret = column("secret");
 
-    const found = await samples.where(sql`${secret} = ${secret.value("s3cret")}`).count();
+    await samples.where(sql`${secret} = ${secret.value("s3cret")}`).count();
 
-    expect(found).toBe(1);
     expect(JSON.stringify(events.map((event) => event.params))).not.toContain("s3cret");
     expect(JSON.stringify(events.map((event) => event.params))).toContain("[FILTERED]");
   });
 
-  test("it works in updateAll, order and toSql, in the stored form", async () => {
+  test("a filtered attribute's value still reaches D1", async () => {
+    await binding.prepare("INSERT INTO typed_samples (id, secret) VALUES (1, 's3cret')").run();
+    const secret = column("secret");
+
+    expect(await countSamples(sql`${secret} = ${secret.value("s3cret")}`)).toBe(1);
+  });
+
+  test("updateAll writes the stored form", async () => {
     const milliseconds = column("milliseconds");
     const moment = new Date("2026-02-03T04:05:06.789Z");
 
     await stamps().updateAll(sql`${milliseconds} = ${milliseconds.value(moment)}`);
-    const ordered = await stamps()
-      .reorder(sql`abs(${milliseconds} - ${milliseconds.value(moment)})`)
-      .toArray();
+
+    expect(await rawStamps()).toMatchObject([
+      { milliseconds: moment.getTime() },
+      { milliseconds: moment.getTime() },
+      { milliseconds: moment.getTime() },
+    ]);
+  });
+
+  test("an order fragment sorts by the stored form", async () => {
+    const milliseconds = column("milliseconds");
+    const third = new Date("2026-01-03T00:00:00.000Z");
+
+    const nearest = stamps().reorder(sql`abs(${milliseconds} - ${milliseconds.value(third)})`);
+
+    expect(await names(nearest)).toEqual(["c", "b", "a"]);
+  });
+
+  test("toSql shows the stored form as the parameter", () => {
+    const milliseconds = column("milliseconds");
+    const moment = new Date("2026-02-03T04:05:06.789Z");
+
     const { params } = stamps()
       .where(sql`${milliseconds} > ${milliseconds.value(moment)}`)
       .toSql();
 
-    expect(ordered).toHaveLength(3);
     expect(params).toEqual([moment.getTime()]);
-    expect(
-      (await binding.prepare("SELECT DISTINCT milliseconds FROM stamps").all()).results,
-    ).toEqual([{ milliseconds: moment.getTime() }]);
   });
 
-  test("fragments with equal typed values have the same shape for or, and different ones don't", async () => {
+  test("fragments with equal typed values have the same shape for or", async () => {
     const milliseconds = column("milliseconds");
     const nearest = (date: Date) =>
       stamps().reorder(sql`abs(${milliseconds} - ${milliseconds.value(date)})`);
-    const day = new Date("2026-01-02T00:00:00.000Z");
 
     const both = nearest(day)
       .where({ name: "a" })
@@ -162,10 +195,30 @@ describe("a typed value in an sql fragment (#142)", () => {
 
     // a and c are the same distance from the day, so their order isn't defined.
     expect((await names(both)).sort((x, y) => x.localeCompare(y))).toEqual(["a", "c"]);
+  });
+
+  test("fragments with different typed values don't have the same shape for or", () => {
+    const milliseconds = column("milliseconds");
+    const nearest = (date: Date) =>
+      stamps().reorder(sql`abs(${milliseconds} - ${milliseconds.value(date)})`);
+
     expect(() =>
       nearest(day)
         .where({ name: "a" })
         .or(nearest(new Date("2026-01-03T00:00:00.000Z")).where({ name: "c" })),
     ).toThrow(IncompatibleRelation);
+  });
+
+  test("equal json typed values, as separate literals, have the same shape for or", () => {
+    const settings = column("settings");
+    const samples = () => shared.model(Sample);
+    const ordered = (theme: string) =>
+      samples().reorder(sql`${settings} = ${settings.value({ theme })}`);
+
+    expect(() =>
+      ordered("dark")
+        .where({ label: "a" })
+        .or(ordered("dark").where({ label: "b" })),
+    ).not.toThrow();
   });
 });

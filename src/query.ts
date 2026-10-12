@@ -108,10 +108,23 @@ function sameValue(a: unknown, b: unknown): boolean {
     return a.attribute === b.attribute;
   }
   if (a instanceof ColumnValue && b instanceof ColumnValue) {
-    return a.attribute === b.attribute && sameValue(a.value, b.value);
+    return a.attribute === b.attribute && sameInput(a.value, b.value);
   }
   if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
   return Object.is(a, b);
+}
+
+/** A typed value's input: an object (a json value) by its JSON text, else as `sameValue`. */
+function sameInput(a: unknown, b: unknown): boolean {
+  const objects = typeof a === "object" && a !== null && typeof b === "object" && b !== null;
+  if (!objects || a instanceof Date || b instanceof Date || Object.is(a, b)) {
+    return sameValue(a, b);
+  }
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false; // a BigInt or a cycle: not the same as anything but itself
+  }
 }
 
 function sameList<T>(
