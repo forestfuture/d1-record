@@ -90,19 +90,41 @@ describe("notes for another tool's migrations", () => {
     expect(originNotes("Drizzle", tables)).toEqual([
       "these migrations look like Drizzle's. Some columns may convert to the wrong type without an error, especially numeric timestamps: check the generated types (https://github.com/forestfuture/d1-record/issues/73)",
       'posts.metadata: read as a string; if it holds JSON, override it as "json" in its Model',
-      "posts.published_at: read as an integer; if it holds a Unix timestamp, it's a number, not a Date",
-      "posts.updatedAt: read as an integer; if it holds a Unix timestamp, it's a number, not a Date",
+      'posts.published_at: read as an integer; if it holds a Unix timestamp, override it in its Model as { type: "datetime", storage: "unixSeconds" } (Drizzle\'s "timestamp") or "unixMilliseconds" ("timestamp_ms")',
+      'posts.updatedAt: read as an integer; if it holds a Unix timestamp, override it in its Model as { type: "datetime", storage: "unixSeconds" } (Drizzle\'s "timestamp") or "unixMilliseconds" ("timestamp_ms")',
       'posts.payloadJson: read as a string; if it holds JSON, override it as "json" in its Model',
     ]);
   });
 
-  test("for Prisma, its DATETIME columns too, since it may store numbers in them", () => {
-    expect(originNotes("Prisma", tables)).toEqual(
+  test("for Prisma, the same, without Drizzle's mode names; its DATETIME columns are ISO text, so no note", () => {
+    const notes = originNotes("Prisma", tables);
+
+    expect(notes).toEqual(
       expect.arrayContaining([
-        "posts.created_at: read as a datetime (ISO text); if it holds a number, as Prisma may write, reads will fail",
+        'posts.published_at: read as an integer; if it holds a Unix timestamp, override it in its Model as { type: "datetime", storage: "unixSeconds" } or "unixMilliseconds"',
         'posts.metadata: read as a string; if it holds JSON, override it as "json" in its Model',
       ]),
     );
+    expect(notes.join("\n")).not.toContain("created_at");
+  });
+
+  test("a column with an expression default, as Drizzle writes for a timestamp, converts and is noted (guard)", () => {
+    const stamped = schemaOf([
+      {
+        name: "0000_init.sql",
+        sql: `CREATE TABLE posts (
+          id INTEGER PRIMARY KEY,
+          created_at INTEGER DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
+          discarded_at INTEGER
+        );`,
+      },
+    ]);
+
+    expect(stamped.ok && stamped.tables[0]?.attributes).toMatchObject({
+      createdAt: { type: "integer", null: false },
+      discardedAt: { type: "integer" },
+    });
+    expect(originNotes("Drizzle", stamped.ok ? stamped.tables : [])).toHaveLength(3);
   });
 
   test("none for Wrangler's own migrations", () => {
