@@ -88,6 +88,16 @@ export function layoutNote(cwd: string, target: Target): string {
   );
 }
 
+/**
+ * The storages an integer timestamp may need, as the end of a note. Drizzle's two `mode`s are
+ * named, since that's what someone with its schema in front of them is reading.
+ */
+function epochStorages(tool: Tool): string {
+  return tool === "Drizzle"
+    ? `"unixSeconds" } (Drizzle's "timestamp") or "unixMilliseconds" ("timestamp_ms")`
+    : `"unixSeconds" } or "unixMilliseconds"`;
+}
+
 /** The columns worth checking, in a schema from `tool`'s migrations. */
 function columnNotes(tool: Tool, tables: readonly GeneratedTable[]): string[] {
   const notes: string[] = [];
@@ -99,11 +109,8 @@ function columnNotes(tool: Tool, tables: readonly GeneratedTable[]): string[] {
       const where = `${table.name}.${column}`;
       if (spec.type === "integer" && words.endsWith("_at")) {
         notes.push(
-          `${where}: read as an integer; if it holds a Unix timestamp, it's a number, not a Date`,
-        );
-      } else if (spec.type === "datetime" && tool === "Prisma") {
-        notes.push(
-          `${where}: read as a datetime (ISO text); if it holds a number, as Prisma may write, reads will fail`,
+          `${where}: read as an integer; if it holds a Unix timestamp, override it in its Model as ` +
+            `{ type: "datetime", storage: ${epochStorages(tool)}`,
         );
       } else if (spec.type === "string" && jsonish.test(words)) {
         notes.push(
