@@ -108,7 +108,7 @@ function sameValue(a: unknown, b: unknown): boolean {
     return a.attribute === b.attribute;
   }
   if (a instanceof ColumnValue && b instanceof ColumnValue) {
-    return a.attribute === b.attribute && sameInput(a.value, b.value);
+    return a.attribute === b.attribute && sameInput(a.assigned, b.assigned);
   }
   if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
   return Object.is(a, b);

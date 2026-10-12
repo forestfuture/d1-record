@@ -1,5 +1,12 @@
 // Turns a QueryDescription or a write into SQL text and bound values. No other module writes SQL.
-import { bindAs, storedAs, storedRows, uncastable, type ValueOf } from "./attribute-values.ts";
+import {
+  bindAs,
+  bindAssigned,
+  storedAs,
+  storedRows,
+  uncastable,
+  type ValueOf,
+} from "./attribute-values.ts";
 import { attributeOf, ignoresColumns } from "./metadata.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { Comparison, comparisonParts, type Operator } from "./comparisons.ts";
@@ -102,8 +109,7 @@ export function compileInsert(
   const placeholders = assignments.map(() => "?").join(", ");
   const params: unknown[] = [];
   for (const [attribute, value] of assignments) {
-    const of = { model, attribute };
-    bindAs(params, of, storedAs("assigned", of, value));
+    bindAssigned(params, { model, attribute }, value);
   }
   return {
     sql: `INSERT INTO ${table} (${columns}) VALUES (${placeholders}) RETURNING ${allColumns(model)}`,
@@ -189,8 +195,7 @@ function compileSets(
   if (changes instanceof SafeSql) return compileFragment(changes, model, params);
   return changes
     .map(([name, value]) => {
-      const of = { model, attribute: name };
-      bindAs(params, of, storedAs("assigned", of, value));
+      bindAssigned(params, { model, attribute: name }, value);
       return `${quoteIdentifier(attributeOf(model, name).column)} = ?`;
     })
     .join(", ");
@@ -354,8 +359,7 @@ function compileFragment(
     if (value instanceof ColumnReference) {
       text += quoteIdentifier(attributeOf(model, value.attribute).column);
     } else if (value instanceof ColumnValue) {
-      const of: ValueOf = { model, attribute: value.attribute };
-      bindAs(params, of, storedAs("assigned", of, value.value));
+      bindAssigned(params, { model, attribute: value.attribute }, value.assigned);
       text += "?";
     } else {
       params.push(writeUntypedValue(value));
