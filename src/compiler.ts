@@ -4,7 +4,7 @@ import { attributeOf, ignoresColumns } from "./metadata.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { Comparison, comparisonParts, type Operator } from "./comparisons.ts";
 import { Either, Negated, type Condition, type QueryDescription } from "./query.ts";
-import { ColumnReference, SafeSql } from "./sql.ts";
+import { ColumnReference, ColumnValue, SafeSql } from "./sql.ts";
 import { writeUntypedValue } from "./conversion.ts";
 import { boundValue } from "./filtering.ts";
 
@@ -353,6 +353,9 @@ function compileFragment(
   fragment.values.forEach((value, index) => {
     if (value instanceof ColumnReference) {
       text += quoteIdentifier(attributeOf(model, value.attribute).column);
+    } else if (value instanceof ColumnValue) {
+      params.push(storedAs("assigned", { model, attribute: value.attribute }, value.value));
+      text += "?";
     } else {
       params.push(writeUntypedValue(value));
       text += "?";

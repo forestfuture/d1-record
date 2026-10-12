@@ -64,4 +64,4 @@ export type { QuerySql } from "./compiler.ts";
 export type { Statement } from "./statement.ts";
 export type { RecordStatement } from "./record-statement.ts";
 export { between, gt, gte, lt, lte, type Comparison } from "./comparisons.ts";
-export { column, sql, type ColumnReference, type SafeSql } from "./sql.ts";
+export { column, sql, type ColumnReference, type ColumnValue, type SafeSql } from "./sql.ts";

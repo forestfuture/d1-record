@@ -1,4 +1,4 @@
-// The `sql` tagged template and `column()`: the only way raw SQL enters a query (ADR-0006).
+// The `sql` tagged template, `column()` and its typed values: the only way raw SQL enters a query (ADR-0006).
 /**
  * A SQL fragment built with the `sql` tagged template (ADR-0006). The template
  * text is written by the developer; every interpolated value is bound as a
@@ -26,6 +26,27 @@ export class ColumnReference {
   /** @internal Use `column()` instead. */
   constructor(attribute: string) {
     this.attribute = attribute;
+  }
+
+  /**
+   * A value of this attribute for a fragment, converted as the attribute stores it: a `Date`
+   * as the integer of an attribute kept as a Unix time, a boolean as 0 or 1, and so on. It's
+   * still a bound parameter. Without it, a value has no attribute to say how it's stored (#142).
+   */
+  value(value: unknown): ColumnValue {
+    return new ColumnValue(this.attribute, value);
+  }
+}
+
+/** A value of an attribute, from `column(attribute).value(value)`, converted when compiled. */
+export class ColumnValue {
+  readonly attribute: string;
+  readonly value: unknown;
+
+  /** @internal Use `column(attribute).value(value)` instead. */
+  constructor(attribute: string, value: unknown) {
+    this.attribute = attribute;
+    this.value = value;
   }
 }
 
