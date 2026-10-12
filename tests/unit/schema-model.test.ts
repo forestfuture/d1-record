@@ -169,7 +169,7 @@ describe("modelFor: the generated Model", () => {
     );
   });
 
-  test("a storage on another type, or that isn't one, is an InvalidModel, past the types too (#73)", () => {
+  test("a storage on a non-datetime, or an unknown storage, is an InvalidModel, past the types too (#73)", () => {
     const flags = (override: unknown) => () => Model("products", { flags: override } as never);
 
     expect(flags({ type: "integer", storage: "unixSeconds" })).toThrow(
