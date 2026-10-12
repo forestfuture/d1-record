@@ -7,7 +7,7 @@ import { underscore } from "./naming.ts";
 export type AttributeType = "string" | "integer" | "real" | "boolean" | "datetime" | "json";
 
 /** How a `datetime` is stored when it's an integer rather than ISO text: seconds or milliseconds (#73). */
-export type Storage = "unixSeconds" | "unixMilliseconds";
+export type EpochStorage = "unixSeconds" | "unixMilliseconds";
 
 /** An attribute's spec written out: its type, and optionally nullability, column and default. */
 export interface SpecObject {
@@ -15,7 +15,7 @@ export interface SpecObject {
   null?: boolean;
   column?: string;
   /** A `datetime` held as a Unix epoch integer, as Drizzle's timestamp modes write it (#73). */
-  storage?: Storage;
+  storage?: EpochStorage;
   /** Evaluated at `build()`, e.g. `() => new Date()`. */
   default?: () => unknown;
   /**
@@ -61,7 +61,7 @@ export interface AttributeDefinition {
   column: string;
   default?: () => unknown;
   generateId?: true;
-  storage?: Storage;
+  storage?: EpochStorage;
 }
 
 type JsType<T extends AttributeType> = T extends "string"
