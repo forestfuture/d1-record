@@ -122,7 +122,7 @@ function stableOrder(model: ModelClass, query: QueryDescription): readonly Order
  */
 function pageNumber(name: string, value: number | string | null | undefined): number | undefined {
   if (value === undefined || value === null || value === "") return undefined;
-  const cast = castValue("integer", value);
+  const cast = castValue({ type: "integer" }, value);
   if (cast === uncastable || (cast as number) < 1) {
     throw new TypeError(`paginate()'s ${name} must be a whole number from 1`);
   }

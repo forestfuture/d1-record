@@ -20,15 +20,18 @@ interface Converter {
 
 const identity = (value: unknown) => value;
 
-/** What converts an attribute's values: its type, or for a datetime stored as an epoch, that (#73). */
-export type ConvertsAs = AttributeType | EpochStorage;
+/**
+ * What an attribute's values convert by: its type, and for a datetime kept as a Unix time, its
+ * storage (#73). Passed whole, so a caller can't convert by the type alone and skip the storage.
+ */
+export type Convertible = Pick<AttributeDefinition, "type" | "storage">;
 
-/** The converter for an attribute: its `storage` if it has one, else its type. */
-export function convertsAs({ type, storage }: Pick<AttributeDefinition, "type" | "storage">) {
-  return storage ?? type;
-}
+/** The key of the converter for an attribute: its storage if it has one, else its type. */
+type ConversionKey = AttributeType | EpochStorage;
 
-const converters: Record<ConvertsAs, Converter> = {
+const keyOf = ({ type, storage }: Convertible): ConversionKey => storage ?? type;
+
+const converters: Record<ConversionKey, Converter> = {
   string: {
     cast: (value) => (typeof value === "string" ? value : uncastable),
     read: identity,
@@ -62,8 +65,8 @@ const converters: Record<ConvertsAs, Converter> = {
 };
 
 /** `value` as the attribute's type (null stays null), or `uncastable`. */
-export function castValue(type: ConvertsAs, value: unknown): unknown {
-  return value === null ? null : converters[type].cast(value);
+export function castValue(attribute: Convertible, value: unknown): unknown {
+  return value === null ? null : converters[keyOf(attribute)].cast(value);
 }
 
 /**
@@ -71,19 +74,19 @@ export function castValue(type: ConvertsAs, value: unknown): unknown {
  * finite number matches a string attribute as its decimal string (`7` → `"7"`), as `find` does
  * for a text key and as Rails does, so a foreign key of another type still finds its target.
  */
-export function castCondition(type: ConvertsAs, value: unknown): unknown {
-  if (type === "string" && typeof value === "number" && Number.isFinite(value)) {
+export function castCondition(attribute: Convertible, value: unknown): unknown {
+  if (attribute.type === "string" && typeof value === "number" && Number.isFinite(value)) {
     return String(value);
   }
-  return castValue(type, value);
+  return castValue(attribute, value);
 }
 
-export function readValue(type: ConvertsAs, value: unknown): unknown {
-  return value === null || value === undefined ? null : converters[type].read(value);
+export function readValue(attribute: Convertible, value: unknown): unknown {
+  return value === null || value === undefined ? null : converters[keyOf(attribute)].read(value);
 }
 
-export function writeValue(type: ConvertsAs, value: unknown): unknown {
-  return value === null || value === undefined ? null : converters[type].write(value);
+export function writeValue(attribute: Convertible, value: unknown): unknown {
+  return value === null || value === undefined ? null : converters[keyOf(attribute)].write(value);
 }
 
 /**
@@ -92,8 +95,8 @@ export function writeValue(type: ConvertsAs, value: unknown): unknown {
  * stored the same way as an attribute of that type.
  */
 export function writeUntypedValue(value: unknown): unknown {
-  if (value instanceof Date) return writeValue("datetime", value);
-  if (typeof value === "boolean") return writeValue("boolean", value);
+  if (value instanceof Date) return writeValue({ type: "datetime" }, value);
+  if (typeof value === "boolean") return writeValue({ type: "boolean" }, value);
   return value;
 }
 
