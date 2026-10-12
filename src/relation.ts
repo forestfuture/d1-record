@@ -38,7 +38,7 @@ import {
   type ModelBase,
   type ModelClass,
 } from "./model.ts";
-import { readValue, writeValue } from "./conversion.ts";
+import { convertsAs, readValue, writeValue } from "./conversion.ts";
 import { SafeSql } from "./sql.ts";
 import {
   checkChanges,
@@ -552,12 +552,20 @@ export class Relation<M extends ModelBase, S = {}> {
             await this.#runner.rows(
               compileSelect(this.#query, compileColumns(this.#model, attributes)),
             )
-          ).map((row) => definitions.map(({ type, column }) => readValue(type, row[column])))
+          ).map((row) =>
+            definitions.map((definition) =>
+              readValue(convertsAs(definition), row[definition.column]),
+            ),
+          )
         : cached.map((record) =>
             // Copies, as a query would give, never the records' own objects.
-            definitions.map(({ type }, index) =>
-              readValue(type, writeValue(type, Reflect.get(record, attributes[index]!))),
-            ),
+            definitions.map((definition, index) => {
+              const converter = convertsAs(definition);
+              return readValue(
+                converter,
+                writeValue(converter, Reflect.get(record, attributes[index]!)),
+              );
+            }),
           );
     return attributes.length === 1 ? values.map(([value]) => value) : values;
   }

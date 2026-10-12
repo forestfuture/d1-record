@@ -11,6 +11,16 @@ class Event extends Model({
   static tableName = "events";
 }
 
+// Drizzle's integer({ mode: "timestamp" }) and integer({ mode: "timestamp_ms" }).
+class Stamp extends Model({
+  id: { type: "integer", null: false },
+  name: "string",
+  seconds: { type: "datetime", storage: "unixSeconds" },
+  milliseconds: { type: "datetime", storage: "unixMilliseconds" },
+}) {
+  static tableName = "stamps";
+}
+
 describe("datetimes stored by other tools (#73)", () => {
   let binding: TestDatabase;
   let dispose: () => Promise<void>;
@@ -23,10 +33,18 @@ describe("datetimes stored by other tools (#73)", () => {
         "CREATE TABLE events (id INTEGER PRIMARY KEY, name TEXT, happened_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
       )
       .run();
+    await binding
+      .prepare(
+        "CREATE TABLE stamps (id INTEGER PRIMARY KEY, name TEXT, seconds INTEGER, milliseconds INTEGER)",
+      )
+      .run();
   });
   afterAll(() => dispose());
   beforeEach(async () => {
-    await binding.prepare("DELETE FROM events").run();
+    await binding.batch([
+      binding.prepare("DELETE FROM events"),
+      binding.prepare("DELETE FROM stamps"),
+    ]);
   });
   afterEach(() => {
     if (zone === undefined) delete process.env.TZ;
@@ -43,5 +61,14 @@ describe("datetimes stored by other tools (#73)", () => {
     const [event] = await connect(binding).model(Event).toArray();
 
     expect(event?.happenedAt?.toISOString()).toBe("2026-10-12T06:38:30.250Z");
+  });
+
+  test("an integer column declared with a storage reads as a Date", async () => {
+    await binding.prepare("INSERT INTO stamps VALUES (1, 'a', 1767323045, 1767323045678)").run();
+
+    const [stamp] = await connect(binding).model(Stamp).toArray();
+
+    expect(stamp?.seconds?.toISOString()).toBe("2026-01-02T03:04:05.000Z");
+    expect(stamp?.milliseconds?.toISOString()).toBe("2026-01-02T03:04:05.678Z");
   });
 });

@@ -6,11 +6,16 @@ import { underscore } from "./naming.ts";
 
 export type AttributeType = "string" | "integer" | "real" | "boolean" | "datetime" | "json";
 
+/** How a `datetime` is stored when it's an integer rather than ISO text: seconds or milliseconds (#73). */
+export type Storage = "unixSeconds" | "unixMilliseconds";
+
 /** An attribute's spec written out: its type, and optionally nullability, column and default. */
 export interface SpecObject {
   type: AttributeType;
   null?: boolean;
   column?: string;
+  /** A `datetime` held as a Unix epoch integer, as Drizzle's timestamp modes write it (#73). */
+  storage?: Storage;
   /** Evaluated at `build()`, e.g. `() => new Date()`. */
   default?: () => unknown;
   /**
@@ -27,11 +32,16 @@ export type ValueSource =
 
 export type AttributeSpec =
   | AttributeType
-  | (Omit<SpecObject, "default" | "generateId"> & { type: "string" } & ValueSource)
-  | (Omit<SpecObject, "type" | "generateId"> & {
-      type: Exclude<AttributeType, "string">;
+  | (Omit<SpecObject, "default" | "generateId" | "storage"> & {
+      type: "string";
+      storage?: never;
+    } & ValueSource)
+  | (Omit<SpecObject, "type" | "generateId" | "storage"> & {
+      type: Exclude<AttributeType, "string" | "datetime">;
       generateId?: false;
-    });
+      storage?: never;
+    })
+  | (Omit<SpecObject, "type" | "generateId"> & { type: "datetime"; generateId?: false });
 
 export type AttributeSpecs = Record<string, AttributeSpec>;
 
@@ -51,6 +61,7 @@ export interface AttributeDefinition {
   column: string;
   default?: () => unknown;
   generateId?: true;
+  storage?: Storage;
 }
 
 type JsType<T extends AttributeType> = T extends "string"
@@ -117,6 +128,7 @@ export function define(name: string, spec: AttributeSpec): AttributeDefinition {
         column: spec.column ?? underscore(name),
         default: spec.default,
         ...(spec.generateId === true && { generateId: true as const }),
+        ...(spec.storage !== undefined && { storage: spec.storage }),
       };
 }
 

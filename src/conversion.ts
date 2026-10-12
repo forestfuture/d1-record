@@ -1,5 +1,5 @@
 // Converting values between attribute types and what D1 stores, per attribute type.
-import type { AttributeType } from "./metadata.ts";
+import type { AttributeDefinition, AttributeType, Storage } from "./metadata.ts";
 
 /** A value that can't be read as the attribute's type. */
 export const uncastable = Symbol("uncastable");
@@ -19,7 +19,15 @@ interface Converter {
 
 const identity = (value: unknown) => value;
 
-const converters: Record<AttributeType, Converter> = {
+/** What converts an attribute's values: its type, or for a datetime stored as an epoch, that (#73). */
+export type ConvertsAs = AttributeType | Storage;
+
+/** The converter for an attribute: its `storage` if it has one, else its type. */
+export function convertsAs({ type, storage }: Pick<AttributeDefinition, "type" | "storage">) {
+  return storage ?? type;
+}
+
+const converters: Record<ConvertsAs, Converter> = {
   string: {
     cast: (value) => (typeof value === "string" ? value : uncastable),
     read: identity,
@@ -33,6 +41,16 @@ const converters: Record<AttributeType, Converter> = {
     read: readDatetime,
     write: (value) => (value as Date).toISOString(),
   },
+  unixSeconds: {
+    cast: castDatetime,
+    read: (value) => new Date(Number(value) * 1000),
+    write: (value) => Math.floor((value as Date).getTime() / 1000),
+  },
+  unixMilliseconds: {
+    cast: castDatetime,
+    read: (value) => new Date(Number(value)),
+    write: (value) => (value as Date).getTime(),
+  },
   json: {
     cast: identity,
     // Text is parsed. Under a column declared JSON, SQLite stores a number-like value (123) as
@@ -43,7 +61,7 @@ const converters: Record<AttributeType, Converter> = {
 };
 
 /** `value` as the attribute's type (null stays null), or `uncastable`. */
-export function castValue(type: AttributeType, value: unknown): unknown {
+export function castValue(type: ConvertsAs, value: unknown): unknown {
   return value === null ? null : converters[type].cast(value);
 }
 
@@ -52,18 +70,18 @@ export function castValue(type: AttributeType, value: unknown): unknown {
  * finite number matches a string attribute as its decimal string (`7` → `"7"`), as `find` does
  * for a text key and as Rails does, so a foreign key of another type still finds its target.
  */
-export function castCondition(type: AttributeType, value: unknown): unknown {
+export function castCondition(type: ConvertsAs, value: unknown): unknown {
   if (type === "string" && typeof value === "number" && Number.isFinite(value)) {
     return String(value);
   }
   return castValue(type, value);
 }
 
-export function readValue(type: AttributeType, value: unknown): unknown {
+export function readValue(type: ConvertsAs, value: unknown): unknown {
   return value === null || value === undefined ? null : converters[type].read(value);
 }
 
-export function writeValue(type: AttributeType, value: unknown): unknown {
+export function writeValue(type: ConvertsAs, value: unknown): unknown {
   return value === null || value === undefined ? null : converters[type].write(value);
 }
 
