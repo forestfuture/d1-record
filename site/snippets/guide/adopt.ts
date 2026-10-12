@@ -1,4 +1,4 @@
-import { gte, Model, modelFor } from "@forestfuture/d1-record";
+import { column, gte, Model, modelFor, sql } from "@forestfuture/d1-record";
 
 // A Drizzle app's posts table, as `d1-record schema` reads it: plain TEXT and INTEGER columns.
 const ApplicationRecord = modelFor(
@@ -45,3 +45,10 @@ export function publishedSince(since: Date) {
   return Article.where({ publishedAt: gte(since) });
 }
 // #endregion timestamps
+
+// #region fragment
+export function publishedBefore(before: Date) {
+  const publishedAt = column("publishedAt");
+  return Article.where(sql`${publishedAt} < ${publishedAt.value(before)}`);
+}
+// #endregion fragment
