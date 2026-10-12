@@ -97,7 +97,7 @@ The column stays an `INTEGER`. `createdAt` and `updatedAt` declared this way are
 Under `unixSeconds`, a `Date` is stored to the second, so a condition such as `lt(date)` compares to the second too.
 
 ::: warning A Date in an sql fragment
-A `Date` inside an `sql` fragment is written as ISO text, because a fragment has no attribute to say otherwise, and it won’t compare with an integer. Use a number there: `` sql`published_at > ${Math.floor(date.getTime() / 1000)}` ``.
+A `Date` interpolated into an `sql` fragment is bound as ISO text, because a fragment has no attribute to say otherwise, and it won’t compare with an integer. Use `column("publishedAt").value(date)`, which writes it as the attribute stores it: see [Writing SQL fragments](./querying#writing-sql-fragments).
 :::
 
 ::: warning TIP

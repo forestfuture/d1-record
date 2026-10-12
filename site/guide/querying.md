@@ -49,6 +49,16 @@ For anything else, write an `sql` tagged template. Values are always bound, and 
 
 <<< @/snippets/guide/querying.ts#sql{ts}
 
+::: warning Integer datetimes
+A value in a fragment is bound as it is, so a `Date` is ISO text. If the attribute is a datetime [stored as a Unix time](./adopt-a-database#reading-unix-timestamps), compare it with `column("publishedAt").value(date)`, which writes the `Date` as the attribute stores it. Without `value`, the fragment matches nothing.
+:::
+
+Write the value with `value`:
+
+<<< @/snippets/guide/adopt.ts#fragment{ts}
+
+`value` works for any attribute, and writes a boolean as 0 or 1 and a JSON value as text. The value is cast as an assigned one, so a value the attribute can’t hold throws `TypeError` naming the attribute. A filtered attribute’s value is hidden from `onQuery`, as it is anywhere else.
+
 ## Ordering and paging
 
 Sort by each key in turn with `order`, and page with `limit` and `offset`:
