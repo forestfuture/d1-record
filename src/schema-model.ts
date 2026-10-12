@@ -2,6 +2,7 @@
 import { InvalidModel } from "./errors.ts";
 import {
   generateIdProblem,
+  storageProblem,
   markIgnoringColumns,
   type AttributeSpecs,
   type AttributeType,
@@ -36,9 +37,14 @@ type ObjectOverride = Partial<Omit<SpecObject, "column">>;
  */
 type AttributeOverride =
   | AttributeType
-  | (Pick<ObjectOverride, "null"> & { type?: "string" } & ValueSource)
+  | (Pick<ObjectOverride, "null"> & { type?: "string"; storage?: never } & ValueSource)
   | (Pick<ObjectOverride, "null" | "default"> & {
-      type: Exclude<AttributeType, "string">;
+      type: Exclude<AttributeType, "string" | "datetime">;
+      generateId?: false;
+      storage?: never;
+    })
+  | (Pick<ObjectOverride, "null" | "default" | "storage"> & {
+      type: "datetime";
       generateId?: false;
     });
 
@@ -94,9 +100,11 @@ const overrideKeys: Readonly<Record<string, (value: unknown) => boolean>> = {
   null: (value) => typeof value === "boolean",
   default: (value) => typeof value === "function",
   generateId: (value) => typeof value === "boolean",
+  // Which one is checked with the merged spec, by storageProblem.
+  storage: (value) => typeof value === "string",
 };
 
-/** Whether `value` is an object override: only `type`, `null`, `default` and `generateId`, well formed. */
+/** Whether `value` is an object override: only `type`, `null`, `default`, `generateId` and `storage`, well formed. */
 function isSpecOverride(value: unknown): value is ObjectOverride {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   return Object.entries(value).every(
@@ -116,7 +124,7 @@ function checked(where: string, attribute: string, override: unknown): ObjectOve
   }
   if (!isSpecOverride(override)) {
     throw new InvalidModel(
-      `${where}.${attribute}: an override is a type name, { type, null, default, generateId }, or false`,
+      `${where}.${attribute}: an override is a type name, { type, null, default, generateId, storage }, or false`,
     );
   }
   return Object.fromEntries(Object.entries(override).filter(([, value]) => value !== undefined));
@@ -131,7 +139,8 @@ function checked(where: string, attribute: string, override: unknown): ObjectOve
 function overridden(spec: AttributeSpecs[string], change: ObjectOverride): AttributeSpecs[string] {
   const base: SpecObject = typeof spec === "string" ? { type: spec } : spec;
   const retyped = change.type !== undefined && change.type !== base.type;
-  const { default: initial, generateId, ...rest } = base;
+  // A storage is for a datetime, so a new type drops it like a default (#73).
+  const { default: initial, generateId, storage, ...rest } = base;
   // A default and generateId replace each other; `generateId: false` leaves a default alone.
   const keepsDefault = !retyped && change.generateId !== true;
   const keepsGenerateId = !retyped && change.default === undefined;
@@ -140,6 +149,7 @@ function overridden(spec: AttributeSpecs[string], change: ObjectOverride): Attri
     ...rest,
     ...(keepsDefault && { default: initial }),
     ...(keepsGenerateId && { generateId }),
+    ...(!retyped && { storage }),
     ...change,
   } as AttributeSpecs[string];
 }
@@ -151,7 +161,10 @@ function checkedOverride(
   change: ObjectOverride,
 ): AttributeSpecs[string] {
   const changed = overridden(spec, change);
-  const problem = typeof changed === "string" ? undefined : generateIdProblem(where, changed);
+  const problem =
+    typeof changed === "string"
+      ? undefined
+      : (generateIdProblem(where, changed) ?? storageProblem(where, changed));
   if (problem !== undefined) throw new InvalidModel(problem);
   return changed;
 }
