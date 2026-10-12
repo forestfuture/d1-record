@@ -1,13 +1,11 @@
 // Attribute metadata: each attribute's type, column and default, resolved from its spec.
 import { ancestors } from "./ancestors.ts";
+import { type EpochStorage, epochStorages } from "./epoch-storage.ts";
 import { UnknownAttribute } from "./errors.ts";
 import type { ModelClass } from "./model.ts";
 import { underscore } from "./naming.ts";
 
 export type AttributeType = "string" | "integer" | "real" | "boolean" | "datetime" | "json";
-
-/** How a `datetime` is stored when it's an integer rather than ISO text: seconds or milliseconds (#73). */
-export type EpochStorage = "unixSeconds" | "unixMilliseconds";
 
 /** An attribute's spec written out: its type, and optionally nullability, column and default. */
 export interface SpecObject {
@@ -175,7 +173,7 @@ export function storageProblem(
   { type, storage }: Pick<SpecObject, "type" | "storage">,
 ): string | undefined {
   if (storage === undefined) return undefined;
-  if (storage !== "unixSeconds" && storage !== "unixMilliseconds") {
+  if (!(epochStorages as readonly unknown[]).includes(storage)) {
     return `${where} has storage ${JSON.stringify(storage)}; use "unixSeconds" or "unixMilliseconds"`;
   }
   if (type !== "datetime") {

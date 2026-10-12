@@ -68,6 +68,25 @@ describe("schemaOf: from migrations to table schemas", () => {
     ]);
   });
 
+  test("a datetime column with a number or an epoch function as its default is noted, naming storage (#73)", () => {
+    const result = tables(`CREATE TABLE things (
+      id INTEGER PRIMARY KEY,
+      a DATETIME DEFAULT 0,
+      b TIMESTAMP DEFAULT (unixepoch()),
+      c DATETIME DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)),
+      d DATETIME DEFAULT CURRENT_TIMESTAMP,
+      e DATETIME DEFAULT '2026-01-02T03:04:05Z'
+    )`);
+    const override =
+      'override it in its Model as { type: "datetime", storage: "unixSeconds" or "unixMilliseconds" }';
+
+    expect(result.notes).toEqual([
+      `things.a: a datetime with a number as its default; if it holds a Unix time, ${override}`,
+      `things.b: a datetime with a number as its default; if it holds a Unix time, ${override}`,
+      `things.c: a datetime with a number as its default; if it holds a Unix time, ${override}`,
+    ]);
+  });
+
   test("NOT NULL columns and the primary key are null: false", () => {
     expect(
       attributes("CREATE TABLE things (id INTEGER PRIMARY KEY, a TEXT NOT NULL, b TEXT)"),

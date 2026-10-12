@@ -293,7 +293,7 @@ migrations_dir = "db\\u002Fmigrate"
       expect.stringMatching(
         /^Note: these migrations look like Drizzle's\. Some columns may convert/,
       ),
-      'Note: posts.published_at: read as an integer; if it holds a Unix timestamp, override it in its Model as { type: "datetime", storage: "unixSeconds" } (Drizzle\'s "timestamp") or "unixMilliseconds" ("timestamp_ms")',
+      'Note: posts.published_at: read as an integer; if it holds a Unix timestamp, override it in its Model as { type: "datetime", storage: "unixSeconds" ("timestamp") or "unixMilliseconds" ("timestamp_ms") }',
     ]);
   });
 

@@ -1,4 +1,5 @@
 // Reads a column as an attribute by the conventions (#66): name, type, nullability, default.
+import { type EpochStorage, epochStorages } from "../../src/epoch-storage.ts";
 import { underscore } from "../../src/naming.ts";
 import { attributeName } from "./names.ts";
 
@@ -59,6 +60,33 @@ function unsupported(declared: string, name: string, where: string): string | un
     return `${where}: ${declared} loses precision as a number; store money as integer cents (${name}_cents INTEGER)`;
   }
   return declared === "BLOB" ? `${where}: BLOB columns aren't supported yet (#20)` : undefined;
+}
+
+/** Drizzle's `mode` for each epoch storage, which a note names for a reader with its schema open. */
+const drizzleModes: Record<EpochStorage, string> = {
+  unixSeconds: '"timestamp"',
+  unixMilliseconds: '"timestamp_ms"',
+};
+
+/** The override that reads a Unix time as a `Date`, for a note; with Drizzle's modes named if asked. */
+export function storageOverride(withDrizzleModes: boolean): string {
+  const storages = epochStorages.map((storage) =>
+    withDrizzleModes ? `"${storage}" (${drizzleModes[storage]})` : `"${storage}"`,
+  );
+  return `{ type: "datetime", storage: ${storages.join(" or ")} }`;
+}
+
+/** A default that's a number or an epoch function, which a datetime in ISO text wouldn't hold. */
+const epochDefault = /^\(?\s*-?\d+(\.\d+)?\s*\)?$|unixepoch|strftime\s*\(\s*'%s'/i;
+
+/** A note for a datetime column whose default looks like a Unix time (#73). */
+function epochDefaultNote(column: Column, type: AttributeType): string | undefined {
+  if (type !== "datetime" || column.defaultValue === null) return undefined;
+  if (!epochDefault.test(column.defaultValue.trim())) return undefined;
+  return (
+    `${column.table}.${column.name}: a datetime with a number as its default; ` +
+    `if it holds a Unix time, override it in its Model as ${storageOverride(false)}`
+  );
 }
 
 /** A column's attribute type: its declared type first, then its name for plain TEXT/INTEGER. */
@@ -130,8 +158,9 @@ function literalDefault(sql: string | null, type: AttributeType): Default | unde
 
 /** A column as an attribute, by the conventions (#66): name, type, nullability and default. */
 export function convert(column: Column): Converted {
-  const { type, error, note } = typeOf(column);
+  const { type, error, note: typeNote } = typeOf(column);
   if (type === undefined) return { ok: false, error: error! };
+  const note = typeNote ?? epochDefaultNote(column, type);
   const attribute = attributeName(column.name);
   const spec: Spec = { type };
   if (column.notNull || column.primaryKey) spec.null = false;
