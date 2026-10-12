@@ -1,5 +1,11 @@
 # @forestfuture/d1-record
 
+## 0.1.4
+
+### Patch Changes
+
+- [#137](https://github.com/forestfuture/d1-record/pull/137) [`636d91e`](https://github.com/forestfuture/d1-record/commit/636d91edda29504384770cf4c93bcbda976688f8) Thanks [@christopherstyles](https://github.com/christopherstyles)! - `npx skills add forestfuture/d1-record` installs only the skill. It used to copy the whole repository into the app's skills folder, because `SKILL.md` was at the repository's root. The skill is now `skills/d1-record/SKILL.md`, in the repository and in the package (`npx skills experimental_sync` still finds it).
+
 ## 0.1.3
 
 ### Patch Changes
