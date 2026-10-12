@@ -90,8 +90,8 @@ describe("notes for another tool's migrations", () => {
     expect(originNotes("Drizzle", tables)).toEqual([
       "these migrations look like Drizzle's. Some columns may convert to the wrong type without an error, especially numeric timestamps: check the generated types (https://github.com/forestfuture/d1-record/issues/73)",
       'posts.metadata: read as a string; if it holds JSON, override it as "json" in its Model',
-      'posts.published_at: read as an integer; if it holds a Unix timestamp, override it in its Model as { type: "datetime", storage: "unixSeconds" } (Drizzle\'s "timestamp") or "unixMilliseconds" ("timestamp_ms")',
-      'posts.updatedAt: read as an integer; if it holds a Unix timestamp, override it in its Model as { type: "datetime", storage: "unixSeconds" } (Drizzle\'s "timestamp") or "unixMilliseconds" ("timestamp_ms")',
+      'posts.published_at: read as an integer; if it holds a Unix timestamp, override it in its Model as { type: "datetime", storage: "unixSeconds" ("timestamp") or "unixMilliseconds" ("timestamp_ms") }',
+      'posts.updatedAt: read as an integer; if it holds a Unix timestamp, override it in its Model as { type: "datetime", storage: "unixSeconds" ("timestamp") or "unixMilliseconds" ("timestamp_ms") }',
       'posts.payloadJson: read as a string; if it holds JSON, override it as "json" in its Model',
     ]);
   });
@@ -101,7 +101,7 @@ describe("notes for another tool's migrations", () => {
 
     expect(notes).toEqual(
       expect.arrayContaining([
-        'posts.published_at: read as an integer; if it holds a Unix timestamp, override it in its Model as { type: "datetime", storage: "unixSeconds" } or "unixMilliseconds"',
+        'posts.published_at: read as an integer; if it holds a Unix timestamp, override it in its Model as { type: "datetime", storage: "unixSeconds" or "unixMilliseconds" }',
         'posts.metadata: read as a string; if it holds JSON, override it as "json" in its Model',
       ]),
     );

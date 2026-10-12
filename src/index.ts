@@ -55,6 +55,7 @@ export type {
   UniquenessOptions,
   ValidationOptions,
 } from "./validations.ts";
+export type { EpochStorage } from "./epoch-storage.ts";
 export type { AttributeSpec, AttributeSpecs, AttributeType } from "./metadata.ts";
 export { Relation, type Scope, type ScopeMethods, type Scoped } from "./relation.ts";
 export type { Conditions, InsertOptions, OrderSpec, UpsertOptions } from "./relation-checks.ts";
