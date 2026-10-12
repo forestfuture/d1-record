@@ -1,10 +1,10 @@
 ---
-description: "Point coding agents at d1-record's docs, install its agent skill, and add its rules to your project's AGENTS.md or CLAUDE.md."
+description: "Point coding agents at d1-record's docs, install its agent skill, and point your project's AGENTS.md or CLAUDE.md at the guide."
 ---
 
 # AI agents
 
-Coding agents follow d1-record’s conventions best with its guide at hand and its rules in context. Use any of these, or all three.
+Coding agents follow d1-record’s conventions best with its guide at hand and its rules in context. The agent skill brings both, and is what most projects need. The rest are for agents that can’t load a skill, or for a nudge that’s always in context.
 
 ## Giving your agent the docs
 
@@ -33,9 +33,19 @@ npx skills experimental_sync
 The skills CLI marks `experimental_sync` as experimental, so its name may change.
 :::
 
-## Adding the rules to your project
+## Pointing AGENTS.md at the guide
 
-Agents read `AGENTS.md`, or `CLAUDE.md` for Claude Code, at the start of every task. Paste this block into yours:
+Agents read `AGENTS.md`, or `CLAUDE.md` for Claude Code, at the start of every task, while a skill loads only when the agent decides it applies. To make sure the guide is always in reach, add one line to yours:
+
+```md
+Before writing code with `@forestfuture/d1-record`, read the part of `node_modules/@forestfuture/d1-record/llms-full.txt` for the task.
+```
+
+The line names the guide shipped with your installed version, so it stays correct after an upgrade.
+
+## If your agent doesn’t load skills
+
+Skip this section if you’ve installed the skill: the block below is the skill’s rules, and the agent would read them twice. For an agent that reads only `AGENTS.md` or `CLAUDE.md`, paste it into yours:
 
 <<< @/../skills/d1-record/SKILL.md#rules{md}
 
