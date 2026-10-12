@@ -48,6 +48,11 @@ export function storedAs(use: Use, of: ValueOf, value: unknown): unknown {
   return writeValue(attributeOf(of.model, of.attribute), cast);
 }
 
+/** `value` cast as an assigned one, in the form D1 stores, bound and hidden if filtered (#83). */
+export function bindAssigned(params: unknown[], of: ValueOf, value: unknown): void {
+  bindAs(params, of, storedAs("assigned", of, value));
+}
+
 /**
  * Binds `stored` values (as D1 holds them) as the attribute's, each hidden from `onQuery`
  * listeners when the attribute is filtered (#83); D1 still gets the real values.

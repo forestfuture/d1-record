@@ -41,13 +41,19 @@ export class ColumnReference {
 /** A value of an attribute, from `column(attribute).value(value)`, converted when compiled. */
 export class ColumnValue {
   readonly attribute: string;
-  readonly value: unknown;
+  /** What was given, before it's cast as an assigned value of the attribute. */
+  readonly assigned: unknown;
 
   /** @internal Use `column(attribute).value(value)` instead. */
-  constructor(attribute: string, value: unknown) {
+  constructor(attribute: string, assigned: unknown) {
     this.attribute = attribute;
-    this.value = value;
+    this.assigned = assigned;
   }
+}
+
+/** Whether a fragment's interpolated value names an attribute: a column, or a typed value. */
+export function namesAttribute(value: unknown): value is ColumnReference | ColumnValue {
+  return value instanceof ColumnReference || value instanceof ColumnValue;
 }
 
 /** Names the column of `attribute` inside an `sql` fragment, quoted and mapped (ADR-0004). */

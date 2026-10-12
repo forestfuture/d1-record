@@ -25,32 +25,39 @@ class Sample extends Model({ id: { type: "integer", null: false }, ...declared }
 const samples = connect({} as never).model(Sample);
 const attributes = Object.keys(declared) as (keyof typeof declared)[];
 
-const compiled = (attribute: string, value: unknown) => {
+/** The fragment `attribute = value`, compiled, or what it threw. */
+function compiled(attribute: string, value: unknown) {
   const reference = column(attribute);
-  return samples.where(sql`${reference} = ${reference.value(value)}`).toSql();
-};
+  try {
+    return { result: samples.where(sql`${reference} = ${reference.value(value)}`).toSql() };
+  } catch (error) {
+    return { error };
+  }
+}
 
 describe("a typed value of any shape in a fragment", () => {
   test("is one bound parameter, or a TypeError that names the attribute", () => {
     fc.assert(
       fc.property(fc.constantFrom(...attributes), values, (attribute, value) => {
-        try {
-          const { params } = compiled(attribute, value);
-          expect(params).toHaveLength(1);
-          const [param] = params;
-          // `JSON.stringify` gives undefined for a function or a symbol: the same gap as below.
-          const unserializable = declared[attribute] === "json" && param === undefined;
-          expect(
-            unserializable || param === null || ["string", "number"].includes(typeof param),
-          ).toBe(true);
-        } catch (error) {
-          expect(error).toBeInstanceOf(TypeError);
+        const outcome = compiled(attribute, value);
+
+        if ("error" in outcome) {
+          expect(outcome.error).toBeInstanceOf(TypeError);
           // A json attribute accepts any value, so JSON's own error for one it can't serialize
-          // (a BigInt, a cycle), or a bound undefined for a function, is what every write path gives today (#146).
+          // (a BigInt, a cycle), or a bound undefined for a function, is what every write path
+          // gives today (#146).
           if (declared[attribute] !== "json") {
-            expect((error as TypeError).message).toMatch(new RegExp(`for "${attribute}"`));
+            expect((outcome.error as TypeError).message).toMatch(new RegExp(`for "${attribute}"`));
           }
+          return;
         }
+        const { params } = outcome.result;
+        expect(params).toHaveLength(1);
+        const [param] = params;
+        const unserializable = declared[attribute] === "json" && param === undefined;
+        expect(
+          unserializable || param === null || ["string", "number"].includes(typeof param),
+        ).toBe(true);
       }),
       PURE_RUNS,
     );
@@ -59,12 +66,11 @@ describe("a typed value of any shape in a fragment", () => {
   test("never changes the SQL text", () => {
     fc.assert(
       fc.property(fc.constantFrom(...attributes), values, (attribute, value) => {
-        const fixed = compiled(attribute, null).sql;
-        try {
-          expect(compiled(attribute, value).sql).toBe(fixed);
-        } catch (error) {
-          expect(error).toBeInstanceOf(TypeError);
-        }
+        const outcome = compiled(attribute, value);
+        const fixed = compiled(attribute, null);
+
+        if ("error" in outcome || "error" in fixed) return;
+        expect(outcome.result.sql).toBe(fixed.result.sql);
       }),
       PURE_RUNS,
     );
