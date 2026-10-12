@@ -41,6 +41,17 @@ With D1, Prisma’s migrations are usually Wrangler’s own: files in `migration
 
 Prisma names tables after its models, such as `User`, and columns in camelCase, such as `createdAt`. d1-record keeps both names, so the Model is `ApplicationRecord("User")`, with attributes such as `createdAt`.
 
+::: warning Two date formats in one column
+Prisma writes a `DateTime` as `2026-10-12T06:38:30.325+00:00`, and a `DEFAULT CURRENT_TIMESTAMP` fills `2026-10-12 06:38:30`. d1-record reads both as UTC, but SQLite compares dates as text, so `order` and `between` on a column with both can misplace values within a day. Rewrite the default-filled rows in a migration, so they match the others:
+
+```sql
+UPDATE "Post" SET "createdAt" = replace("createdAt", ' ', 'T') || 'Z'
+WHERE "createdAt" NOT LIKE '%T%';
+```
+
+Comparing through `datetime()` is tracked in [#143](https://github.com/forestfuture/d1-record/issues/143).
+:::
+
 ## Starting with no migrations
 
 For a database built by hand, or by `drizzle-kit push`, export a snapshot of its schema as the first migration, and mark it as applied:

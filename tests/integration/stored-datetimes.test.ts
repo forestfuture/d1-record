@@ -247,4 +247,30 @@ describe("datetimes stored by other tools (#73)", () => {
     expect(stamp!.seconds?.toISOString()).toBe("2026-01-02T03:04:06.000Z");
     expect(stamp!.savedChanges().seconds?.[1]).toEqual(stamp!.seconds);
   });
+
+  test("a cell that isn't a Unix time fails when the record loads, naming the attribute", async () => {
+    await binding.prepare("INSERT INTO stamps VALUES (1, 'a', 'abc', NULL)").run();
+
+    await expect(connect(binding).model(Stamp).find(1)).rejects.toThrow(
+      new TypeError('Stamp: "abc" isn\'t a datetime for "seconds"'),
+    );
+  });
+
+  test("a cell past the range of a Date fails the same way, showing the number", async () => {
+    await binding.prepare("INSERT INTO stamps VALUES (1, 'a', NULL, 9000000000000000000)").run();
+
+    await expect(connect(binding).model(Stamp).find(1)).rejects.toThrow(
+      new TypeError('Stamp: 9000000000000000000 isn\'t a datetime for "milliseconds"'),
+    );
+  });
+
+  test("a fractional cell loads clean, and saving another attribute leaves it as it was", async () => {
+    await binding.prepare("INSERT INTO stamps VALUES (1, 'a', 1767323045.9, NULL)").run();
+    const stamp = await connect(binding).model(Stamp).find(1);
+
+    expect(stamp.isChanged()).toBe(false);
+    await stamp.update({ name: "b" });
+
+    expect(await raw("stamps")).toMatchObject([{ name: "b", seconds: 1767323045.9 }]);
+  });
 });

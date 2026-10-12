@@ -1,7 +1,7 @@
 // A record's private state: its values, changes, errors, and lifecycle flags.
-import { castAs } from "./attribute-values.ts";
+import { castAs, uncastableError } from "./attribute-values.ts";
 import type { Assignment } from "./compiler.ts";
-import { readValue, writeValue } from "./conversion.ts";
+import { isInvalidDate, readValue, writeValue } from "./conversion.ts";
 import { Errors } from "./errors-collection.ts";
 import { MissingAttribute, NoDatabase, RecordDestroyed } from "./errors.ts";
 import type { Executor } from "./executor.ts";
@@ -257,7 +257,7 @@ export class RecordState {
   loadRow(row: Record<string, unknown>): void {
     for (const [name, definition] of this.#model.attributeDefinitions) {
       const { column } = definition;
-      if (column in row) this.#values[name] = readValue(definition, row[column]);
+      if (column in row) this.#values[name] = this.#readStored(name, row[column]);
     }
     this.#markSaved();
   }
@@ -381,6 +381,19 @@ export class RecordState {
   /** The stored primary key as a JavaScript value, e.g. to find the row again. */
   get storedKeyValue(): unknown {
     return readValue(this.#definition(this.#model.primaryKey), this.storedKey);
+  }
+
+  /**
+   * A stored value as the attribute's. One kept as a Unix time that isn't a time (text, or past
+   * the range of a Date) fails here, naming the attribute, not at the first save (#73).
+   */
+  #readStored(name: string, stored: unknown): unknown {
+    const definition = this.#definition(name);
+    const value = readValue(definition, stored);
+    if (definition.storage !== undefined && isInvalidDate(value)) {
+      throw uncastableError({ model: this.#model, attribute: name }, definition.type, stored);
+    }
+    return value;
   }
 
   /** After an insert: load what D1 stored; `savedChanges` is everything the new row holds. */
