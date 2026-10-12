@@ -30,7 +30,7 @@ const converters: Record<AttributeType, Converter> = {
   boolean: { cast: castBoolean, read: (value) => value === 1, write: (value) => (value ? 1 : 0) },
   datetime: {
     cast: castDatetime,
-    read: (value) => new Date(value as string),
+    read: readDatetime,
     write: (value) => (value as Date).toISOString(),
   },
   json: {
@@ -131,6 +131,18 @@ const isoDate = /^(\d{4})-(\d{2})-(\d{2})$/;
 /** An ISO-8601 date and time, with `Z` or an offset: a time without one is ambiguous. */
 const isoDateTime =
   /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+/** A stored date and time with no zone, as SQLite's `CURRENT_TIMESTAMP` writes it: UTC (#73). */
+const zonelessDateTime = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
+
+/**
+ * A stored datetime as a `Date`. Text without a zone is UTC, as SQLite's own functions write
+ * it, where `new Date` would read it in the process's time zone.
+ */
+function readDatetime(value: unknown): Date {
+  if (typeof value !== "string") return new Date(value as number);
+  return new Date(zonelessDateTime.test(value) ? `${value.replace(" ", "T")}Z` : value);
+}
 
 /** A valid `Date`, or an ISO-8601 string (a date, or a date and time with its offset). */
 function castDatetime(value: unknown): unknown {
