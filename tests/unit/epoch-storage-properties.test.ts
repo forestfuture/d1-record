@@ -7,14 +7,17 @@ import { PURE_RUNS } from "../support/properties.ts";
 // integer is always a safe whole number, and reading it back never moves the instant later.
 const dates = fc.date({ min: new Date(-8.64e12), max: new Date(8.64e12), noInvalidDate: true });
 
+const seconds = { type: "datetime", storage: "unixSeconds" } as const;
+const milliseconds = { type: "datetime", storage: "unixMilliseconds" } as const;
+
 describe("a datetime stored as an epoch", () => {
   test("milliseconds keep the instant exactly, as an integer", () => {
     fc.assert(
       fc.property(dates, (date) => {
-        const stored = writeValue("unixMilliseconds", date);
+        const stored = writeValue(milliseconds, date);
 
         expect(Number.isSafeInteger(stored)).toBe(true);
-        expect((readValue("unixMilliseconds", stored) as Date).getTime()).toBe(date.getTime());
+        expect((readValue(milliseconds, stored) as Date).getTime()).toBe(date.getTime());
       }),
       PURE_RUNS,
     );
@@ -23,8 +26,8 @@ describe("a datetime stored as an epoch", () => {
   test("seconds keep the instant to the second, never later than it", () => {
     fc.assert(
       fc.property(dates, (date) => {
-        const stored = writeValue("unixSeconds", date);
-        const back = (readValue("unixSeconds", stored) as Date).getTime();
+        const stored = writeValue(seconds, date);
+        const back = (readValue(seconds, stored) as Date).getTime();
 
         expect(Number.isSafeInteger(stored)).toBe(true);
         expect(back).toBeLessThanOrEqual(date.getTime());

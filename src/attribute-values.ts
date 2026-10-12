@@ -3,14 +3,7 @@
 // the form D1 stores, and bound hidden from listeners when the attribute is filtered. Records,
 // Relations, associations, preloads, and the compiler all go through here, so no caller has to
 // cast or bind a value its own way.
-import {
-  castCondition,
-  castValue,
-  convertsAs,
-  isInvalidDate,
-  uncastable,
-  writeValue,
-} from "./conversion.ts";
+import { castCondition, castValue, isInvalidDate, uncastable, writeValue } from "./conversion.ts";
 import { FILTERED, Filtered, isFiltered } from "./filtering.ts";
 import { attributeOf } from "./metadata.ts";
 import type { ModelClass } from "./model.ts";
@@ -43,8 +36,7 @@ export interface ValueOf {
 export function castAs(use: Use, of: ValueOf, value: unknown): unknown {
   const definition = attributeOf(of.model, of.attribute);
   const { type } = definition;
-  const converter = convertsAs(definition);
-  const cast = use === "assigned" ? castValue(converter, value) : castCondition(converter, value);
+  const cast = use === "assigned" ? castValue(definition, value) : castCondition(definition, value);
   if (cast === uncastable && use !== "condition") throw uncastableError(of, type, value);
   return cast;
 }
@@ -53,7 +45,7 @@ export function castAs(use: Use, of: ValueOf, value: unknown): unknown {
 export function storedAs(use: Use, of: ValueOf, value: unknown): unknown {
   const cast = castAs(use, of, value);
   if (cast === uncastable) return uncastable;
-  return writeValue(convertsAs(attributeOf(of.model, of.attribute)), cast);
+  return writeValue(attributeOf(of.model, of.attribute), cast);
 }
 
 /**
