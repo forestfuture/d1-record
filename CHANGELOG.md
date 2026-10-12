@@ -1,5 +1,11 @@
 # @forestfuture/d1-record
 
+## 0.1.3
+
+### Patch Changes
+
+- [#134](https://github.com/forestfuture/d1-record/pull/134) [`c4ce735`](https://github.com/forestfuture/d1-record/commit/c4ce73566afa783d6dcc935dca58c2c21d087427) Thanks [@christopherstyles](https://github.com/christopherstyles)! - The guide's `llms-full.txt`, in the package and on the docs site, links to other pages by their full Markdown URL, so an agent reading the one file can follow a link such as `models#casting-assigned-values`.
+
 ## 0.1.2
 
 ### Patch Changes
