@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model } from "../../src/index.ts";
+import { between, connect, gte, Model } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 // Columns as other tools leave them: text from a SQLite default, and integer epochs.
@@ -21,6 +21,16 @@ class Stamp extends Model({
   static tableName = "stamps";
 }
 
+// created_at and updated_at as integer milliseconds, as an app that timestamps with Drizzle has.
+class Entry extends Model({
+  id: { type: "integer", null: false },
+  title: "string",
+  createdAt: { type: "datetime", storage: "unixMilliseconds" },
+  updatedAt: { type: "datetime", storage: "unixMilliseconds" },
+}) {
+  static tableName = "entries";
+}
+
 describe("datetimes stored by other tools (#73)", () => {
   let binding: TestDatabase;
   let dispose: () => Promise<void>;
@@ -35,6 +45,11 @@ describe("datetimes stored by other tools (#73)", () => {
       .run();
     await binding
       .prepare(
+        "CREATE TABLE entries (id INTEGER PRIMARY KEY, title TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
+      )
+      .run();
+    await binding
+      .prepare(
         "CREATE TABLE stamps (id INTEGER PRIMARY KEY, name TEXT, seconds INTEGER, milliseconds INTEGER)",
       )
       .run();
@@ -42,6 +57,7 @@ describe("datetimes stored by other tools (#73)", () => {
   afterAll(() => dispose());
   beforeEach(async () => {
     await binding.batch([
+      binding.prepare("DELETE FROM entries"),
       binding.prepare("DELETE FROM events"),
       binding.prepare("DELETE FROM stamps"),
     ]);
@@ -70,5 +86,84 @@ describe("datetimes stored by other tools (#73)", () => {
 
     expect(stamp?.seconds?.toISOString()).toBe("2026-01-02T03:04:05.000Z");
     expect(stamp?.milliseconds?.toISOString()).toBe("2026-01-02T03:04:05.678Z");
+  });
+
+  // From a form or JSON, so not typed as a Date.
+  const untyped = (value: unknown) => value as never;
+
+  // The tests below passed on first run: the storage rides on the converters, so they guard it.
+  const raw = async (table: string) =>
+    (await binding.prepare(`SELECT * FROM ${table} ORDER BY id`).all()).results;
+
+  test("saving writes the integer, in seconds or milliseconds", async () => {
+    const stamps = connect(binding).model(Stamp);
+
+    await stamps.create({
+      name: "a",
+      seconds: new Date("2026-01-02T03:04:05.678Z"),
+      milliseconds: new Date("2026-01-02T03:04:05.678Z"),
+    });
+
+    expect(await raw("stamps")).toMatchObject([
+      { seconds: 1767323045, milliseconds: 1767323045678 },
+    ]);
+  });
+
+  test("created_at and updated_at are set as integers", async () => {
+    const entries = connect(binding).model(Entry);
+    const before = Date.now();
+
+    const entry = await entries.create({ title: "a" });
+    const [row] = (await raw("entries")) as { created_at: number; updated_at: number }[];
+
+    expect(row!.created_at).toBeGreaterThanOrEqual(before);
+    expect(row!.updated_at).toBe(row!.created_at);
+    expect(entry.createdAt?.getTime()).toBe(row!.created_at);
+
+    await entry.update({ title: "b" });
+    const [updated] = (await raw("entries")) as { created_at: number; updated_at: number }[];
+
+    expect(updated!.created_at).toBe(row!.created_at);
+    expect(updated!.updated_at).toBeGreaterThanOrEqual(row!.updated_at);
+  });
+
+  test("conditions on the attribute compare integers, given Dates", async () => {
+    await binding.batch([
+      binding.prepare("INSERT INTO stamps VALUES (1, 'a', 1767225600, 1767225600000)"),
+      binding.prepare("INSERT INTO stamps VALUES (2, 'b', 1767312000, 1767312000000)"),
+      binding.prepare("INSERT INTO stamps VALUES (3, 'c', 1767398400, 1767398400000)"),
+    ]);
+    const stamps = connect(binding).model(Stamp);
+    const names = async (relation: ReturnType<typeof stamps.where>) =>
+      (await relation.order({ id: "asc" }).toArray()).map((stamp) => stamp.name);
+
+    const second = new Date("2026-01-02T00:00:00.000Z");
+    const third = new Date("2026-01-03T00:00:00.000Z");
+
+    expect(await names(stamps.where({ seconds: second }))).toEqual(["b"]);
+    expect(await names(stamps.where({ milliseconds: gte(second) }))).toEqual(["b", "c"]);
+    expect(await names(stamps.where({ seconds: between(second, third) }))).toEqual(["b", "c"]);
+  });
+
+  test("an ISO string is cast, a bad one throws, and null stays NULL", async () => {
+    const stamps = connect(binding).model(Stamp);
+
+    await stamps.create({
+      name: "a",
+      seconds: untyped("2026-01-02T03:04:05Z"),
+      milliseconds: null,
+    });
+
+    expect(await raw("stamps")).toMatchObject([{ seconds: 1767323045, milliseconds: null }]);
+    expect(() => stamps.build({ seconds: untyped("yesterday") })).toThrow(TypeError);
+  });
+
+  test("an assignment that stores the same integer isn't a change", async () => {
+    await binding.prepare("INSERT INTO stamps VALUES (1, 'a', 1767323045, NULL)").run();
+    const [stamp] = await connect(binding).model(Stamp).toArray();
+
+    stamp!.seconds = new Date("2026-01-02T03:04:05.678Z");
+
+    expect(stamp!.isChanged()).toBe(false);
   });
 });
