@@ -262,7 +262,7 @@ import { column, sql } from "@forestfuture/d1-record";
 const recent = await User.where(sql`${column("createdAt")} > ${since}`).toArray();
 ```
 
-A plain string is rejected.
+A plain string is rejected. To write a `Date`, boolean, or JSON value the way an attribute stores it, see [Writing SQL fragments](./querying#writing-sql-fragments).
 
 ## Serializing records
 
@@ -302,7 +302,7 @@ Rails’ `serializable_hash(except:)` is per call, and `filter_attributes` only 
 - **Matching:** a string matches when the attribute’s snake_case name contains it, in any case: `passwordDigest` (`password_digest`) contains `passw`, and `apiKey` (`api_key`) contains `_key`. A RegExp matches the attribute or its snake_case name.
 - **Hidden in `QueryEvent.params`:** the values bound for the attribute in inserts (in a multi-row insert’s JSON, its column in every row), updates, `updateAll`, conditions, lists and comparisons, and a filtered primary key in a record’s `UPDATE` and `DELETE`.
 - **Hidden in errors:** a cast error’s value, and a filtered primary key in `RecordNotFound`.
-- **Not hidden:** values inside `sql` fragments, which have no attribute; and `toJSON()` and `attributes()`, which are your data, not logs ([Hiding attributes](#hiding-attributes) keeps names out of `toJSON()`).
+- **Not hidden:** a bare value inside an `sql` fragment, which has no attribute (write it as `column("token").value(token)` to filter it); and `toJSON()` and `attributes()`, which are your data, not logs ([Hiding attributes](#hiding-attributes) keeps names out of `toJSON()`).
 
 ::: rails Compared with Rails
 The default list is Rails’ own `filter_parameters` list, and the filtered values read as they do in Rails’ logs.

@@ -23,7 +23,7 @@ These are the project’s own reviews, not an independent audit. Each says what 
 - **An untrusted `null` in a condition.** `findBy({ token: null })` matches rows whose token is NULL. Check a value’s type before querying with it.
 - **Authorization.** Whether this user may read or change this record is your app’s decision.
 - **Formats and ranges.** Casting checks types, not meaning: use [validations](./validations).
-- **Secrets inside `sql` fragments.** A fragment’s values have no attribute, so they’re not hidden from listeners.
+- **Bare values inside `sql` fragments.** A value with no attribute isn’t hidden from listeners. Write it as `column("token").value(token)`, and it’s filtered like the attribute’s other values.
 
 ## Guarantees, and the tests that check them
 

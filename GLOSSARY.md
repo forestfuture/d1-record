@@ -61,8 +61,12 @@ A **Record** loaded through a Relation with `select(...)`. Only the selected att
 _Avoid_: Projection, sparse record
 
 **SQL fragment**:
-A piece of SQL built with the `sql` tagged template, in which every interpolated value is a bound parameter. `column(attribute).value(v)` is a value written as that **Attribute** stores it. It's the only form in which hand-written SQL reaches a Relation.
+A piece of SQL built with the `sql` tagged template, in which every interpolated value is a bound parameter. It's the only form in which hand-written SQL reaches a Relation.
 _Avoid_: Raw SQL, string condition
+
+**Typed value**:
+A value in an **SQL fragment** written as `column(attribute).value(v)`: cast as an assigned value of that **Attribute**, and written as the attribute stores it (an integer for **Epoch storage**), still a bound parameter. A bare interpolated value has no attribute, so it's written by its JavaScript type.
+_Avoid_: Bound attribute, cast value
 
 **Abort**:
 A deliberate refusal raised by a pre-write callback with `abort(reason)`. It cancels the write without being a validation failure.
