@@ -1,6 +1,7 @@
 // What a Relation's methods take, checked when a query is written, not when it runs.
 import type { Assignment, Conflict } from "./compiler.ts";
 import { Comparison } from "./comparisons.ts";
+import { castAs } from "./attribute-values.ts";
 import { attributeOf, type AttributeType } from "./metadata.ts";
 import type { AttributesOf, ModelClass } from "./model.ts";
 import type { NullsPlacement, OrderDirection, OrderTerm } from "./query.ts";
@@ -79,11 +80,16 @@ function attributeOrder(attribute: string, value: unknown, method: string): Orde
   return nulls === undefined ? { attribute, direction } : { attribute, direction, nulls };
 }
 
-/** A fragment's `column()` references and typed values must name declared attributes. */
+/**
+ * A fragment's `column()` references must name declared attributes, and so must its typed
+ * values, which must also be values those attributes can hold, so a mistake surfaces where the
+ * fragment is written, not when the query runs (#142).
+ */
 function checkFragment(model: ModelClass, fragment: SafeSql): void {
   for (const value of fragment.values) {
-    if (value instanceof ColumnReference || value instanceof ColumnValue) {
-      attributeOf(model, value.attribute);
+    if (value instanceof ColumnReference) attributeOf(model, value.attribute);
+    if (value instanceof ColumnValue) {
+      castAs("assigned", { model, attribute: value.attribute }, value.value);
     }
   }
 }
