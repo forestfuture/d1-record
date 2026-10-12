@@ -11,6 +11,8 @@
   "workers_dev": false,
   "routes": [
     { "pattern": "docs.forestfuture.dev/d1-record*", "zone_name": "forestfuture.dev" },
+    // The host's home page, listing every library (home/index.html, copied next to d1-record/).
+    { "pattern": "docs.forestfuture.dev/", "zone_name": "forestfuture.dev" },
     // Crawlers read robots.txt only from the host's root; the build writes it next to d1-record/.
     { "pattern": "docs.forestfuture.dev/robots.txt", "zone_name": "forestfuture.dev" },
   ],

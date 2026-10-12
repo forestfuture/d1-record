@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { copyFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import container from "markdown-it-container";
 import { defineConfig } from "vitepress";
@@ -16,6 +16,11 @@ export default defineConfig({
     absolutizeLinks(outDir);
     // The Worker's assets root is outDir's parent, so this is served at docs.forestfuture.dev/robots.txt
     // (a second route in wrangler.jsonc). Crawlers only read robots.txt from a host's root.
+    // Likewise the host's home page (home/index.html), served by the `docs.forestfuture.dev/` route.
+    copyFileSync(
+      new URL("../home/index.html", import.meta.url),
+      join(dirname(outDir), "index.html"),
+    );
     writeFileSync(
       join(dirname(outDir), "robots.txt"),
       `User-agent: *\nAllow: /\n\nSitemap: https://docs.forestfuture.dev${base}sitemap.xml\n`,
