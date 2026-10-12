@@ -1,6 +1,7 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import llmstxt from "vitepress-plugin-llms";
+import { absoluteLinks } from "./llms-links.ts";
 
 const site = "https://docs.forestfuture.dev/d1-record";
 
@@ -42,4 +43,16 @@ ${agentRules()}
 export function tidyLlmsTxt(outDir: string): void {
   const file = join(outDir, "llms.txt");
   writeFileSync(file, readFileSync(file, "utf8").replace(/\n{3,}/g, "\n\n"));
+}
+
+/**
+ * Makes the guide's links between pages absolute in llms-full.txt and in each page's Markdown copy,
+ * once the plugin has written them: a relative `./models` has nothing to resolve against there (#133).
+ */
+export function absolutizeLinks(outDir: string): void {
+  for (const name of readdirSync(outDir, { recursive: true, encoding: "utf8" })) {
+    if (!name.endsWith(".md") && name !== "llms-full.txt") continue;
+    const file = join(outDir, name);
+    writeFileSync(file, absoluteLinks(readFileSync(file, "utf8")));
+  }
 }
