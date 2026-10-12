@@ -1,7 +1,7 @@
 // A record's private state: its values, changes, errors, and lifecycle flags.
 import { castAs } from "./attribute-values.ts";
 import type { Assignment } from "./compiler.ts";
-import { readValue, writeValue } from "./conversion.ts";
+import { type ConvertsAs, convertsAs, readValue, writeValue } from "./conversion.ts";
 import { Errors } from "./errors-collection.ts";
 import { MissingAttribute, NoDatabase, RecordDestroyed } from "./errors.ts";
 import type { Executor } from "./executor.ts";
@@ -255,8 +255,9 @@ export class RecordState {
 
   /** Loads a D1 row; the record becomes persisted and clean. */
   loadRow(row: Record<string, unknown>): void {
-    for (const [name, { type, column }] of this.#model.attributeDefinitions) {
-      if (column in row) this.#values[name] = readValue(type, row[column]);
+    for (const [name, definition] of this.#model.attributeDefinitions) {
+      const { column } = definition;
+      if (column in row) this.#values[name] = readValue(convertsAs(definition), row[column]);
     }
     this.#markSaved();
   }
@@ -281,7 +282,7 @@ export class RecordState {
     const changes: Changes = {};
     for (const name of this.changedNames()) {
       const before = this.#snapshot.has(name)
-        ? readValue(this.#definition(name).type, this.#snapshot.get(name))
+        ? readValue(this.#converter(name), this.#snapshot.get(name))
         : null;
       changes[name] = [before, this.#copyOf(name)];
     }
@@ -309,9 +310,11 @@ export class RecordState {
    */
   valueInDatabase(name: string): unknown {
     this.read(name);
-    const { type } = this.#definition(name);
-    if (this.#snapshot.has(name)) return readValue(type, this.#snapshot.get(name));
-    return this.#initialValues.has(name) ? readValue(type, this.#initialValues.get(name)) : null;
+    const converter = this.#converter(name);
+    if (this.#snapshot.has(name)) return readValue(converter, this.#snapshot.get(name));
+    return this.#initialValues.has(name)
+      ? readValue(converter, this.#initialValues.get(name))
+      : null;
   }
 
   /**
@@ -335,12 +338,12 @@ export class RecordState {
   restore(names: readonly string[] = this.changedNames()): void {
     this.#requireNotDestroyed("be changed");
     for (const name of names) {
-      const { type } = this.#definition(name);
+      const converter = this.#converter(name);
       if (this.#lifecycle !== "new") {
         if (this.#snapshot.has(name))
-          this.#values[name] = readValue(type, this.#snapshot.get(name));
+          this.#values[name] = readValue(converter, this.#snapshot.get(name));
       } else if (this.#initialValues.has(name)) {
-        this.#values[name] = readValue(type, this.#initialValues.get(name));
+        this.#values[name] = readValue(converter, this.#initialValues.get(name));
       } else {
         this.#values[name] = null;
         this.#assigned.delete(name);
@@ -349,8 +352,8 @@ export class RecordState {
   }
 
   #matches(name: string, before: unknown, after: unknown, options: ChangeOptions): boolean {
-    const { type } = this.#definition(name);
-    const same = (a: unknown, b: unknown) => writeValue(type, a) === writeValue(type, b);
+    const converter = this.#converter(name);
+    const same = (a: unknown, b: unknown) => writeValue(converter, a) === writeValue(converter, b);
     return (
       (!("from" in options) || same(options.from, before)) &&
       (!("to" in options) || same(options.to, after))
@@ -376,7 +379,7 @@ export class RecordState {
 
   /** The stored primary key as a JavaScript value, e.g. to find the row again. */
   get storedKeyValue(): unknown {
-    return readValue(this.#definition(this.#model.primaryKey).type, this.storedKey);
+    return readValue(this.#converter(this.#model.primaryKey), this.storedKey);
   }
 
   /** After an insert: load what D1 stored; `savedChanges` is everything the new row holds. */
@@ -424,14 +427,19 @@ export class RecordState {
     return attributeOf(this.#model, name);
   }
 
+  /** What converts an attribute's values: its type, or its epoch storage (#73). */
+  #converter(name: string): ConvertsAs {
+    return convertsAs(this.#definition(name));
+  }
+
   /** An attribute's current value in its stored form, for comparing with the Snapshot. */
   #storedForm(name: string): unknown {
-    return writeValue(this.#definition(name).type, this.#values[name]);
+    return writeValue(this.#converter(name), this.#values[name]);
   }
 
   /** A copy of an attribute's current value, read back from its stored form. */
   #copyOf(name: string): unknown {
-    return readValue(this.#definition(name).type, this.#storedForm(name));
+    return readValue(this.#converter(name), this.#storedForm(name));
   }
 
   #assignmentsOf(names: readonly string[]): Assignment[] {
