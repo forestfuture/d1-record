@@ -25,8 +25,12 @@ The interactive session `d1-record console` opens: a REPL on the project's local
 _Avoid_: Shell, REPL (in the guide), playground
 
 **Override**:
-A change a Model makes to an attribute of the **Generated schema** (its type, nullability, default, or **Generated id**), or `false` to ignore the column.
+A change a Model makes to an attribute of the **Generated schema** (its type, nullability, default, **Generated id**, or **Epoch storage**), or `false` to ignore the column.
 _Avoid_: Patch, customization
+
+**Epoch storage**:
+How a `datetime` **Attribute** is held when its column is an `INTEGER` of Unix time, not ISO text: `storage: "unixSeconds"` or `"unixMilliseconds"`, as Drizzle's `timestamp` and `timestamp_ms` modes write it. The attribute is still a `Date`.
+_Avoid_: Numeric datetime, timestamp mode
 
 **Record**:
 One instance of a **Model**, representing a single row that is either persisted or not yet saved.

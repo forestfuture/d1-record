@@ -112,6 +112,10 @@ An attribute can be `null` unless it’s declared `null: false`, and its TypeScr
 Store `json` attributes in a `TEXT` column, as [D1 recommends](https://developers.cloudflare.com/d1/sql-api/query-json/#types), and add `CHECK (json_valid(settings))` to have D1 reject invalid JSON. A column declared `JSON` works too.
 :::
 
+::: warning TIP
+A `datetime` can be kept as a Unix time in an `INTEGER` column, as Drizzle writes it. Declare it with `storage: "unixSeconds"` or `"unixMilliseconds"`: see [Reading Unix timestamps](./adopt-a-database#reading-unix-timestamps).
+:::
+
 ## Casting assigned values
 
 Every value is cast to its attribute’s type when it’s assigned, so text from JSON, a form, or a query string becomes the right type:
