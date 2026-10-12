@@ -46,7 +46,7 @@ A change to public behavior or the public API updates, in the same pull request,
 - **`GLOSSARY.md`**: a new term, or a term whose meaning changed.
 - **`site/guide/`**: the page for the behavior, and its examples in `site/snippets/` (see [Documentation](#documentation)).
 - **`src/index.ts`**: a new public name is exported here; an internal one is marked `/** @internal */`, and `vp run check:public-types` keeps it out of the published types.
-- **`SKILL.md`**: its rules, when the change alters how an app should write code with d1-record.
+- **`skills/d1-record/SKILL.md`**: the agent skill's rules, when the change alters how an app should write code with d1-record.
 - **`README.md`**: its quick look and feature list, when they show the behavior.
 - **`.changeset/`**: a changeset (see [Changesets](#changesets)).
 - **`docs/adr/`**: an ADR, for a decision that's hard to reverse, surprising, and a real trade-off.

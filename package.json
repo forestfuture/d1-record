@@ -26,7 +26,7 @@
   "files": [
     "dist",
     "llms-full.txt",
-    "SKILL.md"
+    "skills"
   ],
   "type": "module",
   "sideEffects": false,

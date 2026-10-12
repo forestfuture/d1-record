@@ -164,7 +164,7 @@ d1-record follows [semantic versioning](https://semver.org). While it’s on 0.x
 
 ## For AI agents
 
-The guide is also published for coding agents: [`llms.txt`](https://docs.forestfuture.dev/d1-record/llms.txt), [`llms-full.txt`](https://docs.forestfuture.dev/d1-record/llms-full.txt), and every page as Markdown. The package ships the guide for its own version (`node_modules/@forestfuture/d1-record/llms-full.txt`) and an [agent skill](SKILL.md) (`npx skills add forestfuture/d1-record`). See [AI agents](https://docs.forestfuture.dev/d1-record/guide/ai-agents).
+The guide is also published for coding agents: [`llms.txt`](https://docs.forestfuture.dev/d1-record/llms.txt), [`llms-full.txt`](https://docs.forestfuture.dev/d1-record/llms-full.txt), and every page as Markdown. The package ships the guide for its own version (`node_modules/@forestfuture/d1-record/llms-full.txt`) and an [agent skill](skills/d1-record/SKILL.md) (`npx skills add forestfuture/d1-record`). See [AI agents](https://docs.forestfuture.dev/d1-record/guide/ai-agents).
 
 ## Documentation
 

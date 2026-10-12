@@ -17,7 +17,7 @@ Coding agents follow d1-record’s conventions best with its guide at hand and i
 
 ## Installing the agent skill
 
-Install d1-record’s [agent skill](https://github.com/forestfuture/d1-record/blob/main/SKILL.md): its rules, the shapes of a Model and a Worker, and the mistakes to watch for, with pointers into the guide. Agents that support skills, such as Claude Code, Cursor, Codex, and [others](https://skills.sh), load it when they work on d1-record code:
+Install d1-record’s [agent skill](https://github.com/forestfuture/d1-record/blob/main/skills/d1-record/SKILL.md): its rules, the shapes of a Model and a Worker, and the mistakes to watch for, with pointers into the guide. Agents that support skills, such as Claude Code, Cursor, Codex, and [others](https://skills.sh), load it when they work on d1-record code:
 
 ```sh
 npx skills add forestfuture/d1-record
@@ -37,6 +37,6 @@ The skills CLI marks `experimental_sync` as experimental, so its name may change
 
 Agents read `AGENTS.md`, or `CLAUDE.md` for Claude Code, at the start of every task. Paste this block into yours:
 
-<<< @/../SKILL.md#rules{md}
+<<< @/../skills/d1-record/SKILL.md#rules{md}
 
 Copy it again after upgrading d1-record, since the rules can change.
