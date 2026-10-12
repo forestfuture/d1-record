@@ -97,23 +97,25 @@ To map an attribute to a column with another name, give it `{ column: "..." }`. 
 
 ## Attribute types
 
-| Type       | JavaScript | Stored in D1 as       |
-| ---------- | ---------- | --------------------- |
-| `string`   | `string`   | `TEXT`                |
-| `integer`  | `number`   | `INTEGER`             |
-| `real`     | `number`   | `REAL`                |
-| `boolean`  | `boolean`  | `INTEGER`, `0` or `1` |
-| `datetime` | `Date`     | `TEXT`, ISO-8601      |
-| `json`     | any value  | `TEXT`, as JSON       |
+| Type       | JavaScript | Stored in D1 as                             |
+| ---------- | ---------- | ------------------------------------------- |
+| `string`   | `string`   | `TEXT`                                      |
+| `integer`  | `number`   | `INTEGER`                                   |
+| `real`     | `number`   | `REAL`                                      |
+| `boolean`  | `boolean`  | `INTEGER`, `0` or `1`                       |
+| `datetime` | `Date`     | `TEXT`, ISO-8601, or an `INTEGER` Unix time |
+| `json`     | any value  | `TEXT`, as JSON                             |
 
 An attribute can be `null` unless it’s declared `null: false`, and its TypeScript type includes `| null` to match.
+
+A `datetime` read from text with no time zone, such as SQLite’s `DEFAULT CURRENT_TIMESTAMP` writes, is UTC in any time zone.
 
 ::: warning TIP
 Store `json` attributes in a `TEXT` column, as [D1 recommends](https://developers.cloudflare.com/d1/sql-api/query-json/#types), and add `CHECK (json_valid(settings))` to have D1 reject invalid JSON. A column declared `JSON` works too.
 :::
 
 ::: warning TIP
-A `datetime` can be kept as a Unix time in an `INTEGER` column, as Drizzle writes it. Declare it with `storage: "unixSeconds"` or `"unixMilliseconds"`: see [Reading Unix timestamps](./adopt-a-database#reading-unix-timestamps).
+A `datetime` can be kept as a Unix time in an `INTEGER` column, as Drizzle writes it. Declare it with `storage: "unixSeconds"` or `"unixMilliseconds"`; [Reading Unix timestamps](./adopt-a-database#reading-unix-timestamps) shows how.
 :::
 
 ## Casting assigned values

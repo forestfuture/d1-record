@@ -72,7 +72,7 @@ Fix a column’s type with an override in its Model. It changes how the column i
 
 ## Reading Unix timestamps
 
-Drizzle’s `integer({ mode: "timestamp" })` stores Unix seconds, and `"timestamp_ms"` stores milliseconds. Override the column as a `datetime` with the matching `storage`, and it reads and writes as a `Date`:
+Read a Unix timestamp column as a `Date` by overriding it as a `datetime` with the matching `storage`. Drizzle’s `integer({ mode: "timestamp" })` stores seconds, and `"timestamp_ms"` stores milliseconds:
 
 <<< @/snippets/guide/adopt.ts#timestamps{ts}
 
@@ -81,10 +81,16 @@ Drizzle’s `integer({ mode: "timestamp" })` stores Unix seconds, and `"timestam
 | `"timestamp"`    | `"unixSeconds"`      |
 | `"timestamp_ms"` | `"unixMilliseconds"` |
 
-The column stays an `INTEGER`. `createdAt` and `updatedAt` declared this way are written as integers too, and `where` and `between` take `Date`s. Under `unixSeconds`, a `Date` is stored to the second.
+The column stays an `INTEGER`. `createdAt` and `updatedAt` declared this way are written as integers too, and `where` and `between` take `Date`s.
+
+Under `unixSeconds`, a `Date` is stored to the second, so a condition such as `lt(date)` compares to the second too.
+
+::: warning A Date in an sql fragment
+A `Date` inside an `sql` fragment is written as ISO text, because a fragment has no attribute to say otherwise, and it won’t compare with an integer. Use a number there: `` sql`published_at > ${Math.floor(date.getTime() / 1000)}` ``.
+:::
 
 ::: warning TIP
-Prisma’s dates need no override. On D1, Prisma writes a `DateTime` as ISO text, which d1-record reads as it is. A column its database fills in with `DEFAULT CURRENT_TIMESTAMP` holds UTC text with no zone, and d1-record reads it as UTC in any time zone.
+Prisma’s dates need no override. On D1, Prisma writes a `DateTime` as ISO text, which d1-record reads as it is.
 :::
 
 ::: rails Beyond Rails
