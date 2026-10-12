@@ -4,7 +4,7 @@ import { Comparison } from "./comparisons.ts";
 import { attributeOf, type AttributeType } from "./metadata.ts";
 import type { AttributesOf, ModelClass } from "./model.ts";
 import type { NullsPlacement, OrderDirection, OrderTerm } from "./query.ts";
-import { ColumnReference, SafeSql } from "./sql.ts";
+import { ColumnReference, ColumnValue, SafeSql } from "./sql.ts";
 
 /**
  * Attribute conditions for `where`/`findBy`: a value, an array meaning "any of these", or a
@@ -79,10 +79,12 @@ function attributeOrder(attribute: string, value: unknown, method: string): Orde
   return nulls === undefined ? { attribute, direction } : { attribute, direction, nulls };
 }
 
-/** A fragment's `column()` references must name declared attributes. */
+/** A fragment's `column()` references and typed values must name declared attributes. */
 function checkFragment(model: ModelClass, fragment: SafeSql): void {
   for (const value of fragment.values) {
-    if (value instanceof ColumnReference) attributeOf(model, value.attribute);
+    if (value instanceof ColumnReference || value instanceof ColumnValue) {
+      attributeOf(model, value.attribute);
+    }
   }
 }
 

@@ -2,7 +2,7 @@
 import { Comparison } from "./comparisons.ts";
 import { IncompatibleRelation } from "./errors.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
-import { ColumnReference, SafeSql } from "./sql.ts";
+import { ColumnReference, ColumnValue, SafeSql } from "./sql.ts";
 
 export type OrderDirection = "asc" | "desc";
 
@@ -102,10 +102,13 @@ function sameFragment(x: SafeSql, y: SafeSql): boolean {
   );
 }
 
-/** Columns by attribute, dates by time, anything else by identity. */
+/** Columns by attribute, typed values by attribute and value, dates by time, the rest by identity. */
 function sameValue(a: unknown, b: unknown): boolean {
   if (a instanceof ColumnReference && b instanceof ColumnReference) {
     return a.attribute === b.attribute;
+  }
+  if (a instanceof ColumnValue && b instanceof ColumnValue) {
+    return a.attribute === b.attribute && sameValue(a.value, b.value);
   }
   if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
   return Object.is(a, b);
