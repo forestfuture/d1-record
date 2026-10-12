@@ -96,33 +96,31 @@ describe("notes for another tool's migrations", () => {
     ]);
   });
 
-  test("for Prisma, the same, without Drizzle's mode names; its DATETIME columns are ISO text, so no note", () => {
-    const notes = originNotes("Prisma", tables);
-
-    expect(notes).toEqual(
-      expect.arrayContaining([
-        'posts.published_at: read as an integer; if it holds a Unix timestamp, override it in its Model as { type: "datetime", storage: "unixSeconds" or "unixMilliseconds" }',
-        'posts.metadata: read as a string; if it holds JSON, override it as "json" in its Model',
-      ]),
+  test("for Prisma, an integer timestamp's note doesn't name Drizzle's modes", () => {
+    expect(originNotes("Prisma", tables)).toContain(
+      'posts.published_at: read as an integer; if it holds a Unix timestamp, override it in its Model as { type: "datetime", storage: "unixSeconds" or "unixMilliseconds" }',
     );
-    expect(notes.join("\n")).not.toContain("created_at");
   });
 
-  test("a column with an expression default, as Drizzle writes for a timestamp, converts and is noted (guard)", () => {
+  test("for Prisma, a DATETIME column gets no note, since Prisma writes it as ISO text", () => {
+    expect(originNotes("Prisma", tables).join("\n")).not.toContain("created_at");
+  });
+
+  test("a column with an expression default, as Drizzle writes for a timestamp, converts and is noted", () => {
     const stamped = schemaOf([
       {
         name: "0000_init.sql",
         sql: `CREATE TABLE posts (
           id INTEGER PRIMARY KEY,
           created_at INTEGER DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
-          discarded_at INTEGER
+          published_at INTEGER
         );`,
       },
     ]);
 
     expect(stamped.ok && stamped.tables[0]?.attributes).toMatchObject({
       createdAt: { type: "integer", null: false },
-      discardedAt: { type: "integer" },
+      publishedAt: { type: "integer" },
     });
     expect(originNotes("Drizzle", stamped.ok ? stamped.tables : [])).toHaveLength(3);
   });

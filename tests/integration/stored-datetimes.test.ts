@@ -21,7 +21,7 @@ class Stamp extends Model({
   static tableName = "stamps";
 }
 
-// created_at and updated_at as integer milliseconds, as an app that timestamps with Drizzle has.
+// created_at and updated_at as integer milliseconds, as Drizzle's timestamp_ms mode writes them.
 class Entry extends Model({
   id: { type: "integer", null: false },
   title: "string",
@@ -91,7 +91,8 @@ describe("datetimes stored by other tools (#73)", () => {
   // From a form or JSON, so not typed as a Date.
   const untyped = (value: unknown) => value as never;
 
-  // The tests below passed on first run: the storage rides on the converters, so they guard it.
+  // These passed on first run, as the storage rides on the converters, so they guard it; the
+  // update test at the end was red (the review of #73).
   const raw = async (table: string) =>
     (await binding.prepare(`SELECT * FROM ${table} ORDER BY id`).all()).results;
 
@@ -145,17 +146,78 @@ describe("datetimes stored by other tools (#73)", () => {
     expect(await names(stamps.where({ seconds: between(second, third) }))).toEqual(["b", "c"]);
   });
 
-  test("an ISO string is cast, a bad one throws, and null stays NULL", async () => {
+  test("an ISO string assigned to a stored datetime is cast, and written as an integer", async () => {
     const stamps = connect(binding).model(Stamp);
 
-    await stamps.create({
-      name: "a",
-      seconds: untyped("2026-01-02T03:04:05Z"),
-      milliseconds: null,
-    });
+    await stamps.create({ name: "a", seconds: untyped("2026-01-02T03:04:05Z") });
 
-    expect(await raw("stamps")).toMatchObject([{ seconds: 1767323045, milliseconds: null }]);
-    expect(() => stamps.build({ seconds: untyped("yesterday") })).toThrow(TypeError);
+    expect(await raw("stamps")).toMatchObject([{ seconds: 1767323045 }]);
+  });
+
+  test("a value that isn't a datetime is refused with a TypeError", () => {
+    expect(() =>
+      connect(binding)
+        .model(Stamp)
+        .build({ seconds: untyped("yesterday") }),
+    ).toThrow(TypeError);
+  });
+
+  test("null is stored as NULL", async () => {
+    await connect(binding).model(Stamp).create({ name: "a", seconds: null });
+
+    expect(await raw("stamps")).toMatchObject([{ seconds: null }]);
+  });
+
+  test("Prisma's ISO text with an offset reads as it is, in any time zone", async () => {
+    process.env.TZ = "America/Los_Angeles";
+    await binding
+      .prepare("INSERT INTO events (id, name, happened_at) VALUES (1, 'a', ?)")
+      .bind("2026-10-12T06:38:30.325+00:00")
+      .run();
+
+    const [event] = await connect(binding).model(Event).toArray();
+
+    expect(event?.happenedAt?.toISOString()).toBe("2026-10-12T06:38:30.325Z");
+  });
+
+  test("bulk writes store integers: insertAll, upsertAll and updateAll", async () => {
+    const stamps = connect(binding).model(Stamp);
+    const at = new Date("2026-01-02T03:04:05.678Z");
+
+    await stamps.insertAll([{ id: 1, name: "a", seconds: at, milliseconds: at }]);
+    expect(await raw("stamps")).toMatchObject([
+      { seconds: 1767323045, milliseconds: 1767323045678 },
+    ]);
+
+    const later = new Date("2026-01-03T00:00:00.000Z");
+    await stamps.upsertAll([{ id: 1, name: "b", seconds: later, milliseconds: later }], {
+      uniqueBy: "id",
+    });
+    expect(await raw("stamps")).toMatchObject([
+      { seconds: 1767398400, milliseconds: 1767398400000 },
+    ]);
+
+    await stamps.updateAll({ seconds: at, milliseconds: at });
+    expect(await raw("stamps")).toMatchObject([
+      { seconds: 1767323045, milliseconds: 1767323045678 },
+    ]);
+  });
+
+  test("a datetime's default is written as an integer", async () => {
+    class Dated extends Model({
+      id: { type: "integer", null: false },
+      seconds: {
+        type: "datetime",
+        storage: "unixSeconds",
+        default: () => new Date(1_800_000_000_500),
+      },
+    }) {
+      static tableName = "stamps";
+    }
+
+    await connect(binding).model(Dated).create({});
+
+    expect(await raw("stamps")).toMatchObject([{ seconds: 1_800_000_000 }]);
   });
 
   test("an assignment that stores the same integer isn't a change", async () => {
