@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import container from "markdown-it-container";
 import { defineConfig } from "vitepress";
 import { examples, site } from "./examples.ts";
-import { llms, tidyLlmsTxt } from "./llms.ts";
+import { absolutizeLinks, llms, tidyLlmsTxt } from "./llms.ts";
 
 const repository = "https://github.com/forestfuture/d1-record";
 const base = "/d1-record/";
@@ -13,6 +13,7 @@ export default defineConfig({
   vite: { plugins: [examples(site), llms()] },
   buildEnd: ({ outDir }) => {
     tidyLlmsTxt(outDir);
+    absolutizeLinks(outDir);
     // The Worker's assets root is outDir's parent, so this is served at docs.forestfuture.dev/robots.txt
     // (a second route in wrangler.jsonc). Crawlers only read robots.txt from a host's root.
     writeFileSync(
