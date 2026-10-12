@@ -98,8 +98,15 @@ export function castInherited(
 /** How much of a value an error shows: it came from outside, and errors are often logged. */
 const SHOWN_LENGTH = 60;
 
-/** "Sample: "no" isn't a boolean for "enabled"", the value hidden for a filtered attribute. */
-function uncastableError({ model, attribute, association }: ValueOf, type: string, value: unknown) {
+/**
+ * "Sample: "no" isn't a boolean for "enabled"", the value hidden for a filtered attribute. Also
+ * what a stored value that can't be read says, as a Unix time that isn't one (#73).
+ */
+export function uncastableError(
+  { model, attribute, association }: ValueOf,
+  type: string,
+  value: unknown,
+) {
   const article = /^[aeiou]/.test(type) ? "an" : "a";
   const text = isFiltered(model, attribute) ? FILTERED : shown(value);
   const from = association === undefined ? "" : `, the key of ${association}`;
