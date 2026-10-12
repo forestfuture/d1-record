@@ -70,6 +70,23 @@ Fix a column’s type with an override in its Model. It changes how the column i
 
 <<< @/snippets/guide/adopt.ts#overrides{ts}
 
-::: warning Numeric timestamps
-Drizzle’s `integer({ mode: "timestamp" })` stores Unix seconds, and Prisma may store a `DateTime` as a number. d1-record’s `datetime` reads and writes ISO-8601 text, so it can’t read those yet. Leave such columns as `integer`, and convert with `new Date(seconds * 1000)` where you need a `Date`. Reading numeric timestamps as dates is planned in [#73](https://github.com/forestfuture/d1-record/issues/73).
+## Reading Unix timestamps
+
+Drizzle’s `integer({ mode: "timestamp" })` stores Unix seconds, and `"timestamp_ms"` stores milliseconds. Override the column as a `datetime` with the matching `storage`, and it reads and writes as a `Date`:
+
+<<< @/snippets/guide/adopt.ts#timestamps{ts}
+
+| Drizzle mode     | `storage`            |
+| ---------------- | -------------------- |
+| `"timestamp"`    | `"unixSeconds"`      |
+| `"timestamp_ms"` | `"unixMilliseconds"` |
+
+The column stays an `INTEGER`. `createdAt` and `updatedAt` declared this way are written as integers too, and `where` and `between` take `Date`s. Under `unixSeconds`, a `Date` is stored to the second.
+
+::: warning TIP
+Prisma’s dates need no override. On D1, Prisma writes a `DateTime` as ISO text, which d1-record reads as it is. A column its database fills in with `DEFAULT CURRENT_TIMESTAMP` holds UTC text with no zone, and d1-record reads it as UTC in any time zone.
+:::
+
+::: rails Beyond Rails
+Active Record has no option for a date kept as an integer; there it takes a custom attribute type. In d1-record it’s a `storage` on the `datetime`.
 :::
