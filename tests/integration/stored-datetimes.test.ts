@@ -166,4 +166,23 @@ describe("datetimes stored by other tools (#73)", () => {
 
     expect(stamp!.isChanged()).toBe(false);
   });
+
+  test("after an insert, the record holds the second that was stored", async () => {
+    const stamp = await connect(binding)
+      .model(Stamp)
+      .create({ name: "a", seconds: new Date("2026-01-02T03:04:05.678Z") });
+
+    expect(stamp.seconds?.toISOString()).toBe("2026-01-02T03:04:05.000Z");
+  });
+
+  test("after an update, the record holds the second that was stored, as saved changes show", async () => {
+    await binding.prepare("INSERT INTO stamps VALUES (1, 'a', 1767323045, NULL)").run();
+    const [stamp] = await connect(binding).model(Stamp).toArray();
+
+    stamp!.seconds = new Date("2026-01-02T03:04:06.500Z");
+    await stamp!.save();
+
+    expect(stamp!.seconds?.toISOString()).toBe("2026-01-02T03:04:06.000Z");
+    expect(stamp!.savedChanges().seconds?.[1]).toEqual(stamp!.seconds);
+  });
 });

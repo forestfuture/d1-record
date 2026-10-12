@@ -393,9 +393,16 @@ export class RecordState {
     );
   }
 
-  /** After an update: apply values the write added (timestamps), then record the save. */
+  /**
+   * After an update: apply values the write added (timestamps), then record the save. A value
+   * kept as an epoch is what was stored (a `unixSeconds` Date has no milliseconds), as an
+   * insert's re-read row gives (#73).
+   */
   commitUpdate(added: readonly Assignment[]): void {
     for (const [name, value] of added) this.#values[name] = value;
+    for (const [name, { storage }] of this.#model.attributeDefinitions) {
+      if (storage !== undefined && name in this.#values) this.#values[name] = this.#copyOf(name);
+    }
     this.#savedChanges = this.changes();
     this.#markSaved();
   }
