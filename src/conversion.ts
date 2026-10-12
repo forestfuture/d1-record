@@ -1,5 +1,5 @@
 // Converting values between attribute types and what D1 stores, per attribute type.
-import type { AttributeDefinition, AttributeType, Storage } from "./metadata.ts";
+import type { AttributeDefinition, AttributeType, EpochStorage } from "./metadata.ts";
 
 /** A value that can't be read as the attribute's type. */
 export const uncastable = Symbol("uncastable");
@@ -20,7 +20,7 @@ interface Converter {
 const identity = (value: unknown) => value;
 
 /** What converts an attribute's values: its type, or for a datetime stored as an epoch, that (#73). */
-export type ConvertsAs = AttributeType | Storage;
+export type ConvertsAs = AttributeType | EpochStorage;
 
 /** The converter for an attribute: its `storage` if it has one, else its type. */
 export function convertsAs({ type, storage }: Pick<AttributeDefinition, "type" | "storage">) {
