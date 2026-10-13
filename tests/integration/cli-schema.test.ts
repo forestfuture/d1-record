@@ -297,6 +297,35 @@ migrations_dir = "db\\u002Fmigrate"
     ]);
   });
 
+  test("a Prisma migration's CURRENT_TIMESTAMP default is noted through the command (#143)", () => {
+    const cwd = project({
+      "wrangler.jsonc": `{ "d1_databases": [{ "binding": "DB", "migrations_dir": "migrations" }] }`,
+      "prisma/schema.prisma": "model Post { id Int @id }",
+      "migrations/0001_init.sql":
+        'CREATE TABLE "Post" ("id" INTEGER NOT NULL PRIMARY KEY, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP);',
+    });
+
+    const { code, output } = run(cwd);
+
+    expect(code).toBe(0);
+    expect(output).toContain(
+      "Note: Post.createdAt: its default writes SQLite's date text (2026-10-12 06:38:30)",
+    );
+  });
+
+  test("the same default in Wrangler's own migrations has no note, since it's a hint (#143)", () => {
+    const cwd = project({
+      "wrangler.jsonc": `{ "d1_databases": [{ "binding": "DB", "migrations_dir": "migrations" }] }`,
+      "migrations/0001_init.sql":
+        "CREATE TABLE posts (id INTEGER PRIMARY KEY, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP);",
+    });
+
+    const { code, output } = run(cwd);
+
+    expect(code).toBe(0);
+    expect(output).not.toContain("date text");
+  });
+
   test("notes come with a file that's written, not again when it's up to date, or with --check", () => {
     const cwd = project({
       "wrangler.jsonc": wranglerJsonc,
