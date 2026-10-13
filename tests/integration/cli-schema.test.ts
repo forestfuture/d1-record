@@ -313,7 +313,7 @@ migrations_dir = "db\\u002Fmigrate"
     );
   });
 
-  test("the same default in Wrangler's own migrations has no note, since it's a hint (#143)", () => {
+  test("Wrangler's own migrations get no note for a CURRENT_TIMESTAMP default, since it's a hint (#143)", () => {
     const cwd = project({
       "wrangler.jsonc": `{ "d1_databases": [{ "binding": "DB", "migrations_dir": "migrations" }] }`,
       "migrations/0001_init.sql":

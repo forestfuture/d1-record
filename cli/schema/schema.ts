@@ -139,49 +139,60 @@ function keyError(name: string, keys: readonly string[]): string | undefined {
   return undefined;
 }
 
-/** A table's attributes, in column order, with the errors and notes their columns raise. */
-function attributesOf(columns: readonly Column[]): {
-  attributes: Record<string, Spec>;
+/**
+ * What reading columns turns up besides attributes: the errors that stop a schema, the notes to
+ * print, and the datetime columns (`table.column`) whose default is SQLite's own date text (#143).
+ */
+interface Findings {
   errors: string[];
   notes: string[];
   textDates: string[];
-} {
+}
+
+const noFindings = (): Findings => ({ errors: [], notes: [], textDates: [] });
+
+function merge(into: Findings, from: Findings): void {
+  into.errors.push(...from.errors);
+  into.notes.push(...from.notes);
+  into.textDates.push(...from.textDates);
+}
+
+/** A table's attributes, in column order, with what their columns turn up. */
+function attributesOf(columns: readonly Column[]): { attributes: Record<string, Spec> } & Findings {
   const attributes: Record<string, Spec> = {};
-  const errors: string[] = [];
-  const notes: string[] = [];
-  const textDates: string[] = [];
+  const found = noFindings();
   const columnOf = new Map<string, string>();
   for (const column of columns) {
     const converted = convert(column);
     if (!converted.ok) {
-      errors.push(converted.error);
+      found.errors.push(converted.error);
       continue;
     }
     const { attribute, spec, note, textDate } = converted;
     const taken = columnOf.get(attribute);
     if (taken !== undefined) {
-      errors.push(
+      found.errors.push(
         `${column.table}: columns ${taken} and ${column.name} would both be the attribute ${attribute}; rename one`,
       );
     }
     columnOf.set(attribute, column.name);
     attributes[attribute] = spec;
-    if (note !== undefined) notes.push(note);
-    if (textDate) textDates.push(`${column.table}.${column.name}`);
+    if (note !== undefined) found.notes.push(note);
+    if (textDate) found.textDates.push(`${column.table}.${column.name}`);
   }
-  return { attributes, errors, notes, textDates };
+  return { attributes, ...found };
 }
 
 /** One table's schema, or the errors that stop it from being generated. */
 function tableSchema(
   columns: Column[],
   lastChangedBy: string,
-): { table?: GeneratedTable; errors: string[]; notes: string[]; textDates: string[] } {
+): { table?: GeneratedTable } & Findings {
   const name = columns[0]!.table;
   const keys = columns.filter((column) => column.primaryKey).map((column) => column.name);
   const error = keyError(name, keys);
-  if (error !== undefined) return { errors: [error], notes: [], textDates: [] };
-  const { attributes, errors, notes, textDates } = attributesOf(columns);
+  if (error !== undefined) return { ...noFindings(), errors: [error] };
+  const { attributes, ...found } = attributesOf(columns);
   const table = {
     name,
     exportName: exportName(name),
@@ -189,7 +200,7 @@ function tableSchema(
     lastChangedBy,
     attributes,
   };
-  return { table, errors, notes, textDates };
+  return { table, ...found };
 }
 
 /** Tables whose names become the same export (`line_items`, `line-items` → `lineItems`). */
@@ -218,18 +229,15 @@ export function schemaOf(migrations: readonly Migration[], options: Options = {}
   if (db === undefined) return { ok: false, errors: [error!] };
   const migrationsTable = options.migrationsTable ?? "d1_migrations";
   const tables: GeneratedTable[] = [];
-  const errors: string[] = [];
-  const notes: string[] = [];
-  const textDates: string[] = [];
+  const found = noFindings();
   const own = ownTables(definitions(db), migrationsTable).sort(([a], [b]) => byName(a, b));
-  errors.push(...exportCollisions(own.map(([name]) => name)));
+  found.errors.push(...exportCollisions(own.map(([name]) => name)));
   for (const [name, definition] of own) {
     const result = tableSchema(columnsOf(db, name, definition), changedBy.get(name)!);
-    errors.push(...result.errors);
-    notes.push(...result.notes);
-    textDates.push(...result.textDates);
+    merge(found, result);
     if (result.table !== undefined) tables.push(result.table);
   }
   db.close();
+  const { errors, notes, textDates } = found;
   return errors.length > 0 ? { ok: false, errors } : { ok: true, tables, notes, textDates };
 }

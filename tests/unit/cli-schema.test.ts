@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
+import { fingerprintOf } from "../../cli/schema/render.ts";
 import { schemaOf } from "../../cli/schema/schema.ts";
 
 /** The tables a set of migrations makes, as the schema command reads them. */
@@ -94,19 +95,22 @@ describe("schemaOf: from migrations to table schemas", () => {
       b TIMESTAMP DEFAULT (datetime('now')),
       c DATETIME DEFAULT '2026-01-02T03:04:05Z',
       d DATETIME,
-      e TEXT DEFAULT CURRENT_TIMESTAMP
+      e TEXT DEFAULT CURRENT_TIMESTAMP,
+      f_at TEXT DEFAULT CURRENT_TIMESTAMP
     )`);
 
-    expect(result.textDates).toEqual(["things.a", "things.b"]);
+    // f_at is a datetime by its name, so it counts; e is plain text, so it doesn't.
+    expect(result.textDates).toEqual(["things.a", "things.b", "things.f_at"]);
   });
 
-  test("listing them leaves the tables, and so the schema's fingerprint, as they were (#143)", () => {
+  test("listing them leaves the tables and the schema's fingerprint as they were (#143)", () => {
     const plain = tables(`CREATE TABLE things (id INTEGER PRIMARY KEY, a DATETIME)`);
     const defaulted = tables(
       `CREATE TABLE things (id INTEGER PRIMARY KEY, a DATETIME DEFAULT CURRENT_TIMESTAMP)`,
     );
 
-    expect(Object.keys(defaulted.tables[0]!)).toEqual(Object.keys(plain.tables[0]!));
+    expect(defaulted.tables).toEqual(plain.tables);
+    expect(fingerprintOf(defaulted.tables)).toBe(fingerprintOf(plain.tables));
   });
 
   test("NOT NULL columns and the primary key are null: false", () => {
