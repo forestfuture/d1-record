@@ -51,6 +51,8 @@ For anything else, write an `sql` tagged template. Values are always bound, and 
 
 ::: warning Integer datetimes
 A value in a fragment is bound as it is, so a `Date` is ISO text. If the attribute is a datetime [stored as a Unix time](./adopt-a-database#reading-unix-timestamps), compare it with `column("publishedAt").value(date)`, which writes the `Date` as the attribute stores it. Without `value`, you’re comparing an integer with text, which SQLite always orders the same way: `>` matches nothing, and `<` matches every row.
+
+d1-record throws `TypeError` when a bare `Date` (or an ISO datetime string) sits directly beside that column with only a comparison or `BETWEEN` between them, so the common mistake can’t go unnoticed. Inside an expression, such as `abs(${publishedAt} - ${date})`, it can’t tell what you meant, so use `value` there too.
 :::
 
 <<< @/snippets/guide/adopt.ts#fragment{ts}
