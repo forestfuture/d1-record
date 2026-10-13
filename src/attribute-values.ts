@@ -112,10 +112,11 @@ export function uncastableError(
   type: string,
   value: unknown,
 ) {
-  const article = /^[aeiou]/.test(type) ? "an" : "a";
+  const noun = type === "json" ? "JSON value" : type;
+  const article = /^[aeiou]/.test(noun) ? "an" : "a";
   const text = isFiltered(model, attribute) ? FILTERED : shown(value);
   const from = association === undefined ? "" : `, the key of ${association}`;
-  return new TypeError(`${model.name}: ${text} isn't ${article} ${type} for "${attribute}"${from}`);
+  return new TypeError(`${model.name}: ${text} isn't ${article} ${noun} for "${attribute}"${from}`);
 }
 
 /** A value as an error shows it: JSON where it has one, numbers as written, and at most 60 characters. */
