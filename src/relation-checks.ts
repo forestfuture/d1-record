@@ -2,6 +2,7 @@
 import type { Assignment, Conflict } from "./compiler.ts";
 import { Comparison } from "./comparisons.ts";
 import { castAs } from "./attribute-values.ts";
+import { refuseBareDates } from "./fragment-guard.ts";
 import { attributeOf, type AttributeType } from "./metadata.ts";
 import type { AttributesOf, ModelClass } from "./model.ts";
 import type { NullsPlacement, OrderDirection, OrderTerm } from "./query.ts";
@@ -93,6 +94,7 @@ function checkFragment(model: ModelClass, fragment: SafeSql): void {
       castAs("assigned", { model, attribute: value.attribute }, value.assigned);
     }
   }
+  refuseBareDates(model, fragment);
 }
 
 /** `{}` adds no condition at all (common when an object is built from optional filters). */
