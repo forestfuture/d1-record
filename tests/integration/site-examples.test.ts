@@ -22,7 +22,7 @@ import { runGenerate } from "../../cli/generate/command.ts";
 import { runSchema } from "../../cli/schema/command.ts";
 import { Post, User } from "../../site/snippets/getting-started/models.ts";
 import * as models from "../../site/snippets/guide/models.ts";
-import { createdSince, Event } from "../../site/snippets/guide/mixed-dates.ts";
+import { createdSince, oldestFirst, Reminder } from "../../site/snippets/guide/mixed-dates.ts";
 import * as untrusted from "../../site/snippets/guide/untrusted-input.ts";
 import * as paginating from "../../site/snippets/guide/paginating.ts";
 import * as filtering from "../../site/snippets/guide/filtering.ts";
@@ -467,32 +467,71 @@ describe("Existing databases: a column holding two date forms", () => {
   let binding: TestDatabase;
   let dispose: () => Promise<void>;
   const schema = new URL("../../site/snippets/guide/mixed-dates.sql", import.meta.url);
+  const normalize = new URL("../../site/snippets/guide/mixed-dates-normalize.sql", import.meta.url);
+  const since = new Date("2026-10-12T00:00:00.000Z");
+
+  // One row of each form, and one from the day before.
+  const rows = [
+    "INSERT INTO reminders VALUES (1, 'default form', '2026-10-12 23:59:59')",
+    "INSERT INTO reminders VALUES (2, 'iso form', '2026-10-12T00:00:00.000+00:00')",
+    "INSERT INTO reminders VALUES (3, 'earlier', '2026-10-11 08:00:00')",
+  ];
 
   beforeAll(async () => {
     ({ db: binding, dispose } = await createTestDatabase(schema));
-    await binding.batch([
-      binding.prepare("INSERT INTO events VALUES (1, 'default form', '2026-10-12 23:59:59')"),
-      binding.prepare("INSERT INTO events VALUES (2, 'iso form', '2026-10-12T00:00:00.000+00:00')"),
-      binding.prepare("INSERT INTO events VALUES (3, 'earlier', '2026-10-11 08:00:00')"),
-    ]);
   });
   afterAll(() => dispose());
+  beforeEach(async () => {
+    await binding.batch([
+      binding.prepare("DELETE FROM reminders"),
+      ...rows.map((row) => binding.prepare(row)),
+    ]);
+  });
 
-  const since = new Date("2026-10-12T00:00:00.000Z");
-  const names = (events: { name: string }[]) =>
-    events.map((event) => event.name).sort((a, b) => a.localeCompare(b));
+  const inDatabase = <T>(run: () => Promise<T>) => withDatabase(connect(binding), run);
+  const names = (reminders: { name: string }[]) => reminders.map((reminder) => reminder.name);
 
   test("a plain comparison orders them as text, so it misses both of the day's rows", async () => {
-    const events = await withDatabase(connect(binding), () =>
-      Event.where({ createdAt: gte(since) }).toArray(),
-    );
+    const reminders = await inDatabase(() => Reminder.where({ createdAt: gte(since) }).toArray());
 
-    expect(names(events)).toEqual([]);
+    expect(names(reminders)).toEqual([]);
   });
 
   test("the strftime recipe compares them as times", async () => {
-    const events = await withDatabase(connect(binding), () => createdSince(since).toArray());
+    const reminders = await inDatabase(() => createdSince(since).toArray());
 
-    expect(names(events)).toEqual(["default form", "iso form"]);
+    expect(names(reminders).sort((a, b) => a.localeCompare(b))).toEqual([
+      "default form",
+      "iso form",
+    ]);
+  });
+
+  test("a plain order sorts the two forms as text, so a later row comes first", async () => {
+    const reminders = await inDatabase(() => Reminder.order({ createdAt: "asc" }).toArray());
+
+    expect(names(reminders)).toEqual(["earlier", "default form", "iso form"]);
+  });
+
+  test("the strftime order sorts them as times", async () => {
+    const reminders = await inDatabase(() => oldestFirst().toArray());
+
+    expect(names(reminders)).toEqual(["earlier", "iso form", "default form"]);
+  });
+
+  test("after the migration, a plain comparison and order are right, in one form", async () => {
+    await binding.prepare(readFileSync(normalize, "utf8")).run();
+
+    const found = await inDatabase(() => Reminder.where({ createdAt: gte(since) }).toArray());
+    const ordered = await inDatabase(() => Reminder.order({ createdAt: "asc" }).toArray());
+    const stored = (await binding.prepare("SELECT created_at FROM reminders ORDER BY id").all())
+      .results;
+
+    expect(names(found).sort((a, b) => a.localeCompare(b))).toEqual(["default form", "iso form"]);
+    expect(names(ordered)).toEqual(["earlier", "iso form", "default form"]);
+    expect(stored).toEqual([
+      { created_at: "2026-10-12T23:59:59.000Z" },
+      { created_at: "2026-10-12T00:00:00.000Z" },
+      { created_at: "2026-10-11T08:00:00.000Z" },
+    ]);
   });
 });

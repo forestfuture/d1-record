@@ -42,23 +42,28 @@ With D1, Prisma’s migrations are usually Wrangler’s own: files in `migration
 Prisma names tables after its models, such as `User`, and columns in camelCase, such as `createdAt`. d1-record keeps both names, so the Model is `ApplicationRecord("User")`, with attributes such as `createdAt`.
 
 ::: warning Two date formats in one column
-Prisma writes a `DateTime` as `2026-10-12T06:38:30.325+00:00`, and a `DEFAULT CURRENT_TIMESTAMP` fills `2026-10-12 06:38:30`. d1-record reads both as UTC, but SQLite compares dates as text. On a column with both, `order` and `between` can misplace values within a day, and a condition on one instant misses the row written in the other form.
+Prisma writes a `DateTime` as `2026-10-12T06:38:30.325+00:00`, and a `DEFAULT CURRENT_TIMESTAMP` fills `2026-10-12 06:38:30`. d1-record reads both as UTC, but SQLite compares dates as text, so a column with both needs the steps in [Comparing dates in two forms](#comparing-dates-in-two-forms).
 :::
 
-### Comparing both date forms
+## Comparing dates in two forms
 
-Let SQLite normalize the column inside an `sql` fragment, and compare it with the value as the attribute stores it:
+A column can hold SQLite’s own date text (`2026-10-12 06:38:30`, from a `DEFAULT CURRENT_TIMESTAMP`) beside ISO text (`2026-10-12T06:38:30.000Z`). d1-record reads both as UTC, but SQLite compares them as text. On a column with both, `order` and `between` can misplace values within a day, and a condition on one instant misses the row written in the other form.
+
+To make the rows match, rewrite them once in a migration, with your own table and column:
+
+<<< @/snippets/guide/mixed-dates-normalize.sql{sql}
+
+It writes d1-record’s form for every row SQLite can read as a date, and leaves NULLs and anything else as they were. Running it again changes nothing. The rewrite is permanent, so export the table first. Conditions on the column then use its index.
+
+If another tool still writes the other form, compare through `strftime` in a fragment instead:
 
 <<< @/snippets/guide/mixed-dates.ts#recipe{ts}
 
-`strftime` reads every form SQLite knows and writes d1-record’s ISO text, so rows in either form compare as the times they are. Because the column is wrapped, SQLite can’t use an index on it for that condition, so it reads the table.
+`strftime` reads every form SQLite knows and writes d1-record’s ISO text, so rows in either form compare and sort as the times they are.
 
-To make the rows match instead, rewrite the default-filled rows in a migration. Conditions on the column then use its index again:
-
-```sql
-UPDATE "Post" SET "createdAt" = replace("createdAt", ' ', 'T') || 'Z'
-WHERE "createdAt" NOT LIKE '%T%';
-```
+::: warning TIP
+A wrapped column can’t use its index for that condition, so SQLite reads the whole table.
+:::
 
 ## Starting with no migrations
 

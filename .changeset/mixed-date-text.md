@@ -2,4 +2,6 @@
 "@forestfuture/d1-record": patch
 ---
 
-`d1-record schema` notes a `DATETIME` column whose default is `CURRENT_TIMESTAMP` or `datetime('now')`, in migrations written by Drizzle or Prisma: that default writes SQLite's date text (`2026-10-12 06:38:30`), d1-record writes ISO text, and a column holding both orders as text. The Existing databases guide shows how to compare such a column with `strftime`, and a migration that makes the rows match.
+`d1-record schema` notes a `DATETIME` column whose default is `CURRENT_TIMESTAMP` or `datetime('now')`, in migrations written by Drizzle or Prisma. That default writes SQLite's date text (`2026-10-12 06:38:30`) where d1-record writes ISO text, and the two sort apart as text.
+
+The Existing databases guide shows a migration that rewrites a column to d1-record's form, and a `strftime` fragment that compares and orders a column holding both.
