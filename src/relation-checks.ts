@@ -84,7 +84,8 @@ function attributeOrder(attribute: string, value: unknown, method: string): Orde
 /**
  * A fragment's `column()` references must name declared attributes, and so must its typed
  * values, which must also be values those attributes can hold, so a mistake surfaces where the
- * fragment is written, not when the query runs (#142).
+ * fragment is written, not when the query runs (#142). A bare date beside an integer-stored
+ * column is refused too (#149).
  */
 function checkFragment(model: ModelClass, fragment: SafeSql): void {
   for (const value of fragment.values) {
