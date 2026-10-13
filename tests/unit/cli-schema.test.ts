@@ -87,6 +87,28 @@ describe("schemaOf: from migrations to table schemas", () => {
     ]);
   });
 
+  test("a datetime whose default is SQLite's own date text is listed beside the tables (#143)", () => {
+    const result = tables(`CREATE TABLE things (
+      id INTEGER PRIMARY KEY,
+      a DATETIME DEFAULT CURRENT_TIMESTAMP,
+      b TIMESTAMP DEFAULT (datetime('now')),
+      c DATETIME DEFAULT '2026-01-02T03:04:05Z',
+      d DATETIME,
+      e TEXT DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    expect(result.textDates).toEqual(["things.a", "things.b"]);
+  });
+
+  test("listing them leaves the tables, and so the schema's fingerprint, as they were (#143)", () => {
+    const plain = tables(`CREATE TABLE things (id INTEGER PRIMARY KEY, a DATETIME)`);
+    const defaulted = tables(
+      `CREATE TABLE things (id INTEGER PRIMARY KEY, a DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+    );
+
+    expect(Object.keys(defaulted.tables[0]!)).toEqual(Object.keys(plain.tables[0]!));
+  });
+
   test("NOT NULL columns and the primary key are null: false", () => {
     expect(
       attributes("CREATE TABLE things (id INTEGER PRIMARY KEY, a TEXT NOT NULL, b TEXT)"),

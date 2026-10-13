@@ -21,7 +21,7 @@ export interface GeneratedTable {
 }
 
 export type SchemaResult =
-  | { ok: true; tables: GeneratedTable[]; notes: string[] }
+  | { ok: true; tables: GeneratedTable[]; notes: string[]; textDates: string[] }
   | { ok: false; errors: string[] };
 
 interface Options {
@@ -144,10 +144,12 @@ function attributesOf(columns: readonly Column[]): {
   attributes: Record<string, Spec>;
   errors: string[];
   notes: string[];
+  textDates: string[];
 } {
   const attributes: Record<string, Spec> = {};
   const errors: string[] = [];
   const notes: string[] = [];
+  const textDates: string[] = [];
   const columnOf = new Map<string, string>();
   for (const column of columns) {
     const converted = convert(column);
@@ -155,7 +157,7 @@ function attributesOf(columns: readonly Column[]): {
       errors.push(converted.error);
       continue;
     }
-    const { attribute, spec, note } = converted;
+    const { attribute, spec, note, textDate } = converted;
     const taken = columnOf.get(attribute);
     if (taken !== undefined) {
       errors.push(
@@ -165,20 +167,21 @@ function attributesOf(columns: readonly Column[]): {
     columnOf.set(attribute, column.name);
     attributes[attribute] = spec;
     if (note !== undefined) notes.push(note);
+    if (textDate) textDates.push(`${column.table}.${column.name}`);
   }
-  return { attributes, errors, notes };
+  return { attributes, errors, notes, textDates };
 }
 
 /** One table's schema, or the errors that stop it from being generated. */
 function tableSchema(
   columns: Column[],
   lastChangedBy: string,
-): { table?: GeneratedTable; errors: string[]; notes: string[] } {
+): { table?: GeneratedTable; errors: string[]; notes: string[]; textDates: string[] } {
   const name = columns[0]!.table;
   const keys = columns.filter((column) => column.primaryKey).map((column) => column.name);
   const error = keyError(name, keys);
-  if (error !== undefined) return { errors: [error], notes: [] };
-  const { attributes, errors, notes } = attributesOf(columns);
+  if (error !== undefined) return { errors: [error], notes: [], textDates: [] };
+  const { attributes, errors, notes, textDates } = attributesOf(columns);
   const table = {
     name,
     exportName: exportName(name),
@@ -186,7 +189,7 @@ function tableSchema(
     lastChangedBy,
     attributes,
   };
-  return { table, errors, notes };
+  return { table, errors, notes, textDates };
 }
 
 /** Tables whose names become the same export (`line_items`, `line-items` → `lineItems`). */
@@ -217,14 +220,16 @@ export function schemaOf(migrations: readonly Migration[], options: Options = {}
   const tables: GeneratedTable[] = [];
   const errors: string[] = [];
   const notes: string[] = [];
+  const textDates: string[] = [];
   const own = ownTables(definitions(db), migrationsTable).sort(([a], [b]) => byName(a, b));
   errors.push(...exportCollisions(own.map(([name]) => name)));
   for (const [name, definition] of own) {
     const result = tableSchema(columnsOf(db, name, definition), changedBy.get(name)!);
     errors.push(...result.errors);
     notes.push(...result.notes);
+    textDates.push(...result.textDates);
     if (result.table !== undefined) tables.push(result.table);
   }
   db.close();
-  return errors.length > 0 ? { ok: false, errors } : { ok: true, tables, notes };
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, tables, notes, textDates };
 }

@@ -12,6 +12,8 @@ import { readProject, type DatabaseSnapshot, type ProjectSnapshot } from "./snap
 export interface SchemaTables {
   tables: GeneratedTable[];
   notes: string[];
+  /** The datetime columns (`table.column`) whose default is SQLite's own date text (#143). */
+  textDates: string[];
 }
 
 export interface SchemaOptions extends ProjectOptions {
@@ -90,7 +92,7 @@ export function schemaWrites(cwd: string, db: DatabaseSnapshot, result: SchemaTa
       written({ path: target.out, source: rendered }, `Wrote ${out} (${count}) from ${source}`),
     );
     const tool = migrationTool(db.toolsFound, db.migrations ?? []);
-    notes.unshift(...result.notes, ...originNotes(tool, result.tables));
+    notes.unshift(...result.notes, ...originNotes(tool, result.tables, result.textDates));
   }
   // Whenever it's missing, not only with a new schema: a Model imports it either way.
   steps.push(...baseWrites(cwd, db), ...notes.map((note) => ({ line: `Note: ${note}` })));

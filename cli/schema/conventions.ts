@@ -34,7 +34,7 @@ export interface Column {
 
 /** What a column became, or why it can't be one, plus a note when its type was guessed. */
 export type Converted =
-  | { ok: true; attribute: string; spec: Spec; note?: string }
+  | { ok: true; attribute: string; spec: Spec; note?: string; textDate?: true }
   | { ok: false; error: string };
 
 const declaredTypes: readonly (readonly [RegExp, AttributeType])[] = [
@@ -156,12 +156,16 @@ function literalDefault(sql: string | null, type: AttributeType): Default | unde
   return text === undefined ? undefined : textDefault(text, type);
 }
 
-/** A column as an attribute, by the conventions (#66): name, type, nullability and default. */
-export function convert(column: Column): Converted {
-  const { type, error, note: typeNote } = typeOf(column);
-  if (type === undefined) return { ok: false, error: error! };
-  const note = typeNote ?? epochDefaultNote(column, type);
-  const attribute = attributeName(column.name);
+/** A default that SQLite writes as date text with a space (`2026-10-12 06:38:30`), not ISO. */
+const dateTextDefault = /^\(?\s*(current_timestamp|datetime\s*\(\s*'now'[^)]*\))\s*\)?$/i;
+
+/** Whether a datetime column's default writes SQLite's date text, which sorts apart from ISO (#143). */
+function hasDateTextDefault(column: Column, type: AttributeType): boolean {
+  return type === "datetime" && dateTextDefault.test(column.defaultValue?.trim() ?? "");
+}
+
+/** A column's spec: nullability, a mapped column name, and its default or generated key. */
+function specOf(column: Column, type: AttributeType, attribute: string): Spec {
   const spec: Spec = { type };
   if (column.notNull || column.primaryKey) spec.null = false;
   if (underscore(attribute) !== column.name) spec.column = column.name;
@@ -169,5 +173,20 @@ export function convert(column: Column): Converted {
   const defaultValue = literalDefault(column.defaultValue, type);
   if (defaultValue !== undefined) spec.default = defaultValue;
   else if (column.primaryKey && type === "string") spec.generateId = true;
-  return note === undefined ? { ok: true, attribute, spec } : { ok: true, attribute, spec, note };
+  return spec;
+}
+
+/** A column as an attribute, by the conventions (#66): name, type, nullability and default. */
+export function convert(column: Column): Converted {
+  const { type, error, note: typeNote } = typeOf(column);
+  if (type === undefined) return { ok: false, error: error! };
+  const note = typeNote ?? epochDefaultNote(column, type);
+  const attribute = attributeName(column.name);
+  return {
+    ok: true,
+    attribute,
+    spec: specOf(column, type, attribute),
+    ...(note !== undefined && { note }),
+    ...(hasDateTextDefault(column, type) && { textDate: true as const }),
+  };
 }

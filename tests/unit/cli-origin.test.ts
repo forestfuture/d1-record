@@ -125,6 +125,19 @@ describe("notes for another tool's migrations", () => {
     expect(originNotes("Drizzle", stamped.ok ? stamped.tables : [])).toHaveLength(3);
   });
 
+  test("a datetime defaulting to SQLite's date text is noted, naming the two forms and the guide (#143)", () => {
+    expect(originNotes("Prisma", tables, ["posts.created_at"])).toContain(
+      "posts.created_at: its default writes SQLite's date text (2026-10-12 06:38:30), where d1-record writes ISO text (2026-10-12T06:38:30.000Z); a column holding both orders as text, so range conditions can misplace values within a day: see Existing databases in the guide",
+    );
+  });
+
+  test("it's a hint for a recognised tool's migrations, and for Drizzle as for Prisma", () => {
+    expect(originNotes("Drizzle", tables, ["posts.created_at"]).join("\n")).toContain(
+      "posts.created_at: its default writes SQLite's date text",
+    );
+    expect(originNotes(undefined, tables, ["posts.created_at"])).toEqual([]);
+  });
+
   test("none for Wrangler's own migrations", () => {
     expect(originNotes(undefined, tables)).toEqual([]);
   });
