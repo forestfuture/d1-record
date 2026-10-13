@@ -56,13 +56,26 @@ const converters: Record<ConversionKey, Converter> = {
     write: (value) => (value as Date).getTime(),
   },
   json: {
-    cast: identity,
+    // Any value JSON can write; what it writes lossily (a Map as {}, NaN as null) is kept as is.
+    cast: (value) => (jsonText(value) === undefined ? uncastable : value),
     // Text is parsed. Under a column declared JSON, SQLite stores a number-like value (123) as
     // a number, and D1 returns it as one, which is already the value.
     read: (value) => (typeof value === "string" ? JSON.parse(value) : value),
     write: (value) => JSON.stringify(value),
   },
 };
+
+/**
+ * The JSON text of a value, or undefined when JSON can't write it: `stringify` throws (a
+ * BigInt, a cycle) or gives nothing (a function, a symbol) (#146).
+ */
+function jsonText(value: unknown): string | undefined {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return undefined;
+  }
+}
 
 /** `value` as the attribute's type (null stays null), or `uncastable`. */
 export function castValue(attribute: Convertible, value: unknown): unknown {

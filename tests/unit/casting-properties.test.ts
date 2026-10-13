@@ -28,7 +28,8 @@ const attributes = Object.keys(declared) as Attribute[];
 
 /** The two refusals: a value that isn't the type, and `undefined` (which isn't NULL). */
 function refusal(attribute: Attribute): RegExp {
-  const type = `isn't an? ${declared[attribute]} for "${attribute}"`;
+  const noun = declared[attribute] === "json" ? "JSON value" : declared[attribute];
+  const type = `isn't an? ${noun} for "${attribute}"`;
   const missing = `got undefined for "${attribute}"; use null to store NULL`;
   return new RegExp(`^Sample: (?:.* ${type}|${missing})$`, "s");
 }
@@ -47,8 +48,12 @@ function isOfType(attribute: Attribute, value: unknown): boolean {
     case "datetime":
       return value instanceof Date && !Number.isNaN(value.getTime());
     case "json":
-      // Any value is JSON-able as far as assigning goes; saving it is the round-trip property's.
-      return true;
+      // What JSON can write; the rest is refused (#146). Written out here, not from the code.
+      try {
+        return JSON.stringify(value) !== undefined;
+      } catch {
+        return false;
+      }
   }
 }
 
@@ -83,7 +88,7 @@ describe("assigning a value of any shape to an attribute", () => {
           samples.build({ [attribute]: value as never });
         } catch (error) {
           // The value as the message shows it: up to 60 characters, and an ellipsis after them.
-          const shown = /^Sample: (.*) isn't an? \w+ for "\w+"$/s.exec(
+          const shown = /^Sample: (.*) isn't an? [\w ]+ for "\w+"$/s.exec(
             (error as Error).message,
           )?.[1];
           if (shown !== undefined) expect(shown.length).toBeLessThanOrEqual(SHOWN_LENGTH + 1);

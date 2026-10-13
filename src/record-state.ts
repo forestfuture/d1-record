@@ -385,14 +385,20 @@ export class RecordState {
 
   /**
    * A stored value as the attribute's. One kept as a Unix time that isn't a time (text, or past
-   * the range of a Date) fails here, naming the attribute, not at the first save (#73).
+   * the range of a Date), or a json cell that isn't JSON, fails here, naming the attribute,
+   * not at the first save or as the parser's own error (#73, #146).
    */
   #readStored(name: string, stored: unknown): unknown {
     const definition = this.#definition(name);
-    const value = readValue(definition, stored);
-    if (definition.storage !== undefined && isInvalidDate(value)) {
-      throw uncastableError({ model: this.#model, attribute: name }, definition.type, stored);
+    const refused = () =>
+      uncastableError({ model: this.#model, attribute: name }, definition.type, stored);
+    let value: unknown;
+    try {
+      value = readValue(definition, stored);
+    } catch (error) {
+      throw definition.type === "json" && error instanceof SyntaxError ? refused() : error;
     }
+    if (definition.storage !== undefined && isInvalidDate(value)) throw refused();
     return value;
   }
 
