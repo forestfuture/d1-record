@@ -1,7 +1,7 @@
 import fc from "fast-check";
 import { describe, expect, test } from "vite-plus/test";
-import { castValue, uncastable } from "../../src/conversion.ts";
-import { column, connect, Model, sql } from "../../src/index.ts";
+import { column, connect, Model } from "../../src/index.ts";
+import { fragment } from "../support/fragments.ts";
 import { PURE_RUNS } from "../support/properties.ts";
 import { values } from "../support/values.ts";
 
@@ -21,24 +21,35 @@ const operators = ["=", "==", "<>", "!=", "<", "<=", ">", ">="];
 
 /** `column <operator> value`, built from its pieces so the operator can vary. */
 function comparing(attribute: string, operator: string, value: unknown) {
-  const strings = ["", ` ${operator} `, ""];
-  return sql(
-    Object.assign([...strings], { raw: strings }) as TemplateStringsArray,
-    column(attribute),
-    value,
-  );
+  return fragment(["", ` ${operator} `, ""], column(attribute), value);
 }
 
-/** Whether a value is one a datetime attribute would cast from outside: a Date, or an ISO string. */
+/** An ISO date, or a date and time with or without a zone (SQLite writes it without one). */
+const dateText =
+  /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})?)?$/;
+
+/**
+ * Whether a value is one the guard should refuse beside an integer column: a Date, or a string
+ * that's date text. Written out here, not from the implementation, so it can disagree with it.
+ */
 function isBareDatetime(value: unknown): boolean {
-  if (value instanceof Date) return true;
-  return typeof value === "string" && castValue({ type: "datetime" }, value) !== uncastable;
+  return value instanceof Date || (typeof value === "string" && dateText.test(value));
 }
+
+/** Every shape of value, and date text in the forms a request or SQLite makes. */
+const anyValue = fc.oneof(
+  values,
+  fc.date({ noInvalidDate: true }).map((date) => date.toISOString()),
+  fc
+    .date({ noInvalidDate: true })
+    .map((date) => date.toISOString().replace("T", " ").replace("Z", "")),
+  fc.date({ noInvalidDate: true }).map((date) => date.toISOString().slice(0, 10)),
+);
 
 describe("the bare date guard, for a value of any shape", () => {
   test("refuses exactly a Date or an ISO datetime string beside an integer-stored column", () => {
     fc.assert(
-      fc.property(fc.constantFrom(...operators), values, (operator, value) => {
+      fc.property(fc.constantFrom(...operators), anyValue, (operator, value) => {
         const refused = (() => {
           try {
             stamps.where(comparing("seconds", operator, value));
