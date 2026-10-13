@@ -1,6 +1,6 @@
 {
   "name": "@forestfuture/d1-record",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A Rails-inspired Active Record for Cloudflare Workers and D1.",
   "keywords": [
     "active-record",
