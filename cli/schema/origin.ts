@@ -113,12 +113,29 @@ function columnNotes(tool: Tool, tables: readonly GeneratedTable[]): string[] {
   return notes;
 }
 
-/** Notes for a schema generated from another tool's migrations: the tool, then the columns to check. */
-export function originNotes(tool: Tool | undefined, tables: readonly GeneratedTable[]): string[] {
+/** A note for a datetime whose default writes SQLite's date text, which sorts apart from ISO (#143). */
+function textDateNote(where: string): string {
+  return (
+    `${where}: its default writes SQLite's date text (2026-10-12 06:38:30), where d1-record ` +
+    `writes ISO text (2026-10-12T06:38:30.000Z); a column holding both orders as text, so ` +
+    `range conditions can misplace values within a day: see Existing databases in the guide`
+  );
+}
+
+/**
+ * Notes for a schema generated from another tool's migrations: the tool, then the columns to
+ * check, and `textDates`, the datetime columns whose default is SQLite's own date text.
+ */
+export function originNotes(
+  tool: Tool | undefined,
+  tables: readonly GeneratedTable[],
+  textDates: readonly string[] = [],
+): string[] {
   if (tool === undefined) return [];
   return [
     `these migrations look like ${tool}'s. Some columns may convert to the wrong type without ` +
       `an error, especially numeric timestamps: check the generated types (${issue})`,
     ...columnNotes(tool, tables),
+    ...textDates.map(textDateNote),
   ];
 }
