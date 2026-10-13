@@ -11,7 +11,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261001.1",
-    "@types/markdown-it-container": "4.0.0",
+    "@types/markdown-it-container": "4.0.1",
     "markdown-it-container": "4.0.0",
     "vitepress": "2.0.0-alpha.20",
     "vitepress-plugin-llms": "1.14.0",
