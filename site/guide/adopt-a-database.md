@@ -110,7 +110,7 @@ The column stays an `INTEGER`. `createdAt` and `updatedAt` declared this way are
 Under `unixSeconds`, a `Date` is stored to the second, so a condition such as `lt(date)` compares to the second too.
 
 ::: warning A Date in an sql fragment
-A `Date` interpolated into an `sql` fragment is bound as ISO text, because a fragment has no attribute to say otherwise, and it won’t compare with an integer. Beside the column in a comparison, d1-record throws `TypeError`. Use `column("publishedAt").value(date)`, which writes it as the attribute stores it. See [Writing SQL fragments](./querying#writing-sql-fragments).
+A `Date` beside that column in a `sql` fragment throws `TypeError`: a fragment has no attribute, so it would bind as ISO text. Use `column("publishedAt").value(date)`, which writes it as the attribute stores it. See [Writing SQL fragments](./querying#writing-sql-fragments).
 :::
 
 ::: warning TIP
