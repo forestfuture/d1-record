@@ -111,6 +111,10 @@ An attribute can be `null` unless it’s declared `null: false`, and its TypeScr
 A `datetime` read from text with no time zone, such as SQLite’s `DEFAULT CURRENT_TIMESTAMP` writes, is UTC in any time zone.
 
 ::: warning TIP
+A column that holds both ISO text and SQLite’s date text compares as text. See [Comparing dates in two forms](./adopt-a-database#comparing-dates-in-two-forms).
+:::
+
+::: warning TIP
 Store `json` attributes in a `TEXT` column, as [D1 recommends](https://developers.cloudflare.com/d1/sql-api/query-json/#types), and add `CHECK (json_valid(settings))` to have D1 reject invalid JSON. A column declared `JSON` works too.
 :::
 
