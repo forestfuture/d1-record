@@ -42,15 +42,23 @@ With D1, Prisma’s migrations are usually Wrangler’s own: files in `migration
 Prisma names tables after its models, such as `User`, and columns in camelCase, such as `createdAt`. d1-record keeps both names, so the Model is `ApplicationRecord("User")`, with attributes such as `createdAt`.
 
 ::: warning Two date formats in one column
-Prisma writes a `DateTime` as `2026-10-12T06:38:30.325+00:00`, and a `DEFAULT CURRENT_TIMESTAMP` fills `2026-10-12 06:38:30`. d1-record reads both as UTC, but SQLite compares dates as text, so `order` and `between` on a column with both can misplace values within a day. Rewrite the default-filled rows in a migration, so they match the others:
+Prisma writes a `DateTime` as `2026-10-12T06:38:30.325+00:00`, and a `DEFAULT CURRENT_TIMESTAMP` fills `2026-10-12 06:38:30`. d1-record reads both as UTC, but SQLite compares dates as text. On a column with both, `order` and `between` can misplace values within a day, and a condition on one instant misses the row written in the other form.
+:::
+
+### Comparing both date forms
+
+Let SQLite normalize the column inside an `sql` fragment, and compare it with the value as the attribute stores it:
+
+<<< @/snippets/guide/mixed-dates.ts#recipe{ts}
+
+`strftime` reads every form SQLite knows and writes d1-record’s ISO text, so rows in either form compare as the times they are. Because the column is wrapped, SQLite can’t use an index on it for that condition, so it reads the table.
+
+To make the rows match instead, rewrite the default-filled rows in a migration. Conditions on the column then use its index again:
 
 ```sql
 UPDATE "Post" SET "createdAt" = replace("createdAt", ' ', 'T') || 'Z'
 WHERE "createdAt" NOT LIKE '%T%';
 ```
-
-Comparing through `datetime()` is tracked in [#143](https://github.com/forestfuture/d1-record/issues/143).
-:::
 
 ## Starting with no migrations
 

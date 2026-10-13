@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vite-plus/test";
-import { connect, Model, withDatabase } from "../../src/index.ts";
+import { connect, gte, Model, withDatabase } from "../../src/index.ts";
 import {
   Article,
   Author,
@@ -22,6 +22,7 @@ import { runGenerate } from "../../cli/generate/command.ts";
 import { runSchema } from "../../cli/schema/command.ts";
 import { Post, User } from "../../site/snippets/getting-started/models.ts";
 import * as models from "../../site/snippets/guide/models.ts";
+import { createdSince, Event } from "../../site/snippets/guide/mixed-dates.ts";
 import * as untrusted from "../../site/snippets/guide/untrusted-input.ts";
 import * as paginating from "../../site/snippets/guide/paginating.ts";
 import * as filtering from "../../site/snippets/guide/filtering.ts";
@@ -459,5 +460,39 @@ describe("Serialize records: hide attributes from toJSON", () => {
   test("a Model adds to the base class's list", () => {
     expect(hidden.Base.hiddenAttributes).toEqual(["passwordDigest"]);
     expect(hidden.Account.hiddenAttributes).toEqual(["passwordDigest", "apiKey"]);
+  });
+});
+
+describe("Existing databases: a column holding two date forms", () => {
+  let binding: TestDatabase;
+  let dispose: () => Promise<void>;
+  const schema = new URL("../../site/snippets/guide/mixed-dates.sql", import.meta.url);
+
+  beforeAll(async () => {
+    ({ db: binding, dispose } = await createTestDatabase(schema));
+    await binding.batch([
+      binding.prepare("INSERT INTO events VALUES (1, 'default form', '2026-10-12 23:59:59')"),
+      binding.prepare("INSERT INTO events VALUES (2, 'iso form', '2026-10-12T00:00:00.000+00:00')"),
+      binding.prepare("INSERT INTO events VALUES (3, 'earlier', '2026-10-11 08:00:00')"),
+    ]);
+  });
+  afterAll(() => dispose());
+
+  const since = new Date("2026-10-12T00:00:00.000Z");
+  const names = (events: { name: string }[]) =>
+    events.map((event) => event.name).sort((a, b) => a.localeCompare(b));
+
+  test("a plain comparison orders them as text, so it misses both of the day's rows", async () => {
+    const events = await withDatabase(connect(binding), () =>
+      Event.where({ createdAt: gte(since) }).toArray(),
+    );
+
+    expect(names(events)).toEqual([]);
+  });
+
+  test("the strftime recipe compares them as times", async () => {
+    const events = await withDatabase(connect(binding), () => createdSince(since).toArray());
+
+    expect(names(events)).toEqual(["default form", "iso form"]);
   });
 });
