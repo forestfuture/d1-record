@@ -155,7 +155,7 @@ const isoDateTime =
   /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})$/;
 
 /** A stored date and time with no zone, as SQLite's `CURRENT_TIMESTAMP` writes it: UTC (#73). */
-const zonelessDateTime = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
+export const zonelessDateTime = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
 
 /**
  * A stored datetime as a `Date`. Text without a zone is UTC, as SQLite's own functions write
