@@ -264,6 +264,14 @@ describe("datetimes stored by other tools (#73)", () => {
     );
   });
 
+  test("pluck names a cell that isn't a Unix time too, as a record load does", async () => {
+    await binding.prepare("INSERT INTO stamps VALUES (1, 'a', 'abc', NULL)").run();
+
+    await expect(connect(binding).model(Stamp).pluck("seconds")).rejects.toThrow(
+      new TypeError('Stamp: "abc" isn\'t a datetime for "seconds"'),
+    );
+  });
+
   test("a fractional cell loads clean, and saving another attribute leaves it as it was", async () => {
     await binding.prepare("INSERT INTO stamps VALUES (1, 'a', 1767323045.9, NULL)").run();
     const stamp = await connect(binding).model(Stamp).find(1);

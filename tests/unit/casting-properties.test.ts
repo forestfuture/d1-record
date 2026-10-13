@@ -48,7 +48,9 @@ function isOfType(attribute: Attribute, value: unknown): boolean {
     case "datetime":
       return value instanceof Date && !Number.isNaN(value.getTime());
     case "json":
-      // What JSON can write; the rest is refused (#146). Written out here, not from the code.
+      // The definition, not an independent check: a json value is what JSON can write (#146).
+      // What the property tests is that nothing else gets through, and that the refusal is a
+      // TypeError naming the attribute.
       try {
         return JSON.stringify(value) !== undefined;
       } catch {

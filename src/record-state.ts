@@ -1,7 +1,7 @@
 // A record's private state: its values, changes, errors, and lifecycle flags.
-import { castAs, uncastableError } from "./attribute-values.ts";
+import { castAs, copyAs, readAs, type ValueOf, writeAs } from "./attribute-values.ts";
 import type { Assignment } from "./compiler.ts";
-import { isInvalidDate, readValue, writeValue } from "./conversion.ts";
+import { readValue, writeValue } from "./conversion.ts";
 import { Errors } from "./errors-collection.ts";
 import { MissingAttribute, NoDatabase, RecordDestroyed } from "./errors.ts";
 import type { Executor } from "./executor.ts";
@@ -143,7 +143,7 @@ export class RecordState {
    */
   write(name: string, value: unknown): void {
     this.#requireWritable(name, value);
-    this.#store(name, castAs("assigned", { model: this.#model, attribute: name }, value));
+    this.#store(name, castAs("assigned", this.#of(name), value));
   }
 
   /**
@@ -152,7 +152,7 @@ export class RecordState {
    */
   writeKey(name: string, value: unknown, association: string): void {
     this.#requireWritable(name, value);
-    this.#store(name, castAs("key", { model: this.#model, attribute: name, association }, value));
+    this.#store(name, castAs("key", { ...this.#of(name), association }, value));
   }
 
   /** A destroyed record is read-only, and `undefined` would silently store NULL. */
@@ -257,7 +257,7 @@ export class RecordState {
   loadRow(row: Record<string, unknown>): void {
     for (const [name, definition] of this.#model.attributeDefinitions) {
       const { column } = definition;
-      if (column in row) this.#values[name] = this.#readStored(name, row[column]);
+      if (column in row) this.#values[name] = readAs(this.#of(name), row[column]);
     }
     this.#markSaved();
   }
@@ -383,25 +383,6 @@ export class RecordState {
     return readValue(this.#definition(this.#model.primaryKey), this.storedKey);
   }
 
-  /**
-   * A stored value as the attribute's. One kept as a Unix time that isn't a time (text, or past
-   * the range of a Date), or a json cell that isn't JSON, fails here, naming the attribute,
-   * not at the first save or as the parser's own error (#73, #146).
-   */
-  #readStored(name: string, stored: unknown): unknown {
-    const definition = this.#definition(name);
-    const refused = () =>
-      uncastableError({ model: this.#model, attribute: name }, definition.type, stored);
-    let value: unknown;
-    try {
-      value = readValue(definition, stored);
-    } catch (error) {
-      throw definition.type === "json" && error instanceof SyntaxError ? refused() : error;
-    }
-    if (definition.storage !== undefined && isInvalidDate(value)) throw refused();
-    return value;
-  }
-
   /** After an insert: load what D1 stored; `savedChanges` is everything the new row holds. */
   commitInsert(row: Record<string, unknown> | undefined): void {
     if (row === undefined) this.#markSaved();
@@ -454,14 +435,19 @@ export class RecordState {
     return attributeOf(this.#model, name);
   }
 
+  /** The attribute as a value is for, so a refusal names the Model and attribute. */
+  #of(name: string): ValueOf {
+    return { model: this.#model, attribute: name };
+  }
+
   /** An attribute's current value in its stored form, for comparing with the Snapshot. */
   #storedForm(name: string): unknown {
-    return writeValue(this.#definition(name), this.#values[name]);
+    return writeAs(this.#of(name), this.#values[name]);
   }
 
   /** A copy of an attribute's current value, read back from its stored form. */
   #copyOf(name: string): unknown {
-    return readValue(this.#definition(name), this.#storedForm(name));
+    return copyAs(this.#of(name), this.#values[name]);
   }
 
   #assignmentsOf(names: readonly string[]): Assignment[] {

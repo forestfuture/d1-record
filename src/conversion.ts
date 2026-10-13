@@ -12,7 +12,10 @@ interface Converter {
    * string can't be read as something it isn't. Never called with null.
    */
   cast(value: unknown): unknown;
-  /** D1 value → JavaScript value. Never called with null. */
+  /**
+   * D1 value → JavaScript value, or `uncastable` for a stored value that isn't one: a json cell
+   * that isn't JSON, a Unix time past the range of a `Date` (#73, #146). Never called with null.
+   */
   read(value: unknown): unknown;
   /** JavaScript value → D1 value. Never called with null. */
   write(value: unknown): unknown;
@@ -47,35 +50,16 @@ const converters: Record<ConversionKey, Converter> = {
   },
   unixSeconds: {
     cast: castDatetime,
-    read: (value) => new Date(Number(value) * 1000),
+    read: (value) => validDate(new Date(Number(value) * 1000)),
     write: (value) => Math.floor((value as Date).getTime() / 1000),
   },
   unixMilliseconds: {
     cast: castDatetime,
-    read: (value) => new Date(Number(value)),
+    read: (value) => validDate(new Date(Number(value))),
     write: (value) => (value as Date).getTime(),
   },
-  json: {
-    // Any value JSON can write; what it writes lossily (a Map as {}, NaN as null) is kept as is.
-    cast: (value) => (jsonText(value) === undefined ? uncastable : value),
-    // Text is parsed. Under a column declared JSON, SQLite stores a number-like value (123) as
-    // a number, and D1 returns it as one, which is already the value.
-    read: (value) => (typeof value === "string" ? JSON.parse(value) : value),
-    write: (value) => JSON.stringify(value),
-  },
+  json: { cast: castJson, read: readJson, write: (value) => JSON.stringify(value) },
 };
-
-/**
- * The JSON text of a value, or undefined when JSON can't write it: `stringify` throws (a
- * BigInt, a cycle) or gives nothing (a function, a symbol) (#146).
- */
-function jsonText(value: unknown): string | undefined {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return undefined;
-  }
-}
 
 /** `value` as the attribute's type (null stays null), or `uncastable`. */
 export function castValue(attribute: Convertible, value: unknown): unknown {
@@ -94,6 +78,10 @@ export function castCondition(attribute: Convertible, value: unknown): unknown {
   return castValue(attribute, value);
 }
 
+/**
+ * A stored value as the attribute's, or `uncastable` for one that isn't: `readAs`, in
+ * attribute-values.ts, is how a cell D1 returned is read, so it fails naming its attribute.
+ */
 export function readValue(attribute: Convertible, value: unknown): unknown {
   return value === null || value === undefined ? null : converters[keyOf(attribute)].read(value);
 }
@@ -130,6 +118,35 @@ const booleans = new Map<unknown, boolean>([
 function castBoolean(value: unknown): unknown {
   const key = typeof value === "string" ? value.toLowerCase() : value;
   return booleans.has(key) ? booleans.get(key) : uncastable;
+}
+
+/**
+ * Any value JSON can write, as it is. What `stringify` writes lossily (a `Map` as `{}`, `NaN` as
+ * `null`) is kept; what it throws on (a BigInt, a cycle) or gives nothing for (a function, a
+ * symbol) is refused (#146). It's checked here, and written again at save, so a value is
+ * refused where it's assigned rather than where it's stored, and the cost is one more
+ * `stringify` per assignment.
+ */
+function castJson(value: unknown): unknown {
+  try {
+    return JSON.stringify(value) === undefined ? uncastable : value;
+  } catch {
+    return uncastable;
+  }
+}
+
+/**
+ * Text is parsed; one that isn't JSON is `uncastable`. Under a column declared JSON, SQLite
+ * stores a number-like value (123) as a number, and D1 returns it as one, which is already the
+ * value.
+ */
+function readJson(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return uncastable;
+  }
 }
 
 /** A whole number, signed, with nothing else but spaces around it. */
@@ -187,6 +204,11 @@ function castDatetime(value: unknown): unknown {
   // The day must exist too: `Date` rolls 2026-02-30T10:00Z over to 2 March.
   if (!isoDateTime.test(value) || dayOf(value.slice(0, 10)) === undefined) return uncastable;
   const date = new Date(value.replace(" ", "T"));
+  return isInvalidDate(date) ? uncastable : date;
+}
+
+/** `date`, or `uncastable` for an invalid one (a stored number past the range of a `Date`). */
+function validDate(date: Date): Date | typeof uncastable {
   return isInvalidDate(date) ? uncastable : date;
 }
 
