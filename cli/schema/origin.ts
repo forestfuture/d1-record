@@ -117,8 +117,8 @@ function columnNotes(tool: Tool, tables: readonly GeneratedTable[]): string[] {
 function textDateNote(where: string): string {
   return (
     `${where}: its default writes SQLite's date text (2026-10-12 06:38:30), where d1-record ` +
-    `writes ISO text (2026-10-12T06:38:30.000Z); a column holding both orders as text, so ` +
-    `range conditions can misplace values within a day: see Existing databases in the guide`
+    `writes ISO text (2026-10-12T06:38:30.000Z), and the two sort apart as text, so range ` +
+    `conditions can misplace values within a day (see Existing databases in the guide)`
   );
 }
 
@@ -129,7 +129,7 @@ function textDateNote(where: string): string {
 export function originNotes(
   tool: Tool | undefined,
   tables: readonly GeneratedTable[],
-  textDates: readonly string[] = [],
+  textDates: readonly string[],
 ): string[] {
   if (tool === undefined) return [];
   return [

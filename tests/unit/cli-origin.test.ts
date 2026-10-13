@@ -87,7 +87,7 @@ describe("notes for another tool's migrations", () => {
   const tables = result.ok ? result.tables : [];
 
   test("the tool, then each column to check: numeric timestamps, and JSON in plain TEXT, named either way", () => {
-    expect(originNotes("Drizzle", tables)).toEqual([
+    expect(originNotes("Drizzle", tables, [])).toEqual([
       "these migrations look like Drizzle's. Some columns may convert to the wrong type without an error, especially numeric timestamps: check the generated types (https://github.com/forestfuture/d1-record/issues/73)",
       'posts.metadata: read as a string; if it holds JSON, override it as "json" in its Model',
       'posts.published_at: read as an integer; if it holds a Unix timestamp, override it in its Model as { type: "datetime", storage: "unixSeconds" ("timestamp") or "unixMilliseconds" ("timestamp_ms") }',
@@ -97,13 +97,13 @@ describe("notes for another tool's migrations", () => {
   });
 
   test("for Prisma, an integer timestamp's note doesn't name Drizzle's modes", () => {
-    expect(originNotes("Prisma", tables)).toContain(
+    expect(originNotes("Prisma", tables, [])).toContain(
       'posts.published_at: read as an integer; if it holds a Unix timestamp, override it in its Model as { type: "datetime", storage: "unixSeconds" or "unixMilliseconds" }',
     );
   });
 
   test("for Prisma, a DATETIME column gets no note, since Prisma writes it as ISO text", () => {
-    expect(originNotes("Prisma", tables).join("\n")).not.toContain("created_at");
+    expect(originNotes("Prisma", tables, []).join("\n")).not.toContain("created_at");
   });
 
   test("a column with an expression default, as Drizzle writes for a timestamp, converts and is noted", () => {
@@ -122,23 +122,26 @@ describe("notes for another tool's migrations", () => {
       createdAt: { type: "integer", null: false },
       publishedAt: { type: "integer" },
     });
-    expect(originNotes("Drizzle", stamped.ok ? stamped.tables : [])).toHaveLength(3);
+    expect(originNotes("Drizzle", stamped.ok ? stamped.tables : [], [])).toHaveLength(3);
   });
 
   test("a datetime defaulting to SQLite's date text is noted, naming the two forms and the guide (#143)", () => {
     expect(originNotes("Prisma", tables, ["posts.created_at"])).toContain(
-      "posts.created_at: its default writes SQLite's date text (2026-10-12 06:38:30), where d1-record writes ISO text (2026-10-12T06:38:30.000Z); a column holding both orders as text, so range conditions can misplace values within a day: see Existing databases in the guide",
+      "posts.created_at: its default writes SQLite's date text (2026-10-12 06:38:30), where d1-record writes ISO text (2026-10-12T06:38:30.000Z), and the two sort apart as text, so range conditions can misplace values within a day (see Existing databases in the guide)",
     );
   });
 
-  test("it's a hint for a recognised tool's migrations, and for Drizzle as for Prisma", () => {
+  test("Drizzle's migrations get the date text note too (#143)", () => {
     expect(originNotes("Drizzle", tables, ["posts.created_at"]).join("\n")).toContain(
       "posts.created_at: its default writes SQLite's date text",
     );
+  });
+
+  test("without a recognised tool there's no date text note, since it's a hint (#143)", () => {
     expect(originNotes(undefined, tables, ["posts.created_at"])).toEqual([]);
   });
 
   test("none for Wrangler's own migrations", () => {
-    expect(originNotes(undefined, tables)).toEqual([]);
+    expect(originNotes(undefined, tables, [])).toEqual([]);
   });
 });
