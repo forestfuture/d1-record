@@ -24,3 +24,10 @@ updates:
     groups:
       development:
         dependency-type: development
+    ignore:
+      # Pinned to the vitest that vite-plus bundles: vp refuses to run coverage on any other
+      # (#153). It moves with vite-plus, not on its own.
+      - dependency-name: "@vitest/coverage-v8"
+      # The types follow the Node the repo runs (.node-version), so only its minors and patches.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
