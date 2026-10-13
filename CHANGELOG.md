@@ -1,5 +1,19 @@
 # @forestfuture/d1-record
 
+## 0.1.5
+
+### Patch Changes
+
+- [#144](https://github.com/forestfuture/d1-record/pull/144) [`9115053`](https://github.com/forestfuture/d1-record/commit/9115053978d0b22504be180d492120b3baf48176) Thanks [@christopherstyles](https://github.com/christopherstyles)! - A `datetime` can be stored as a Unix time in an `INTEGER` column: declare it with `storage: "unixSeconds"` or `"unixMilliseconds"`, as in `ApplicationRecord("posts", { publishedAt: { type: "datetime", storage: "unixSeconds" } })`, to read and write Drizzle's `timestamp` and `timestamp_ms` columns as `Date`s. `d1-record schema`'s notes for a numeric timestamp, and for a `DATETIME` column that defaults to a number, name the override. Prisma's `datetime` columns no longer get a note, since Prisma writes ISO text to D1.
+
+- [#150](https://github.com/forestfuture/d1-record/pull/150) [`3c960ff`](https://github.com/forestfuture/d1-record/commit/3c960ff9a3148320e6ac358fe293d4d5c965d47f) Thanks [@christopherstyles](https://github.com/christopherstyles)! - `d1-record schema` notes a `DATETIME` column whose default is `CURRENT_TIMESTAMP` or `datetime('now')`, in migrations written by Drizzle or Prisma. That default writes SQLite's date text (`2026-10-12 06:38:30`) where d1-record writes ISO text, and the two sort apart as text.
+
+  The Existing databases guide shows a migration that rewrites a column to d1-record's form, and a `strftime` fragment that compares and orders a column holding both.
+
+- [#147](https://github.com/forestfuture/d1-record/pull/147) [`4e141c0`](https://github.com/forestfuture/d1-record/commit/4e141c0e2d1e3a247de5e072d4ca0398ccd45f7a) Thanks [@christopherstyles](https://github.com/christopherstyles)! - `column("publishedAt").value(date)` is a value of that attribute for an `sql` fragment, written as the attribute stores it. A plain `Date` in a fragment is ISO text, which doesn't compare with an attribute stored as an integer Unix time (`storage: "unixSeconds"`). The value is cast like an assigned one, stays a bound parameter, and is hidden from `onQuery` for a filtered attribute.
+
+- [#144](https://github.com/forestfuture/d1-record/pull/144) [`9656c7b`](https://github.com/forestfuture/d1-record/commit/9656c7b006880751439ef89bd6bc70f1a9cfc719) Thanks [@christopherstyles](https://github.com/christopherstyles)! - A stored date with no time zone, as SQLite's `DEFAULT CURRENT_TIMESTAMP` writes it (`2026-10-12 06:38:30`), now reads as UTC. It was read in the process's time zone, so in Node outside UTC (the console, scripts, tests) it came back hours off. Workers were unaffected, as they run in UTC.
+
 ## 0.1.4
 
 ### Patch Changes
