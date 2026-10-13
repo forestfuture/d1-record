@@ -43,21 +43,13 @@ describe("a typed value of any shape in a fragment", () => {
 
         if ("error" in outcome) {
           expect(outcome.error).toBeInstanceOf(TypeError);
-          // A json attribute accepts any value, so JSON's own error for one it can't serialize
-          // (a BigInt, a cycle), or a bound undefined for a function, is what every write path
-          // gives today (#146).
-          if (declared[attribute] !== "json") {
-            expect((outcome.error as TypeError).message).toMatch(new RegExp(`for "${attribute}"`));
-          }
+          expect((outcome.error as TypeError).message).toMatch(new RegExp(`for "${attribute}"`));
           return;
         }
         const { params } = outcome.result;
         expect(params).toHaveLength(1);
         const [param] = params;
-        const unserializable = declared[attribute] === "json" && param === undefined;
-        expect(
-          unserializable || param === null || ["string", "number"].includes(typeof param),
-        ).toBe(true);
+        expect(param === null || ["string", "number"].includes(typeof param)).toBe(true);
       }),
       PURE_RUNS,
     );
