@@ -97,14 +97,14 @@ To map an attribute to a column with another name, give it `{ column: "..." }`. 
 
 ## Attribute types
 
-| Type       | JavaScript | Stored in D1 as                             |
-| ---------- | ---------- | ------------------------------------------- |
-| `string`   | `string`   | `TEXT`                                      |
-| `integer`  | `number`   | `INTEGER`                                   |
-| `real`     | `number`   | `REAL`                                      |
-| `boolean`  | `boolean`  | `INTEGER`, `0` or `1`                       |
-| `datetime` | `Date`     | `TEXT`, ISO-8601, or an `INTEGER` Unix time |
-| `json`     | any value  | `TEXT`, as JSON                             |
+| Type       | JavaScript     | Stored in D1 as                             |
+| ---------- | -------------- | ------------------------------------------- |
+| `string`   | `string`       | `TEXT`                                      |
+| `integer`  | `number`       | `INTEGER`                                   |
+| `real`     | `number`       | `REAL`                                      |
+| `boolean`  | `boolean`      | `INTEGER`, `0` or `1`                       |
+| `datetime` | `Date`         | `TEXT`, ISO-8601, or an `INTEGER` Unix time |
+| `json`     | any JSON value | `TEXT`, as JSON                             |
 
 An attribute can be `null` unless it’s declared `null: false`, and its TypeScript type includes `| null` to match.
 
@@ -149,8 +149,10 @@ Anything else throws `TypeError` naming the Model and the attribute, and the att
 - For a `json`: a value JSON can’t write, such as a `BigInt`, an object that refers to itself, a function, or a symbol.
 
 ::: warning TIP
-A `json` attribute keeps what `JSON.stringify` writes, so a `Map` is stored as `{}` and `NaN` as `null`. Convert them first.
+A `json` attribute stores what `JSON.stringify` writes: a `Map` becomes `{}` and `NaN` becomes `null`. Convert them before assigning.
 :::
+
+A stored cell that can’t be read fails the same way when the record loads, or when `pluck` reads it: a `json` cell that isn’t JSON, or a number in a [Unix time column](./adopt-a-database#reading-unix-timestamps) that a `Date` can’t hold. The error names the Model and attribute, hides a filtered attribute’s cell, and a list holding one fails whole.
 
 ### Casting conditions and keys
 
@@ -158,6 +160,7 @@ Conditions are cast the same way, so `where({ quantity: "42" })` finds 42. A con
 
 - A condition reads a number as its digits for a `string` attribute, and a record built from that Relation starts with what it matched: `where({ label: 7 }).build()` has the label `"7"`.
 - A key copied from another record through an association is cast too, so an integer key written into a text foreign key becomes its digits.
+- A `json` value JSON can’t write matches nothing, never the rows whose cell is `NULL`. In a list, it’s left out and the rest still match.
 
 ::: rails Beyond Rails
 Rails casts leniently: `"12abc"` becomes `12`, `1.7` becomes `1`, any other text is `true`, and `""` is `nil`. d1-record refuses each, so `isAdmin=no` from a form can’t save `true`, and an empty field can’t silently become `null`.
