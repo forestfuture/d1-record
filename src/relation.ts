@@ -1,7 +1,7 @@
 // Relation: the chainable query (`where`, `order`, …), its finders, terminals, and bulk writes.
 import { jointly } from "./executor.ts";
 import { shownKey } from "./filtering.ts";
-import { castInherited } from "./attribute-values.ts";
+import { castInherited, copyAs, readAs } from "./attribute-values.ts";
 import {
   compileColumns,
   compileCount,
@@ -38,7 +38,6 @@ import {
   type ModelBase,
   type ModelClass,
 } from "./model.ts";
-import { readValue, writeValue } from "./conversion.ts";
 import { SafeSql } from "./sql.ts";
 import {
   checkChanges,
@@ -544,7 +543,8 @@ export class Relation<M extends ModelBase, S = {}> {
   >(...attributes: K): Promise<{ -readonly [I in keyof K]: AttributesOf<M>[K[I]] }[]>;
   async pluck(...attributes: string[]): Promise<unknown[]> {
     if (attributes.length === 0) throw new TypeError("pluck() needs at least one attribute");
-    const definitions = attributes.map((name) => attributeOf(this.#model, name));
+    const targets = attributes.map((attribute) => ({ model: this.#model, attribute }));
+    const columns = attributes.map((name) => attributeOf(this.#model, name).column);
     const cached = this.#cached();
     const values =
       cached === undefined
@@ -552,17 +552,10 @@ export class Relation<M extends ModelBase, S = {}> {
             await this.#runner.rows(
               compileSelect(this.#query, compileColumns(this.#model, attributes)),
             )
-          ).map((row) =>
-            definitions.map((definition) => readValue(definition, row[definition.column])),
-          )
+          ).map((row) => targets.map((of, index) => readAs(of, row[columns[index]!])))
         : cached.map((record) =>
             // Copies, as a query would give, never the records' own objects.
-            definitions.map((definition, index) =>
-              readValue(
-                definition,
-                writeValue(definition, Reflect.get(record, attributes[index]!)),
-              ),
-            ),
+            targets.map((of) => copyAs(of, Reflect.get(record, of.attribute))),
           );
     return attributes.length === 1 ? values.map(([value]) => value) : values;
   }

@@ -3,9 +3,16 @@
 // the form D1 stores, and bound hidden from listeners when the attribute is filtered. Records,
 // Relations, associations, preloads, and the compiler all go through here, so no caller has to
 // cast or bind a value its own way.
-import { castCondition, castValue, isInvalidDate, uncastable, writeValue } from "./conversion.ts";
+import {
+  castCondition,
+  castValue,
+  isInvalidDate,
+  readValue,
+  uncastable,
+  writeValue,
+} from "./conversion.ts";
 import { FILTERED, Filtered, isFiltered } from "./filtering.ts";
-import { attributeOf } from "./metadata.ts";
+import { type AttributeType, attributeOf } from "./metadata.ts";
 import type { ModelClass } from "./model.ts";
 
 export { uncastable };
@@ -44,8 +51,43 @@ export function castAs(use: Use, of: ValueOf, value: unknown): unknown {
 /** `value` cast for `use`, in the form D1 stores; `uncastable` for a condition that can't be. */
 export function storedAs(use: Use, of: ValueOf, value: unknown): unknown {
   const cast = castAs(use, of, value);
-  if (cast === uncastable) return uncastable;
-  return writeValue(attributeOf(of.model, of.attribute), cast);
+  return cast === uncastable ? uncastable : writeAs(of, cast);
+}
+
+/**
+ * An attribute's value in the form D1 stores. For a value already cast, which a json one can
+ * stop being: mutated in place since, it may be one JSON can't write now, and that throws
+ * `TypeError` naming the attribute, as assigning it would (#146).
+ */
+export function writeAs(of: ValueOf, value: unknown): unknown {
+  const definition = attributeOf(of.model, of.attribute);
+  let stored: unknown;
+  try {
+    stored = writeValue(definition, value);
+  } catch (error) {
+    if (definition.type !== "json") throw error;
+    throw uncastableError(of, definition.type, value);
+  }
+  // Only a json value gives nothing: JSON writes no function or symbol.
+  if (stored === undefined) throw uncastableError(of, definition.type, value);
+  return stored;
+}
+
+/**
+ * A cell D1 returned as the attribute's value. One that isn't (text in a Unix time column, or
+ * past the range of a `Date`; a json cell that isn't JSON) throws `TypeError` naming the
+ * attribute, with the cell hidden if it's filtered, not the parser's own error (#73, #146).
+ */
+export function readAs(of: ValueOf, stored: unknown): unknown {
+  const definition = attributeOf(of.model, of.attribute);
+  const value = readValue(definition, stored);
+  if (value === uncastable) throw uncastableError(of, definition.type, stored);
+  return value;
+}
+
+/** A copy of an attribute's value: written as D1 stores it, then read back. */
+export function copyAs(of: ValueOf, value: unknown): unknown {
+  return readAs(of, writeAs(of, value));
 }
 
 /** `value` cast as an assigned one, in the form D1 stores, bound and hidden if filtered (#83). */
@@ -103,16 +145,20 @@ export function castInherited(
 /** How much of a value an error shows: it came from outside, and errors are often logged. */
 const SHOWN_LENGTH = 60;
 
+/** What an attribute type is called in a refusal, where its name isn't it. */
+const nouns: Partial<Record<AttributeType, string>> = { json: "JSON value" };
+
 /**
  * "Sample: "no" isn't a boolean for "enabled"", the value hidden for a filtered attribute. Also
- * what a stored value that can't be read says, as a Unix time that isn't one (#73).
+ * what a stored value that can't be read says: a Unix time that isn't one (#73), or a json cell
+ * that isn't JSON (#146).
  */
-export function uncastableError(
+function uncastableError(
   { model, attribute, association }: ValueOf,
-  type: string,
+  type: AttributeType,
   value: unknown,
 ) {
-  const noun = type === "json" ? "JSON value" : type;
+  const noun = nouns[type] ?? type;
   const article = /^[aeiou]/.test(noun) ? "an" : "a";
   const text = isFiltered(model, attribute) ? FILTERED : shown(value);
   const from = association === undefined ? "" : `, the key of ${association}`;
