@@ -137,7 +137,7 @@ Values are cast wherever they’re assigned: `build`, `create`, `assign`, `updat
 | `real`     | a finite number, or a string that’s wholly one, with an optional sign, point, and exponent: `"1.5"`, `".5"`, `"5."`, `"-2e3"`          |
 | `string`   | a string                                                                                                                               |
 | `datetime` | a valid `Date`; a date, `"2026-01-02"` (midnight UTC); or a date and time with `Z` or a `±HH:MM` offset: `"2026-01-02T09:30:00+02:00"` |
-| `json`     | any value                                                                                                                              |
+| `json`     | any value JSON can write                                                                                                               |
 
 Anything else throws `TypeError` naming the Model and the attribute, and the attribute keeps its value. The error shows at most 60 characters of the value, and none of a [filtered attribute](#filtering-attributes)’s. Among the values refused:
 
@@ -146,6 +146,11 @@ Anything else throws `TypeError` naming the Model and the attribute, and the att
 - `NaN` and `Infinity`.
 - A number, boolean, or `Date` for a `string`.
 - For a `datetime`: a time without an offset, a lowercase `t` or `z`, a day that doesn’t exist (`"2026-02-30"`), other formats, and numbers.
+- For a `json`: a value JSON can’t write, such as a `BigInt`, an object that refers to itself, a function, or a symbol.
+
+::: warning TIP
+A `json` attribute keeps what `JSON.stringify` writes, so a `Map` is stored as `{}` and `NaN` as `null`. Convert them first.
+:::
 
 ### Casting conditions and keys
 
