@@ -1,5 +1,13 @@
 # @forestfuture/d1-record
 
+## 0.2.0
+
+### Minor Changes
+
+- [#151](https://github.com/forestfuture/d1-record/pull/151) [`8bff94a`](https://github.com/forestfuture/d1-record/commit/8bff94a81325d6fa9963223201ce57d08668fefa) Thanks [@christopherstyles](https://github.com/christopherstyles)! - An `sql` fragment that compares a bare `Date`, or a date text string, directly with the column of an attribute stored as a Unix time (`storage: "unixSeconds"` or `"unixMilliseconds"`) now throws `TypeError` where the fragment is used, with the fix in the message. It used to match nothing, or every row, without an error.
+
+  Use `column("publishedAt").value(date)`. An expression around the column, an `IN` list and `IS` are not read.
+
 ## 0.1.5
 
 ### Patch Changes
