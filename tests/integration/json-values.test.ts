@@ -164,6 +164,34 @@ describe("json attributes: values JSON can't write, and cells that aren't JSON (
     });
   });
 
+  describe("after a save, the record holds what D1 stored (#163)", () => {
+    test("a lossy value is what it was stored as, after an insert", async () => {
+      const doc = await docs().create({ id: 1, settings: { n: Number.NaN } });
+
+      expect(doc.settings).toEqual({ n: null });
+    });
+
+    test("and after an update", async () => {
+      await insertCell("settings", '{"a":1}');
+      const doc = await docs().find(1);
+
+      doc.settings = { n: Number.NaN };
+      await doc.save();
+
+      expect(doc.settings).toEqual({ n: null });
+    });
+
+    test("and the save isn't a change to load again", async () => {
+      await insertCell("settings", '{"a":1}');
+      const doc = await docs().find(1);
+      doc.settings = { n: Number.NaN };
+      await doc.save();
+
+      expect(doc.isChanged()).toBe(false);
+      expect((await docs().find(1)).settings).toEqual({ n: null });
+    });
+  });
+
   describe("a condition with such a value", () => {
     test("matches nothing, not the rows whose cell is NULL", async () => {
       await binding.prepare("INSERT INTO json_docs (id, settings) VALUES (1, NULL)").run();
