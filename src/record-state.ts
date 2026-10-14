@@ -136,7 +136,7 @@ export class RecordState {
    * (use `null` for that); a destroyed record is read-only.
    */
   write(name: string, value: unknown): void {
-    this.#requireWritable();
+    this.#requireNotDestroyed("be changed");
     this.#store(name, this.#attribute(name).cast(value));
   }
 
@@ -145,13 +145,8 @@ export class RecordState {
    * is (#94): an integer key into a text foreign key becomes its digits.
    */
   writeKey(name: string, value: unknown, association: string): void {
-    this.#requireWritable();
-    this.#store(name, this.#attribute(name).key(value, association));
-  }
-
-  /** A destroyed record is read-only. */
-  #requireWritable(): void {
     this.#requireNotDestroyed("be changed");
+    this.#store(name, this.#attribute(name).key(value, association));
   }
 
   /** Stores an attribute's already-cast value, as assigned. */
@@ -374,7 +369,7 @@ export class RecordState {
   /** After an insert: load what D1 stored; `savedChanges` is everything the new row holds. */
   commitInsert(row: Record<string, unknown> | undefined): void {
     if (row === undefined) {
-      for (const name of Object.keys(this.#values)) this.#values[name] = this.#copyOf(name);
+      this.#settle();
       this.#markSaved();
     } else {
       this.loadRow(row);
@@ -387,13 +382,14 @@ export class RecordState {
   }
 
   /**
-   * After an update: apply values the write added (timestamps), then record the save. Each
-   * attribute written holds what was stored (a `unixSeconds` Date has no milliseconds, a
-   * `json` NaN is null), as an insert's re-read row gives (#73, #163).
+   * After an update: apply values the write added (timestamps), then record the save. Every
+   * attribute holds what was stored (a `unixSeconds` Date has no milliseconds, a `json` NaN is
+   * null), as an insert's re-read row gives (#73, #163), including one assigned a value equal
+   * as stored, which wasn't a change.
    */
   commitUpdate(added: readonly Assignment[]): void {
     for (const [name, value] of added) this.#values[name] = value;
-    for (const name of this.changedNames()) this.#values[name] = this.#copyOf(name);
+    this.#settle();
     this.#savedChanges = this.changes();
     this.#markSaved();
   }
@@ -438,6 +434,11 @@ export class RecordState {
   /** A copy of an attribute's current value, read back from its stored form. */
   #copyOf(name: string): unknown {
     return this.#attribute(name).copy(this.#values[name]);
+  }
+
+  /** Every loaded attribute becomes what D1 holds for it: its value, written and read back. */
+  #settle(): void {
+    for (const name of Object.keys(this.#values)) this.#values[name] = this.#copyOf(name);
   }
 
   #assignmentsOf(names: readonly string[]): Assignment[] {
