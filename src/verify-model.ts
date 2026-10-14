@@ -51,7 +51,10 @@ function rejectReservedAttributeNames(model: ModelClass): void {
   }
 }
 
-/** A key a type can't have, or that excludes another given with it: see `src/spec-keys.ts`. */
+/**
+ * A spec key its type can't have, one given with a key that excludes it, or a storage that isn't
+ * an epoch unit: the rules are in `src/spec-keys.ts`.
+ */
 function rejectBadSpecs(model: ModelClass): void {
   for (const [name, definition] of model.attributeDefinitions) {
     const problem = specProblem(`${model.name}.${name}`, definition);

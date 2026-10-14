@@ -33,22 +33,19 @@ export interface TableSchema {
 /** A generated schema's tables, by name (`tables` in `src/db/schema.ts`). */
 export type TableSchemas = Readonly<Record<string, TableSchema>>;
 
-/** An override written out, as read at runtime: any of a spec's parts but its column. */
-type ObjectOverride = SpecChange;
-
 /**
  * A change to a generated attribute: its type alone, or its type, nullability, default and
  * `generateId`, typed so `generateId` goes only with a string, and never with a default (#99).
  */
 type AttributeOverride =
   | AttributeType
-  | (Pick<ObjectOverride, "null"> & { type?: "string"; storage?: never } & ValueSource)
-  | (Pick<ObjectOverride, "null" | "default"> & {
+  | (Pick<SpecChange, "null"> & { type?: "string"; storage?: never } & ValueSource)
+  | (Pick<SpecChange, "null" | "default"> & {
       type: Exclude<AttributeType, "string" | "datetime">;
       generateId?: false;
       storage?: never;
     })
-  | (Pick<ObjectOverride, "null" | "default" | "storage"> & {
+  | (Pick<SpecChange, "null" | "default" | "storage"> & {
       type: "datetime";
       generateId?: false;
     });
@@ -101,7 +98,7 @@ export interface SchemaModel<T extends TableSchemas, B extends BaseClass = typeo
  * An override as given, checked (TypeScript checks it too, but not in plain JavaScript or past
  * a cast): `false` to ignore the column, or the spec changes.
  */
-function checked(where: string, attribute: string, override: unknown): ObjectOverride | false {
+function checked(where: string, attribute: string, override: unknown): SpecChange | false {
   if (override === false) return false;
   if (isAttributeType(override)) return { type: override };
   if (!isSpecChange(override)) {
@@ -119,7 +116,7 @@ function checked(where: string, attribute: string, override: unknown): ObjectOve
 function checkedOverride(
   where: string,
   spec: AttributeSpecs[string],
-  change: ObjectOverride,
+  change: SpecChange,
 ): AttributeSpecs[string] {
   const changed = applyChange(typeof spec === "string" ? { type: spec } : spec, change);
   const problem = specProblem(where, changed);
