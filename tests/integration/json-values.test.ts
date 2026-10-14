@@ -171,7 +171,7 @@ describe("json attributes: values JSON can't write, and cells that aren't JSON (
       expect(doc.settings).toEqual({ n: null });
     });
 
-    test("and after an update", async () => {
+    test("a lossy value is what it was stored as, after an update", async () => {
       await insertCell("settings", '{"a":1}');
       const doc = await docs().find(1);
 
@@ -181,14 +181,22 @@ describe("json attributes: values JSON can't write, and cells that aren't JSON (
       expect(doc.settings).toEqual({ n: null });
     });
 
-    test("and the save isn't a change to load again", async () => {
+    test("isChanged is false after a save of a lossy value", async () => {
       await insertCell("settings", '{"a":1}');
       const doc = await docs().find(1);
       doc.settings = { n: Number.NaN };
       await doc.save();
 
       expect(doc.isChanged()).toBe(false);
-      expect((await docs().find(1)).settings).toEqual({ n: null });
+    });
+
+    test("a reload after a save of a lossy value gives the same value", async () => {
+      await insertCell("settings", '{"a":1}');
+      const doc = await docs().find(1);
+      doc.settings = { n: Number.NaN };
+      await doc.save();
+
+      expect((await docs().find(1)).settings).toEqual(doc.settings);
     });
   });
 
