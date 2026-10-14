@@ -1,4 +1,4 @@
-// The rules for each key of an attribute's spec: what it may hold, where it's allowed, what it excludes (#164).
+// The rules for each key of an attribute's spec: what it may hold, where it's allowed, what it conflicts with (#164).
 // A key's rules are written here once, and the override merge, the override check, a Model's check
 // and the attribute's definition all read them.
 import { epochStorages } from "./epoch-storage.ts";
@@ -24,25 +24,25 @@ export function isAttributeType(value: unknown): value is AttributeType {
 /** A part of a spec. */
 type SpecKey = keyof SpecObject;
 
-/** The parts of a spec an override may change (not the column), any left out or `undefined` unchanged. */
-export type SpecChange = Partial<Omit<SpecObject, "column">>;
+/** An override written out: the parts of a spec it may change (not the column), any left out or `undefined` unchanged. */
+export type SpecOverride = Partial<Omit<SpecObject, "column">>;
 
 interface KeyRule {
   /** Whether a value is well formed: checked past the types, in plain JavaScript or past a cast. */
   isWellFormed: (value: unknown) => boolean;
   /** How the key reads in a message, if not by its name: `a storage`. */
-  label?: string;
+  describedAs?: string;
   /** Whether a value gives the key; by default any but `undefined` (`generateId: false` doesn't). */
   isGiven?: (value: unknown) => boolean;
   /** The only values it may hold, named in the message for any other. */
-  oneOf?: readonly string[];
+  allowedValues?: readonly string[];
   /** The only types that may have it, and why. */
   onlyFor?: { types: readonly AttributeType[]; because: string };
   /**
-   * Keys it can't be given with. Declared on one of the two: it holds both ways, and the
-   * message names the declaring key first. An override that gives one replaces the other.
+   * Keys it can't be given with. Declared on one of the two: it holds both ways, and a message
+   * names the declaring key first. An override that gives one replaces the other.
    */
-  excludes?: readonly SpecKey[];
+  conflictsWith?: readonly SpecKey[];
   /**
    * What an override that gives the attribute a new type does to it: `"drop"` it, as it was
    * written for the old type, or `"keep"` it, the default.
@@ -54,7 +54,7 @@ interface KeyRule {
    * `false` for a key `define` doesn't copy into the attribute's definition as given: the type
    * and column, which it resolves, and nullability, which a definition doesn't hold.
    */
-  carried?: false;
+  copiedToDefinition?: false;
 }
 
 /**
@@ -62,16 +62,16 @@ interface KeyRule {
  * added there is a compile error until it has its rules here.
  */
 const rules: { readonly [K in SpecKey]: KeyRule } = {
-  type: { isWellFormed: isAttributeType, carried: false },
-  null: { isWellFormed: (value) => typeof value === "boolean", carried: false },
+  type: { isWellFormed: isAttributeType, copiedToDefinition: false },
+  null: { isWellFormed: (value) => typeof value === "boolean", copiedToDefinition: false },
   column: {
     isWellFormed: (value) => typeof value === "string",
     overridable: false,
-    carried: false,
+    copiedToDefinition: false,
   },
   default: {
     isWellFormed: (value) => typeof value === "function",
-    label: "a default",
+    describedAs: "a default",
     onRetype: "drop",
   },
   // A generated id is a string, and comes from generateId alone, not a default as well (#99).
@@ -79,14 +79,14 @@ const rules: { readonly [K in SpecKey]: KeyRule } = {
     isWellFormed: (value) => typeof value === "boolean",
     isGiven: (value) => value === true,
     onlyFor: { types: ["string"], because: "generated ids are strings" },
-    excludes: ["default"],
+    conflictsWith: ["default"],
     onRetype: "drop",
   },
   // Only a datetime is stored as a Unix epoch, in seconds or milliseconds (#73).
   storage: {
     isWellFormed: (value) => typeof value === "string",
-    label: "a storage",
-    oneOf: epochStorages,
+    describedAs: "a storage",
+    allowedValues: epochStorages,
     onlyFor: { types: ["datetime"], because: "only a datetime is stored as an epoch" },
     onRetype: "drop",
   },
@@ -94,17 +94,17 @@ const rules: { readonly [K in SpecKey]: KeyRule } = {
 
 const entries = Object.entries(rules) as [SpecKey, KeyRule][];
 
-/** For each key, the keys it can't be given with, whichever of the two declares it. */
-const excluding = new Map<SpecKey, SpecKey[]>(entries.map(([key]) => [key, []]));
-for (const [key, { excludes = [] }] of entries) {
-  for (const other of excludes) {
-    excluding.get(key)!.push(other);
-    excluding.get(other)!.push(key);
+/** For each key, the keys it conflicts with, whichever of the two declares it. */
+const conflicts = new Map<SpecKey, SpecKey[]>(entries.map(([key]) => [key, []]));
+for (const [key, { conflictsWith = [] }] of entries) {
+  for (const other of conflictsWith) {
+    conflicts.get(key)!.push(other);
+    conflicts.get(other)!.push(key);
   }
 }
 
 /** The keys an override may hold, as a message lists them: `type, null, default, …`. */
-export const specKeyNames = entries
+export const overridableKeyNames = entries
   .filter(([, rule]) => rule.overridable !== false)
   .map(([key]) => key)
   .join(", ");
@@ -117,10 +117,10 @@ function givenValue(spec: Partial<SpecObject>, key: SpecKey): unknown {
 }
 
 /** How a key reads in a message. */
-const labelOf = (key: SpecKey): string => rules[key].label ?? key;
+const readsAs = (key: SpecKey): string => rules[key].describedAs ?? key;
 
 /** Whether `value` is an object holding only spec keys an override may change, each well formed or `undefined`. */
-export function isSpecChange(value: unknown): value is SpecChange {
+export function isSpecOverride(value: unknown): value is SpecOverride {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   return Object.entries(value).every(([key, each]) => {
     if (!Object.hasOwn(rules, key) || rules[key as SpecKey].overridable === false) return false;
@@ -128,16 +128,16 @@ export function isSpecChange(value: unknown): value is SpecChange {
   });
 }
 
-/** The problem with `key` given together with a key it excludes. */
-function exclusionProblem(
+/** The problem with `key` given together with a key it conflicts with. */
+function conflictProblem(
   where: string,
   spec: Partial<SpecObject>,
   key: SpecKey,
 ): string | undefined {
-  const other = rules[key].excludes?.find((each) => givenValue(spec, each) !== undefined);
+  const other = rules[key].conflictsWith?.find((each) => givenValue(spec, each) !== undefined);
   return other === undefined
     ? undefined
-    : `${where} has both ${labelOf(key)} and ${labelOf(other)}; keep one`;
+    : `${where} has both ${readsAs(key)} and ${readsAs(other)}; keep one`;
 }
 
 /** A value as a message shows it: as JSON, or as text for one JSON can't write (a BigInt). */
@@ -152,17 +152,17 @@ function shown(value: unknown): string {
 /** The problem with a given key's value, or with its attribute's type. */
 function valueProblem(
   where: string,
-  spec: SpecChange & Pick<SpecObject, "type">,
+  spec: SpecOverride & Pick<SpecObject, "type">,
   key: SpecKey,
 ): string | undefined {
-  const { oneOf, onlyFor } = rules[key];
+  const { allowedValues, onlyFor } = rules[key];
   const value = givenValue(spec, key);
-  if (oneOf !== undefined && !oneOf.includes(value as string)) {
-    const names = oneOf.map((each) => `"${each}"`).join(" or ");
+  if (allowedValues !== undefined && !allowedValues.includes(value as string)) {
+    const names = allowedValues.map((each) => `"${each}"`).join(" or ");
     return `${where} has ${key} ${shown(value)}; use ${names}`;
   }
   if (onlyFor !== undefined && !onlyFor.types.includes(spec.type)) {
-    return `${where} is "${spec.type}", so it can't have ${labelOf(key)}: ${onlyFor.because}`;
+    return `${where} is "${spec.type}", so it can't have ${readsAs(key)}: ${onlyFor.because}`;
   }
   return undefined;
 }
@@ -170,30 +170,30 @@ function valueProblem(
 /** Why a spec can't be as it is, or undefined if it can. `where` names it (`User.id`). */
 export function specProblem(
   where: string,
-  spec: SpecChange & Pick<SpecObject, "type">,
+  spec: SpecOverride & Pick<SpecObject, "type">,
 ): string | undefined {
   for (const [key] of entries) {
     if (givenValue(spec, key) === undefined) continue;
-    const problem = exclusionProblem(where, spec, key) ?? valueProblem(where, spec, key);
+    const problem = conflictProblem(where, spec, key) ?? valueProblem(where, spec, key);
     if (problem !== undefined) return problem;
   }
   return undefined;
 }
 
 /**
- * `base` with `change` applied. A key `change` gives replaces one it excludes, and a new type
- * drops every key written for the old one (so the column's own default applies on insert, unless
- * the change gives one, #81).
+ * `base` with `override` applied. A key `override` gives replaces one it conflicts with, and a new
+ * type drops every key written for the old one (so the column's own default applies on insert,
+ * unless the override gives one, #81).
  */
-export function applyChange(base: SpecObject, change: SpecChange): SpecObject {
+export function applyOverride(base: SpecObject, override: SpecOverride): SpecObject {
   const given = Object.fromEntries(
-    Object.entries(change).filter(([, value]) => value !== undefined),
+    Object.entries(override).filter(([, value]) => value !== undefined),
   );
   const retyped = given.type !== undefined && given.type !== base.type;
   const dropped = new Set(
     entries
       .filter(([key, rule]) => {
-        const replaced = excluding
+        const replaced = conflicts
           .get(key)!
           .some((other) => givenValue(given, other) !== undefined);
         return replaced || (retyped && rule.onRetype === "drop");
@@ -205,11 +205,13 @@ export function applyChange(base: SpecObject, change: SpecChange): SpecObject {
 }
 
 /** The keys of `spec` that go into its attribute's definition as given: `default`, `generateId`, `storage`. */
-export function carriedKeys(
+export function copiedKeys(
   spec: SpecObject,
 ): Partial<Pick<AttributeDefinition, "default" | "generateId" | "storage">> {
-  const carried = entries
-    .filter(([key, rule]) => rule.carried !== false && givenValue(spec, key) !== undefined)
+  const copied = entries
+    .filter(
+      ([key, rule]) => rule.copiedToDefinition !== false && givenValue(spec, key) !== undefined,
+    )
     .map(([key]) => [key, spec[key]]);
-  return Object.fromEntries(carried);
+  return Object.fromEntries(copied);
 }

@@ -2,10 +2,10 @@ import fc from "fast-check";
 import { describe, expect, test } from "vite-plus/test";
 import { define, type SpecObject } from "../../src/metadata.ts";
 import {
-  applyChange,
-  carriedKeys,
-  isSpecChange,
-  specKeyNames,
+  applyOverride,
+  copiedKeys,
+  isSpecOverride,
+  overridableKeyNames,
   specProblem,
 } from "../../src/spec-keys.ts";
 import { PURE_RUNS } from "../support/properties.ts";
@@ -54,7 +54,7 @@ describe("applying a change to a spec", () => {
   test("gives every key the change gives, and keeps the column", () => {
     fc.assert(
       fc.property(spec, change, (base, given) => {
-        const applied = applyChange(base, given);
+        const applied = applyOverride(base, given);
 
         for (const [key, value] of Object.entries(given)) {
           if (value !== undefined) expect(applied[key as keyof SpecObject]).toBe(value);
@@ -70,7 +70,7 @@ describe("applying a change to a spec", () => {
       fc.property(spec, change, (base, given) => {
         fc.pre(given.type !== undefined && given.type !== base.type);
 
-        const applied = applyChange(base, given);
+        const applied = applyOverride(base, given);
 
         expect(applied.null).toBe(given.null ?? base.null);
         expect(applied.default).toBe(given.default);
@@ -84,8 +84,8 @@ describe("applying a change to a spec", () => {
   test("on the same type leaves untouched what the change doesn't mention", () => {
     fc.assert(
       fc.property(spec, (base) => {
-        expect(applyChange(base, {})).toEqual(base);
-        expect(applyChange(base, { type: base.type })).toEqual(base);
+        expect(applyOverride(base, {})).toEqual(base);
+        expect(applyOverride(base, { type: base.type })).toEqual(base);
       }),
       PURE_RUNS,
     );
@@ -95,18 +95,18 @@ describe("applying a change to a spec", () => {
     const generated = { type: "string", generateId: true } as const;
     const defaulted = { type: "string", default: initial } as const;
 
-    expect(applyChange(generated, { default: initial })).toEqual({
+    expect(applyOverride(generated, { default: initial })).toEqual({
       type: "string",
       default: initial,
     });
-    expect(applyChange(defaulted, { generateId: true })).toEqual(generated);
+    expect(applyOverride(defaulted, { generateId: true })).toEqual(generated);
   });
 
   test("`generateId: false` replaces nothing, and `storage` replaces nothing", () => {
     const base = { type: "string", default: initial } as const;
 
-    expect(applyChange(base, { generateId: false })).toEqual({ ...base, generateId: false });
-    expect(applyChange({ type: "datetime", storage: "unixSeconds" }, { null: false })).toEqual({
+    expect(applyOverride(base, { generateId: false })).toEqual({ ...base, generateId: false });
+    expect(applyOverride({ type: "datetime", storage: "unixSeconds" }, { null: false })).toEqual({
       type: "datetime",
       storage: "unixSeconds",
       null: false,
@@ -167,21 +167,21 @@ describe("an override's shape", () => {
   test("refuses anything that isn't an object, and any key that isn't a spec key but the column", () => {
     fc.assert(
       fc.property(values, (value) => {
-        if (isSpecChange(value)) expect(typeof value === "object" && value !== null).toBe(true);
+        if (isSpecOverride(value)) expect(typeof value === "object" && value !== null).toBe(true);
       }),
       PURE_RUNS,
     );
-    expect(isSpecChange({ column: "c" })).toBe(false);
-    expect(isSpecChange({ extra: 1 })).toBe(false);
-    expect(isSpecChange([])).toBe(false);
-    expect(isSpecChange(JSON.parse('{"__proto__": 1}'))).toBe(false);
+    expect(isSpecOverride({ column: "c" })).toBe(false);
+    expect(isSpecOverride({ extra: 1 })).toBe(false);
+    expect(isSpecOverride([])).toBe(false);
+    expect(isSpecOverride(JSON.parse('{"__proto__": 1}'))).toBe(false);
   });
 
   test("refuses a key holding the wrong kind of value, and accepts it left undefined", () => {
     fc.assert(
       fc.property(keyed, (key) => {
-        expect(isSpecChange({ [key]: undefined })).toBe(true);
-        expect(isSpecChange({ [key]: Symbol("nope") })).toBe(false);
+        expect(isSpecOverride({ [key]: undefined })).toBe(true);
+        expect(isSpecOverride({ [key]: Symbol("nope") })).toBe(false);
       }),
       PURE_RUNS,
     );
@@ -199,7 +199,7 @@ describe("a spec's keys", () => {
       storage: true,
     } satisfies Record<keyof SpecObject, true>;
 
-    expect(specKeyNames.split(", ")).toEqual(
+    expect(overridableKeyNames.split(", ")).toEqual(
       Object.keys(expected).filter((key) => key !== "column"),
     );
   });
@@ -217,7 +217,7 @@ describe("a spec's keys", () => {
         expect(definition.storage).toBe(given.storage);
         expect(
           Object.keys(definition).every(
-            (key) => key in carriedKeys(given) || key === "type" || key === "column",
+            (key) => key in copiedKeys(given) || key === "type" || key === "column",
           ),
         ).toBe(true);
       }),
