@@ -8,3 +8,12 @@ Read a dependency's types and docs from these paths, rather than searching `node
 - **Vite+** commands and config: `node_modules/vite-plus/docs/guide/<command>.md`. `lint.md` covers the repo's own lint rules (`scripts/lint/`).
 - **Oxlint rules** and their options: https://oxc.rs/docs/guide/usage/linter/rules.html. `vp lint --rules` prints nothing here.
 - **tsdown**, which `vp pack` runs: its config types are under `node_modules/.pnpm/@voidzero-dev+vite-plus-core@*/node_modules/@voidzero-dev/vite-plus-core/dist/tsdown/`.
+
+## Bumping Vite+
+
+Dependabot is told to leave `vite-plus` and `@vitest/coverage-v8` alone, because each needs the others to move with it. Bump them together, in one change:
+
+1. In `pnpm-workspace.yaml`, set `vite-plus` and `vite` (`npm:@voidzero-dev/vite-plus-core@…`) in the catalog to the same version, and the same version in each `minimumReleaseAgeExclude` entry.
+2. Run `vp install`, then `vp toolchain` to read the vitest it bundles.
+3. Pin `@vitest/coverage-v8` in `package.json` to that vitest version, exactly. `vp test --coverage` refuses any other.
+4. Run `vp run validate`.
