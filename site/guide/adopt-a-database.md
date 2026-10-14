@@ -124,3 +124,28 @@ Prisma’s dates need no override. On D1, Prisma writes a `DateTime` as ISO text
 ::: rails Beyond Rails
 Active Record has no option for a date kept as an integer; there it takes a custom attribute type. In d1-record it’s a `storage` on the `datetime`.
 :::
+
+## Fixing cells of the wrong type
+
+A cell that isn’t the attribute’s type fails when the record loads or `pluck` reads it, naming the Model and attribute:
+
+```text
+TypeError: Article: 1767323045 isn't a datetime for "publishedAt"
+```
+
+Find the cells by their storage class:
+
+```sql
+SELECT typeof(published_at), count(*) FROM articles GROUP BY 1;
+```
+
+Then fix the cause:
+
+- If the column holds Unix times, declare the [`storage`](#reading-unix-timestamps) so they’re read as one.
+- If the attribute’s type is wrong, override it with the type the column holds.
+- If a few rows hold the wrong thing, `UPDATE` them.
+- If the column isn’t used, ignore it with `false` in the override.
+
+::: warning TIP
+SQLite converts a value to the column’s declared type only when it can: `'42'` in an `INTEGER` column is stored as 42, and `'abc'` stays text.
+:::

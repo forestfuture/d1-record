@@ -152,7 +152,17 @@ Anything else throws `TypeError` naming the Model and the attribute, and the att
 A `json` attribute stores what `JSON.stringify` writes: a `Map` becomes `{}` and `NaN` becomes `null`. Convert them before assigning. After a save, the record holds what was stored.
 :::
 
-A stored cell that can’t be read fails the same way when the record loads, or when `pluck` reads it: a `json` cell that isn’t JSON, or a number in a [Unix time column](./adopt-a-database#reading-unix-timestamps) that a `Date` can’t hold. The error names the Model and attribute, hides a filtered attribute’s cell, and a list holding one fails whole.
+A stored cell is checked the same way, when the record loads or `pluck` reads it. One that isn’t the attribute’s type fails with the same error, shows the same value, and fails a list that holds it whole. These cells fail:
+
+- For a `boolean`: anything but `0` and `1`.
+- For an `integer`: text, a fraction, or a number past `Number.MAX_SAFE_INTEGER`.
+- For a `real`: anything but a number.
+- For a `string`: anything but text.
+- For a `datetime`: text that isn’t a date or a date and time (`"garbage"`, `"12"`), or a number. A number is a [Unix time](./adopt-a-database#reading-unix-timestamps), which needs a `storage`.
+- For a `datetime` with a `storage`: anything but a number, or one past what a `Date` can hold.
+- For a `json`: text that isn’t JSON.
+
+See [Fixing cells of the wrong type](./adopt-a-database#fixing-cells-of-the-wrong-type).
 
 ### Casting conditions and keys
 
