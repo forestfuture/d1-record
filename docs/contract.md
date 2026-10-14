@@ -207,10 +207,10 @@ _Guide:_ [shared-behavior](../site/guide/shared-behavior.md), [models](../site/g
 
 ## Change tracking
 
-_Guide:_ [models](../site/guide/models.md). _Code:_ `src/record-state.ts`.
+_Guide:_ [models](../site/guide/models.md). _Code:_ `src/record-state.ts`, `src/attribute.ts`.
 
 - Change detection compares each attribute's current serialized value with the value last loaded or saved, so in-place changes to `json` values and `Date`s are detected.
-- After a successful save (an insert or an update), each attribute the save wrote holds what D1 stored, as a reload gives (#163): a `unixSeconds` `Date` has no milliseconds, and a `json` value's `NaN` or `Map` is `null` or `{}`.
+- After a successful save (an insert or an update), every loaded attribute holds what D1 stored, as a reload gives (#163): a `unixSeconds` `Date` has no milliseconds, and a `json` value's `NaN` or `Map` is `null` or `{}`, even when assigning it wasn't a change.
 - `isChanged()`, `changed()` → `["email"]`, `changedAttributes()` → `{ email: old }`, `changes()` → `{ email: [old, new] }`.
 - `savedChanges()` holds the changes from the last **successful** save (`{}` after a clean save). After `create`, that's everything the new row holds, including what D1 filled in (the generated key, column defaults), each changed from `null`. A failed save doesn't change it. `changes()` and `savedChanges()` return copies, so editing the record afterwards never alters them. Use it in `after*` callbacks, where the record is already clean.
 - A new record's changes are its assigned attributes, each changed from `null`.
