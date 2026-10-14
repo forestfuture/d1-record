@@ -5,12 +5,7 @@
 // per-request state.
 import { connect, databaseParts, type Database } from "./database.ts";
 import { NoDatabase } from "./errors.ts";
-import {
-  CurrentExecutor,
-  type D1Executor,
-  describeDatabasesWith,
-  type Executor,
-} from "./executor.ts";
+import { CurrentExecutor, type Executor } from "./executor.ts";
 import type { ModelClass, ScopesOf } from "./model.ts";
 import type { Scoped } from "./relation.ts";
 import { relationFor } from "./scoped-relation.ts";
@@ -50,6 +45,7 @@ export async function withDatabase<R>(
   requests ??= newStorage();
   const outer = requests.getStore() ?? [];
   const inner = Array.isArray(databases) ? databases : [databases as Database];
+  for (const db of inner) db[databaseParts].executor.setOrigin("request");
   return requests.run([...inner, ...outer], fn);
 }
 
@@ -81,18 +77,6 @@ function notAWorker(error: unknown): boolean {
   );
 }
 
-/** Each binding's own database, by its binding's name, for errors to name. */
-const bindingNames = new WeakMap<D1Executor, string>();
-
-// Errors name each database (#93): the request's (from withDatabase), a binding's, or connect()'s.
-describeDatabasesWith((database) => {
-  if (requests?.getStore()?.some((db) => db[databaseParts].executor === database)) {
-    return "the request's database";
-  }
-  const name = bindingNames.get(database);
-  return name === undefined ? "a connect() database" : `the ${name} binding's database`;
-});
-
 /** One Database per D1 binding, for queries outside `withDatabase`: it holds nothing per-request. */
 const defaults = new WeakMap<D1Database, Database>();
 
@@ -100,7 +84,7 @@ function defaultDatabase(binding: D1Database, name: string): Database {
   let db = defaults.get(binding);
   if (db === undefined) {
     db = connect(binding);
-    bindingNames.set(db[databaseParts].executor, name);
+    db[databaseParts].executor.setOrigin({ binding: name });
     defaults.set(binding, db);
   }
   return db;
