@@ -558,8 +558,11 @@ describe("Querying: raw statements bind and read a value as the attribute stores
     expect(rows).toEqual([{ id: 2, total: 20 }]);
   });
 
-  test("deserialize reads the cell as a Date, and NULL as null", async () => {
+  test("deserialize reads the cell as a Date", async () => {
     expect(await paidAt(binding, 1)).toEqual(new Date("2026-01-01T00:00:00.000Z"));
+  });
+
+  test("deserialize reads NULL as null", async () => {
     expect(await paidAt(binding, 3)).toBeNull();
   });
 });

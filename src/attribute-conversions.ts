@@ -1,5 +1,6 @@
 // An attribute's conversions as a value (#148): the cast, write and read d1-record does for it,
 // for SQL d1-record doesn't write (a raw D1 statement, a cache key, a row checked in a test).
+// Not the declared type (`"datetime"`): that's an AttributeType, in metadata.ts.
 import { castAs, readAs, storedAs } from "./attribute-values.ts";
 import { attributeOf, requireDefined } from "./metadata.ts";
 import type { ModelClass } from "./model.ts";
@@ -13,17 +14,20 @@ export interface AttributeConversions<T> {
   /**
    * `input` as the attribute's JavaScript value, as assigning it would: strict, so `TypeError`
    * naming the Model and attribute when it can't be. `null` stays `null`; `undefined` throws.
+   * Nothing is floored: a `Date` with milliseconds keeps them, whatever the attribute's `storage`.
    */
   readonly cast: (input: unknown) => T;
   /**
-   * `input`, cast, as D1 stores it: an ISO string, an integer for a `storage` attribute, `0` or
-   * `1`, JSON text. What `column(attribute).value(input)` binds inside an `sql` fragment.
+   * `input`, cast, as D1 stores it: an ISO string, an integer for a `storage` attribute (seconds
+   * are floored), `0` or `1`, JSON text. The value `column(attribute).value(input)` binds inside
+   * an `sql` fragment; `undefined` throws as assigning it does.
    */
   readonly serialize: (input: unknown) => string | number | null;
   /**
-   * A cell D1 returned, as the attribute's JavaScript value; `null` for NULL. One that isn't
-   * the attribute's stored form throws `TypeError` naming the Model and attribute, as a record
-   * load does.
+   * A cell D1 returned, as the attribute's JavaScript value; `null` for NULL and `undefined`.
+   * It reads as a record load does, so a cell that can't be read throws `TypeError` naming the
+   * Model and attribute: text in a Unix time column, a number past the range of a `Date`, or text
+   * in a `json` column that isn't JSON.
    */
   readonly deserialize: (stored: unknown) => T;
 }
@@ -32,15 +36,14 @@ export interface AttributeConversions<T> {
 export function conversionsFor<T>(model: ModelClass, attribute: string): AttributeConversions<T> {
   attributeOf(model, attribute);
   const of = { model, attribute };
+  const defined = (input: unknown) => {
+    requireDefined(model, attribute, input);
+    return input;
+  };
   return Object.freeze({
-    cast: (input: unknown) => {
-      requireDefined(model, attribute, input);
-      return castAs("assigned", of, input) as T;
-    },
-    serialize: (input: unknown) => {
-      requireDefined(model, attribute, input);
-      return storedAs("assigned", of, input) as string | number | null;
-    },
+    cast: (input: unknown) => castAs("assigned", of, defined(input)) as T,
+    serialize: (input: unknown) =>
+      storedAs("assigned", of, defined(input)) as string | number | null,
     deserialize: (stored: unknown) => readAs(of, stored) as T,
   });
 }

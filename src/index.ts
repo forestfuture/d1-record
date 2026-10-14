@@ -56,7 +56,7 @@ export type {
   ValidationOptions,
 } from "./validations.ts";
 export type { EpochStorage } from "./epoch-storage.ts";
-export type { AttributeConversions } from "./attribute-type.ts";
+export type { AttributeConversions } from "./attribute-conversions.ts";
 export type { AttributeSpec, AttributeSpecs, AttributeType } from "./metadata.ts";
 export { Relation, type Scope, type ScopeMethods, type Scoped } from "./relation.ts";
 export type { Conditions, InsertOptions, OrderSpec, UpsertOptions } from "./relation-checks.ts";
