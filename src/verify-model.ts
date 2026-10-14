@@ -1,11 +1,11 @@
 // Checks a Model's declaration the first time it's used, then seals its declarations.
-// It checks the table, the primary key, the attribute names, generated ids, hidden attributes, and page sizes.
+// It checks the table, the primary key, the attribute names, the spec keys, hidden attributes, and page sizes.
 import { ancestors } from "./ancestors.ts";
 import { declarationIn, probeOf } from "./association-fields.ts";
 import { seal } from "./declarations.ts";
 import { InvalidModel } from "./errors.ts";
-import { generateIdProblem, storageProblem } from "./metadata.ts";
 import { ModelBase, type ModelClass } from "./model.ts";
+import { specProblem } from "./spec-keys.ts";
 import { rejectAbstract, requireTableName } from "./table-names.ts";
 
 // Module-level, but not request state (ADR-0003): it only remembers which Model
@@ -19,8 +19,7 @@ export function verifyModel(model: ModelClass): void {
   requireTableName(model);
   requirePrimaryKeyAttribute(model);
   rejectReservedAttributeNames(model);
-  rejectBadGeneratedIds(model);
-  rejectBadStorage(model);
+  rejectBadSpecs(model);
   rejectUnknownHiddenAttributes(model);
   rejectShadowingFields(model);
   rejectBadPageSizes(model);
@@ -52,18 +51,10 @@ function rejectReservedAttributeNames(model: ModelClass): void {
   }
 }
 
-/** A generated id is a string, and comes from `generateId` alone, not a default as well. */
-function rejectBadGeneratedIds(model: ModelClass): void {
+/** A key a type can't have, or that excludes another given with it: see `src/spec-keys.ts`. */
+function rejectBadSpecs(model: ModelClass): void {
   for (const [name, definition] of model.attributeDefinitions) {
-    const problem = generateIdProblem(`${model.name}.${name}`, definition);
-    if (problem !== undefined) throw new InvalidModel(problem);
-  }
-}
-
-/** Only a datetime has a storage, and it's seconds or milliseconds (#73). */
-function rejectBadStorage(model: ModelClass): void {
-  for (const [name, definition] of model.attributeDefinitions) {
-    const problem = storageProblem(`${model.name}.${name}`, definition);
+    const problem = specProblem(`${model.name}.${name}`, definition);
     if (problem !== undefined) throw new InvalidModel(problem);
   }
 }

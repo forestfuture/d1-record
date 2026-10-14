@@ -1,6 +1,6 @@
 // Attribute metadata: each attribute's type, column and default, resolved from its spec.
 import { ancestors } from "./ancestors.ts";
-import { type EpochStorage, epochStorages } from "./epoch-storage.ts";
+import type { EpochStorage } from "./epoch-storage.ts";
 import { UnknownAttribute } from "./errors.ts";
 import type { ModelClass } from "./model.ts";
 import { underscore } from "./naming.ts";
@@ -144,42 +144,6 @@ export function attributesForColumn(model: ModelClass, column: string): string[]
   return [...model.attributeDefinitions]
     .filter(([, definition]) => definition.column === column)
     .map(([name]) => name);
-}
-
-/**
- * Why an attribute can't have `generateId`, or undefined if it can: a generated id is a string,
- * and comes from `generateId` alone, not a default as well (#99). `where` names it (`User.id`).
- */
-export function generateIdProblem(
-  where: string,
-  { type, default: initial, generateId }: Pick<SpecObject, "type" | "default" | "generateId">,
-): string | undefined {
-  if (generateId !== true) return undefined;
-  if (initial !== undefined) {
-    return `${where} has both generateId and a default; keep one`;
-  }
-  if (type !== "string") {
-    return `${where} is "${type}", so it can't have generateId: generated ids are strings`;
-  }
-  return undefined;
-}
-
-/**
- * Why an attribute can't have this `storage`, or undefined if it can: only a datetime is stored
- * as a Unix epoch, in seconds or milliseconds (#73). `where` names it (`Event.at`).
- */
-export function storageProblem(
-  where: string,
-  { type, storage }: Pick<SpecObject, "type" | "storage">,
-): string | undefined {
-  if (storage === undefined) return undefined;
-  if (!(epochStorages as readonly unknown[]).includes(storage)) {
-    return `${where} has storage ${JSON.stringify(storage)}; use "unixSeconds" or "unixMilliseconds"`;
-  }
-  if (type !== "datetime") {
-    return `${where} is "${type}", so it can't have a storage: only a datetime is stored as an epoch`;
-  }
-  return undefined;
 }
 
 /** `undefined` would silently store NULL, so writing it throws `TypeError` (use `null`). */
