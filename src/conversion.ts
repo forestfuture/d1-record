@@ -13,8 +13,9 @@ interface Converter {
    */
   cast(value: unknown): unknown;
   /**
-   * D1 value → JavaScript value, or `uncastable` for a stored value that isn't one: a json cell
-   * that isn't JSON, a Unix time past the range of a `Date` (#73, #146). Never called with null.
+   * D1 value → JavaScript value, or `uncastable` for a stored value that isn't one: a boolean
+   * other than 0 and 1, text in an integer column, a json cell that isn't JSON, a Unix time past
+   * the range of a `Date` (#73, #146, #159). Never called with null.
    */
   read(value: unknown): unknown;
   /** JavaScript value → D1 value. Never called with null. */
@@ -37,12 +38,20 @@ const keyOf = ({ type, storage }: Convertible): ConversionKey => storage ?? type
 const converters: Record<ConversionKey, Converter> = {
   string: {
     cast: (value) => (typeof value === "string" ? value : uncastable),
-    read: identity,
+    read: (value) => (typeof value === "string" ? value : uncastable),
     write: identity,
   },
-  integer: { cast: castInteger, read: identity, write: identity },
-  real: { cast: castReal, read: identity, write: identity },
-  boolean: { cast: castBoolean, read: (value) => value === 1, write: (value) => (value ? 1 : 0) },
+  integer: {
+    cast: castInteger,
+    read: (value) => (Number.isSafeInteger(value) ? value : uncastable),
+    write: identity,
+  },
+  real: {
+    cast: castReal,
+    read: (value) => (Number.isFinite(value) ? value : uncastable),
+    write: identity,
+  },
+  boolean: { cast: castBoolean, read: readBoolean, write: (value) => (value ? 1 : 0) },
   datetime: {
     cast: castDatetime,
     read: readDatetime,
@@ -50,12 +59,12 @@ const converters: Record<ConversionKey, Converter> = {
   },
   unixSeconds: {
     cast: castDatetime,
-    read: (value) => validDate(new Date(Number(value) * 1000)),
+    read: (value) => (typeof value === "number" ? validDate(new Date(value * 1000)) : uncastable),
     write: (value) => Math.floor((value as Date).getTime() / 1000),
   },
   unixMilliseconds: {
     cast: castDatetime,
-    read: (value) => validDate(new Date(Number(value))),
+    read: (value) => (typeof value === "number" ? validDate(new Date(value)) : uncastable),
     write: (value) => (value as Date).getTime(),
   },
   json: { cast: castJson, read: readJson, write: (value) => JSON.stringify(value) },
@@ -187,13 +196,26 @@ const isoDateTime =
 /** A stored date and time with no zone, as SQLite's `CURRENT_TIMESTAMP` writes it: UTC (#73). */
 export const zonelessDateTime = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
 
+/** What `toISOString` writes for a year outside 0000-9999: a sign and six digits (`+010000-…`). */
+const expandedYearDateTime = /^[+-]\d{6}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
 /**
- * A stored datetime as a `Date`. Text without a zone is UTC, as SQLite's own functions write
- * it, where `new Date` would read it in the process's time zone.
+ * A stored datetime as a `Date`: text in a form an assignment accepts (an ISO date, or a date and
+ * time with its offset), what `toISOString` writes for a far year, or SQLite's own, with no
+ * zone, which is UTC, where `new Date` would read it in the process's time zone. A number isn't
+ * one: it's a Unix time (#73), and read as a time in ISO text it would be a moment in January
+ * 1970 (#159).
  */
-function readDatetime(value: unknown): Date {
-  if (typeof value !== "string") return new Date(value as number);
-  return new Date(zonelessDateTime.test(value) ? `${value.replace(" ", "T")}Z` : value);
+function readDatetime(value: unknown): unknown {
+  if (typeof value !== "string") return uncastable;
+  if (expandedYearDateTime.test(value)) return validDate(new Date(value));
+  return castDatetime(zonelessDateTime.test(value) ? `${value}Z` : value);
+}
+
+/** `1` and `0` are the stored form of a boolean; any other cell isn't one. */
+function readBoolean(value: unknown): unknown {
+  if (value === 1) return true;
+  return value === 0 ? false : uncastable;
 }
 
 /** A valid `Date`, or an ISO-8601 string (a date, or a date and time with its offset). */
