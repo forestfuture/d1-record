@@ -1,63 +1,22 @@
 import fc from "fast-check";
 import { describe, expect, test } from "vite-plus/test";
-import { connect, Model } from "../../src/index.ts";
+import { connect } from "../../src/index.ts";
+import {
+  assignedRefusal,
+  isOfType,
+  Sample,
+  sampleAttributes,
+} from "../support/attribute-samples.ts";
 import { PURE_RUNS } from "../support/properties.ts";
 import { values } from "../support/values.ts";
 
 // Assigned values come from outside (JSON, a form, a query string), so for a value of any shape an
 // attribute is the type it declares or the assignment is refused, and the refusal is a TypeError
 // that names the attribute and shows little of the value (#81, #122).
-const declared = {
-  label: "string",
-  quantity: "integer",
-  ratio: "real",
-  enabled: "boolean",
-  stamp: "datetime",
-  settings: "json",
-} as const;
-
-class Sample extends Model({ id: { type: "integer", null: false }, ...declared }) {
-  static tableName = "samples";
-}
-
 // No D1 needed: building a record casts what's assigned and never queries.
 const samples = connect({} as never).model(Sample);
 
-type Attribute = keyof typeof declared;
-const attributes = Object.keys(declared) as Attribute[];
-
-/** The two refusals: a value that isn't the type, and `undefined` (which isn't NULL). */
-function refusal(attribute: Attribute): RegExp {
-  const noun = declared[attribute] === "json" ? "JSON value" : declared[attribute];
-  const type = `isn't an? ${noun} for "${attribute}"`;
-  const missing = `got undefined for "${attribute}"; use null to store NULL`;
-  return new RegExp(`^Sample: (?:.* ${type}|${missing})$`, "s");
-}
-
-/** Whether `value` is a JavaScript value of the attribute's declared type. */
-function isOfType(attribute: Attribute, value: unknown): boolean {
-  switch (declared[attribute]) {
-    case "string":
-      return typeof value === "string";
-    case "integer":
-      return Number.isSafeInteger(value);
-    case "real":
-      return Number.isFinite(value);
-    case "boolean":
-      return typeof value === "boolean";
-    case "datetime":
-      return value instanceof Date && !Number.isNaN(value.getTime());
-    case "json":
-      // The definition, not an independent check: a json value is what JSON can write (#146).
-      // What the property tests is that nothing else gets through, and that the refusal is a
-      // TypeError naming the attribute.
-      try {
-        return JSON.stringify(value) !== undefined;
-      } catch {
-        return false;
-      }
-  }
-}
+const attributes = sampleAttributes;
 
 const runs = PURE_RUNS;
 
@@ -73,7 +32,7 @@ describe("assigning a value of any shape to an attribute", () => {
           built = samples.build({ [attribute]: value as never });
         } catch (error) {
           expect(error).toBeInstanceOf(TypeError);
-          expect((error as TypeError).message).toMatch(refusal(attribute));
+          expect((error as TypeError).message).toMatch(assignedRefusal(attribute));
           return;
         }
         const stored = built[attribute];
