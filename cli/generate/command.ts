@@ -10,9 +10,10 @@ import {
   type Print,
 } from "../plan.ts";
 import { importPath, shown, slashed } from "../project/paths.ts";
-import { classify, listed } from "../project/names.ts";
+import { classify } from "../project/names.ts";
 import { readProject, type DatabaseSnapshot, type ProjectSnapshot } from "../project/snapshot.ts";
 import { defaultModels, oneModelsFile } from "../project/targets.ts";
+import { chooseDatabase } from "../project/wrangler.ts";
 import { byName, schemaOf, type GeneratedTable, type Migration } from "../schema/schema.ts";
 import { schemaRefusal, schemaWrites, type SchemaTables } from "../schema/writes.ts";
 import { parseColumns, type ColumnArg } from "./columns.ts";
@@ -84,15 +85,12 @@ function databaseFor(
   project: ProjectSnapshot,
   options: GenerateOptions,
 ): DatabaseSnapshot | string {
-  const { databases } = project;
-  const bindings = listed(databases.map((db) => db.target.database.binding));
-  if (options.database !== undefined) {
-    const db = databases.find((each) => each.target.database.binding === options.database);
-    return db ?? `No D1 database is bound as ${options.database}; this config has ${bindings}`;
-  }
-  return databases.length === 1
-    ? databases[0]!
-    : `This config has several D1 databases; choose one with --database (${bindings})`;
+  const chosen = chooseDatabase(
+    project.databases.map((db) => db.target.database),
+    options.database,
+  );
+  if (typeof chosen === "string") return chosen;
+  return project.databases.find((db) => db.target.database === chosen)!;
 }
 
 /** Wrangler only applies migrations its `migrations_pattern` matches, so refuse any other file. */

@@ -159,27 +159,6 @@ describe("planGenerate: what g model and g migration write and print, from a sna
     expect(plan.code).toBe(1);
   });
 
-  test("with several databases, --database chooses one, and must name one", () => {
-    const one = project().databases[0]!;
-    const logs = {
-      ...one,
-      target: {
-        ...one.target,
-        database: { binding: "LOGS", migrationsDir: "logs", entry: { binding: "LOGS" } },
-      },
-    };
-    const several = { ...project(), databases: [one, logs] };
-
-    expect(shown(planGenerate(several, product))).toEqual({
-      files: [],
-      lines: ["This config has several D1 databases; choose one with --database (DB or LOGS)"],
-      code: 1,
-    });
-    expect(linesOf(planGenerate(several, { ...product, database: "CACHE" }))).toEqual([
-      "No D1 database is bound as CACHE; this config has DB or LOGS",
-    ]);
-  });
-
   test("a migration that migrations_pattern wouldn't match is refused", () => {
     const one = project().databases[0]!;
     const nested = {
