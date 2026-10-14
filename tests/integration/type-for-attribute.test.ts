@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model, UnknownAttribute } from "../../src/index.ts";
+import { connect, Model } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 // One attribute per stored form: ISO text, an integer in seconds and in milliseconds, and the
-// other types. `secret` is filtered by default.
+// other types. The conversions alone are tested without a database, in tests/unit.
 class Post extends Model({
   id: { type: "integer", null: false },
   title: "string",
@@ -19,7 +19,7 @@ class Post extends Model({
   static tableName = "typed_posts";
 }
 
-describe("typeForAttribute: an attribute's conversions, for SQL d1-record doesn't write (#148)", () => {
+describe("typeForAttribute against D1: a raw statement and a save agree (#148)", () => {
   let binding: TestDatabase;
   let dispose: () => Promise<void>;
 
@@ -44,7 +44,7 @@ describe("typeForAttribute: an attribute's conversions, for SQL d1-record doesn'
   const insertRaw = (column: string, value: unknown) =>
     binding.prepare(`INSERT INTO typed_posts (id, ${column}) VALUES (1, ?)`).bind(value).run();
 
-  describe("serialize binds a value as the attribute stores it", () => {
+  describe("a raw statement that binds serialize's value", () => {
     beforeEach(async () => {
       await binding.batch(
         [1, 2, 3].map((n) =>
@@ -61,7 +61,7 @@ describe("typeForAttribute: an attribute's conversions, for SQL d1-record doesn'
       ["published_at", "publishedAt"],
       ["seconds", "seconds"],
       ["milliseconds", "milliseconds"],
-    ] as const)("a raw statement on %s compares the same instant", async (column, attribute) => {
+    ] as const)("compares the same instant on %s", async (column, attribute) => {
       const since = Post.typeForAttribute(attribute).serialize(day(2));
 
       const { results } = await binding
@@ -71,108 +71,41 @@ describe("typeForAttribute: an attribute's conversions, for SQL d1-record doesn'
 
       expect(results.map((row) => row.id)).toEqual([2, 3]);
     });
-
-    test("it's what a save writes, for every type", async () => {
-      const given = {
-        title: "Hello",
-        publishedAt: new Date("2026-01-02T03:04:05.678Z"),
-        seconds: new Date("2026-01-02T03:04:05.678Z"),
-        milliseconds: "2026-01-02T03:04:05.678Z",
-        featured: "true",
-        rating: "42",
-        score: "1.5",
-        meta: { a: [1, null] },
-        secret: { token: "x" },
-      };
-      await binding.prepare("DELETE FROM typed_posts").run();
-      await connect(binding)
-        .model(Post)
-        .create({ id: 1, ...given } as never);
-
-      const row = await rawRow();
-
-      const columns = {
-        title: "title",
-        publishedAt: "published_at",
-        seconds: "seconds",
-        milliseconds: "milliseconds",
-        featured: "featured",
-        rating: "rating",
-        score: "score",
-        meta: "meta",
-        secret: "secret",
-      } as const;
-      for (const [attribute, column] of Object.entries(columns)) {
-        const value = given[attribute as keyof typeof given];
-        const serialized = Post.typeForAttribute(attribute as never).serialize(value);
-        expect([attribute, serialized]).toEqual([attribute, row![column]]);
-      }
-    });
-
-    test("a Date with milliseconds is floored for seconds and kept for milliseconds", () => {
-      const date = new Date("2026-01-02T03:04:05.678Z");
-
-      expect(Post.typeForAttribute("seconds").serialize(date)).toBe(1767323045);
-      expect(Post.typeForAttribute("milliseconds").serialize(date)).toBe(1767323045678);
-    });
-
-    test("an ISO string is cast first, so it's written as the attribute stores it", () => {
-      expect(Post.typeForAttribute("seconds").serialize("2026-01-02T03:04:05Z")).toBe(1767323045);
-      expect(Post.typeForAttribute("publishedAt").serialize("2026-01-02")).toBe(
-        "2026-01-02T00:00:00.000Z",
-      );
-    });
-
-    test("null is NULL", () => {
-      expect(Post.typeForAttribute("seconds").serialize(null)).toBeNull();
-      expect(Post.typeForAttribute("meta").serialize(null)).toBeNull();
-    });
   });
 
-  describe("a value the attribute can't hold throws TypeError naming the Model and attribute", () => {
-    test("serialize, as assigning it would", () => {
-      expect(() => Post.typeForAttribute("seconds").serialize(1767323045)).toThrow(
-        new TypeError(`Post: 1767323045 isn't a datetime for "seconds"`),
-      );
-      expect(() => Post.typeForAttribute("rating").serialize("abc")).toThrow(
-        new TypeError(`Post: "abc" isn't an integer for "rating"`),
-      );
-    });
+  test("serialize gives what a save writes, for every type", async () => {
+    const given = {
+      title: "Hello",
+      publishedAt: new Date("2026-01-02T03:04:05.678Z"),
+      seconds: new Date("2026-01-02T03:04:05.678Z"),
+      milliseconds: "2026-01-02T03:04:05.678Z",
+      featured: "true",
+      rating: "42",
+      score: "1.5",
+      meta: { a: [1, null] },
+      secret: { token: "x" },
+    };
+    const columns: Record<keyof typeof given, string> = {
+      title: "title",
+      publishedAt: "published_at",
+      seconds: "seconds",
+      milliseconds: "milliseconds",
+      featured: "featured",
+      rating: "rating",
+      score: "score",
+      meta: "meta",
+      secret: "secret",
+    };
+    await connect(binding)
+      .model(Post)
+      .create({ id: 1, ...given } as never);
 
-    test("cast", () => {
-      expect(() => Post.typeForAttribute("featured").cast("yes")).toThrow(
-        new TypeError(`Post: "yes" isn't a boolean for "featured"`),
-      );
-    });
+    const row = await rawRow();
 
-    test.each(["serialize", "cast"] as const)(
-      "%s refuses undefined, as assigning does",
-      (method) => {
-        expect(() => Post.typeForAttribute("seconds")[method](undefined)).toThrow(
-          new TypeError(`Post: got undefined for "seconds"; use null to store NULL`),
-        );
-      },
-    );
-
-    test("a filtered attribute's value is hidden", () => {
-      expect(() => Post.typeForAttribute("secret").serialize(10n)).toThrow(
-        new TypeError(`Post: [FILTERED] isn't a JSON value for "secret"`),
-      );
-    });
-  });
-
-  describe("cast", () => {
-    test("is the JavaScript value, as assigned", () => {
-      expect(Post.typeForAttribute("seconds").cast("2026-01-02T03:04:05Z")).toEqual(
-        new Date("2026-01-02T03:04:05.000Z"),
-      );
-      expect(Post.typeForAttribute("rating").cast(" 42 ")).toBe(42);
-      expect(Post.typeForAttribute("featured").cast("off")).toBe(false);
-    });
-
-    test("null stays null", () => {
-      expect(Post.typeForAttribute("rating").cast(null)).toBeNull();
-    });
+    for (const attribute of Object.keys(given) as (keyof typeof given)[]) {
+      const serialized = Post.typeForAttribute(attribute).serialize(given[attribute]);
+      expect([attribute, serialized]).toEqual([attribute, row![columns[attribute]]]);
+    }
   });
 
   describe("deserialize reads a cell of a raw query as the value a record load gives", () => {
@@ -194,40 +127,6 @@ describe("typeForAttribute: an attribute's conversions, for SQL d1-record doesn'
       const read = Post.typeForAttribute(attribute).deserialize(row![column]);
 
       expect(read).toEqual(loaded[attribute]);
-    });
-
-    test("NULL, and undefined, are null", () => {
-      expect(Post.typeForAttribute("seconds").deserialize(null)).toBeNull();
-      expect(Post.typeForAttribute("seconds").deserialize(undefined)).toBeNull();
-    });
-
-    test("a cell that isn't the stored form throws, as a record load does", () => {
-      expect(() => Post.typeForAttribute("seconds").deserialize("abc")).toThrow(
-        new TypeError(`Post: "abc" isn't a datetime for "seconds"`),
-      );
-      expect(() => Post.typeForAttribute("meta").deserialize("not json {")).toThrow(
-        new TypeError(`Post: "not json {" isn't a JSON value for "meta"`),
-      );
-    });
-
-    test("a filtered attribute's cell is hidden", () => {
-      expect(() => Post.typeForAttribute("secret").deserialize("not json {")).toThrow(
-        new TypeError(`Post: [FILTERED] isn't a JSON value for "secret"`),
-      );
-    });
-  });
-
-  describe("the object", () => {
-    test("an unknown attribute is UnknownAttribute", () => {
-      expect(() => Post.typeForAttribute("nope" as never)).toThrow(
-        new UnknownAttribute(`Post has no attribute "nope"`),
-      );
-    });
-
-    test("its methods work on their own", () => {
-      const { serialize } = Post.typeForAttribute("seconds");
-
-      expect(serialize(new Date("2026-01-02T03:04:05Z"))).toBe(1767323045);
     });
   });
 });

@@ -485,4 +485,26 @@ describe("types", () => {
     };
     expectTypeOf(typeOnly).toBeFunction();
   });
+
+  test("typeForAttribute on a modelFor Model follows its overrides, and checks the name (#148)", () => {
+    const ApplicationRecord = modelFor({
+      notes: {
+        attributes: { id: { type: "string", null: false }, openedAt: "integer" },
+        primaryKey: "id",
+      },
+    } as const);
+    class Note extends ApplicationRecord("notes", {
+      openedAt: { type: "datetime", storage: "unixSeconds" },
+    }) {}
+
+    const typeOnly = () => {
+      expectTypeOf(Note.typeForAttribute("openedAt")).toEqualTypeOf<
+        AttributeConversions<Date | null>
+      >();
+      expectTypeOf(Note.typeForAttribute("id").cast("a")).toEqualTypeOf<string>();
+      // @ts-expect-error not an attribute of Note
+      Note.typeForAttribute("closedAt");
+    };
+    expectTypeOf(typeOnly).toBeFunction();
+  });
 });

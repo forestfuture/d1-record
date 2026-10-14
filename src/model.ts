@@ -9,7 +9,7 @@ import {
   type ExactSpecs,
 } from "./metadata.ts";
 import { type Permitted, permitted } from "./permit.ts";
-import { type AttributeConversions, conversionsFor } from "./attribute-type.ts";
+import { type AttributeConversions, conversionsFor } from "./attribute-conversions.ts";
 import { defaultFilterAttributes, type FilterAttribute } from "./filtering.ts";
 import type { Errors } from "./errors-collection.ts";
 import { declare } from "./declarations.ts";
