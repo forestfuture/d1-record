@@ -1,4 +1,4 @@
-// The one place the library calls D1, reports to `onQuery`, and says where a database is from.
+// The one place the library calls D1 (reporting each statement to `onQuery`), and where a database is from.
 import { boundValue, shownValue } from "./filtering.ts";
 import type { CompiledSql } from "./compiler.ts";
 import { translateConstraintError } from "./constraints.ts";
@@ -74,7 +74,7 @@ export interface Executor {
 /** Where a database came from, for errors to name it: `connect()`'s, the request's, or a binding's. */
 type Origin = "connect" | "request" | { binding: string };
 
-/** How an error names a database by its origin (#170). */
+/** How an error names a database by its origin. */
 function nameOf(origin: Origin): string {
   if (origin === "connect") return "a connect() database";
   if (origin === "request") return "the request's database";
@@ -100,19 +100,17 @@ export class D1Executor implements Executor {
     return this;
   }
 
-  /**
-   * Where this database came from, which errors name it by (#170). It's `"connect"` until the
-   * Database is adopted: `withDatabase` makes it `"request"`, and a binding's own Database, made
-   * for queries outside `withDatabase`, takes `{ binding }`. It lives here because records keep
-   * their D1Executor and outlive `withDatabase`, so a per-request lookup couldn't find it later.
-   */
+  /** Where this database came from; errors name it by this. */
   get origin(): Origin {
     return this.#origin;
   }
 
   /**
-   * Sets where this database came from. Sticky: a Database given to `withDatabase` is "the
-   * request's database" for its life, including when it's used explicitly outside `withDatabase`.
+   * @internal Sets where this database came from (#170): `withDatabase` makes it `"request"`, and
+   * a binding's own Database takes `{ binding }`. It lives on the executor because records keep
+   * their D1Executor and outlive `withDatabase`, so a per-request lookup couldn't find it later.
+   * Sticky: a Database given to `withDatabase` is "the request's database" for its life, including
+   * when it's used explicitly outside `withDatabase`.
    */
   setOrigin(origin: Origin): void {
     this.#origin = origin;
