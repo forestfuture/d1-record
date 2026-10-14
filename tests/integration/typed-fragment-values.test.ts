@@ -125,6 +125,15 @@ describe("a typed value in an sql fragment (#142)", () => {
     );
   });
 
+  test("undefined says to use null, as assigning it does (#163)", () => {
+    const seconds = column("seconds");
+    const condition = sql`${seconds} > ${seconds.value(undefined)}`;
+
+    expect(() => stamps().where(condition)).toThrow(
+      new TypeError('Stamp: got undefined for "seconds"; use null to store NULL'),
+    );
+  });
+
   test("an attribute the Model doesn't have is UnknownAttribute when the fragment is used", () => {
     // Alone: a column() beside it would already be checked.
     const condition = sql`seconds > ${column("nope").value(1)}`;

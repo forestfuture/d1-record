@@ -1,8 +1,9 @@
-// An attribute value's whole path (#94): cast, refused, stored, and bound in one place.
-// Cast by how it reaches the attribute (its use), refused with an error that names it, put in
-// the form D1 stores, and bound hidden from listeners when the attribute is filtered. Records,
-// Relations, associations, preloads, and the compiler all go through here, so no caller has to
-// cast or bind a value its own way.
+// An attribute's value path (#94, #163): cast, refused, stored, read, and bound in one place.
+// `attributeFor(model, name)` resolves an attribute once per Model class; its methods cast a
+// value by how it reaches the attribute, refuse with an error that names it, put it in the form
+// D1 stores, read a cell back, and bind it hidden from listeners when the attribute is filtered.
+// Records, Relations, associations, preloads, and the compiler all go through here, so no caller
+// has to cast or bind a value its own way.
 import {
   castCondition,
   castValue,
@@ -12,10 +13,18 @@ import {
   writeValue,
 } from "./conversion.ts";
 import { FILTERED, Filtered, isFiltered } from "./filtering.ts";
-import { type AttributeType, attributeOf } from "./metadata.ts";
+import {
+  type AttributeDefinition,
+  type AttributeType,
+  attributeOf,
+  requireDefined,
+} from "./metadata.ts";
 import type { ModelClass } from "./model.ts";
 
 export { uncastable };
+
+/** What a condition's `condition()` and `conditionCell()` give for a value that can't match. */
+export const noMatch = uncastable;
 
 /**
  * How a value reaches an attribute:
@@ -36,72 +45,197 @@ export interface ValueOf {
 }
 
 /**
- * `value` as the attribute's type for `use`. An `assigned` or `key` value that can't be cast
- * throws `TypeError` naming the Model, attribute and association, and showing the value unless
- * the attribute is filtered (#83); a `condition` value returns `uncastable`.
+ * One attribute's value path, resolved once per Model class by `attributeFor` (#163). Which
+ * Model and attribute a refusal names, whether the attribute is filtered, and how its type is
+ * stored are known here, so a caller only says what the value is for.
  */
+export class Attribute {
+  readonly model: ModelClass;
+  readonly name: string;
+  readonly column: string;
+  readonly #definition: AttributeDefinition;
+
+  /** @internal Use `attributeFor`. */
+  constructor(model: ModelClass, name: string) {
+    this.model = model;
+    this.name = name;
+    this.#definition = attributeOf(model, name);
+    this.column = this.#definition.column;
+  }
+
+  /**
+   * An assigned value (a setter, `build`, `update`, `insert`, `permit`) as the attribute's type:
+   * only what's unambiguous for it (#81). `undefined` throws, as it would store NULL silently;
+   * what can't be cast throws `TypeError` naming the Model and attribute, showing the value
+   * unless the attribute is filtered (#83).
+   */
+  cast(value: unknown): unknown {
+    requireDefined(this.model, this.name, value);
+    return this.#orRefuse(castValue(this.#definition, value), value);
+  }
+
+  /**
+   * A key copied from another record or inherited from a condition: cast as a condition's, but
+   * one that can't be cast throws, naming the association it came through.
+   */
+  key(value: unknown, association?: string): unknown {
+    requireDefined(this.model, this.name, value);
+    return this.#orRefuse(castCondition(this.#definition, value), value, association);
+  }
+
+  /**
+   * A condition's value (`where`, `find`, a preload) as the attribute's type, or `noMatch`: a
+   * number also matches a string attribute as its digits, and a value that can't be cast
+   * matches nothing, so a value from a URL is never an error.
+   */
+  condition(value: unknown): unknown {
+    return castCondition(this.#definition, value);
+  }
+
+  /** A condition's value in the form D1 stores, or `noMatch`. */
+  conditionCell(value: unknown): unknown {
+    const cast = this.condition(value);
+    return cast === noMatch ? noMatch : this.write(cast);
+  }
+
+  /**
+   * An already cast value in the form D1 stores. A `json` value changed in place into one JSON
+   * can't write throws `TypeError` naming the attribute, as assigning it would (#146).
+   */
+  write(value: unknown): unknown {
+    let stored: unknown;
+    try {
+      stored = writeValue(this.#definition, value);
+    } catch (error) {
+      if (this.#definition.type !== "json") throw error;
+      throw this.#refusal(value);
+    }
+    // Only a json value gives nothing: JSON writes no function or symbol.
+    if (stored === undefined) throw this.#refusal(value);
+    return stored;
+  }
+
+  /** An assigned value cast, then in the form D1 stores. */
+  store(value: unknown): unknown {
+    return this.write(this.cast(value));
+  }
+
+  /**
+   * A cell D1 returned as the attribute's value. One that isn't (text in a Unix time column, or
+   * past the range of a `Date`; a json cell that isn't JSON) throws `TypeError` naming the
+   * attribute, with the cell hidden if it's filtered, not the parser's own error (#73, #146).
+   */
+  read(cell: unknown): unknown {
+    const value = readValue(this.#definition, cell);
+    if (value === noMatch) throw this.#refusal(cell);
+    return value;
+  }
+
+  /** A copy of a value: written as D1 stores it, then read back. */
+  copy(value: unknown): unknown {
+    return this.read(this.write(value));
+  }
+
+  /** Whether two values are the same as stored (dates by time, json by content). */
+  same(a: unknown, b: unknown): boolean {
+    return writeValue(this.#definition, a) === writeValue(this.#definition, b);
+  }
+
+  /** An assigned value, cast and written, bound hidden from `onQuery` if filtered (#83). */
+  bind(params: unknown[], value: unknown): void {
+    this.bindCells(params, this.store(value));
+  }
+
+  /**
+   * Binds cells (as D1 holds them) as the attribute's, each hidden from `onQuery` listeners when
+   * the attribute is filtered (#83); D1 still gets the real values. Filtering is asked at the
+   * time, since `filterAttributes` is a static a Model may set after this was resolved.
+   */
+  bindCells(params: unknown[], ...cells: unknown[]): void {
+    const filtered = isFiltered(this.model, this.name);
+    for (const cell of cells) params.push(filtered ? new Filtered(cell) : cell);
+  }
+
+  /** Whether the attribute's values are hidden from listeners and errors. */
+  get filtered(): boolean {
+    return isFiltered(this.model, this.name);
+  }
+
+  #orRefuse(cast: unknown, value: unknown, association?: string): unknown {
+    if (cast === noMatch) throw this.#refusal(value, association);
+    return cast;
+  }
+
+  #refusal(value: unknown, association?: string): TypeError {
+    return uncastableError(
+      { model: this.model, attribute: this.name, association },
+      this.#definition.type,
+      value,
+    );
+  }
+}
+
+const resolved = new WeakMap<ModelClass, Map<string, Attribute>>();
+
+/**
+ * The resolved attribute of a Model, remembered per class (derived from the class, ADR-0003):
+ * `UnknownAttribute` for a name it doesn't have.
+ */
+export function attributeFor(model: ModelClass, name: string): Attribute {
+  let attributes = resolved.get(model);
+  if (attributes === undefined) {
+    attributes = new Map();
+    resolved.set(model, attributes);
+  }
+  let attribute = attributes.get(name);
+  if (attribute === undefined) {
+    attribute = new Attribute(model, name);
+    attributes.set(name, attribute);
+  }
+  return attribute;
+}
+
+/** The attribute a value is for, as `castAs` and `storedAs` name it: see `Attribute`. */
+function resolve(of: ValueOf): Attribute {
+  return attributeFor(of.model, of.attribute);
+}
+
+/** `value` for `use`, cast; `uncastable` for a condition that can't be. See `Attribute`. */
 export function castAs(use: Use, of: ValueOf, value: unknown): unknown {
-  const definition = attributeOf(of.model, of.attribute);
-  const { type } = definition;
-  const cast = use === "assigned" ? castValue(definition, value) : castCondition(definition, value);
-  if (cast === uncastable && use !== "condition") throw uncastableError(of, type, value);
-  return cast;
+  const attribute = resolve(of);
+  if (use === "condition") return attribute.condition(value);
+  return use === "assigned" ? attribute.cast(value) : attribute.key(value, of.association);
 }
 
 /** `value` cast for `use`, in the form D1 stores; `uncastable` for a condition that can't be. */
 export function storedAs(use: Use, of: ValueOf, value: unknown): unknown {
   const cast = castAs(use, of, value);
-  return cast === uncastable ? uncastable : writeAs(of, cast);
+  return cast === uncastable ? uncastable : resolve(of).write(cast);
 }
 
-/**
- * An attribute's value in the form D1 stores. For a value already cast, which a json one can
- * stop being: mutated in place since, it may be one JSON can't write now, and that throws
- * `TypeError` naming the attribute, as assigning it would (#146).
- */
+/** An already cast value in the form D1 stores. See `Attribute#write`. */
 export function writeAs(of: ValueOf, value: unknown): unknown {
-  const definition = attributeOf(of.model, of.attribute);
-  let stored: unknown;
-  try {
-    stored = writeValue(definition, value);
-  } catch (error) {
-    if (definition.type !== "json") throw error;
-    throw uncastableError(of, definition.type, value);
-  }
-  // Only a json value gives nothing: JSON writes no function or symbol.
-  if (stored === undefined) throw uncastableError(of, definition.type, value);
-  return stored;
+  return resolve(of).write(value);
 }
 
-/**
- * A cell D1 returned as the attribute's value. One that isn't (text in a Unix time column, or
- * past the range of a `Date`; a json cell that isn't JSON) throws `TypeError` naming the
- * attribute, with the cell hidden if it's filtered, not the parser's own error (#73, #146).
- */
+/** A cell D1 returned as the attribute's value. See `Attribute#read`. */
 export function readAs(of: ValueOf, stored: unknown): unknown {
-  const definition = attributeOf(of.model, of.attribute);
-  const value = readValue(definition, stored);
-  if (value === uncastable) throw uncastableError(of, definition.type, stored);
-  return value;
+  return resolve(of).read(stored);
 }
 
 /** A copy of an attribute's value: written as D1 stores it, then read back. */
 export function copyAs(of: ValueOf, value: unknown): unknown {
-  return readAs(of, writeAs(of, value));
+  return resolve(of).copy(value);
 }
 
 /** `value` cast as an assigned one, in the form D1 stores, bound and hidden if filtered (#83). */
 export function bindAssigned(params: unknown[], of: ValueOf, value: unknown): void {
-  bindAs(params, of, storedAs("assigned", of, value));
+  resolve(of).bind(params, value);
 }
 
-/**
- * Binds `stored` values (as D1 holds them) as the attribute's, each hidden from `onQuery`
- * listeners when the attribute is filtered (#83); D1 still gets the real values.
- */
+/** Binds `stored` cells as the attribute's. See `Attribute#bindCells`. */
 export function bindAs(params: unknown[], of: ValueOf, ...stored: unknown[]): void {
-  const filtered = isFiltered(of.model, of.attribute);
-  for (const value of stored) params.push(filtered ? new Filtered(value) : value);
+  resolve(of).bindCells(params, ...stored);
 }
 
 /**

@@ -1,16 +1,10 @@
 // A record's private state: its values, changes, errors, and lifecycle flags.
-import { castAs, copyAs, readAs, type ValueOf, writeAs } from "./attribute-values.ts";
+import { type Attribute, attributeFor } from "./attribute-values.ts";
 import type { Assignment } from "./compiler.ts";
-import { readValue, writeValue } from "./conversion.ts";
 import { Errors } from "./errors-collection.ts";
 import { MissingAttribute, NoDatabase, RecordDestroyed } from "./errors.ts";
 import type { Executor } from "./executor.ts";
-import {
-  attributeOf,
-  initialValues,
-  requireDefined,
-  type AttributeDefinition,
-} from "./metadata.ts";
+import { attributeOf, initialValues, type AttributeDefinition } from "./metadata.ts";
 import type { ChangeOptions, ModelBase, ModelClass } from "./model.ts";
 
 /** @internal The hidden slot where a Record keeps its `RecordState`. */
@@ -142,8 +136,8 @@ export class RecordState {
    * (use `null` for that); a destroyed record is read-only.
    */
   write(name: string, value: unknown): void {
-    this.#requireWritable(name, value);
-    this.#store(name, castAs("assigned", this.#of(name), value));
+    this.#requireWritable();
+    this.#store(name, this.#attribute(name).cast(value));
   }
 
   /**
@@ -151,14 +145,13 @@ export class RecordState {
    * is (#94): an integer key into a text foreign key becomes its digits.
    */
   writeKey(name: string, value: unknown, association: string): void {
-    this.#requireWritable(name, value);
-    this.#store(name, castAs("key", { ...this.#of(name), association }, value));
+    this.#requireWritable();
+    this.#store(name, this.#attribute(name).key(value, association));
   }
 
-  /** A destroyed record is read-only, and `undefined` would silently store NULL. */
-  #requireWritable(name: string, value: unknown): void {
+  /** A destroyed record is read-only. */
+  #requireWritable(): void {
     this.#requireNotDestroyed("be changed");
-    requireDefined(this.#model, name, value);
   }
 
   /** Stores an attribute's already-cast value, as assigned. */
@@ -257,7 +250,7 @@ export class RecordState {
   loadRow(row: Record<string, unknown>): void {
     for (const [name, definition] of this.#model.attributeDefinitions) {
       const { column } = definition;
-      if (column in row) this.#values[name] = readAs(this.#of(name), row[column]);
+      if (column in row) this.#values[name] = this.#attribute(name).read(row[column]);
     }
     this.#markSaved();
   }
@@ -282,7 +275,7 @@ export class RecordState {
     const changes: Changes = {};
     for (const name of this.changedNames()) {
       const before = this.#snapshot.has(name)
-        ? readValue(this.#definition(name), this.#snapshot.get(name))
+        ? this.#attribute(name).read(this.#snapshot.get(name))
         : null;
       changes[name] = [before, this.#copyOf(name)];
     }
@@ -310,11 +303,9 @@ export class RecordState {
    */
   valueInDatabase(name: string): unknown {
     this.read(name);
-    const definition = this.#definition(name);
-    if (this.#snapshot.has(name)) return readValue(definition, this.#snapshot.get(name));
-    return this.#initialValues.has(name)
-      ? readValue(definition, this.#initialValues.get(name))
-      : null;
+    const attribute = this.#attribute(name);
+    if (this.#snapshot.has(name)) return attribute.read(this.#snapshot.get(name));
+    return this.#initialValues.has(name) ? attribute.read(this.#initialValues.get(name)) : null;
   }
 
   /**
@@ -338,12 +329,11 @@ export class RecordState {
   restore(names: readonly string[] = this.changedNames()): void {
     this.#requireNotDestroyed("be changed");
     for (const name of names) {
-      const definition = this.#definition(name);
+      const attribute = this.#attribute(name);
       if (this.#lifecycle !== "new") {
-        if (this.#snapshot.has(name))
-          this.#values[name] = readValue(definition, this.#snapshot.get(name));
+        if (this.#snapshot.has(name)) this.#values[name] = attribute.read(this.#snapshot.get(name));
       } else if (this.#initialValues.has(name)) {
-        this.#values[name] = readValue(definition, this.#initialValues.get(name));
+        this.#values[name] = attribute.read(this.#initialValues.get(name));
       } else {
         this.#values[name] = null;
         this.#assigned.delete(name);
@@ -352,9 +342,7 @@ export class RecordState {
   }
 
   #matches(name: string, before: unknown, after: unknown, options: ChangeOptions): boolean {
-    const definition = this.#definition(name);
-    const same = (a: unknown, b: unknown) =>
-      writeValue(definition, a) === writeValue(definition, b);
+    const same = (a: unknown, b: unknown) => this.#attribute(name).same(a, b);
     return (
       (!("from" in options) || same(options.from, before)) &&
       (!("to" in options) || same(options.to, after))
@@ -380,13 +368,17 @@ export class RecordState {
 
   /** The stored primary key as a JavaScript value, e.g. to find the row again. */
   get storedKeyValue(): unknown {
-    return readValue(this.#definition(this.#model.primaryKey), this.storedKey);
+    return this.#attribute(this.#model.primaryKey).read(this.storedKey);
   }
 
   /** After an insert: load what D1 stored; `savedChanges` is everything the new row holds. */
   commitInsert(row: Record<string, unknown> | undefined): void {
-    if (row === undefined) this.#markSaved();
-    else this.loadRow(row);
+    if (row === undefined) {
+      for (const name of Object.keys(this.#values)) this.#values[name] = this.#copyOf(name);
+      this.#markSaved();
+    } else {
+      this.loadRow(row);
+    }
     this.#savedChanges = Object.fromEntries(
       Object.keys(this.#values)
         .filter((name) => this.#values[name] !== null)
@@ -395,15 +387,13 @@ export class RecordState {
   }
 
   /**
-   * After an update: apply values the write added (timestamps), then record the save. A value
-   * kept as an epoch is what was stored (a `unixSeconds` Date has no milliseconds), as an
-   * insert's re-read row gives (#73).
+   * After an update: apply values the write added (timestamps), then record the save. Each
+   * attribute written holds what was stored (a `unixSeconds` Date has no milliseconds, a
+   * `json` NaN is null), as an insert's re-read row gives (#73, #163).
    */
   commitUpdate(added: readonly Assignment[]): void {
     for (const [name, value] of added) this.#values[name] = value;
-    for (const [name, { storage }] of this.#model.attributeDefinitions) {
-      if (storage !== undefined && name in this.#values) this.#values[name] = this.#copyOf(name);
-    }
+    for (const name of this.changedNames()) this.#values[name] = this.#copyOf(name);
     this.#savedChanges = this.changes();
     this.#markSaved();
   }
@@ -435,19 +425,19 @@ export class RecordState {
     return attributeOf(this.#model, name);
   }
 
-  /** The attribute as a value is for, so a refusal names the Model and attribute. */
-  #of(name: string): ValueOf {
-    return { model: this.#model, attribute: name };
+  /** The resolved attribute, so a refusal names the Model and attribute. */
+  #attribute(name: string): Attribute {
+    return attributeFor(this.#model, name);
   }
 
   /** An attribute's current value in its stored form, for comparing with the Snapshot. */
   #storedForm(name: string): unknown {
-    return writeAs(this.#of(name), this.#values[name]);
+    return this.#attribute(name).write(this.#values[name]);
   }
 
   /** A copy of an attribute's current value, read back from its stored form. */
   #copyOf(name: string): unknown {
-    return copyAs(this.#of(name), this.#values[name]);
+    return this.#attribute(name).copy(this.#values[name]);
   }
 
   #assignmentsOf(names: readonly string[]): Assignment[] {
