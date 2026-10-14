@@ -1,5 +1,17 @@
 # @forestfuture/d1-record
 
+## 0.4.0
+
+### Minor Changes
+
+- [#167](https://github.com/forestfuture/d1-record/pull/167) [`fb08090`](https://github.com/forestfuture/d1-record/commit/fb08090e5137724d2270468cbf53d7d63f3e62b3) Thanks [@christopherstyles](https://github.com/christopherstyles)! - A stored cell that isn't the attribute's type now fails when it's read, naming the Model and attribute, where it was read loosely: ISO text that isn't a date (an Invalid `Date`), a number in an ISO `datetime` column (a moment in January 1970), a boolean other than 0 and 1 (`false`), and text or a fraction in an `integer`, `real`, or `string` column. A record load, `pluck`, and `typeForAttribute(...).deserialize` read the same way.
+
+  A `datetime` with a `storage` no longer reads `""`, `true`, or numeric text through `Number()`, and ISO text with more than nine fractional digits is refused. To fix a column, declare its `storage`, correct its type, or ignore it: the guide's "Fixing cells of the wrong type" shows how. `d1-record schema` now notes a column with no declared type, which it reads as a string.
+
+### Patch Changes
+
+- [#165](https://github.com/forestfuture/d1-record/pull/165) [`f0465da`](https://github.com/forestfuture/d1-record/commit/f0465da6aa5aa2ad23ee222c4802a35406972e52) Thanks [@christopherstyles](https://github.com/christopherstyles)! - After an update, a record holds what D1 stored for its attributes, as it does after an insert or a reload: a `json` value's `NaN` is `null`, where it stayed `NaN` until the record was reloaded. `undefined` given to `column(attribute).value()` or `permit` now throws the same `TypeError` as assigning it: `got undefined for "attribute"; use null to store NULL`.
+
 ## 0.3.1
 
 ### Patch Changes
