@@ -1,5 +1,11 @@
 # @forestfuture/d1-record
 
+## 0.3.1
+
+### Patch Changes
+
+- [#160](https://github.com/forestfuture/d1-record/pull/160) [`2205c17`](https://github.com/forestfuture/d1-record/commit/2205c17278fbf522d192d95c425de76cf727ce2a) Thanks [@christopherstyles](https://github.com/christopherstyles)! - `Model.typeForAttribute(name)` gives an attribute's `cast`, `serialize` and `deserialize`, for SQL d1-record doesn't write. A raw `env.DB.prepare(…).bind(…)` can bind `Post.typeForAttribute("publishedAt").serialize(date)`, which is what the attribute stores (an integer for `storage`, ISO text otherwise), and read a cell back with `deserialize`.
+
 ## 0.3.0
 
 ### Minor Changes
