@@ -1,5 +1,5 @@
 // `includes()`: preloading associations, one `WHERE key IN (…)` query per association.
-import { castAs } from "./attribute-values.ts";
+import { attributeFor } from "./attribute.ts";
 import type { Executor } from "./executor.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { mergeTrees, type IncludeTree } from "./query.ts";
@@ -40,9 +40,9 @@ async function preloadOne(
   const targets = await loadByKeys(association, executor, keys);
   const byKey = groupBy(targets, targetAttribute);
   // Looked up as the targets hold it: an integer key matches a text foreign key's digits (#94).
-  const of = { model: target, attribute: targetAttribute };
+  const targetKey = attributeFor(target, targetAttribute);
   for (const [index, record] of records.entries()) {
-    const group = byKey.get(castAs("condition", of, keys[index])) ?? [];
+    const group = byKey.get(targetKey.condition(keys[index])) ?? [];
     const value = definition.kind === "hasMany" ? group : (group[0] ?? null);
     record[state].cacheAssociation(name, { attribute: ownerAttribute, key: keys[index], value });
   }

@@ -1,7 +1,7 @@
 // What a Relation's methods take, checked when a query is written, not when it runs.
 import type { Assignment, Conflict } from "./compiler.ts";
 import { Comparison } from "./comparisons.ts";
-import { castAs } from "./attribute-values.ts";
+import { attributeFor } from "./attribute.ts";
 import { refuseBareDates } from "./fragment-guard.ts";
 import { attributeOf, type AttributeType } from "./metadata.ts";
 import type { AttributesOf, ModelClass } from "./model.ts";
@@ -92,7 +92,7 @@ function checkFragment(model: ModelClass, fragment: SafeSql): void {
     if (!namesAttribute(value)) continue;
     attributeOf(model, value.attribute);
     if (value instanceof ColumnValue) {
-      castAs("assigned", { model, attribute: value.attribute }, value.assigned);
+      attributeFor(model, value.attribute).cast(value.assigned);
     }
   }
   refuseBareDates(model, fragment);

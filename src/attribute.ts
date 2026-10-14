@@ -21,24 +21,11 @@ import {
 } from "./metadata.ts";
 import type { ModelClass } from "./model.ts";
 
-export { uncastable };
-
 /** What a condition's `condition()` and `conditionCell()` give for a value that can't match. */
 export const noMatch = uncastable;
 
-/**
- * How a value reaches an attribute:
- * - `assigned`: given by code or a request (a setter, `build`, `update`, `insert`, `permit`):
- *   only what's unambiguous for the type (#81).
- * - `condition`: matched in `where`, `find` or a preload: a number also matches a string
- *   attribute as its digits, and a value that can't be cast matches nothing.
- * - `key`: copied from another record or inherited from a condition: cast as a condition's,
- *   but one that can't be cast throws.
- */
-export type Use = "assigned" | "condition" | "key";
-
 /** The attribute a value is for, and the association it came through, if any. */
-export interface ValueOf {
+interface ValueOf {
   model: ModelClass;
   attribute: string;
   association?: string | undefined;
@@ -195,49 +182,6 @@ export function attributeFor(model: ModelClass, name: string): Attribute {
   return attribute;
 }
 
-/** The attribute a value is for, as `castAs` and `storedAs` name it: see `Attribute`. */
-function resolve(of: ValueOf): Attribute {
-  return attributeFor(of.model, of.attribute);
-}
-
-/** `value` for `use`, cast; `uncastable` for a condition that can't be. See `Attribute`. */
-export function castAs(use: Use, of: ValueOf, value: unknown): unknown {
-  const attribute = resolve(of);
-  if (use === "condition") return attribute.condition(value);
-  return use === "assigned" ? attribute.cast(value) : attribute.key(value, of.association);
-}
-
-/** `value` cast for `use`, in the form D1 stores; `uncastable` for a condition that can't be. */
-export function storedAs(use: Use, of: ValueOf, value: unknown): unknown {
-  const cast = castAs(use, of, value);
-  return cast === uncastable ? uncastable : resolve(of).write(cast);
-}
-
-/** An already cast value in the form D1 stores. See `Attribute#write`. */
-export function writeAs(of: ValueOf, value: unknown): unknown {
-  return resolve(of).write(value);
-}
-
-/** A cell D1 returned as the attribute's value. See `Attribute#read`. */
-export function readAs(of: ValueOf, stored: unknown): unknown {
-  return resolve(of).read(stored);
-}
-
-/** A copy of an attribute's value: written as D1 stores it, then read back. */
-export function copyAs(of: ValueOf, value: unknown): unknown {
-  return resolve(of).copy(value);
-}
-
-/** `value` cast as an assigned one, in the form D1 stores, bound and hidden if filtered (#83). */
-export function bindAssigned(params: unknown[], of: ValueOf, value: unknown): void {
-  resolve(of).bind(params, value);
-}
-
-/** Binds `stored` cells as the attribute's. See `Attribute#bindCells`. */
-export function bindAs(params: unknown[], of: ValueOf, ...stored: unknown[]): void {
-  resolve(of).bindCells(params, ...stored);
-}
-
 /**
  * Rows of `names`' values, assigned, as one JSON value D1 reads with `json_each`; listeners see
  * a filtered attribute's column as "[FILTERED]" in every row.
@@ -247,9 +191,8 @@ export function storedRows(
   names: readonly string[],
   rows: readonly (readonly unknown[])[],
 ): unknown {
-  const stored = rows.map((row) =>
-    row.map((value, index) => storedAs("assigned", { model, attribute: names[index]! }, value)),
-  );
+  const attributes = names.map((name) => attributeFor(model, name));
+  const stored = rows.map((row) => row.map((value, index) => attributes[index]!.store(value)));
   const json = JSON.stringify(stored);
   const filtered = names.map((attribute) => isFiltered(model, attribute));
   if (!filtered.includes(true)) return json;
@@ -271,7 +214,7 @@ export function castInherited(
   return Object.fromEntries(
     Object.entries(inherited).map(([attribute, value]) => {
       const association = attribute === link?.attribute ? link.association : undefined;
-      return [attribute, castAs("key", { model, attribute, association }, value)];
+      return [attribute, attributeFor(model, attribute).key(value, association)];
     }),
   );
 }

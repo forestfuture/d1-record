@@ -1,5 +1,5 @@
 // A record's private state: its values, changes, errors, and lifecycle flags.
-import { type Attribute, attributeFor } from "./attribute-values.ts";
+import { type Attribute, attributeFor } from "./attribute.ts";
 import type { Assignment } from "./compiler.ts";
 import { Errors } from "./errors-collection.ts";
 import { MissingAttribute, NoDatabase, RecordDestroyed } from "./errors.ts";

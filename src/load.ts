@@ -1,5 +1,5 @@
 // How a Relation's query runs (on D1, or not at all for `none()`), and the keys `find` looks up.
-import { castAs, uncastable } from "./attribute-values.ts";
+import { attributeFor, noMatch } from "./attribute.ts";
 import { compileColumns, compileSelect, type CompiledSql } from "./compiler.ts";
 import { databaseNow, type Executor } from "./executor.ts";
 import { hydrate, primaryKeyOf, type ModelBase, type ModelClass } from "./model.ts";
@@ -139,10 +139,10 @@ async function hydrated<M extends ModelBase>(
  * reported missing.
  */
 export function keysToFind(model: ModelClass, ids: readonly unknown[]): (string | number)[] {
-  const of = { model, attribute: model.primaryKey };
+  const key = attributeFor(model, model.primaryKey);
   const keys = ids.map((id) => {
-    const cast = castAs("condition", of, id);
-    return (cast === uncastable ? id : cast) as string | number;
+    const cast = key.condition(id);
+    return (cast === noMatch ? id : cast) as string | number;
   });
   return [...new Set(keys)];
 }
