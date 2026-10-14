@@ -155,8 +155,8 @@ A `json` attribute stores what `JSON.stringify` writes: a `Map` becomes `{}` and
 A stored cell is checked the same way, when the record loads or `pluck` reads it. One that isn’t the attribute’s type fails with the same error, shows the same value, and fails a list that holds it whole. These cells fail:
 
 - For a `boolean`: anything but `0` and `1`.
-- For an `integer`: text, a fraction, or a number past `Number.MAX_SAFE_INTEGER`.
-- For a `real`: anything but a number.
+- For an `integer`: text, a fraction, or a number outside the safe integer range.
+- For a `real`: anything but a finite number.
 - For a `string`: anything but text.
 - For a `datetime`: text that isn’t a date or a date and time (`"garbage"`, `"12"`), or a number. A number is a [Unix time](./adopt-a-database#reading-unix-timestamps), which needs a `storage`.
 - For a `datetime` with a `storage`: anything but a number, or one past what a `Date` can hold.
