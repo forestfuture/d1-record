@@ -1,13 +1,10 @@
 // `modelFor` and `ApplicationRecord`: Model base classes built on the generated schema (ADR-0010).
 import { InvalidModel } from "./errors.ts";
 import {
-  generateIdProblem,
-  storageProblem,
   markIgnoringColumns,
   type AttributeSpecs,
   type AttributeType,
   type ExactSpecs,
-  type SpecObject,
   type ValueSource,
 } from "./metadata.ts";
 import {
@@ -17,6 +14,14 @@ import {
   type ModelBaseFor,
   type ModelClass,
 } from "./model.ts";
+import {
+  applyChange,
+  isAttributeType,
+  isSpecChange,
+  specKeyNames,
+  specProblem,
+  type SpecChange,
+} from "./spec-keys.ts";
 import { bindTable } from "./table-names.ts";
 
 /** One table in a generated schema: its attributes, and which is the primary key. */
@@ -29,7 +34,7 @@ export interface TableSchema {
 export type TableSchemas = Readonly<Record<string, TableSchema>>;
 
 /** An override written out, as read at runtime: any of a spec's parts but its column. */
-type ObjectOverride = Partial<Omit<SpecObject, "column">>;
+type ObjectOverride = SpecChange;
 
 /**
  * A change to a generated attribute: its type alone, or its type, nullability, default and
@@ -92,81 +97,34 @@ export interface SchemaModel<T extends TableSchemas, B extends BaseClass = typeo
   <const A extends AttributeSpecs>(specs: A & ExactSpecs<A>): ModelBaseFor<A, B>;
 }
 
-const types: readonly unknown[] = ["string", "integer", "real", "boolean", "datetime", "json"];
-
-/** What each key of an object override may hold (besides `undefined`, which changes nothing). */
-const overrideKeys: Readonly<Record<string, (value: unknown) => boolean>> = {
-  type: (value) => types.includes(value),
-  null: (value) => typeof value === "boolean",
-  default: (value) => typeof value === "function",
-  generateId: (value) => typeof value === "boolean",
-  // Which one is checked with the merged spec, by storageProblem.
-  storage: (value) => typeof value === "string",
-};
-
-/** Whether `value` is an object override: only `type`, `null`, `default`, `generateId` and `storage`, well formed. */
-function isSpecOverride(value: unknown): value is ObjectOverride {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  return Object.entries(value).every(
-    ([key, each]) =>
-      Object.hasOwn(overrideKeys, key) && (each === undefined || overrideKeys[key]!(each)),
-  );
-}
-
 /**
  * An override as given, checked (TypeScript checks it too, but not in plain JavaScript or past
- * a cast): `false` to ignore the column, or the spec changes, with unset keys left out.
+ * a cast): `false` to ignore the column, or the spec changes.
  */
 function checked(where: string, attribute: string, override: unknown): ObjectOverride | false {
   if (override === false) return false;
-  if (typeof override === "string" && types.includes(override)) {
-    return { type: override as AttributeType };
-  }
-  if (!isSpecOverride(override)) {
+  if (isAttributeType(override)) return { type: override };
+  if (!isSpecChange(override)) {
     throw new InvalidModel(
-      `${where}.${attribute}: an override is a type name, { type, null, default, generateId, storage }, or false`,
+      `${where}.${attribute}: an override is a type name, { ${specKeyNames} }, or false`,
     );
   }
-  return Object.fromEntries(Object.entries(override).filter(([, value]) => value !== undefined));
+  return override;
 }
 
 /**
- * A generated spec with an override applied. A new type drops the generated default or
- * `generateId`, which were written for the old type (#81): the column's own default applies on
- * insert, unless the override gives one. A `default` replaces `generateId`, and `generateId`
- * a `default`, so an attribute has one or the other (#99).
+ * A generated spec with an override applied, refused if it leaves a spec a type can't have (#99,
+ * #73). The merged spec's type isn't known statically, so it's checked here, as a Model's is.
  */
-function overridden(spec: AttributeSpecs[string], change: ObjectOverride): AttributeSpecs[string] {
-  const base: SpecObject = typeof spec === "string" ? { type: spec } : spec;
-  const retyped = change.type !== undefined && change.type !== base.type;
-  // A storage is for a datetime, so a new type drops it like a default (#73).
-  const { default: initial, generateId, storage, ...rest } = base;
-  // A default and generateId replace each other; `generateId: false` leaves a default alone.
-  const keepsDefault = !retyped && change.generateId !== true;
-  const keepsGenerateId = !retyped && change.default === undefined;
-  // Checked by generateIdProblem, since a merged spec's type isn't known statically.
-  return {
-    ...rest,
-    ...(keepsDefault && { default: initial }),
-    ...(keepsGenerateId && { generateId }),
-    ...(!retyped && { storage }),
-    ...change,
-  } as AttributeSpecs[string];
-}
-
-/** `spec` with `change` applied, refused if it leaves a `generateId` it can't have (#99). */
 function checkedOverride(
   where: string,
   spec: AttributeSpecs[string],
   change: ObjectOverride,
 ): AttributeSpecs[string] {
-  const changed = overridden(spec, change);
-  const problem =
-    typeof changed === "string"
-      ? undefined
-      : (generateIdProblem(where, changed) ?? storageProblem(where, changed));
+  const changed = applyChange(typeof spec === "string" ? { type: spec } : spec, change);
+  const problem = specProblem(where, changed);
   if (problem !== undefined) throw new InvalidModel(problem);
-  return changed;
+  return changed as AttributeSpecs[string];
 }
 
 /** A table's attribute specs with `overrides` applied; throws `InvalidModel` for a bad one. */
