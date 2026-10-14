@@ -25,6 +25,10 @@ updates:
       development:
         dependency-type: development
     ignore:
+      # Bumped by hand with the catalog's vite (vite-plus-core), which it must equal, and the
+      # release-age excludes in pnpm-workspace.yaml. A bump of vite-plus alone fails to type-check
+      # (#157); docs/agents/dependencies.md has the steps.
+      - dependency-name: "vite-plus"
       # Pinned to the vitest that vite-plus bundles: vp refuses to run coverage on any other
       # (#153). It moves with vite-plus, not on its own.
       - dependency-name: "@vitest/coverage-v8"
