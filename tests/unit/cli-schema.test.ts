@@ -283,7 +283,20 @@ describe("schemaOf: from migrations to table schemas", () => {
       doneAt: { type: "string" },
       payloadAt: { type: "json" },
     });
-    expect(result.notes).toEqual([]);
+    expect(result.notes).toEqual([expect.stringContaining("things.done_at: has no declared type")]);
+  });
+
+  test("a column with no declared type, or one SQLite gives no affinity, is noted as a string (#159)", () => {
+    const result = tables(`CREATE TABLE things (
+      id INTEGER PRIMARY KEY, a, b UUID, c TEXT, d ANY, e BLOB_ISH, f TEXT CHECK (json_valid(f))
+    )`);
+
+    expect(result.notes).toEqual([
+      "things.a: has no declared type, so it's read as a string; a number in it fails when the record loads, so override it in its Model with the type it holds",
+      "things.b: is declared UUID, so it's read as a string; a number in it fails when the record loads, so override it in its Model with the type it holds",
+      "things.d: is declared ANY, so it's read as a string; a number in it fails when the record loads, so override it in its Model with the type it holds",
+      "things.e: is declared BLOB_ISH, so it's read as a string; a number in it fails when the record loads, so override it in its Model with the type it holds",
+    ]);
   });
 
   test("a primary key's own literal default wins over a key generated in code", () => {

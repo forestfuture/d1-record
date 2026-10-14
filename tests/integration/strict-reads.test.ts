@@ -1,19 +1,28 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model } from "../../src/index.ts";
+import { connect, hasMany, Model } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class Reading extends Model({
   id: { type: "integer", null: false },
+  ownerId: "integer",
   label: "string",
   quantity: "integer",
   ratio: "real",
   enabled: "boolean",
   stamp: "datetime",
   seconds: { type: "datetime", storage: "unixSeconds" },
+  milliseconds: { type: "datetime", storage: "unixMilliseconds" },
+  settings: "json",
   secret: "integer",
 }) {
   static tableName = "strict_reads";
   static override filterAttributes = ["secret"];
+}
+
+class Owner extends Model({ id: { type: "integer", null: false } }) {
+  static tableName = "strict_owners";
+
+  readings = hasMany(Reading, { foreignKey: "ownerId" });
 }
 
 describe("a stored cell that isn't the attribute's type fails when it's read (#159)", () => {
@@ -23,15 +32,19 @@ describe("a stored cell that isn't the attribute's type fails when it's read (#1
   beforeAll(async () => {
     ({ db: binding, dispose } = await createTestDatabase());
     // No declared types, so SQLite keeps each value as it was bound: no column affinity converts.
-    await binding
-      .prepare(
-        "CREATE TABLE strict_reads (id INTEGER PRIMARY KEY, label, quantity, ratio, enabled, stamp, seconds, secret)",
-      )
-      .run();
+    await binding.batch([
+      binding.prepare(
+        "CREATE TABLE strict_reads (id INTEGER PRIMARY KEY, owner_id, label, quantity, ratio, enabled, stamp, seconds, milliseconds, settings, secret)",
+      ),
+      binding.prepare("CREATE TABLE strict_owners (id INTEGER PRIMARY KEY)"),
+    ]);
   });
   afterAll(() => dispose());
   beforeEach(async () => {
-    await binding.prepare("DELETE FROM strict_reads").run();
+    await binding.batch([
+      binding.prepare("DELETE FROM strict_reads"),
+      binding.prepare("DELETE FROM strict_owners"),
+    ]);
   });
 
   const readings = () => connect(binding).model(Reading);
@@ -53,7 +66,16 @@ describe("a stored cell that isn't the attribute's type fails when it's read (#1
     ["stamp", "2026-02-30 03:04:05", `"2026-02-30 03:04:05" isn't a datetime`],
     ["stamp", 1767323045, "1767323045 isn't a datetime"],
     ["seconds", "abc", `"abc" isn't a datetime`],
+    ["stamp", "+002026-01-01T00:00:00.000Z", `"+002026-01-01T00:00:00.000Z" isn't a datetime`],
+    ["stamp", "+010000-02-30T00:00:00.000Z", `"+010000-02-30T00:00:00.000Z" isn't a datetime`],
+    [
+      "stamp",
+      "2026-01-02T03:04:05.1234567890Z",
+      `"2026-01-02T03:04:05.1234567890Z" isn't a datetime`,
+    ],
     ["seconds", "", `"" isn't a datetime`],
+    ["milliseconds", "abc", `"abc" isn't a datetime`],
+    ["settings", "not json {", `"not json {" isn't a JSON value`],
     ["seconds", "1767323045", `"1767323045" isn't a datetime`],
   ] as const;
 
@@ -75,12 +97,23 @@ describe("a stored cell that isn't the attribute's type fails when it's read (#1
     });
   });
 
-  test("by reload", async () => {
+  test("fails reload when the cell changed to one that can't be read", async () => {
     await insertCell("enabled", 1);
     const reading = await readings().find(1);
     await binding.prepare("UPDATE strict_reads SET enabled = 2 WHERE id = 1").run();
 
     await expect(reading.reload()).rejects.toThrow(
+      new TypeError(`Reading: 2 isn't a boolean for "enabled"`),
+    );
+  });
+
+  test("fails a preload of the records that hold it", async () => {
+    await binding.prepare("INSERT INTO strict_owners (id) VALUES (1)").run();
+    await binding
+      .prepare("INSERT INTO strict_reads (id, owner_id, enabled) VALUES (1, 1, 2)")
+      .run();
+
+    await expect(connect(binding).model(Owner).includes("readings").find(1)).rejects.toThrow(
       new TypeError(`Reading: 2 isn't a boolean for "enabled"`),
     );
   });
@@ -93,11 +126,28 @@ describe("a stored cell that isn't the attribute's type fails when it's read (#1
     await expect(readings().pluck("secret")).rejects.toThrow(error);
   });
 
-  describe("reads what is a value of the type", () => {
-    test("0 and 1 as booleans, whole numbers, a real that is whole, and NULL", async () => {
+  describe("reads a cell that is a value of the type", () => {
+    test("NULL as null, for every attribute", async () => {
+      await binding.prepare("INSERT INTO strict_reads (id) VALUES (1)").run();
+
+      const reading = await readings().find(1);
+
+      expect(reading.attributes()).toMatchObject({
+        label: null,
+        quantity: null,
+        ratio: null,
+        enabled: null,
+        stamp: null,
+        seconds: null,
+        milliseconds: null,
+        settings: null,
+      });
+    });
+
+    test("0 and 1 as booleans, whole and negative integers, and a real that is whole", async () => {
       await binding
         .prepare(
-          "INSERT INTO strict_reads (id, label, quantity, ratio, enabled) VALUES (1, 'a', 7, 3, 0), (2, 'b', -7, 1.5, 1), (3, NULL, NULL, NULL, NULL)",
+          "INSERT INTO strict_reads (id, label, quantity, ratio, enabled) VALUES (1, 'a', 7, 3, 0), (2, 'b', -7, 1.5, 1), (3, 'c', 0, -0.5, 1)",
         )
         .run();
 
@@ -106,7 +156,7 @@ describe("a stored cell that isn't the attribute's type fails when it's read (#1
       expect(rows.map((row) => [row.label, row.quantity, row.ratio, row.enabled])).toEqual([
         ["a", 7, 3, false],
         ["b", -7, 1.5, true],
-        [null, null, null, null],
+        ["c", 0, -0.5, true],
       ]);
     });
 
@@ -127,11 +177,52 @@ describe("a stored cell that isn't the attribute's type fails when it's read (#1
       expect((await readings().find(1)).seconds).toEqual(new Date(1767323045500));
     });
 
-    test("a date past year 9999, as a save wrote it", async () => {
-      const far = new Date("+010000-01-01T00:00:00.000Z");
-      await readings().create({ id: 1, stamp: far });
+    test("a Unix time in milliseconds, and JSON of any shape", async () => {
+      await binding
+        .prepare(
+          "INSERT INTO strict_reads (id, milliseconds, settings) VALUES (1, 1767323045678, '[1,{\"a\":null}]')",
+        )
+        .run();
 
-      expect((await readings().find(1)).stamp).toEqual(far);
+      const reading = await readings().find(1);
+
+      expect(reading.milliseconds).toEqual(new Date(1767323045678));
+      expect(reading.settings).toEqual([1, { a: null }]);
+    });
+
+    test.each([["+010000-01-01T00:00:00.000Z"], ["-000001-12-31T23:59:59.999Z"]])(
+      "a far year held as %s, as a save writes it",
+      async (cell) => {
+        await insertCell("stamp", cell);
+
+        expect((await readings().find(1)).stamp).toEqual(new Date(cell));
+      },
+    );
+
+    test("a date past year 9999 after a save, a reload, and a save of another attribute", async () => {
+      const far = new Date("+010000-01-01T00:00:00.000Z");
+      const reading = await readings().create({ id: 1, stamp: far });
+
+      reading.label = "after";
+      await reading.save();
+
+      expect(reading.stamp).toEqual(far);
+      expect((await reading.reload()).stamp).toEqual(far);
+    });
+
+    test("a record's own snapshot, after a save that changed another attribute", async () => {
+      await readings().create({
+        id: 1,
+        stamp: new Date("2026-01-02T03:04:05.678Z"),
+        enabled: true,
+      });
+      const reading = await readings().find(1);
+
+      reading.quantity = 3;
+      await reading.save();
+
+      expect(reading.changes()).toEqual({});
+      expect(reading.enabled).toBe(true);
     });
   });
 });

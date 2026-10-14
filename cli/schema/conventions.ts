@@ -95,11 +95,32 @@ function typeOf(column: Column): { type?: AttributeType; error?: string; note?: 
   const where = `${column.table}.${column.name}`;
   const error = unsupported(declared, column.name, where);
   if (error !== undefined) return { error };
-  const type = declaredTypes.find(([pattern]) => pattern.test(declared))?.[1] ?? "string";
-  if (type === "string" && column.jsonChecked) return { type: "json" };
+  return typeOfDeclared(column, declared, where);
+}
+
+/** The attribute type for a supported declared type; a guess (`string`) comes with a note (#159). */
+function typeOfDeclared(
+  column: Column,
+  declared: string,
+  where: string,
+): { type: AttributeType; note?: string } {
+  const matched = declaredTypes.find(([pattern]) => pattern.test(declared))?.[1];
+  if ((matched === undefined || matched === "string") && column.jsonChecked) {
+    return { type: "json" };
+  }
+  if (matched === undefined) return { type: "string", note: unmatchedNote(declared, where) };
   return declared === "TEXT" || declared === "INTEGER"
-    ? refinedByName(column, type, where)
-    : { type };
+    ? refinedByName(column, matched, where)
+    : { type: matched };
+}
+
+/** A note for a column whose declared type is none of the types SQLite gives an affinity (#159). */
+function unmatchedNote(declared: string, where: string): string {
+  const named = declared === "" ? "has no declared type" : `is declared ${declared}`;
+  return (
+    `${where}: ${named}, so it's read as a string; a number in it fails when the record loads, ` +
+    `so override it in its Model with the type it holds`
+  );
 }
 
 /** A column declared exactly TEXT or INTEGER, refined by its name (Rails' conventions). */

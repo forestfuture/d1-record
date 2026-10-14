@@ -1,6 +1,6 @@
 // Recognizes migrations written by another tool (Drizzle, Prisma), and the columns to check.
 // Those tools can store values differently from d1-record's conventions, so some columns
-// convert to the wrong type without an error (#73).
+// convert to the wrong type and fail when they are read (#73, #159).
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { underscore } from "../../src/naming.ts";
@@ -133,8 +133,8 @@ export function originNotes(
 ): string[] {
   if (tool === undefined) return [];
   return [
-    `these migrations look like ${tool}'s. Some columns may convert to the wrong type without ` +
-      `an error, especially numeric timestamps: check the generated types (${issue})`,
+    `these migrations look like ${tool}'s. Some columns may convert to the wrong type and fail ` +
+      `when read, especially numeric timestamps: check the generated types (${issue})`,
     ...columnNotes(tool, tables),
     ...textDates.map(textDateNote),
   ];

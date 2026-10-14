@@ -36,21 +36,9 @@ type ConversionKey = AttributeType | EpochStorage;
 const keyOf = ({ type, storage }: Convertible): ConversionKey => storage ?? type;
 
 const converters: Record<ConversionKey, Converter> = {
-  string: {
-    cast: (value) => (typeof value === "string" ? value : uncastable),
-    read: (value) => (typeof value === "string" ? value : uncastable),
-    write: identity,
-  },
-  integer: {
-    cast: castInteger,
-    read: (value) => (Number.isSafeInteger(value) ? value : uncastable),
-    write: identity,
-  },
-  real: {
-    cast: castReal,
-    read: (value) => (Number.isFinite(value) ? value : uncastable),
-    write: identity,
-  },
+  string: { cast: text, read: text, write: identity },
+  integer: { cast: castInteger, read: safeInteger, write: identity },
+  real: { cast: castReal, read: finiteNumber, write: identity },
   boolean: { cast: castBoolean, read: readBoolean, write: (value) => (value ? 1 : 0) },
   datetime: {
     cast: castDatetime,
@@ -59,12 +47,12 @@ const converters: Record<ConversionKey, Converter> = {
   },
   unixSeconds: {
     cast: castDatetime,
-    read: (value) => (typeof value === "number" ? validDate(new Date(value * 1000)) : uncastable),
+    read: unixTime(1000),
     write: (value) => Math.floor((value as Date).getTime() / 1000),
   },
   unixMilliseconds: {
     cast: castDatetime,
-    read: (value) => (typeof value === "number" ? validDate(new Date(value)) : uncastable),
+    read: unixTime(1),
     write: (value) => (value as Date).getTime(),
   },
   json: { cast: castJson, read: readJson, write: (value) => JSON.stringify(value) },
@@ -174,16 +162,35 @@ function numberFrom(value: unknown, pattern: RegExp): unknown {
   return typeof value === "string" && pattern.test(value) ? Number(value) : uncastable;
 }
 
+/** `value` if it's text, else `uncastable`. */
+function text(value: unknown): unknown {
+  return typeof value === "string" ? value : uncastable;
+}
+
+/** `value` if it's a safe integer, else `uncastable`. */
+function safeInteger(value: unknown): unknown {
+  return Number.isSafeInteger(value) ? value : uncastable;
+}
+
+/** `value` if it's a finite number, else `uncastable`. */
+function finiteNumber(value: unknown): unknown {
+  return Number.isFinite(value) ? value : uncastable;
+}
+
 /** A safe integer, or a string that's wholly one: `1.7`, `"12abc"` and `"1e3"` aren't. */
 function castInteger(value: unknown): unknown {
-  const number = numberFrom(value, integerText);
-  return Number.isSafeInteger(number) ? number : uncastable;
+  return safeInteger(numberFrom(value, integerText));
 }
 
 /** A finite number, or a string that's wholly a decimal number. */
 function castReal(value: unknown): unknown {
-  const number = numberFrom(value, realText);
-  return Number.isFinite(number) ? number : uncastable;
+  return finiteNumber(numberFrom(value, realText));
+}
+
+/** A Unix time of this many milliseconds per unit as a `Date`; anything but a number is `uncastable`. */
+function unixTime(millisecondsPer: number): (value: unknown) => unknown {
+  return (value) =>
+    typeof value === "number" ? validDate(new Date(value * millisecondsPer)) : uncastable;
 }
 
 /** An ISO-8601 date: `2026-01-02`, read as midnight UTC. */
@@ -208,8 +215,14 @@ const expandedYearDateTime = /^[+-]\d{6}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
  */
 function readDatetime(value: unknown): unknown {
   if (typeof value !== "string") return uncastable;
-  if (expandedYearDateTime.test(value)) return validDate(new Date(value));
+  if (expandedYearDateTime.test(value)) return farYear(value);
   return castDatetime(zonelessDateTime.test(value) ? `${value}Z` : value);
+}
+
+/** A far year's text as a `Date`, if `toISOString` would write exactly this text for it. */
+function farYear(value: string): unknown {
+  const date = new Date(value);
+  return !isInvalidDate(date) && date.toISOString() === value ? date : uncastable;
 }
 
 /** `1` and `0` are the stored form of a boolean; any other cell isn't one. */
