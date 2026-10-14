@@ -1,6 +1,6 @@
 // Turns a QueryDescription or a write into SQL text and bound values. No other module writes SQL.
 import { type Attribute, attributeFor, noMatch, storedRows } from "./attribute.ts";
-import { attributeOf, ignoresColumns } from "./metadata.ts";
+import { ignoresColumns } from "./metadata.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { Comparison, comparisonParts, type Operator } from "./comparisons.ts";
 import { Either, Negated, type Condition, type QueryDescription } from "./query.ts";
@@ -97,8 +97,9 @@ export function compileInsert(
       model,
     };
   }
-  const definitions = assignments.map(([name]) => attributeOf(model, name));
-  const columns = definitions.map(({ column }) => quoteIdentifier(column)).join(", ");
+  const columns = assignments
+    .map(([name]) => quoteIdentifier(attributeFor(model, name).column))
+    .join(", ");
   const placeholders = assignments.map(() => "?").join(", ");
   const params: unknown[] = [];
   for (const [name, value] of assignments) attributeFor(model, name).bind(params, value);
@@ -125,9 +126,8 @@ export function compileInsertRows(
   rows: readonly (readonly unknown[])[],
   conflict?: Conflict,
 ): CompiledSql {
-  const definitions = names.map((name) => attributeOf(model, name));
-  const columns = definitions.map(({ column }) => quoteIdentifier(column)).join(", ");
-  const values = definitions.map((_, index) => `value ->> '$[${index}]'`).join(", ");
+  const columns = names.map((name) => quoteIdentifier(attributeFor(model, name).column)).join(", ");
+  const values = names.map((_, index) => `value ->> '$[${index}]'`).join(", ");
   const json = storedRows(model, names, rows);
   // `WHERE true` keeps SQLite from reading ON CONFLICT as part of the SELECT.
   const sql =
@@ -147,7 +147,7 @@ function compileConflict(
 ): string {
   if (conflict === undefined) return "";
   if (conflict.kind === "skip") return " ON CONFLICT DO NOTHING";
-  const column = (name: string) => quoteIdentifier(attributeOf(model, name).column);
+  const column = (name: string) => quoteIdentifier(attributeFor(model, name).column);
   const target = conflict.uniqueBy.map(column).join(", ");
   const updated = (conflict.update ?? names).filter(
     (name) => !conflict.uniqueBy.includes(name) && name !== "createdAt",
@@ -168,7 +168,7 @@ export function compileUpdate(
 ): CompiledSql {
   const params: unknown[] = [];
   const sets = compileSets(model, assignments, params);
-  const primaryKey = attributeOf(model, model.primaryKey);
+  const primaryKey = attributeFor(model, model.primaryKey);
   attributeFor(model, model.primaryKey).bindCells(params, storedKey);
   return {
     sql: `UPDATE ${quoteIdentifier(model.tableName)} SET ${sets} WHERE ${quoteIdentifier(primaryKey.column)} = ?`,
@@ -201,7 +201,7 @@ function compileSets(
 function compileTarget(query: QueryDescription, params: unknown[]): string {
   if (query.none) return " WHERE 1 = 0";
   if (query.limit === undefined && query.offset === undefined) return compileWhere(query, params);
-  const key = quoteIdentifier(attributeOf(query.model, query.model.primaryKey).column);
+  const key = quoteIdentifier(attributeFor(query.model, query.model.primaryKey).column);
   const inner = compileSelect({ ...query, distinct: false }, key);
   params.push(...inner.params);
   return ` WHERE ${key} IN (${inner.sql})`;
@@ -229,7 +229,7 @@ export function compileDeleteAll(query: QueryDescription): CompiledSql {
 
 /** `DELETE … WHERE <primary key> = ?`, with the key as stored in D1. */
 export function compileDelete(model: ModelClass<ModelBase>, storedKey: unknown): CompiledSql {
-  const { column } = attributeOf(model, model.primaryKey);
+  const { column } = attributeFor(model, model.primaryKey);
   const params: unknown[] = [];
   attributeFor(model, model.primaryKey).bindCells(params, storedKey);
   return {
@@ -252,7 +252,7 @@ export function compileColumns(
   attributes: readonly string[] | undefined,
 ): string {
   if (attributes === undefined) return allColumns(model);
-  return attributes.map((name) => quoteIdentifier(attributeOf(model, name).column)).join(", ");
+  return attributes.map((name) => quoteIdentifier(attributeFor(model, name).column)).join(", ");
 }
 
 /**
@@ -266,7 +266,7 @@ export function compileCount(query: QueryDescription, attribute?: string): Compi
     return { ...inner, sql: `SELECT COUNT(*) AS count FROM (${inner.sql})` };
   }
   const inner = compileSelect({ ...query, select: undefined, distinct: false });
-  const column = quoteIdentifier(attributeOf(query.model, attribute).column);
+  const column = quoteIdentifier(attributeFor(query.model, attribute).column);
   const counted = query.distinct ? `DISTINCT ${column}` : column;
   return { ...inner, sql: `SELECT COUNT(${counted}) AS count FROM (${inner.sql})` };
 }
@@ -329,7 +329,7 @@ function compileOrder({ model, order }: QueryDescription, params: unknown[]): st
   const terms = order.map((term) => {
     if (term instanceof SafeSql) return compileFragment(term, model, params);
     const { attribute, direction, nulls } = term;
-    const column = quoteIdentifier(attributeOf(model, attribute).column);
+    const column = quoteIdentifier(attributeFor(model, attribute).column);
     return `${column} ${direction.toUpperCase()}${nulls ? ` NULLS ${nulls.toUpperCase()}` : ""}`;
   });
   return ` ORDER BY ${terms.join(", ")}`;
@@ -353,7 +353,7 @@ function compileFragment(
   let text = fragment.strings[0] ?? "";
   fragment.values.forEach((value, index) => {
     if (value instanceof ColumnReference) {
-      text += quoteIdentifier(attributeOf(model, value.attribute).column);
+      text += quoteIdentifier(attributeFor(model, value.attribute).column);
     } else if (value instanceof ColumnValue) {
       attributeFor(model, value.attribute).bind(params, value.assigned);
       text += "?";

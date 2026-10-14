@@ -21,15 +21,8 @@ import {
 } from "./metadata.ts";
 import type { ModelClass } from "./model.ts";
 
-/** What a condition's `condition()` and `conditionCell()` give for a value that can't match. */
+/** What `condition()` and `conditionCell()` give for a value that can't match anything. */
 export const noMatch = uncastable;
-
-/** The attribute a value is for, and the association it came through, if any. */
-interface ValueOf {
-  model: ModelClass;
-  attribute: string;
-  association?: string | undefined;
-}
 
 /**
  * One attribute's value path, resolved once per Model class by `attributeFor` (#163). Which
@@ -37,14 +30,14 @@ interface ValueOf {
  * stored are known here, so a caller only says what the value is for.
  */
 export class Attribute {
-  readonly model: ModelClass;
+  readonly #model: ModelClass;
   readonly name: string;
   readonly column: string;
   readonly #definition: AttributeDefinition;
 
   /** @internal Use `attributeFor`. */
   constructor(model: ModelClass, name: string) {
-    this.model = model;
+    this.#model = model;
     this.name = name;
     this.#definition = attributeOf(model, name);
     this.column = this.#definition.column;
@@ -57,7 +50,7 @@ export class Attribute {
    * unless the attribute is filtered (#83).
    */
   cast(value: unknown): unknown {
-    requireDefined(this.model, this.name, value);
+    requireDefined(this.#model, this.name, value);
     return this.#orRefuse(castValue(this.#definition, value), value);
   }
 
@@ -66,7 +59,7 @@ export class Attribute {
    * one that can't be cast throws, naming the association it came through.
    */
   key(value: unknown, association?: string): unknown {
-    requireDefined(this.model, this.name, value);
+    requireDefined(this.#model, this.name, value);
     return this.#orRefuse(castCondition(this.#definition, value), value, association);
   }
 
@@ -114,7 +107,7 @@ export class Attribute {
    */
   read(cell: unknown): unknown {
     const value = readValue(this.#definition, cell);
-    if (value === noMatch) throw this.#refusal(cell);
+    if (value === uncastable) throw this.#refusal(cell);
     return value;
   }
 
@@ -139,25 +132,33 @@ export class Attribute {
    * time, since `filterAttributes` is a static a Model may set after this was resolved.
    */
   bindCells(params: unknown[], ...cells: unknown[]): void {
-    const filtered = isFiltered(this.model, this.name);
-    for (const cell of cells) params.push(filtered ? new Filtered(cell) : cell);
-  }
-
-  /** Whether the attribute's values are hidden from listeners and errors. */
-  get filtered(): boolean {
-    return isFiltered(this.model, this.name);
+    const hidden = this.#hidden();
+    for (const cell of cells) params.push(hidden ? new Filtered(cell) : cell);
   }
 
   #orRefuse(cast: unknown, value: unknown, association?: string): unknown {
-    if (cast === noMatch) throw this.#refusal(value, association);
+    if (cast === uncastable) throw this.#refusal(value, association);
     return cast;
   }
 
+  /** Whether the attribute's values are hidden from listeners and errors (#83). */
+  #hidden(): boolean {
+    return isFiltered(this.#model, this.name);
+  }
+
+  /**
+   * "Sample: "no" isn't a boolean for "enabled"", the value hidden for a filtered attribute. Also
+   * what a stored value that can't be read says: a Unix time that isn't one (#73), or a json
+   * cell that isn't JSON (#146).
+   */
   #refusal(value: unknown, association?: string): TypeError {
-    return uncastableError(
-      { model: this.model, attribute: this.name, association },
-      this.#definition.type,
-      value,
+    const { type } = this.#definition;
+    const noun = nouns[type] ?? type;
+    const article = /^[aeiou]/.test(noun) ? "an" : "a";
+    const text = this.#hidden() ? FILTERED : shown(value);
+    const from = association === undefined ? "" : `, the key of ${association}`;
+    return new TypeError(
+      `${this.#model.name}: ${text} isn't ${article} ${noun} for "${this.name}"${from}`,
     );
   }
 }
@@ -224,23 +225,6 @@ const SHOWN_LENGTH = 60;
 
 /** What an attribute type is called in a refusal, where its name isn't it. */
 const nouns: Partial<Record<AttributeType, string>> = { json: "JSON value" };
-
-/**
- * "Sample: "no" isn't a boolean for "enabled"", the value hidden for a filtered attribute. Also
- * what a stored value that can't be read says: a Unix time that isn't one (#73), or a json cell
- * that isn't JSON (#146).
- */
-function uncastableError(
-  { model, attribute, association }: ValueOf,
-  type: AttributeType,
-  value: unknown,
-) {
-  const noun = nouns[type] ?? type;
-  const article = /^[aeiou]/.test(noun) ? "an" : "a";
-  const text = isFiltered(model, attribute) ? FILTERED : shown(value);
-  const from = association === undefined ? "" : `, the key of ${association}`;
-  return new TypeError(`${model.name}: ${text} isn't ${article} ${noun} for "${attribute}"${from}`);
-}
 
 /** A value as an error shows it: JSON where it has one, numbers as written, and at most 60 characters. */
 function shown(value: unknown): string {
