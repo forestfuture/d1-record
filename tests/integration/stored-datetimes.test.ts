@@ -264,6 +264,17 @@ describe("datetimes stored by other tools (#73)", () => {
     );
   });
 
+  test("a same-second assignment holds the stored second after a save of another attribute (#163)", async () => {
+    await binding.prepare("INSERT INTO stamps VALUES (1, 'a', 1767323045, NULL)").run();
+    const stamp = await connect(binding).model(Stamp).find(1);
+
+    stamp.seconds = new Date("2026-01-02T03:04:05.678Z");
+    stamp.name = "b";
+    await stamp.save();
+
+    expect(stamp.seconds?.getTime()).toBe(1767323045000);
+  });
+
   test("pluck names a cell that isn't a Unix time too, as a record load does", async () => {
     await binding.prepare("INSERT INTO stamps VALUES (1, 'a', 'abc', NULL)").run();
 

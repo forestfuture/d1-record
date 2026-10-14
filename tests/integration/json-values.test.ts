@@ -192,6 +192,19 @@ describe("json attributes: values JSON can't write, and cells that aren't JSON (
     });
   });
 
+  describe("a lossy value equal to what is stored (#163)", () => {
+    test("holds the stored form after a save of another attribute", async () => {
+      await binding.prepare(`INSERT INTO json_docs (id, settings) VALUES (1, '{"n":null}')`).run();
+      const doc = await docs().find(1);
+
+      doc.settings = { n: Number.NaN };
+      doc.folderId = 2;
+      await doc.save();
+
+      expect(doc.settings).toEqual({ n: null });
+    });
+  });
+
   describe("a condition with such a value", () => {
     test("matches nothing, not the rows whose cell is NULL", async () => {
       await binding.prepare("INSERT INTO json_docs (id, settings) VALUES (1, NULL)").run();
