@@ -2,8 +2,8 @@ packages:
   - .
   - site
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@1.0.0
-  vite-plus: 1.0.0
+  vite: npm:@voidzero-dev/vite-plus-core@1.1.0
+  vite-plus: 1.1.0
 overrides:
   vite@*: "catalog:"
   # Dev-only advisories (#85): miniflare 4 pins undici 7.28.0 and sharp 0.35.2. Only those
@@ -19,13 +19,13 @@ allowBuilds:
   esbuild: true
   workerd: true
 minimumReleaseAgeExclude:
-  - "@voidzero-dev/vite-plus-core@1.0.0"
-  - "@voidzero-dev/vite-plus-darwin-arm64@1.0.0"
-  - "@voidzero-dev/vite-plus-darwin-x64@1.0.0"
-  - "@voidzero-dev/vite-plus-linux-arm64-gnu@1.0.0"
-  - "@voidzero-dev/vite-plus-linux-arm64-musl@1.0.0"
-  - "@voidzero-dev/vite-plus-linux-x64-gnu@1.0.0"
-  - "@voidzero-dev/vite-plus-linux-x64-musl@1.0.0"
-  - "@voidzero-dev/vite-plus-win32-arm64-msvc@1.0.0"
-  - "@voidzero-dev/vite-plus-win32-x64-msvc@1.0.0"
-  - vite-plus@1.0.0
+  - "@voidzero-dev/vite-plus-core@1.1.0"
+  - "@voidzero-dev/vite-plus-darwin-arm64@1.1.0"
+  - "@voidzero-dev/vite-plus-darwin-x64@1.1.0"
+  - "@voidzero-dev/vite-plus-linux-arm64-gnu@1.1.0"
+  - "@voidzero-dev/vite-plus-linux-arm64-musl@1.1.0"
+  - "@voidzero-dev/vite-plus-linux-x64-gnu@1.1.0"
+  - "@voidzero-dev/vite-plus-linux-x64-musl@1.1.0"
+  - "@voidzero-dev/vite-plus-win32-arm64-msvc@1.1.0"
+  - "@voidzero-dev/vite-plus-win32-x64-msvc@1.1.0"
+  - vite-plus@1.1.0
