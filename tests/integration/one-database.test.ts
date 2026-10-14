@@ -253,16 +253,11 @@ describe("one database", () => {
     test("a request's database used explicitly inside withDatabase is still the request's", async () => {
       const request = connect(one);
 
-      const merged = await withDatabase(request, async () =>
-        request
-          .model(Post)
-          .where({})
-          .merge(connect(two).model(Post).where({}))
-          .toArray()
-          .catch((error: unknown) => error),
+      const merged = withDatabase(request, async () =>
+        request.model(Post).where({}).merge(connect(two).model(Post).where({})).toArray(),
       );
 
-      expect(merged).toEqual(
+      await expect(merged).rejects.toThrow(
         new IncompatibleRelation(
           "merge() needs its relations on one database; these are on the request's database and a connect() database",
         ),
@@ -271,11 +266,68 @@ describe("one database", () => {
 
     test("a database given to withDatabase is the request's for its life, even outside it", async () => {
       const request = connect(one);
-      await withDatabase(request, async () => {});
+      await withDatabase(request, async () => {
+        // Nothing to run: giving the database to withDatabase is what's under test.
+      });
 
       const merged = request.model(Post).where({}).merge(connect(two).model(Post).where({}));
 
       await expect(merged.toArray()).rejects.toThrow(
+        new IncompatibleRelation(
+          "merge() needs its relations on one database; these are on the request's database and a connect() database",
+        ),
+      );
+    });
+
+    test("databases of two requests are both the request's, so the error says another", async () => {
+      const first = connect(one);
+      const second = connect(two);
+      const user = await withDatabase(first, () => User.find(1));
+      await withDatabase(second, async () => {
+        // Nothing to run: the second request's database only has to be one withDatabase was given.
+      });
+
+      const merged = user.posts().merge(second.model(Post).where({}));
+
+      await expect(merged.toArray()).rejects.toThrow(
+        new IncompatibleRelation(
+          "merge() needs its relations on one database; these are on the request's database and another",
+        ),
+      );
+    });
+
+    test("a record loaded in withDatabase names its database as the request's after it", async () => {
+      const user = await withDatabase(connect(one), () => User.find(1));
+
+      const merged = user.posts().merge(Post.isPublished());
+
+      await expect(merged.toArray()).rejects.toThrow(
+        new IncompatibleRelation(
+          "merge() needs its relations on one database; these are on the request's database and the DB binding's database",
+        ),
+      );
+    });
+
+    test("every database given to withDatabase, even one no Model's binding matches or a nested call adds, is the request's", async () => {
+      const mismatched = connect(two);
+      const merged = (relation: Promise<unknown>) =>
+        expect(relation).rejects.toThrow(
+          new IncompatibleRelation(
+            "merge() needs its relations on one database; these are on the request's database and another",
+          ),
+        );
+
+      await withDatabase([connect(one), mismatched], async () => {
+        const outer = Post.where({});
+        await withDatabase(connect(one), async () => {
+          const nested = Post.where({});
+          await merged(nested.merge(mismatched.model(Post).where({})).toArray());
+          await merged(outer.merge(mismatched.model(Post).where({})).toArray());
+        });
+      });
+      await expect(
+        mismatched.model(Post).where({}).merge(connect(one).model(Post).where({})).toArray(),
+      ).rejects.toThrow(
         new IncompatibleRelation(
           "merge() needs its relations on one database; these are on the request's database and a connect() database",
         ),
