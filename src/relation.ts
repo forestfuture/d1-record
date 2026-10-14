@@ -1,7 +1,7 @@
 // Relation: the chainable query (`where`, `order`, …), its finders, terminals, and bulk writes.
 import { jointly } from "./executor.ts";
 import { shownKey } from "./filtering.ts";
-import { castInherited, copyAs, readAs } from "./attribute-values.ts";
+import { attributeFor, castInherited } from "./attribute.ts";
 import {
   compileColumns,
   compileCount,
@@ -543,8 +543,7 @@ export class Relation<M extends ModelBase, S = {}> {
   >(...attributes: K): Promise<{ -readonly [I in keyof K]: AttributesOf<M>[K[I]] }[]>;
   async pluck(...attributes: string[]): Promise<unknown[]> {
     if (attributes.length === 0) throw new TypeError("pluck() needs at least one attribute");
-    const targets = attributes.map((attribute) => ({ model: this.#model, attribute }));
-    const columns = attributes.map((name) => attributeOf(this.#model, name).column);
+    const resolved = attributes.map((name) => attributeFor(this.#model, name));
     const cached = this.#cached();
     const values =
       cached === undefined
@@ -552,10 +551,10 @@ export class Relation<M extends ModelBase, S = {}> {
             await this.#runner.rows(
               compileSelect(this.#query, compileColumns(this.#model, attributes)),
             )
-          ).map((row) => targets.map((of, index) => readAs(of, row[columns[index]!])))
+          ).map((row) => resolved.map((attribute) => attribute.read(row[attribute.column])))
         : cached.map((record) =>
             // Copies, as a query would give, never the records' own objects.
-            targets.map((of) => copyAs(of, Reflect.get(record, of.attribute))),
+            resolved.map((attribute) => attribute.copy(Reflect.get(record, attribute.name))),
           );
     return attributes.length === 1 ? values.map(([value]) => value) : values;
   }

@@ -79,8 +79,8 @@ export function castCondition(attribute: Convertible, value: unknown): unknown {
 }
 
 /**
- * A stored value as the attribute's, or `uncastable` for one that isn't: `readAs`, in
- * attribute-values.ts, is how a cell D1 returned is read, so it fails naming its attribute.
+ * A stored value as the attribute's, or `uncastable` for one that isn't. `Attribute#read`, in
+ * attribute.ts, is how a cell D1 returned is read, so it fails naming its attribute.
  */
 export function readValue(attribute: Convertible, value: unknown): unknown {
   return value === null || value === undefined ? null : converters[keyOf(attribute)].read(value);

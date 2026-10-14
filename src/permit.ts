@@ -1,5 +1,5 @@
 // `permit`: keeps only the named attributes from untrusted input, each cast to its type (#82).
-import { castAs } from "./attribute-values.ts";
+import { attributeFor } from "./attribute.ts";
 import { attributeOf } from "./metadata.ts";
 import type { AttributesOf, ModelClass } from "./model.ts";
 
@@ -32,7 +32,7 @@ function castPermitted(model: ModelClass, name: string, value: unknown): unknown
   if (value instanceof Blob) {
     throw new TypeError(`${model.name}: "${name}" is a file, and no attribute stores one`);
   }
-  return castAs("assigned", { model, attribute: name }, value);
+  return attributeFor(model, name).cast(value);
 }
 
 /**

@@ -1,8 +1,7 @@
 // An attribute's conversions as a value (#148): the cast, write and read d1-record does for it,
 // for SQL d1-record doesn't write (a raw D1 statement, a cache key, a row checked in a test).
 // Not the declared type (`"datetime"`): that's an AttributeType, in metadata.ts.
-import { castAs, readAs, storedAs } from "./attribute-values.ts";
-import { attributeOf, requireDefined } from "./metadata.ts";
+import { attributeFor } from "./attribute.ts";
 import type { ModelClass } from "./model.ts";
 
 /**
@@ -34,16 +33,10 @@ export interface AttributeConversions<T> {
 
 /** The conversions of `model`'s `attribute`; `UnknownAttribute` if it has none by that name. */
 export function conversionsFor<T>(model: ModelClass, attribute: string): AttributeConversions<T> {
-  attributeOf(model, attribute);
-  const of = { model, attribute };
-  const defined = (input: unknown) => {
-    requireDefined(model, attribute, input);
-    return input;
-  };
+  const resolved = attributeFor(model, attribute);
   return Object.freeze({
-    cast: (input: unknown) => castAs("assigned", of, defined(input)) as T,
-    serialize: (input: unknown) =>
-      storedAs("assigned", of, defined(input)) as string | number | null,
-    deserialize: (stored: unknown) => readAs(of, stored) as T,
+    cast: (input: unknown) => resolved.cast(input) as T,
+    serialize: (input: unknown) => resolved.store(input) as string | number | null,
+    deserialize: (stored: unknown) => resolved.read(stored) as T,
   });
 }

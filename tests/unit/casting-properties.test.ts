@@ -61,7 +61,7 @@ function isOfType(attribute: Attribute, value: unknown): boolean {
 
 const runs = PURE_RUNS;
 
-/** How much of a value an error shows (`SHOWN_LENGTH` in src/attribute-values.ts). */
+/** How much of a value an error shows (`SHOWN_LENGTH` in src/attribute.ts). */
 const SHOWN_LENGTH = 60;
 
 describe("assigning a value of any shape to an attribute", () => {
