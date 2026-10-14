@@ -74,7 +74,7 @@ For a cache key, or the value a test expects of a raw row, `serialize` gives the
 `cast` gives the JavaScript value for an input, without converting it to the stored form: `cast("2026-01-02")` is a `Date`. It keeps a `Date`’s milliseconds, where `serialize` floors them for `unixSeconds`.
 
 - **`serialize` and `cast`** take what assigning would: a `Date` or an ISO string for a `datetime`, `"42"` for an `integer`. Anything else throws `TypeError` naming the Model and attribute, and so does `undefined`. Use `null` for NULL.
-- **`deserialize`** reads a cell as loading a record does, and NULL and `undefined` are `null`. It throws the same `TypeError` for a cell it can’t read: text in a Unix time column, a number past what a `Date` holds, or text in a `json` column that isn’t JSON.
+- **`deserialize`** reads a cell as loading a record does, and NULL and `undefined` are `null`. It throws the same `TypeError` for a cell that isn’t the attribute’s type. See [Fixing cells of the wrong type](./adopt-a-database#fixing-cells-of-the-wrong-type).
 - **A filtered attribute’s value** is hidden in those errors, as it is anywhere else.
 
 ::: warning TIP

@@ -44,6 +44,10 @@ _Avoid_: Saved, deleted, frozen
 Reading a value given to an attribute as the attribute's type, by how it reaches the attribute (its use), accepting only what's unambiguous: `"false"` is `false` for a boolean, `"42"` is 42 for an integer. **Assigned** values (set, built, given to a bulk write or `permit`) are strict. **Condition** values also read a number as its digits for a string attribute. **Key** values (copied from another record through an association, or inherited from a Relation's conditions) are cast as condition values are. A value that can't be cast is **uncastable**: an assigned or key value is an error, and a condition with one matches nothing.
 _Avoid_: Coerce, convert (D1's storage form is conversion), parse
 
+**Stored cell**:
+A value D1 returned for one column of a row: a number, text, or NULL. It's read as its **Attribute**'s type or refused with a `TypeError` naming the Model and attribute, and never coerced, as a **Cast** value may be. A record load, `pluck`, and `deserialize` read it the same way.
+_Avoid_: Raw value, database value, value from D1
+
 **Filtered attribute**:
 An attribute whose values listeners, errors, and a printed record show as `"[FILTERED]"` (passwords, tokens, keys, emails), named by the Model's `filterAttributes`. D1 still gets the real values.
 _Avoid_: Redacted, masked, sensitive field; and "filter" alone, which means a **Scope**'s conditions

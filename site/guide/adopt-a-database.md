@@ -83,10 +83,10 @@ From then on, change tables with new migrations. See [Schema changes](./change-a
 
 ## Checking the generated attributes
 
-Other tools can store values differently, so a column can become the wrong attribute type without an error. When `d1-record schema` recognizes Drizzle’s or Prisma’s migrations, it prints a note for each column worth checking:
+Other tools can store values differently, so a column can become the wrong attribute type, and fail when it’s read. When `d1-record schema` recognizes Drizzle’s or Prisma’s migrations, it prints a note for each column worth checking:
 
 ```
-Note: these migrations look like Drizzle's. Some columns may convert to the wrong type without an error, especially numeric timestamps: check the generated types (…)
+Note: these migrations look like Drizzle's. Some columns may convert to the wrong type and fail when read, especially numeric timestamps: check the generated types (…)
 Note: posts.metadata: read as a string; if it holds JSON, override it as "json" in its Model
 ```
 
@@ -133,7 +133,7 @@ A cell that isn’t the attribute’s type fails when the record loads or `pluck
 TypeError: Article: 1767323045 isn't a datetime for "publishedAt"
 ```
 
-Find the cells by their storage class:
+Find the cells by their SQLite type:
 
 ```sql
 SELECT typeof(published_at), count(*) FROM articles GROUP BY 1;
