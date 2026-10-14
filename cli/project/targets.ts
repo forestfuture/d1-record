@@ -1,10 +1,10 @@
-// A project's D1 databases from its Wrangler config: migrations folders and schema paths.
-// For each database, where its migrations are and where its generated schema goes. Shared by
-// `d1-record schema` and the generators.
+// Where each D1 database's migrations, schema and base class are, from the config and the options.
+// Shared by `d1-record schema`, the generators and the console.
 import { readdirSync, readFileSync } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { classify, moduleName } from "./names.ts";
-import { byName, type Migration } from "./schema.ts";
+import { byName, type Migration } from "../schema/schema.ts";
+import { slashed } from "./paths.ts";
 import { readWranglerConfig, type DatabaseConfig } from "./wrangler.ts";
 
 /** Where a project's config, migrations and generated schema are, when not the defaults. */
@@ -18,8 +18,6 @@ export interface ProjectOptions {
   /** Where Models and their base class live (`src/models`), or one file of Models (`src/models.ts`). */
   models?: string;
 }
-
-export type Print = (line: string) => void;
 
 /** One database to generate: where its migrations are read from, and where its schema goes. */
 export interface Target {
@@ -69,22 +67,6 @@ function sharedBase(targets: readonly Target[]): string | undefined {
     seen.set(base.className, database.binding);
   }
   return undefined;
-}
-
-/** A relative path with forward slashes, as Wrangler names migrations on every system. */
-export function slashed(path: string): string {
-  return path.split(sep).join("/");
-}
-
-/** A module path from one file's folder to another file, as an import writes it (`../db/schema`). */
-export function importPath(fromDir: string, to: string): string {
-  const path = slashed(relative(fromDir, to)).replace(/\.ts$/, "");
-  return path.startsWith(".") ? path : `./${path}`;
-}
-
-/** A path as printed: relative to the project, with forward slashes. */
-export function shown(cwd: string, path: string): string {
-  return slashed(relative(cwd, path)) || ".";
 }
 
 /** The databases to generate, from the Wrangler config and the options; or why there are none. */

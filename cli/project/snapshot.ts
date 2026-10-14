@@ -1,10 +1,10 @@
-// A project as the commands see it, read from disk once: migrations and generated files.
+// A project read from disk once: each database's migrations and generated files.
 // One per D1 database. Commands plan from a snapshot, so what they decide is testable without a
 // folder on disk (#95).
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { hasNestedMigrations, toolsWithFiles, type Tool } from "./origin.ts";
-import { migrationsOf, targetsOf, type ProjectOptions, type Target } from "./project.ts";
-import type { Migration } from "./schema.ts";
+import { hasNestedMigrations, toolsWithFiles, type Tool } from "../schema/origin.ts";
+import { migrationsOf, targetsOf, type ProjectOptions, type Target } from "./targets.ts";
+import type { Migration } from "../schema/schema.ts";
 
 /** One D1 database, and what's on disk for it. */
 export interface DatabaseSnapshot {
