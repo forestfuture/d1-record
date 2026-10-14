@@ -9,12 +9,12 @@ import {
   type Plan,
   type Print,
 } from "../plan.ts";
-import { schemaRefusal, schemaWrites, type SchemaTables } from "../schema/command.ts";
 import { importPath, shown, slashed } from "../project/paths.ts";
 import { classify, listed } from "../project/names.ts";
 import { readProject, type DatabaseSnapshot, type ProjectSnapshot } from "../project/snapshot.ts";
 import { defaultModels, oneModelsFile } from "../project/targets.ts";
 import { byName, schemaOf, type GeneratedTable, type Migration } from "../schema/schema.ts";
+import { schemaRefusal, schemaWrites, type SchemaTables } from "../schema/writes.ts";
 import { parseColumns, type ColumnArg } from "./columns.ts";
 import { migrationFileName, migrationFor, type KeyType } from "./migration.ts";
 import { appendModel, modelFileName, modelSource, type ModelToWrite } from "./model-file.ts";
