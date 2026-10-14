@@ -52,7 +52,7 @@ function rejectReservedAttributeNames(model: ModelClass): void {
 }
 
 /**
- * A spec key its type can't have, one given with a key that excludes it, or a storage that isn't
+ * A spec key its type can't have, one given with a key it conflicts with, or a storage that isn't
  * an epoch unit: the rules are in `src/spec-keys.ts`.
  */
 function rejectBadSpecs(model: ModelClass): void {

@@ -15,12 +15,12 @@ import {
   type ModelClass,
 } from "./model.ts";
 import {
-  applyChange,
+  applyOverride,
   isAttributeType,
-  isSpecChange,
-  specKeyNames,
+  isSpecOverride,
+  overridableKeyNames,
   specProblem,
-  type SpecChange,
+  type SpecOverride,
 } from "./spec-keys.ts";
 import { bindTable } from "./table-names.ts";
 
@@ -39,13 +39,13 @@ export type TableSchemas = Readonly<Record<string, TableSchema>>;
  */
 type AttributeOverride =
   | AttributeType
-  | (Pick<SpecChange, "null"> & { type?: "string"; storage?: never } & ValueSource)
-  | (Pick<SpecChange, "null" | "default"> & {
+  | (Pick<SpecOverride, "null"> & { type?: "string"; storage?: never } & ValueSource)
+  | (Pick<SpecOverride, "null" | "default"> & {
       type: Exclude<AttributeType, "string" | "datetime">;
       generateId?: false;
       storage?: never;
     })
-  | (Pick<SpecChange, "null" | "default" | "storage"> & {
+  | (Pick<SpecOverride, "null" | "default" | "storage"> & {
       type: "datetime";
       generateId?: false;
     });
@@ -98,12 +98,12 @@ export interface SchemaModel<T extends TableSchemas, B extends BaseClass = typeo
  * An override as given, checked (TypeScript checks it too, but not in plain JavaScript or past
  * a cast): `false` to ignore the column, or the spec changes.
  */
-function checked(where: string, attribute: string, override: unknown): SpecChange | false {
+function checked(where: string, attribute: string, override: unknown): SpecOverride | false {
   if (override === false) return false;
   if (isAttributeType(override)) return { type: override };
-  if (!isSpecChange(override)) {
+  if (!isSpecOverride(override)) {
     throw new InvalidModel(
-      `${where}.${attribute}: an override is a type name, { ${specKeyNames} }, or false`,
+      `${where}.${attribute}: an override is a type name, { ${overridableKeyNames} }, or false`,
     );
   }
   return override;
@@ -116,9 +116,9 @@ function checked(where: string, attribute: string, override: unknown): SpecChang
 function checkedOverride(
   where: string,
   spec: AttributeSpecs[string],
-  change: SpecChange,
+  change: SpecOverride,
 ): AttributeSpecs[string] {
-  const changed = applyChange(typeof spec === "string" ? { type: spec } : spec, change);
+  const changed = applyOverride(typeof spec === "string" ? { type: spec } : spec, change);
   const problem = specProblem(where, changed);
   if (problem !== undefined) throw new InvalidModel(problem);
   return changed as AttributeSpecs[string];
