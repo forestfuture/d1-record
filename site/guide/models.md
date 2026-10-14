@@ -149,7 +149,7 @@ Anything else throws `TypeError` naming the Model and the attribute, and the att
 - For a `json`: a value JSON can’t write, such as a `BigInt`, an object that refers to itself, a function, or a symbol.
 
 ::: warning TIP
-A `json` attribute stores what `JSON.stringify` writes: a `Map` becomes `{}` and `NaN` becomes `null`. Convert them before assigning.
+A `json` attribute stores what `JSON.stringify` writes: a `Map` becomes `{}` and `NaN` becomes `null`. Convert them before assigning. After a save, the record holds what was stored.
 :::
 
 A stored cell that can’t be read fails the same way when the record loads, or when `pluck` reads it: a `json` cell that isn’t JSON, or a number in a [Unix time column](./adopt-a-database#reading-unix-timestamps) that a `Date` can’t hold. The error names the Model and attribute, hides a filtered attribute’s cell, and a list holding one fails whole.
