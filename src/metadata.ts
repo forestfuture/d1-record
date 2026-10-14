@@ -1,5 +1,6 @@
 // Attribute metadata: each attribute's type, column and default, resolved from its spec.
 import { ancestors } from "./ancestors.ts";
+import { carriedKeys } from "./spec-keys.ts";
 import type { EpochStorage } from "./epoch-storage.ts";
 import { UnknownAttribute } from "./errors.ts";
 import type { ModelClass } from "./model.ts";
@@ -121,13 +122,7 @@ export function ignoresColumns(model: object): boolean {
 export function define(name: string, spec: AttributeSpec): AttributeDefinition {
   return typeof spec === "string"
     ? { type: spec, column: underscore(name) }
-    : {
-        type: spec.type,
-        column: spec.column ?? underscore(name),
-        default: spec.default,
-        ...(spec.generateId === true && { generateId: true as const }),
-        ...(spec.storage !== undefined && { storage: spec.storage }),
-      };
+    : { type: spec.type, column: spec.column ?? underscore(name), ...carriedKeys(spec) };
 }
 
 /** Looks up a declared attribute; throws `UnknownAttribute` for any other name. */
