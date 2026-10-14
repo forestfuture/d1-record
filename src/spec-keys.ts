@@ -29,7 +29,7 @@ export type SpecChange = Partial<Omit<SpecObject, "column">>;
 
 interface KeyRule {
   /** Whether a value is well formed: checked past the types, in plain JavaScript or past a cast. */
-  holds: (value: unknown) => boolean;
+  isWellFormed: (value: unknown) => boolean;
   /** How the key reads in a message, if not by its name: `a storage`. */
   label?: string;
   /** Whether a value gives the key; by default any but `undefined` (`generateId: false` doesn't). */
@@ -59,17 +59,21 @@ interface KeyRule {
  * added there is a compile error until it has its rules here.
  */
 const rules: { readonly [K in SpecKey]: KeyRule } = {
-  type: { holds: isAttributeType, carried: false },
-  null: { holds: (value) => typeof value === "boolean", carried: false },
-  column: { holds: (value) => typeof value === "string", overridable: false, carried: false },
+  type: { isWellFormed: isAttributeType, carried: false },
+  null: { isWellFormed: (value) => typeof value === "boolean", carried: false },
+  column: {
+    isWellFormed: (value) => typeof value === "string",
+    overridable: false,
+    carried: false,
+  },
   default: {
-    holds: (value) => typeof value === "function",
+    isWellFormed: (value) => typeof value === "function",
     label: "a default",
     dropsOnRetype: true,
   },
   // A generated id is a string, and comes from generateId alone, not a default as well (#99).
   generateId: {
-    holds: (value) => typeof value === "boolean",
+    isWellFormed: (value) => typeof value === "boolean",
     isGiven: (value) => value === true,
     onlyFor: { types: ["string"], because: "generated ids are strings" },
     excludes: ["default"],
@@ -77,7 +81,7 @@ const rules: { readonly [K in SpecKey]: KeyRule } = {
   },
   // Only a datetime is stored as a Unix epoch, in seconds or milliseconds (#73).
   storage: {
-    holds: (value) => typeof value === "string",
+    isWellFormed: (value) => typeof value === "string",
     label: "a storage",
     oneOf: epochStorages,
     onlyFor: { types: ["datetime"], because: "only a datetime is stored as an epoch" },
@@ -117,7 +121,7 @@ export function isSpecChange(value: unknown): value is SpecChange {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   return Object.entries(value).every(([key, each]) => {
     if (!Object.hasOwn(rules, key) || rules[key as SpecKey].overridable === false) return false;
-    return each === undefined || rules[key as SpecKey].holds(each);
+    return each === undefined || rules[key as SpecKey].isWellFormed(each);
   });
 }
 
