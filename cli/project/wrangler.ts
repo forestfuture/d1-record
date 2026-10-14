@@ -1,5 +1,4 @@
-// Reads a Worker's Wrangler config and chooses one of its D1 databases.
-// What it reads: its D1 databases, their migrations folders, and its account_id.
+// Reads a Worker's Wrangler config (D1 databases, migrations folders, account_id) and chooses one database.
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { listed } from "./names.ts";

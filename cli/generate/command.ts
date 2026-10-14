@@ -90,6 +90,7 @@ function databaseFor(
     options.database,
   );
   if (typeof chosen === "string") return chosen;
+  // Safe: `chosen` is one of these snapshots' own `target.database` objects, returned as it was.
   return project.databases.find((db) => db.target.database === chosen)!;
 }
 
