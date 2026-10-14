@@ -1,6 +1,5 @@
-// Which D1 database the console opens, and what a remote open reaches: the only one in the Wrangler config, or the one named.
-import { listed } from "../project/names.ts";
-import { readWranglerConfig } from "../project/wrangler.ts";
+// Which D1 database the console opens, and what a remote open reaches.
+import { chooseDatabase, readWranglerConfig } from "../project/wrangler.ts";
 
 /** The binding to open, and the Wrangler config file that declares it. */
 export interface ChosenDatabase {
@@ -44,18 +43,8 @@ export function databaseFor(
 ): ChosenDatabase | string {
   const config = readWranglerConfig(cwd, options.config);
   if (!config.ok) return config.error;
-  const bindings = config.databases.map((database) => database.binding);
-  const chosen =
-    options.database === undefined
-      ? config.databases.length === 1
-        ? config.databases[0]
-        : undefined
-      : config.databases.find((database) => database.binding === options.database);
-  if (chosen !== undefined) {
-    const found = { binding: chosen.binding, entry: chosen.entry, configFile: config.file };
-    return config.accountId === undefined ? found : { ...found, accountId: config.accountId };
-  }
-  return options.database === undefined
-    ? `This config has several D1 databases; choose one with --database (${listed(bindings)})`
-    : `No D1 database is bound as ${options.database}; this config has ${listed(bindings)}`;
+  const chosen = chooseDatabase(config.databases, options.database);
+  if (typeof chosen === "string") return chosen;
+  const found = { binding: chosen.binding, entry: chosen.entry, configFile: config.file };
+  return config.accountId === undefined ? found : { ...found, accountId: config.accountId };
 }

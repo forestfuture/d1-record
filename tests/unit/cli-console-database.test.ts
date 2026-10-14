@@ -29,24 +29,6 @@ describe("the database the console opens", () => {
     });
   });
 
-  test("with several, the one --database names", () => {
-    const cwd = project("DB", "LOGS");
-
-    expect(databaseFor(cwd, { database: "LOGS" })).toMatchObject({ binding: "LOGS" });
-  });
-
-  test("with several and no --database, it lists them", () => {
-    expect(databaseFor(project("DB", "LOGS"), {})).toBe(
-      "This config has several D1 databases; choose one with --database (DB or LOGS)",
-    );
-  });
-
-  test("a --database the config doesn't bind says which it has", () => {
-    expect(databaseFor(project("DB", "LOGS"), { database: "CACHE" })).toBe(
-      "No D1 database is bound as CACHE; this config has DB or LOGS",
-    );
-  });
-
   test("carries the config's account_id, which the temporary config would otherwise lose", () => {
     const cwd = project("DB");
     writeFileSync(

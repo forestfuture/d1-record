@@ -1,6 +1,8 @@
-// Reads a Worker's Wrangler config: its D1 databases, their migrations folders, and its account_id.
+// Reads a Worker's Wrangler config and chooses one of its D1 databases.
+// What it reads: its D1 databases, their migrations folders, and its account_id.
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { listed } from "./names.ts";
 
 /** One D1 database a Worker binds, and where its migrations are. */
 export interface DatabaseConfig {
@@ -134,4 +136,21 @@ export function readWranglerConfig(cwd: string, configPath?: string): ConfigResu
   }
   const found = { ok: true, file, dir: dirname(file), databases: entries.map(databaseOf) } as const;
   return typeof config.account_id === "string" ? { ...found, accountId: config.account_id } : found;
+}
+
+/**
+ * The database a command works on: the only one, or the one `--database` names; or, as a message
+ * to print, why there isn't one (several and none named, or a name no binding has).
+ */
+export function chooseDatabase<D extends { binding: string }>(
+  databases: readonly D[],
+  named: string | undefined,
+): D | string {
+  const bindings = listed(databases.map((database) => database.binding));
+  if (named === undefined) {
+    if (databases.length === 1) return databases[0]!;
+    return `This config has several D1 databases; choose one with --database (${bindings})`;
+  }
+  const chosen = databases.find((database) => database.binding === named);
+  return chosen ?? `No D1 database is bound as ${named}; this config has ${bindings}`;
 }
