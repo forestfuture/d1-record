@@ -159,6 +159,14 @@ describe("planGenerate: what g model and g migration write and print, from a sna
     expect(plan.code).toBe(1);
   });
 
+  test("a --database the config doesn't bind is refused, naming the bindings it has", () => {
+    expect(shown(planGenerate(project(), { ...product, database: "CACHE" }))).toEqual({
+      files: [],
+      lines: ["No D1 database is bound as CACHE; this config has DB"],
+      code: 1,
+    });
+  });
+
   test("a migration that migrations_pattern wouldn't match is refused", () => {
     const one = project().databases[0]!;
     const nested = {
