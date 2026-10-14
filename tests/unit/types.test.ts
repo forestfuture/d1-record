@@ -1,5 +1,6 @@
 import { describe, expectTypeOf, test } from "vite-plus/test";
 import {
+  type AttributeConversions,
   belongsTo,
   between,
   connect,
@@ -463,6 +464,24 @@ describe("types", () => {
       expectTypeOf(User.toSql()).toEqualTypeOf<QuerySql>();
       expectTypeOf(db.model(User).toDeleteAll().toSql()).toEqualTypeOf<QuerySql>();
       expectTypeOf<QuerySql>().toEqualTypeOf<{ sql: string; params: unknown[] }>();
+    };
+    expectTypeOf(typeOnly).toBeFunction();
+  });
+
+  test("typeForAttribute's conversions are typed by the attribute, and its name is checked (#148)", () => {
+    const typeOnly = () => {
+      expectTypeOf(User.typeForAttribute("createdAt")).toEqualTypeOf<
+        AttributeConversions<Date | null>
+      >();
+      expectTypeOf(User.typeForAttribute("id").cast("1")).toEqualTypeOf<number>();
+      expectTypeOf(User.typeForAttribute("email").deserialize("a")).toEqualTypeOf<string>();
+      expectTypeOf(User.typeForAttribute("isActive").serialize(true)).toEqualTypeOf<
+        string | number | null
+      >();
+      // @ts-expect-error not an attribute of User
+      User.typeForAttribute("nope");
+      // @ts-expect-error a method isn't an attribute
+      User.typeForAttribute("label");
     };
     expectTypeOf(typeOnly).toBeFunction();
   });
