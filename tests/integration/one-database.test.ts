@@ -250,6 +250,25 @@ describe("one database", () => {
       );
     });
 
+    test("a request's database used explicitly inside withDatabase is still the request's", async () => {
+      const request = connect(one);
+
+      const merged = await withDatabase(request, async () =>
+        request
+          .model(Post)
+          .where({})
+          .merge(connect(two).model(Post).where({}))
+          .toArray()
+          .catch((error: unknown) => error),
+      );
+
+      expect(merged).toEqual(
+        new IncompatibleRelation(
+          "merge() needs its relations on one database; these are on the request's database and a connect() database",
+        ),
+      );
+    });
+
     test("db.batch() names itself, and a static outside withDatabase is on the binding's database", async () => {
       const db = connect(one);
 
