@@ -1,0 +1,120 @@
+// A Batch's steps: its one database pinned, before-callbacks, one atomic write, then after-callbacks.
+import { RecordNotSaved } from "./errors.ts";
+import {
+  prepareDestroy,
+  prepareSave,
+  refusalError,
+  recordsSaving,
+  type Claimed,
+} from "./lifecycle.ts";
+import { RecordStatement, recordStatementParts } from "./record-statement.ts";
+import { state } from "./record-state.ts";
+import { runAfter, writeAll, type PreparedWrite } from "./unit-of-work.ts";
+import { pinBefore, pinClaimed, type Executor } from "./executor.ts";
+import type { ModelBase } from "./model.ts";
+import { statementParts, type Statement } from "./statement.ts";
+
+/** The Executor an entry was built on: its Relation's, or its record's. */
+function executorOf(entry: BatchEntry): Executor {
+  return entry instanceof RecordStatement
+    ? entry[recordStatementParts].record[state].executor
+    : entry[statementParts].executor;
+}
+
+/** The records a batch entry writes: a save's whole autosave graph, or a destroy's record. */
+function recordsOf(entry: BatchEntry): ModelBase[] {
+  if (!(entry instanceof RecordStatement)) return [];
+  const { record, kind } = entry[recordStatementParts];
+  return kind === "save" ? recordsSaving(record) : [record];
+}
+
+/**
+ * A batch's steps: its one database found and every record pinned to it, before anything runs
+ * (#93); then before-callbacks, one atomic write, then after-callbacks.
+ */
+export async function runBatch<const T extends readonly BatchEntry[]>(
+  entries: T,
+  needs: string,
+  handles: readonly Executor[] = [],
+): Promise<BatchResults<T>> {
+  const statements = entries.filter((entry) => !(entry instanceof RecordStatement));
+  const all = [...handles, ...statements.map(executorOf)];
+  const records = entries.flatMap(recordsOf);
+  if (all.length === 0 && records.length === 0) return [] as BatchResults<T>;
+  const database = await pinBefore(
+    records.map((record) => record[state]),
+    needs,
+    all,
+  );
+  // Each record is written once, even if listed twice or already saved by its owner.
+  const claimed: Claimed = new Set();
+  const prepared: PreparedEntry[] = [];
+  for (const entry of entries) {
+    prepared.push(
+      entry instanceof RecordStatement ? await recordEntry(entry, claimed) : statementEntry(entry),
+    );
+  }
+  await pinClaimed(
+    [...claimed].map((record) => record[state]),
+    database,
+    needs,
+  );
+  const writes = prepared.flatMap(({ writes }) => writes());
+  await writeAll(database, writes);
+  await runAfter(writes);
+  return prepared.map(({ result }) => result()) as BatchResults<T>;
+}
+
+/**
+ * `db.batch`, on the database the entries were built on: the current one, for statements and
+ * records from a Model's statics (`Product.toUpdateAll(…)`, `Product.build(…).toSave()`), or one
+ * explicit `db`. Atomic, as `db.batch` is; entries from two databases throw `IncompatibleRelation`.
+ */
+export async function batch<const T extends readonly BatchEntry[]>(
+  entries: T,
+): Promise<BatchResults<T>> {
+  // The database they're on now: entries from a Model's statics and from db.model(…) can be one.
+  return runBatch(entries, "batch() needs its statements and records");
+}
+
+/** What `db.batch` accepts: statements, and records' save or destroy. */
+export type BatchEntry = Statement | RecordStatement;
+
+/** `db.batch`'s result for each entry: D1's `meta`, or the saved or destroyed record. */
+export type BatchResults<T extends readonly BatchEntry[]> = {
+  -readonly [K in keyof T]: T[K] extends RecordStatement<infer R> ? R : D1Meta;
+};
+
+interface PreparedEntry {
+  /** Built when the batch is: every entry is prepared first, so foreign keys are linked. */
+  writes: () => PreparedWrite[];
+  result: () => unknown;
+}
+
+function statementEntry(statement: Statement): PreparedEntry {
+  let meta: D1Meta | undefined;
+  const write: PreparedWrite = {
+    statements: [statement[statementParts].query],
+    commit: ([result]) => {
+      meta = result?.meta;
+    },
+    after: async () => {},
+  };
+  return { writes: () => [write], result: () => meta };
+}
+
+/** A record's prepared save or destroy; a refusal throws, as a Rails transaction's `save!` does. */
+async function recordEntry(statement: RecordStatement, claimed: Claimed): Promise<PreparedEntry> {
+  const { record, kind } = statement[recordStatementParts];
+  const plan = await (kind === "save"
+    ? prepareSave(record, claimed)
+    : prepareDestroy(record, claimed));
+  if (plan.status !== "ready") throw refusalError(record, plan, kind);
+  if (plan.stages.length > 1) {
+    const { name } = record.constructor;
+    throw new RecordNotSaved(
+      `${name} can't be saved in a batch with the new records it autosaves: one of them needs a key D1 only generates when a record is written (the ${name}'s, or a new record it points at). Generate keys in code, or save it on its own`,
+    );
+  }
+  return { writes: () => plan.stages.flatMap((stage) => stage()), result: () => record };
+}
