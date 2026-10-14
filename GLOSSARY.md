@@ -81,7 +81,7 @@ A deliberate refusal raised by a pre-write callback with `abort(reason)`. It can
 _Avoid_: Halt, cancel, returning false
 
 **Database**:
-A wrapper around a `D1Database` binding, made with `connect(env.DB, { session, onQuery })`, that queries go through. It's the **Current database** for a request run in `withDatabase`, or used explicitly with `db.model(User)`; a Model's **Binding** gets one with no per-request options.
+A wrapper around a `D1Database` binding, made with `connect(env.DB, { session, onQuery })`, that queries go through. It's the **Current database** for a request run in `withDatabase`, or used explicitly with `db.model(User)`; a Model's **Binding** gets one with no per-request options. A Database has an origin (made by `connect()`, given to `withDatabase`, or a binding's own), and an error names it that way: "a connect() database", "the request's database", "the DB binding's database".
 _Avoid_: Connection, client, context (on its own)
 
 **Attribute**:
