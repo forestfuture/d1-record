@@ -53,7 +53,8 @@ function notify(listener: QueryListener | undefined, event: QueryEvent): void {
 
 /**
  * The concrete database a handle sends to now. Private to this module (#93): callers ask
- * `oneDatabase` instead, so "is this the same database?" is decided in one place.
+ * `oneDatabase` (through `jointly` and `pinBefore`) instead, so "is this the same database?" is
+ * decided in one place.
  */
 const resolve = Symbol("resolve");
 
