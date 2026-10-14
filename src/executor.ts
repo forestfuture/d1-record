@@ -248,7 +248,7 @@ export function databaseNow(handle: Executor): Promise<D1Executor> {
  * `IncompatibleRelation` (#93): "`needs` on one database", naming where each came from. Every
  * check of "the same database" (merge, or, scopes, batches, saves) and every pin goes here.
  */
-export async function oneDatabase(
+async function oneDatabase(
   handles: readonly [Executor, ...Executor[]],
   needs: string,
 ): Promise<D1Executor> {
@@ -285,4 +285,38 @@ class JointExecutor extends ForwardingExecutor {
   [resolve](): Promise<D1Executor> {
     return oneDatabase(this.#handles, this.#needs);
   }
+}
+
+/** What a record's state gives the pin: the Database it's on now, and a way to take another. */
+interface DatabaseKeeper {
+  readonly executor: Executor;
+  belongTo(executor: Executor): void;
+}
+
+/**
+ * The one database `keepers` (and `handles`, a batch's statements) share, each record pinned to
+ * it before anything runs (#93): two databases throw `IncompatibleRelation`, with no validation,
+ * callback or write run. A record keeps the database it was first written on.
+ */
+export async function pinBefore(
+  keepers: readonly DatabaseKeeper[],
+  needs: string,
+  handles: readonly Executor[] = [],
+): Promise<D1Executor> {
+  const all = [...handles, ...keepers.map((keeper) => keeper.executor)];
+  const database = await oneDatabase(all as [Executor, ...Executor[]], needs);
+  for (const keeper of keepers) keeper.belongTo(database);
+  return database;
+}
+
+/**
+ * The records a write prepared, pinned to its database too: any a callback added on the way,
+ * from another database, still throws `IncompatibleRelation` before anything is written.
+ */
+export async function pinClaimed(
+  keepers: readonly DatabaseKeeper[],
+  database: D1Executor,
+  needs: string,
+): Promise<void> {
+  await pinBefore(keepers, needs, [database]);
 }

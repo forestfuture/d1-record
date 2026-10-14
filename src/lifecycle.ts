@@ -21,7 +21,7 @@ import {
   RecordNotSaved,
 } from "./errors.ts";
 import { clearErrors } from "./errors-collection.ts";
-import { type D1Executor, type Executor, oneDatabase } from "./executor.ts";
+import { type Executor, pinBefore, pinClaimed } from "./executor.ts";
 import {
   declared,
   type AfterCallbackKind,
@@ -196,11 +196,18 @@ async function validateAutosaves(record: ModelBase, claimed: Claimed): Promise<v
  * → afterCreate | afterUpdate → afterSave.
  */
 export async function saveLifecycle(record: ModelBase): Promise<Outcome> {
-  const database = await pinBefore(recordsSaving(record), "save() needs its records");
+  const database = await pinBefore(
+    recordsSaving(record).map((each) => each[state]),
+    "save() needs its records",
+  );
   const claimed: Claimed = new Set();
   const plan = await prepareSave(record, claimed);
   if (plan.status !== "ready") return plan;
-  await pinClaimed(claimed, database, "save() needs its records");
+  await pinClaimed(
+    [...claimed].map((each) => each[state]),
+    database,
+    "save() needs its records",
+  );
   await runPlan(database, plan);
   return { status: "saved" };
 }
@@ -222,34 +229,6 @@ export function recordsSaving(record: ModelBase): ModelBase[] {
   };
   visit(record);
   return [...found];
-}
-
-/**
- * The one database `records` (and `handles`, a batch's statements) share, each record pinned to
- * it before anything runs (#93): two databases throw `IncompatibleRelation`, with no validation,
- * callback or write run. A record keeps the database it was first written on.
- */
-export async function pinBefore(
-  records: readonly ModelBase[],
-  needs: string,
-  handles: readonly Executor[] = [],
-): Promise<D1Executor> {
-  const all = [...handles, ...records.map((record) => record[state].executor)];
-  const database = await oneDatabase(all as [Executor, ...Executor[]], needs);
-  for (const record of records) record[state].belongTo(database);
-  return database;
-}
-
-/**
- * The records a write prepared, pinned to its database too: any a callback added on the way,
- * from another database, still throws `IncompatibleRelation` before anything is written.
- */
-export async function pinClaimed(
-  claimed: Claimed,
-  database: D1Executor,
-  needs: string,
-): Promise<void> {
-  await pinBefore([...claimed], needs, [database]);
 }
 
 /** Everything a save does before writing: validation and the before-callbacks. */
@@ -418,11 +397,15 @@ function saveWrite(record: ModelBase, isInsert: boolean): PreparedWrite {
  * → mark destroyed → afterDestroy. Every write, dependents' included, is one atomic batch.
  */
 export async function destroyLifecycle(record: ModelBase): Promise<DestroyOutcome> {
-  const database = await pinBefore([record], "destroy() needs its records");
+  const database = await pinBefore([record[state]], "destroy() needs its records");
   const claimed: Claimed = new Set();
   const plan = await prepareDestroy(record, claimed);
   if (plan.status !== "ready") return plan;
-  await pinClaimed(claimed, database, "destroy() needs its records");
+  await pinClaimed(
+    [...claimed].map((each) => each[state]),
+    database,
+    "destroy() needs its records",
+  );
   await runPlan(database, plan);
   return { status: "destroyed" };
 }
