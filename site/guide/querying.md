@@ -59,20 +59,22 @@ A value in a fragment is bound as it is, so a `Date` is ISO text. If the attribu
 
 ## Using raw statements
 
-When you send SQL to D1 yourself, ask the Model how an attribute stores its values with `typeForAttribute`. Bind what `serialize` gives:
+Bind what `serialize` gives when you send SQL to D1 yourself. `typeForAttribute` returns an attribute’s conversions:
 
 <<< @/snippets/guide/raw-statements.ts#bind{ts}
 
-`serialize` writes the `Date` as `paidAt` stores it: an integer here, ISO text for a plain `datetime`. If the attribute’s `storage` changes, the statement keeps working.
+`serialize` writes the `Date` as `paidAt` stores it: an integer here, ISO text for a plain `datetime`.
 
 Turn a cell from a raw query into the attribute’s value with `deserialize`:
 
 <<< @/snippets/guide/raw-statements.ts#read{ts}
 
-`cast` gives the JavaScript value for an input, without converting it to the stored form: `cast("2026-01-02")` is a `Date`.
+For a cache key, or the value a test expects of a raw row, `serialize` gives the stored form too.
+
+`cast` gives the JavaScript value for an input, without converting it to the stored form: `cast("2026-01-02")` is a `Date`. It keeps a `Date`’s milliseconds, where `serialize` floors them for `unixSeconds`.
 
 - **`serialize` and `cast`** take what assigning would: a `Date` or an ISO string for a `datetime`, `"42"` for an `integer`. Anything else throws `TypeError` naming the Model and attribute, and so does `undefined`. Use `null` for NULL.
-- **`deserialize`** throws the same `TypeError` for a cell that isn’t the attribute’s stored form, as loading a record does. NULL is `null`.
+- **`deserialize`** reads a cell as loading a record does, and NULL and `undefined` are `null`. It throws the same `TypeError` for a cell it can’t read: text in a Unix time column, a number past what a `Date` holds, or text in a `json` column that isn’t JSON.
 - **A filtered attribute’s value** is hidden in those errors, as it is anywhere else.
 
 ::: warning TIP
