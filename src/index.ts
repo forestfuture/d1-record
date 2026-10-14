@@ -8,15 +8,8 @@ export type {
   HasOne,
   HasOneDependent,
 } from "./associations.ts";
-export {
-  batch,
-  connect,
-  Database,
-  type BatchEntry,
-  type BatchResults,
-  type ConnectOptions,
-  type RelationsFor,
-} from "./database.ts";
+export { batch, type BatchEntry, type BatchResults } from "./batch.ts";
+export { connect, Database, type ConnectOptions, type RelationsFor } from "./database.ts";
 export {
   abort,
   AssociationNotLoaded,
