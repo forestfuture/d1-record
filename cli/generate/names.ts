@@ -1,7 +1,7 @@
 // Names the generators accept, and Rails' `tableize` for a Model's table.
 import { pluralize, singularize } from "../../src/inflections.ts";
 import { underscore } from "../../src/naming.ts";
-import { classify } from "../schema/names.ts";
+import { classify } from "../project/names.ts";
 
 /** A name the generators accept: letters, digits and `_`, starting with a letter. */
 const allowed = /^[A-Za-z][A-Za-z0-9_]*$/;

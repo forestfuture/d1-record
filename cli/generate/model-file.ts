@@ -1,6 +1,6 @@
 // A generated Model's source file, or the class added to an existing one.
 import { stringLiteral, stringLiteralPattern } from "../source.ts";
-import { moduleName } from "../schema/names.ts";
+import { moduleName } from "../project/names.ts";
 
 /** A Model to write: its class, its table, and the `belongsTo`s its references suggest. */
 export interface ModelToWrite {

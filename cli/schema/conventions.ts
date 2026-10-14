@@ -1,7 +1,7 @@
 // Reads a column as an attribute by the conventions (#66): name, type, nullability, default.
 import { type EpochStorage, epochStorages } from "../../src/epoch-storage.ts";
 import { underscore } from "../../src/naming.ts";
-import { attributeName } from "./names.ts";
+import { attributeName } from "../project/names.ts";
 
 type AttributeType = "string" | "integer" | "real" | "boolean" | "datetime" | "json";
 

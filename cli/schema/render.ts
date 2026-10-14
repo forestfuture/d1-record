@@ -2,7 +2,7 @@
 import { stringLiteral } from "../source.ts";
 import { createHash } from "node:crypto";
 import type { Default, Spec } from "./conventions.ts";
-import { isIdentifier } from "./names.ts";
+import { isIdentifier } from "../project/names.ts";
 import type { GeneratedTable } from "./schema.ts";
 
 /**

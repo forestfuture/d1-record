@@ -5,7 +5,8 @@ import { existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { underscore } from "../../src/naming.ts";
 import { storageOverride } from "./conventions.ts";
-import { shown, type Target } from "./project.ts";
+import { shown } from "../project/paths.ts";
+import type { Target } from "../project/targets.ts";
 import type { GeneratedTable, Migration } from "./schema.ts";
 
 const tools = ["Drizzle", "Prisma"] as const;

@@ -1,12 +1,13 @@
 // `d1-record schema`: plans the generated schema for each database, and `--watch`.
 import { watch } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
-import { apply, combined, printing, written, type Plan, type Step } from "../plan.ts";
-import { importPath, shown, type Print, type ProjectOptions } from "./project.ts";
+import { apply, combined, printing, written, type Plan, type Print, type Step } from "../plan.ts";
+import { importPath, shown } from "../project/paths.ts";
+import { readProject, type DatabaseSnapshot, type ProjectSnapshot } from "../project/snapshot.ts";
+import type { ProjectOptions } from "../project/targets.ts";
 import { fingerprintIn, fingerprintOf, renderBase, renderSchema } from "./render.ts";
 import { layoutNote, migrationTool, originNotes } from "./origin.ts";
 import { schemaOf, type GeneratedTable } from "./schema.ts";
-import { readProject, type DatabaseSnapshot, type ProjectSnapshot } from "./snapshot.ts";
 
 /** The tables a database's migrations make, and the notes their columns raise. */
 export interface SchemaTables {

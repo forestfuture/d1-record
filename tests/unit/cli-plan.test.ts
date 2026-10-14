@@ -2,7 +2,7 @@ import { describe, expect, test } from "vite-plus/test";
 import { planGenerate } from "../../cli/generate/command.ts";
 import { filesOf, linesOf, type Plan } from "../../cli/plan.ts";
 import { planSchema } from "../../cli/schema/command.ts";
-import type { DatabaseSnapshot, ProjectSnapshot } from "../../cli/schema/snapshot.ts";
+import type { DatabaseSnapshot, ProjectSnapshot } from "../../cli/project/snapshot.ts";
 
 const cwd = "/app";
 

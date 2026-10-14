@@ -2,7 +2,8 @@
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { createJiti } from "jiti";
-import { defaultModels, oneModelsFile, shown } from "../schema/project.ts";
+import { shown, slashed } from "../project/paths.ts";
+import { defaultModels, oneModelsFile } from "../project/targets.ts";
 import type { StatementEvent } from "./verbose.ts";
 
 /**
@@ -112,9 +113,6 @@ async function modelsIn(
   }
   return found;
 }
-
-/** A path with forward slashes, to compare file names whatever the system's separator is. */
-const slashed = (path: string): string => path.replaceAll("\\", "/");
 
 /**
  * Forgets the project's own modules, so they are read again. Its dependencies stay as they are,

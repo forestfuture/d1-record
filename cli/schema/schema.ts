@@ -1,7 +1,7 @@
 // Applies a database's migrations to in-memory SQLite and reads back its tables and columns.
 import type { DatabaseSync } from "node:sqlite";
 import { convert, type Column, type Spec } from "./conventions.ts";
-import { exportName } from "./names.ts";
+import { exportName } from "../project/names.ts";
 
 export interface Migration {
   /** The file's name, as Wrangler orders and records it. */

@@ -1,6 +1,6 @@
 // Which D1 database the console opens, and what a remote open reaches: the only one in the Wrangler config, or the one named.
-import { listed } from "../schema/names.ts";
-import { readWranglerConfig } from "../schema/wrangler.ts";
+import { listed } from "../project/names.ts";
+import { readWranglerConfig } from "../project/wrangler.ts";
 
 /** The binding to open, and the Wrangler config file that declares it. */
 export interface ChosenDatabase {

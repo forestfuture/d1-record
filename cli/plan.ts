@@ -1,9 +1,12 @@
 // A command's plan (the files to write and the lines to print), and `apply`, which carries it out.
 // What a command decides to do is kept apart from doing it. Commands plan from a snapshot of the
-// project (cli/schema/snapshot.ts), and `apply` is the one place that writes (#95).
+// project (cli/project/snapshot.ts), and `apply` is the one place that writes (#95).
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { shown } from "./schema/project.ts";
+import { shown } from "./project/paths.ts";
+
+/** Where a command prints its lines (the console, or a test's list). */
+export type Print = (line: string) => void;
 
 /** A file a command writes: where, and what. */
 export interface FileToWrite {
