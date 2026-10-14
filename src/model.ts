@@ -8,7 +8,8 @@ import {
   type AttributeSpecs,
   type ExactSpecs,
 } from "./metadata.ts";
-import { permitted } from "./permit.ts";
+import { type Permitted, permitted } from "./permit.ts";
+import { type AttributeConversions, conversionsFor } from "./attribute-type.ts";
 import { defaultFilterAttributes, type FilterAttribute } from "./filtering.ts";
 import type { Errors } from "./errors-collection.ts";
 import { declare } from "./declarations.ts";
@@ -138,11 +139,6 @@ declare const attributeTypes: unique symbol;
 
 /** An attribute's name on record type `R`. */
 type AttributeKey<R> = keyof AttributesOf<R> & string;
-
-/** What `permit` returns: the named attributes, each optional, as their types. */
-type Permitted<C extends ModelClass, K extends string> = Partial<
-  Pick<AttributesOf<InstanceType<C>>, K & keyof AttributesOf<InstanceType<C>>>
->;
 
 /** `from`/`to` for the change checks: only matching when the value was, or became, this. */
 export interface ChangeOptions<V = unknown> {
@@ -311,6 +307,18 @@ export class ModelBase {
     ...names: K[]
   ): Permitted<C, K> {
     return permitted(this, input, names) as Permitted<C, K>;
+  }
+
+  /**
+   * An attribute's conversions, for SQL d1-record doesn't write, as Rails' `type_for_attribute`:
+   * `Post.typeForAttribute("publishedAt").serialize(date)` is what `publishedAt` stores a `Date`
+   * as, whatever its `storage`; `cast` and `deserialize` go the other way.
+   */
+  static typeForAttribute<C extends ModelClass, K extends AttributeKey<InstanceType<C>>>(
+    this: C,
+    name: K,
+  ): AttributeConversions<AttributesOf<InstanceType<C>>[K]> {
+    return conversionsFor(this, name);
   }
 
   /** Declares a validation, e.g. `this.validates("email", { presence: true })` in `static {}`. */

@@ -1,7 +1,12 @@
 // `permit`: keeps only the named attributes from untrusted input, each cast to its type (#82).
 import { castAs } from "./attribute-values.ts";
 import { attributeOf } from "./metadata.ts";
-import type { ModelClass } from "./model.ts";
+import type { AttributesOf, ModelClass } from "./model.ts";
+
+/** What `permit` returns: the named attributes, each optional, as their types. */
+export type Permitted<C extends ModelClass, K extends string> = Partial<
+  Pick<AttributesOf<InstanceType<C>>, K & keyof AttributesOf<InstanceType<C>>>
+>;
 
 /**
  * The named attributes of untrusted `input`, as Rails' `params.permit`: every other key is
