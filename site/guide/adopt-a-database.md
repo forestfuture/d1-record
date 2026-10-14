@@ -114,6 +114,10 @@ A `Date` beside that column in a `sql` fragment throws `TypeError`: a fragment h
 :::
 
 ::: warning TIP
+In a raw `env.DB.prepare(...)` statement, bind `Article.typeForAttribute("publishedAt").serialize(date)`, and read a cell with `deserialize`. See [Using raw statements](./querying#using-raw-statements).
+:::
+
+::: warning TIP
 Prisma’s dates need no override. On D1, Prisma writes a `DateTime` as ISO text, which d1-record reads as it is.
 :::
 

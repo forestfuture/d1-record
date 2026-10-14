@@ -68,6 +68,10 @@ _Avoid_: Raw SQL, string condition
 A value in an **SQL fragment** written as `column(attribute).value(v)`: cast as an assigned value of that **Attribute**, and written as the attribute stores it (an integer for **Epoch storage**), still a bound parameter. A bare interpolated value has no attribute, so it's written by its JavaScript type.
 _Avoid_: Bound attribute, cast value
 
+**Attribute conversions**:
+The `cast`, `serialize` and `deserialize` of one **Attribute**, from `Model.typeForAttribute(name)`: the same steps a record uses, for SQL d1-record doesn't write. `serialize` is what a **Typed value** binds.
+_Avoid_: Attribute type (that is the declared type, `"datetime"`), codec, serializer
+
 **Abort**:
 A deliberate refusal raised by a pre-write callback with `abort(reason)`. It cancels the write without being a validation failure.
 _Avoid_: Halt, cancel, returning false
