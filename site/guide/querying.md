@@ -57,6 +57,32 @@ A value in a fragment is bound as it is, so a `Date` is ISO text. If the attribu
 
 `value` works for any attribute, and writes a boolean as 0 or 1 and a JSON value as text. The value is cast as an assigned one, so a value the attribute can’t hold throws `TypeError` naming the attribute, when `where` is given the fragment. A filtered attribute’s value is hidden from `onQuery`, as it is anywhere else.
 
+## Using raw statements
+
+When you send SQL to D1 yourself, ask the Model how an attribute stores its values with `typeForAttribute`. Bind what `serialize` gives:
+
+<<< @/snippets/guide/raw-statements.ts#bind{ts}
+
+`serialize` writes the `Date` as `paidAt` stores it: an integer here, ISO text for a plain `datetime`. If the attribute’s `storage` changes, the statement keeps working.
+
+Turn a cell from a raw query into the attribute’s value with `deserialize`:
+
+<<< @/snippets/guide/raw-statements.ts#read{ts}
+
+`cast` gives the JavaScript value for an input, without converting it to the stored form: `cast("2026-01-02")` is a `Date`.
+
+- **`serialize` and `cast`** take what assigning would: a `Date` or an ISO string for a `datetime`, `"42"` for an `integer`. Anything else throws `TypeError` naming the Model and attribute, and so does `undefined`. Use `null` for NULL.
+- **`deserialize`** throws the same `TypeError` for a cell that isn’t the attribute’s stored form, as loading a record does. NULL is `null`.
+- **A filtered attribute’s value** is hidden in those errors, as it is anywhere else.
+
+::: warning TIP
+`typeForAttribute` needs no connection to D1, and the attribute’s name is checked when you compile.
+:::
+
+::: rails Compared with Rails
+`typeForAttribute` is `type_for_attribute`, with the same `cast`, `serialize`, and `deserialize`. d1-record’s are strict: a value the attribute can’t hold throws, where Rails casts it leniently.
+:::
+
 ## Ordering and paging
 
 Sort by each key in turn with `order`, and page with `limit` and `offset`:

@@ -23,6 +23,7 @@ import { runSchema } from "../../cli/schema/command.ts";
 import { Post, User } from "../../site/snippets/getting-started/models.ts";
 import * as models from "../../site/snippets/guide/models.ts";
 import { createdSince, oldestFirst, Reminder } from "../../site/snippets/guide/mixed-dates.ts";
+import { paidAt, paidSince } from "../../site/snippets/guide/raw-statements.ts";
 import * as untrusted from "../../site/snippets/guide/untrusted-input.ts";
 import * as paginating from "../../site/snippets/guide/paginating.ts";
 import * as filtering from "../../site/snippets/guide/filtering.ts";
@@ -533,5 +534,32 @@ describe("Existing databases: a column holding two date forms", () => {
       { created_at: "2026-10-12T00:00:00.000Z" },
       { created_at: "2026-10-11T08:00:00.000Z" },
     ]);
+  });
+});
+
+describe("Querying: raw statements bind and read a value as the attribute stores it", () => {
+  let binding: TestDatabase;
+  let dispose: () => Promise<void>;
+  const schema = new URL("../../site/snippets/guide/raw-statements.sql", import.meta.url);
+
+  beforeAll(async () => {
+    ({ db: binding, dispose } = await createTestDatabase(schema));
+    await binding.batch([
+      binding.prepare("INSERT INTO invoices VALUES (1, 10, 1767225600)"), // 2026-01-01
+      binding.prepare("INSERT INTO invoices VALUES (2, 20, 1767312000)"), // 2026-01-02
+      binding.prepare("INSERT INTO invoices VALUES (3, 30, NULL)"),
+    ]);
+  });
+  afterAll(() => dispose());
+
+  test("serialize binds the integer the column holds, so the comparison works", async () => {
+    const rows = await paidSince(binding, new Date("2026-01-02T00:00:00.000Z"));
+
+    expect(rows).toEqual([{ id: 2, total: 20 }]);
+  });
+
+  test("deserialize reads the cell as a Date, and NULL as null", async () => {
+    expect(await paidAt(binding, 1)).toEqual(new Date("2026-01-01T00:00:00.000Z"));
+    expect(await paidAt(binding, 3)).toBeNull();
   });
 });
