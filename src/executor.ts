@@ -1,4 +1,4 @@
-// The one place the library calls D1: runs statements, reports them to `onQuery`.
+// The one place the library calls D1, reports to `onQuery`, and says where a database is from.
 import { boundValue, shownValue } from "./filtering.ts";
 import type { CompiledSql } from "./compiler.ts";
 import { translateConstraintError } from "./constraints.ts";
@@ -71,6 +71,16 @@ export interface Executor {
   [resolve](): Promise<D1Executor>;
 }
 
+/** Where a database came from, for errors to name it: `connect()`'s, the request's, or a binding's. */
+type Origin = "connect" | "request" | { binding: string };
+
+/** How an error names a database by its origin (#170). */
+function nameOf(origin: Origin): string {
+  if (origin === "connect") return "a connect() database";
+  if (origin === "request") return "the request's database";
+  return `the ${origin.binding} binding's database`;
+}
+
 /**
  * The single place the library calls D1: every statement is reported to `onQuery`, and a
  * constraint failure becomes the matching `ConstraintViolation` for the statement's Model.
@@ -78,6 +88,7 @@ export interface Executor {
 export class D1Executor implements Executor {
   readonly #binding: D1Database | D1DatabaseSession;
   readonly #onQuery: QueryListener | undefined;
+  #origin: Origin = "connect";
 
   /** `binding` is the D1 binding itself, or one D1 Session every query goes through. */
   constructor(binding: D1Database | D1DatabaseSession, onQuery?: QueryListener) {
@@ -87,6 +98,24 @@ export class D1Executor implements Executor {
 
   async [resolve](): Promise<D1Executor> {
     return this;
+  }
+
+  /**
+   * Where this database came from, which errors name it by (#170). It's `"connect"` until the
+   * Database is adopted: `withDatabase` makes it `"request"`, and a binding's own Database, made
+   * for queries outside `withDatabase`, takes `{ binding }`. It lives here because records keep
+   * their D1Executor and outlive `withDatabase`, so a per-request lookup couldn't find it later.
+   */
+  get origin(): Origin {
+    return this.#origin;
+  }
+
+  /**
+   * Sets where this database came from. Sticky: a Database given to `withDatabase` is "the
+   * request's database" for its life, including when it's used explicitly outside `withDatabase`.
+   */
+  setOrigin(origin: Origin): void {
+    this.#origin = origin;
   }
 
   /** Runs one statement and resolves to its rows. */
@@ -211,14 +240,6 @@ export class CurrentExecutor extends ForwardingExecutor {
   }
 }
 
-/** How errors name a database: "the request's database", "the DB binding's database", … */
-let describe: (database: D1Executor) => string = () => "a connect() database";
-
-/** @internal Sets how errors name a database; the current database's module knows (#93). */
-export function describeDatabasesWith(describer: (database: D1Executor) => string): void {
-  describe = describer;
-}
-
 /** The D1Executor `handle` sends to now. */
 export function databaseNow(handle: Executor): Promise<D1Executor> {
   return handle[resolve]();
@@ -236,7 +257,7 @@ export async function oneDatabase(
   const databases = [...new Set(await Promise.all(handles.map((handle) => handle[resolve]())))];
   const [first, second] = databases as [D1Executor, D1Executor | undefined];
   if (second !== undefined) {
-    const [one, two] = [describe(first), describe(second)];
+    const [one, two] = [nameOf(first.origin), nameOf(second.origin)];
     throw new IncompatibleRelation(
       `${needs} on one database; these are on ${one} and ${one === two ? "another" : two}`,
     );
