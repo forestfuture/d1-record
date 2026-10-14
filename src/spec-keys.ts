@@ -43,8 +43,11 @@ interface KeyRule {
    * message names the declaring key first. An override that gives one replaces the other.
    */
   excludes?: readonly SpecKey[];
-  /** Dropped when an override gives the attribute a new type, as it was written for the old. */
-  dropsOnRetype?: true;
+  /**
+   * What an override that gives the attribute a new type does to it: `"drop"` it, as it was
+   * written for the old type, or `"keep"` it, the default.
+   */
+  onRetype?: "drop" | "keep";
   /** `false` for a key an override can't change. */
   overridable?: false;
   /**
@@ -69,7 +72,7 @@ const rules: { readonly [K in SpecKey]: KeyRule } = {
   default: {
     isWellFormed: (value) => typeof value === "function",
     label: "a default",
-    dropsOnRetype: true,
+    onRetype: "drop",
   },
   // A generated id is a string, and comes from generateId alone, not a default as well (#99).
   generateId: {
@@ -77,7 +80,7 @@ const rules: { readonly [K in SpecKey]: KeyRule } = {
     isGiven: (value) => value === true,
     onlyFor: { types: ["string"], because: "generated ids are strings" },
     excludes: ["default"],
-    dropsOnRetype: true,
+    onRetype: "drop",
   },
   // Only a datetime is stored as a Unix epoch, in seconds or milliseconds (#73).
   storage: {
@@ -85,7 +88,7 @@ const rules: { readonly [K in SpecKey]: KeyRule } = {
     label: "a storage",
     oneOf: epochStorages,
     onlyFor: { types: ["datetime"], because: "only a datetime is stored as an epoch" },
-    dropsOnRetype: true,
+    onRetype: "drop",
   },
 };
 
@@ -193,7 +196,7 @@ export function applyChange(base: SpecObject, change: SpecChange): SpecObject {
         const replaced = excluding
           .get(key)!
           .some((other) => givenValue(given, other) !== undefined);
-        return rule.dropsOnRetype === true && (retyped || replaced);
+        return replaced || (retyped && rule.onRetype === "drop");
       })
       .map(([key]) => key),
   );
