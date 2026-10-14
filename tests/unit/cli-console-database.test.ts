@@ -29,6 +29,16 @@ describe("the database the console opens", () => {
     });
   });
 
+  test("with several, the one --database names, as the config declares it", () => {
+    const cwd = project("DB", "LOGS");
+
+    expect(databaseFor(cwd, { database: "LOGS" })).toEqual({
+      binding: "LOGS",
+      entry: { binding: "LOGS", database_name: "LOGS-name" },
+      configFile: join(cwd, "wrangler.jsonc"),
+    });
+  });
+
   test("carries the config's account_id, which the temporary config would otherwise lose", () => {
     const cwd = project("DB");
     writeFileSync(
