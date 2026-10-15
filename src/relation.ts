@@ -587,12 +587,12 @@ export class Relation<M extends ModelBase, S = {}> {
   async toArray(): Promise<M[]> {
     const cached = this.#cached();
     if (cached !== undefined) return [...cached];
-    const collection = this.#collection;
-    if (collection.fill === undefined) return this.#runner.load(this.#query);
+    // Started before the query is sent, so a write that lands first keeps its rows out (#181).
+    const fill = this.#collection.startFill?.();
+    if (fill === undefined) return this.#runner.load(this.#query);
     // Loaded for the owner in its order, then target primary-key order, as preloaded.
     const records = await this.#runner.load({ ...this.#query, order: this.#withPrimaryKeyOrder() });
-    collection.fill(records);
-    return [...(this.#cached() ?? records)];
+    return fill(records) as M[];
   }
 
   /** The owner's loaded records for this hasMany, if it has them. */

@@ -15,8 +15,12 @@ import type { ResolvedAssociation } from "./resolved-association.ts";
 export interface OwnedCollection {
   /** The records it holds without a query (stored, then built), or undefined if not loaded. */
   loaded(): readonly ModelBase[] | undefined;
-  /** Keeps records just loaded from D1. Only the association itself has it, not narrowed ones. */
-  fill?(records: readonly ModelBase[]): void;
+  /**
+   * Starts a load from D1, called before its query is sent; the function it returns takes the
+   * rows and gives the load's own records (then those built). It keeps them only if nothing
+   * changed the association meanwhile (#181). Only the association itself has it, not narrowed ones.
+   */
+  startFill?(): (records: readonly ModelBase[]) => readonly ModelBase[];
   /** A record created through it joins the loaded records, as in Rails. */
   created(record: ModelBase): void;
   /** A record built through it, for autosave. */
@@ -69,18 +73,28 @@ function withKey(
   const recordState = owner[state];
   const { name, ownerAttribute, definition } = association;
   const built = () => recordState.built(name);
+  // The stored records, then those built through it and not among them, as Rails merges new
+  // records into what it loads.
+  const withBuilt = (stored: readonly ModelBase[]) => [
+    ...stored,
+    ...built().filter((record) => !stored.includes(record)),
+  ];
   const fill = (records: readonly ModelBase[]) =>
     recordState.cacheAssociation(name, { attribute: ownerAttribute, key, value: records });
   const collection: OwnedCollection = {
-    // The stored records, then those built through it and not among them, as Rails merges
-    // new records into what it loads.
     loaded() {
       const stored = recordState.cachedAssociation(name)?.value as ModelBase[] | undefined;
-      if (stored === undefined) return undefined;
-      return [...stored, ...built().filter((record) => !stored.includes(record))];
+      return stored === undefined ? undefined : withBuilt(stored);
     },
-    fill,
+    startFill() {
+      const generation = recordState.associationGeneration(name);
+      return (records) => {
+        if (recordState.associationGeneration(name) === generation) fill(records);
+        return withBuilt(records);
+      };
+    },
     created(record) {
+      recordState.markAssociationChanged(name);
       const loaded = collection.loaded();
       if (loaded !== undefined) fill([...loaded, record]);
     },
