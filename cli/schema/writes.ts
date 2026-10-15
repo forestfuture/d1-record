@@ -3,7 +3,8 @@ import { basename, dirname } from "node:path";
 import { written, type Plan, type Step } from "../plan.ts";
 import { importPath, shown } from "../project/paths.ts";
 import type { DatabaseSnapshot } from "../project/snapshot.ts";
-import { layoutNote, migrationTool, originNotes } from "./origin.ts";
+import { migrationTool } from "../project/tools.ts";
+import { layoutNote, originNotes } from "./origin.ts";
 import { fingerprintIn, renderBase, renderSchema } from "./render.ts";
 import type { GeneratedTable } from "./schema.ts";
 
