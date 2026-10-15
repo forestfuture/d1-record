@@ -32,16 +32,8 @@ export class LoadedAssociations {
   }
 
   /**
-   * Keeps a loaded association (preloaded or lazily loaded) for the key given. Loads already
-   * sent aren't discarded: the belongsTo and hasOne writers move to `set` with #189.
-   */
-  cache(name: string, entry: CachedAssociation): void {
-    this.#entries.set(name, entry);
-  }
-
-  /**
-   * Sets the association to what a write made it, for the key `attribute` holds now; loads of
-   * it already sent won't be kept.
+   * Sets the association to what a write or preload made it, for the key `attribute` holds now;
+   * loads of it already sent won't be kept.
    */
   set(name: string, attribute: string, value: unknown): void {
     this.#entries.set(name, { attribute, key: this.#key(attribute), value });

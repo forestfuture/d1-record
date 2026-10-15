@@ -42,11 +42,7 @@ export function linkRecords(owner: ModelBase, autosaves: readonly Autosave[]): v
     for (const record of records) {
       record[state].writeKey(definition.foreignKey, value, name);
       if (definition.kind === "hasOne") {
-        owner[state].associations.cache(name, {
-          attribute: ownerAttribute,
-          key: value,
-          value: record,
-        });
+        owner[state].associations.set(name, ownerAttribute, record);
       }
     }
   }
