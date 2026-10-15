@@ -1,7 +1,6 @@
 // `modelFor` and `ApplicationRecord`: Model base classes built on the generated schema (ADR-0010).
 import { InvalidModel } from "./errors.ts";
 import {
-  markIgnoringColumns,
   type AttributeSpecs,
   type AttributeType,
   type ExactSpecs,
@@ -174,9 +173,8 @@ export function modelFor<const T extends TableSchemas, B extends BaseClass = typ
     const { specs, ignoring } = specsFor(table, schema, overrides);
     // Generic in the app's base class, so seen here as the library's, which every base extends.
     const model = defineModel(specs, base) as unknown as ModelClass;
-    bindTable(model, table);
+    bindTable(model, table, { ignoresColumns: ignoring });
     model.primaryKey = schema.primaryKey;
-    if (ignoring) markIgnoringColumns(model);
     return model;
   }
   return SchemaModel as SchemaModel<T, B>;
