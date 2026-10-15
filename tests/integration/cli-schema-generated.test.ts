@@ -120,6 +120,7 @@ describe("a schema generated from migrations", () => {
       .model(Featured)
       .createOrThrow({ userId: user.id, name: "Chair", priceCents: 12000 });
 
+    const inserted = events.map((event) => event.sql);
     events.length = 0;
     const read = await db.model(Featured).find(featured.id);
 
@@ -127,6 +128,7 @@ describe("a schema generated from migrations", () => {
     expect(events.map((event) => event.sql)).toEqual([
       expect.stringMatching(/^SELECT "id", "user_id", "name", .*"tagline" FROM "products"/),
     ]);
+    expect([...inserted, ...events.map((event) => event.sql)].join()).not.toContain("settings");
   });
 
   test("a Model declared in full works beside the generated ones", async () => {

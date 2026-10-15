@@ -128,7 +128,7 @@ function specsFor(
   name: string,
   table: TableSchema,
   overrides: Readonly<Record<string, unknown>>,
-): { specs: AttributeSpecs; ignoring: boolean } {
+): { specs: AttributeSpecs; ignoresColumns: boolean } {
   const where = name;
   const changes = new Map<string, ReturnType<typeof checked>>();
   for (const [attribute, override] of Object.entries(overrides)) {
@@ -148,7 +148,7 @@ function specsFor(
     specs[attribute] =
       change === undefined ? spec : checkedOverride(`${name}.${attribute}`, spec, change);
   }
-  return { specs, ignoring: [...changes.values()].includes(false) };
+  return { specs, ignoresColumns: [...changes.values()].includes(false) };
 }
 
 /**
@@ -170,10 +170,10 @@ export function modelFor<const T extends TableSchemas, B extends BaseClass = typ
     if (schema === undefined) {
       throw new InvalidModel(`There's no table named ${table} in the generated schema`);
     }
-    const { specs, ignoring } = specsFor(table, schema, overrides);
+    const { specs, ignoresColumns } = specsFor(table, schema, overrides);
     // Generic in the app's base class, so seen here as the library's, which every base extends.
     const model = defineModel(specs, base) as unknown as ModelClass;
-    bindTable(model, table, { ignoresColumns: ignoring });
+    bindTable(model, table, { ignoresColumns });
     model.primaryKey = schema.primaryKey;
     return model;
   }

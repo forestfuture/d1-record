@@ -1,5 +1,4 @@
 // Association types and options, and readying a Model: its associations checked and installed.
-import { ignoresColumns } from "./table-names.ts";
 import { InvalidModel } from "./errors.ts";
 import { associationsOf } from "./association-fields.ts";
 import { belongsToAccessor, hasOneAccessor } from "./association-writers.ts";
@@ -112,8 +111,6 @@ const prepared = new WeakSet<object>();
 export function readyModel(model: ModelClass): void {
   verifyModel(model);
   if (prepared.has(model)) return;
-  // Derived facts, settled once here: whether its queries name their columns.
-  ignoresColumns(model);
   for (const [name, definition] of associationsOf(model)) {
     checkAssociation(model, name, definition);
     Object.defineProperty(model.prototype, name, accessorProperty(name, definition));
