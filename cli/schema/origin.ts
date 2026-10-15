@@ -1,13 +1,14 @@
 // Recognizes migrations written by another tool (Drizzle, Prisma), and the columns to check.
 // Those tools can store values differently from d1-record's conventions, so some columns
 // convert to the wrong type and fail when they are read (#73, #159).
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { underscore } from "../../src/naming.ts";
 import { storageOverride } from "./conventions.ts";
 import { shown } from "../project/paths.ts";
 import type { Target } from "../project/targets.ts";
-import type { GeneratedTable, Migration } from "./schema.ts";
+import type { Migration } from "../project/migrations.ts";
+import type { GeneratedTable } from "./schema.ts";
 
 const tools = ["Drizzle", "Prisma"] as const;
 
@@ -63,20 +64,6 @@ export function migrationTool(
     (tool) =>
       toolsFound.includes(tool) ||
       migrations.some((migration) => signs[tool].marker.test(migration.sql)),
-  );
-}
-
-/**
- * Whether a database's migrations are in folders (`migrations/0000_init/migration.sql`, as
- * Drizzle writes them) with no `migrations_pattern` in the config to find them.
- */
-export function hasNestedMigrations(target: Target): boolean {
-  const dir = target.migrationsDir;
-  if (target.database.migrationsPattern !== undefined || !existsSync(dir)) return false;
-  const entries = readdirSync(dir, { withFileTypes: true });
-  if (entries.some((entry) => entry.isFile() && entry.name.endsWith(".sql"))) return false;
-  return entries.some(
-    (entry) => entry.isDirectory() && existsSync(join(dir, entry.name, "migration.sql")),
   );
 }
 

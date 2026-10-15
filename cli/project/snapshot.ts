@@ -2,9 +2,9 @@
 // One per D1 database. Commands plan from a snapshot, so what they decide is testable without a
 // folder on disk (#95).
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { hasNestedMigrations, toolsWithFiles, type Tool } from "../schema/origin.ts";
-import { migrationsOf, targetsOf, type ProjectOptions, type Target } from "./targets.ts";
-import type { Migration } from "../schema/schema.ts";
+import { toolsWithFiles, type Tool } from "../schema/origin.ts";
+import { hasNestedMigrations, migrationsOf, type Migration } from "./migrations.ts";
+import { targetsOf, type ProjectOptions, type Target } from "./targets.ts";
 
 /** One D1 database, and what's on disk for it. */
 export interface DatabaseSnapshot {
