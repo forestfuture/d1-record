@@ -575,6 +575,22 @@ describe("statements", () => {
         expect(bodies(await post.comments().toArray())).toEqual(["three"]);
       });
 
+      test("a collection read a write overtook still resolves to its rows with the records built through it", async () => {
+        const { db, arm, held, release } = holdStatements(binding, readsComments, "afterRunning");
+        await seedComments(db);
+        const post = await db.model(Post).find(1);
+        post.comments().build({ body: "draft" });
+        arm();
+
+        const reading = post.comments().toArray();
+        await held;
+        await post.comments().updateAll({ body: "new" });
+        release();
+
+        expect(bodies(await reading)).toEqual(["one", "two", "draft"]);
+        expect(post.isLoaded("comments")).toBe(false);
+      });
+
       test("a collection read sent after a statement is built and answered after its batch isn't kept", async () => {
         const { db, arm, held, release } = holdStatements(binding, readsComments, "afterRunning");
         await seedComments(db);
@@ -588,22 +604,6 @@ describe("statements", () => {
         release();
 
         expect(bodies(await reading)).toEqual(["one", "two"]);
-        expect(post.isLoaded("comments")).toBe(false);
-      });
-
-      test("…and still resolves to its rows with the records built through it", async () => {
-        const { db, arm, held, release } = holdStatements(binding, readsComments, "afterRunning");
-        await seedComments(db);
-        const post = await db.model(Post).find(1);
-        post.comments().build({ body: "draft" });
-        arm();
-
-        const reading = post.comments().toArray();
-        await held;
-        await post.comments().updateAll({ body: "new" });
-        release();
-
-        expect(bodies(await reading)).toEqual(["one", "two", "draft"]);
         expect(post.isLoaded("comments")).toBe(false);
       });
 

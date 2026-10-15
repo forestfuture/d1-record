@@ -322,7 +322,7 @@ export class Relation<M extends ModelBase, S = {}> {
     method: string,
   ): Statement {
     this.#requireSavedOwner();
-    const landed = this.#clearCollection();
+    const landed = this.#clearCollectionUntilWritten();
     const inherited = castInherited(
       this.#model,
       inheritedAttributes(this.#query.conditions),
@@ -340,7 +340,7 @@ export class Relation<M extends ModelBase, S = {}> {
    * Clears what an owner has loaded through this Relation's hasMany, for a statement built
    * through it; the function it returns clears it again once the statement is written (#187).
    */
-  #clearCollection(): () => void {
+  #clearCollectionUntilWritten(): () => void {
     const collection = this.#collection;
     collection.invalidate();
     return () => collection.invalidate();
@@ -360,7 +360,7 @@ export class Relation<M extends ModelBase, S = {}> {
   toUpdateAll(changes: Partial<AttributesOf<M>> | SafeSql): Statement {
     const checked = checkChanges(this.#model, changes);
     const query = compileUpdateAll(this.#writableQuery("updateAll"), checked);
-    return new Statement(this.#executor, query, this.#clearCollection());
+    return new Statement(this.#executor, query, this.#clearCollectionUntilWritten());
   }
 
   /**
@@ -376,7 +376,7 @@ export class Relation<M extends ModelBase, S = {}> {
   /** `deleteAll`, as a Statement for `db.batch([...])`. */
   toDeleteAll(): Statement {
     const query = this.#writableQuery("deleteAll");
-    const landed = this.#clearCollection();
+    const landed = this.#clearCollectionUntilWritten();
     const nullifies = this.#collection.nullifies;
     const compiled =
       nullifies === undefined
