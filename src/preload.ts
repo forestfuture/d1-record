@@ -44,7 +44,7 @@ async function preloadOne(
   for (const [index, record] of records.entries()) {
     const group = byKey.get(targetKey.condition(keys[index])) ?? [];
     const value = definition.kind === "hasMany" ? group : (group[0] ?? null);
-    // Set, not loaded: the owners aren't reachable until loading returns, so nothing can write
+    // Set, not started as a load: the owners aren't reachable until loading returns, so nothing can write
     // through them meanwhile.
     record[state].associations.set(name, ownerAttribute, value);
   }

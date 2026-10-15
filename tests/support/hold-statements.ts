@@ -2,6 +2,10 @@
 import { connect } from "../../src/index.ts";
 import type { TestDatabase } from "./d1.ts";
 
+/** Whether a statement reads `table`: what to hold to land a read after something else. */
+export const reads = (table: string) => (sql: string) =>
+  sql.startsWith("SELECT") && sql.includes(`"${table}"`);
+
 /** A held statement waits for `release()` before it reaches D1, or after D1 has answered it. */
 type Hold = "beforeRunning" | "afterRunning";
 

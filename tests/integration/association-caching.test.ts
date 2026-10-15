@@ -9,7 +9,7 @@ import {
   type QueryEvent,
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
-import { holdStatements } from "../support/hold-statements.ts";
+import { holdStatements, reads } from "../support/hold-statements.ts";
 
 class User extends Model({
   id: { type: "integer", null: false },
@@ -51,10 +51,6 @@ class Profile extends Model({
 }) {
   static tableName = "profiles";
 }
-
-/** A read of `table`. */
-const reads = (table: string) => (sql: string) =>
-  sql.startsWith("SELECT") && sql.includes(`"${table}"`);
 
 describe("caching lazily loaded associations", () => {
   let binding: TestDatabase;
@@ -292,7 +288,7 @@ describe("caching lazily loaded associations", () => {
     expect(user.loaded("posts")).toHaveLength(3);
   });
 
-  test("a belongsTo read answered after set() resolves to what it loaded, and set()'s record stays loaded", async () => {
+  test("a belongsTo read answered after set() leaves set()'s record loaded", async () => {
     const {
       db: database,
       arm,
@@ -350,7 +346,26 @@ describe("caching lazily loaded associations", () => {
     expect(user.loaded("profile")).toBe(built);
   });
 
-  test("a hasOne read answered after reload() isn't kept", async () => {
+  test("a hasOne read answered after create() leaves the created record loaded", async () => {
+    const {
+      db: database,
+      arm,
+      held,
+      release,
+    } = holdStatements(binding, reads("profiles"), "afterRunning");
+    const user = await database.model(User).find(2);
+    arm();
+
+    const reading = user.profile();
+    await held;
+    const created = await user.profile.createOrThrow({ bio: "New" });
+    release();
+
+    expect(await reading).toBeNull();
+    expect(user.loaded("profile")).toBe(created);
+  });
+
+  test("a hasOne read answered after reload() leaves nothing loaded", async () => {
     const {
       db: database,
       arm,
