@@ -405,7 +405,7 @@ export class ModelBase {
   loaded<K extends AssociationName<this>>(name: K): LoadedValue<this[K]> {
     const model = this.constructor as ModelClass;
     associationOf(model, name);
-    const cached = this[state].cachedAssociation(name);
+    const cached = this[state].associations.get(name);
     if (cached === undefined) {
       throw new AssociationNotLoaded(
         `${model.name} record hasn't loaded "${name}"; preload it with includes("${name}"), or read it first`,
@@ -419,7 +419,7 @@ export class ModelBase {
   /** Whether the association is loaded: preloaded or already read, for the key held now. */
   isLoaded<K extends AssociationName<this>>(name: K): boolean {
     associationOf(this.constructor as ModelClass, name);
-    return this[state].cachedAssociation(name) !== undefined;
+    return this[state].associations.get(name) !== undefined;
   }
 
   /**

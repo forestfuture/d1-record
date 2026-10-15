@@ -46,7 +46,7 @@ async function preloadOne(
     const value = definition.kind === "hasMany" ? group : (group[0] ?? null);
     // Kept unconditionally: the owners aren't reachable until loading returns, so nothing can
     // write through them meanwhile.
-    record[state].cacheAssociation(name, { attribute: ownerAttribute, key: keys[index], value });
+    record[state].associations.cache(name, { attribute: ownerAttribute, key: keys[index], value });
   }
   return targets;
 }

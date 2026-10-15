@@ -4,6 +4,7 @@ import type { Assignment } from "./compiler.ts";
 import { Errors } from "./errors-collection.ts";
 import { MissingAttribute, NoDatabase, RecordDestroyed } from "./errors.ts";
 import type { Executor } from "./executor.ts";
+import { LoadedAssociations } from "./loaded-associations.ts";
 import { attributeOf, initialValues, type AttributeDefinition } from "./metadata.ts";
 import type { ChangeOptions, ModelBase, ModelClass } from "./model.ts";
 
@@ -13,13 +14,6 @@ export const state = Symbol("state");
 /** Each record's link to its database (its `RecordState`), for pinning it to one (#93). */
 export function linksOf(records: Iterable<ModelBase>): RecordState[] {
   return [...records].map((record) => record[state]);
-}
-
-/** A loaded association, with the owner's attribute and key value it was loaded for. */
-export interface CachedAssociation {
-  attribute: string;
-  key: unknown;
-  value: unknown;
 }
 
 /** `{ attribute: [before, after] }` */
@@ -47,10 +41,8 @@ export class RecordState {
   #savedChanges: Changes = {};
   readonly #errors = new Errors();
   #abortReason: string | undefined;
-  readonly #associations = new Map<string, CachedAssociation>();
-  /** Counted when an association changes, by name and record-wide, so a stale load isn't kept. */
-  readonly #loadsDiscarded = new Map<string, number>();
-  #allLoadsDiscarded = 0;
+  /** The associations it has loaded, each kept while its key is current. */
+  readonly associations = new LoadedAssociations((attribute) => this.#values[attribute]);
   readonly #built = new Map<string, ModelBase[]>();
   readonly #belongsTo = new Map<string, ModelBase>();
 
@@ -181,64 +173,11 @@ export class RecordState {
     this.assign(attributes);
   }
 
-  /**
-   * Caches a loaded association (preloaded or lazily loaded): a record, an array of records,
-   * or null. It stays current while `attribute` still holds `key`. Loads already sent aren't
-   * discarded: the belongsTo and hasOne writers move to `setAssociation` with #189.
-   */
-  cacheAssociation(name: string, entry: CachedAssociation): void {
-    this.#associations.set(name, entry);
-  }
-
-  /** Sets the association to what a write made it; loads of it already sent won't be kept. */
-  setAssociation(name: string, entry: CachedAssociation): void {
-    this.#associations.set(name, entry);
-    this.#discardPendingLoads(name);
-  }
-
-  /**
-   * Starts a load of the association, before its query is sent: the function it returns keeps
-   * the loaded entry only if nothing changed the association meanwhile (#181).
-   */
-  startLoad(name: string): (entry: CachedAssociation) => void {
-    const generation = this.#generation(name);
-    return (entry) => {
-      if (this.#generation(name) === generation) this.#associations.set(name, entry);
-    };
-  }
-
-  /** The cached association, if it was loaded for the key the record holds now. */
-  cachedAssociation(name: string): { value: unknown } | undefined {
-    const entry = this.#associations.get(name);
-    if (entry === undefined || !Object.is(this.#values[entry.attribute] ?? null, entry.key)) {
-      return undefined;
-    }
-    return entry;
-  }
-
   /** Points this record at `value` through `attribute` (a foreign key), keeping it loaded. */
   pointAt(name: string, attribute: string, key: unknown, value: unknown): void {
     this.writeKey(attribute, key, name);
-    // The key as the foreign key stores it (cast to its type), so the cache matches it.
-    this.cacheAssociation(name, { attribute, key: this.#values[attribute], value });
-  }
-
-  /** Forgets what's cached for the association; loads of it already sent won't be kept. */
-  clearAssociation(name: string): void {
-    this.#associations.delete(name);
-    this.#discardPendingLoads(name);
-  }
-
-  #discardPendingLoads(name: string): void {
-    this.#loadsDiscarded.set(name, (this.#loadsDiscarded.get(name) ?? 0) + 1);
-  }
-
-  /**
-   * Changes with each change to the association, so a load can tell whether it's still current.
-   * The two counts are summed, so `reload()` makes every name stale without touching the map.
-   */
-  #generation(name: string): number {
-    return this.#allLoadsDiscarded + (this.#loadsDiscarded.get(name) ?? 0);
+    // The key as the foreign key stores it (cast to its type), so the entry matches it.
+    this.associations.cache(name, { attribute, key: this.#values[attribute], value });
   }
 
   /** Records built through one of this record's hasMany associations, for autosave. */
@@ -269,15 +208,14 @@ export class RecordState {
 
   /** Forgets an association: what's cached and what was built through it (`reloadAssociation`). */
   resetAssociation(name: string): void {
-    this.clearAssociation(name);
+    this.associations.clear(name);
     this.#built.delete(name);
     this.#belongsTo.delete(name);
   }
 
   /** Forgets every association, cached and built (`reload()`), as Rails' reload does. */
   clearAssociations(): void {
-    this.#associations.clear();
-    this.#allLoadsDiscarded += 1;
+    this.associations.clearAll();
     this.#built.clear();
     this.#belongsTo.clear();
   }
