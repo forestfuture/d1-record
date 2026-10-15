@@ -25,16 +25,16 @@ datetime, json or references; then ! for NOT NULL, =value for a default, and :un
   --out <file>        The schema file to regenerate, when it isn't src/db/schema.ts`,
   action({ values, positionals }, print, fail) {
     const [kind, name, ...columns] = positionals;
-    const { id, "no-timestamps": noTimestamps, models, database, config, out } = values;
+    const { id, "no-timestamps": noTimestamps, help: _, ...flags } = values;
     if ((kind !== "model" && kind !== "migration") || name === undefined) {
       return fail("Name what to generate: g model <Name> or g migration <Name>");
     }
     if (id !== undefined && id !== "integer" && id !== "text") {
       return fail(`--id is integer or text, not ${id}`);
     }
-    const generate = { kind, name, columns, models, database, config, out } as const;
+    const timestamps = !noTimestamps;
     return runGenerate(
-      { ...generate, integerId: id === "integer", timestamps: !noTimestamps },
+      { ...flags, kind, name, columns, integerId: id === "integer", timestamps },
       print,
     );
   },
