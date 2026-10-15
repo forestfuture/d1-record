@@ -23,7 +23,7 @@ datetime, json or references; then ! for NOT NULL, =value for a default, and :un
                       ApplicationRecord is imported from the same folder
   --database <name>   The D1 binding to use, when the config has several
   --out <file>        The schema file to regenerate, when it isn't src/db/schema.ts`,
-  run({ values, positionals }, print, fail) {
+  action({ values, positionals }, print, fail) {
     const [kind, name, ...columns] = positionals;
     const { id, "no-timestamps": noTimestamps, models, database, config, out } = values;
     if ((kind !== "model" && kind !== "migration") || name === undefined) {

@@ -1,15 +1,15 @@
-// What a `d1-record` subcommand declares (flags, help, how it runs), and `defineSubcommand`, which parses a command line for it.
+// What a `d1-record` subcommand declares (flags, help, its action), `defineSubcommand`, which parses a command line for it, and `helpFor`, which joins their help.
 import { parseArgs, type ParseArgsOptionsConfig } from "node:util";
 import type { Print } from "./plan.ts";
 
 /** The flags every subcommand takes. */
-export const sharedOptions = {
+const sharedOptions = {
   config: { type: "string" },
   help: { type: "boolean", short: "h" },
 } as const satisfies ParseArgsOptionsConfig;
 
 /** The help for the shared flags, after every subcommand's own. */
-export const sharedFlagHelp = `Options for every command:
+const sharedFlagHelp = `Options for every command:
   --config <file>     Use this Wrangler config
   -h, --help          Show this help`;
 
@@ -27,7 +27,7 @@ type Outcome = number | "watching" | Promise<number>;
 /** Prints what is wrong with a command line, then the usage; 1. */
 type Fail = (problem: string) => number;
 
-/** The help a subcommand gives, which `d1-record --help` joins into one usage. */
+/** The help a subcommand gives, which `helpFor` joins into one usage. */
 interface SubcommandHelp {
   /** Its Usage line or lines, indented as they're printed. */
   usage: string;
@@ -37,26 +37,30 @@ interface SubcommandHelp {
   flagHelp: string;
 }
 
-/** A subcommand as written: its help, its flags, and what it does with them once parsed. */
+/** A subcommand as written: its help, its flags, and what it does once they're parsed. */
 interface SubcommandSpec<O extends ParseArgsOptionsConfig> extends SubcommandHelp {
   /** Its own flags (the shared ones are added). */
   options: O;
-  run(parsed: Parsed<O>, print: Print, fail: Fail): Outcome;
+  /** What it does once its flags are parsed. */
+  action: (parsed: Parsed<O>, print: Print, fail: Fail) => Outcome;
 }
 
 /** A subcommand ready to run: it parses the arguments after its name, and runs. */
 export interface Subcommand extends SubcommandHelp {
+  /** Every flag it takes: the shared ones and its own. */
   options: ParseArgsOptionsConfig;
   run(argv: readonly string[], print: Print, fail: Fail): Outcome;
 }
 
-/** A subcommand from its spec: its `run` gets the command line parsed, or `fail` says why it can't be. */
+/** A subcommand from its spec: its `action` gets the command line parsed, or `fail` says why it can't be. */
 export function defineSubcommand<const O extends ParseArgsOptionsConfig>(
   spec: SubcommandSpec<O>,
 ): Subcommand {
-  const options: WithShared<O> = { ...sharedOptions, ...spec.options };
+  const { options: own, action, ...help } = spec;
+  const options: WithShared<O> = { ...sharedOptions, ...own };
   return {
-    ...spec,
+    ...help,
+    options,
     run(argv, print, fail) {
       let parsed: Parsed<O>;
       try {
@@ -64,7 +68,15 @@ export function defineSubcommand<const O extends ParseArgsOptionsConfig>(
       } catch (error) {
         return fail((error as Error).message);
       }
-      return spec.run(parsed, print, fail);
+      return action(parsed, print, fail);
     },
   };
+}
+
+/** The usage: every subcommand's Usage lines, its notes, its flags, then the shared flags. */
+export function helpFor(subcommands: readonly Subcommand[]): string {
+  const usage = `Usage:\n${subcommands.map((subcommand) => subcommand.usage).join("\n")}`;
+  const notes = subcommands.flatMap((subcommand) => subcommand.notes ?? []);
+  const flags = subcommands.map((subcommand) => subcommand.flagHelp);
+  return [usage, ...notes, ...flags, sharedFlagHelp].join("\n\n");
 }
