@@ -1,4 +1,4 @@
-// Statement: a bulk write (`toInsert`, `toUpdateAll`, …) built to run on its own or in a batch.
+// Statement: a bulk write (`toInsert`, `toUpdateAll`, …) built to run on its own or in a batch, and what runs once it's written.
 import {
   compileInsert,
   compileInsertRows,
