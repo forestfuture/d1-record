@@ -467,8 +467,8 @@ describe("statements", () => {
         // D1 that holds every UPDATE back until the read has loaded the collection: ordered, not
         // timed, so the read always lands while the write is in flight.
         type Prepared = ReturnType<TestDatabase["prepare"]>;
-        let readLanded!: () => void;
-        const read = new Promise<void>((resolve) => (readLanded = resolve));
+        let releaseUpdate!: () => void;
+        const readDone = new Promise<void>((resolve) => (releaseUpdate = resolve));
         const slow = new Proxy(binding, {
           get(target, property) {
             if (property !== "prepare") return Reflect.get(target, property, target);
@@ -480,7 +480,7 @@ describe("statements", () => {
                       return (...values: unknown[]) => delayed(inner.bind(...values));
                     if (name !== "all") return Reflect.get(inner, name, inner);
                     return async () => {
-                      await read;
+                      await readDone;
                       return inner.all();
                     };
                   },
@@ -499,7 +499,7 @@ describe("statements", () => {
           "one",
           "two",
         ]);
-        readLanded();
+        releaseUpdate();
         await writing;
 
         expect((await post.comments().toArray()).map((comment) => comment.body)).toEqual([
