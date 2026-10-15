@@ -142,8 +142,7 @@ describe("running one piece of code in the console's scope", () => {
   });
 
   test("a rejection nobody awaits fails the script when it arrives while the code still runs", async () => {
-    // Ordered, not timed: D1 answers the count after the lookup, and the rejection event fires
-    // by the next turn of the event loop, before the code goes on to its result.
+    // Ordered, not timed: D1 answers the count after the lookup; the tick lets the rejection event fire.
     const result = await run(
       "Sample.find(99); await Sample.count(); await new Promise((resolve) => setImmediate(resolve)); 1",
     );
