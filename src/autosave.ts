@@ -15,8 +15,8 @@ export interface Autosave {
  */
 export function autosavesOf(owner: ModelBase, claimed: ReadonlySet<ModelBase>): Autosave[] {
   const model = modelOf(owner);
-  return owner[state]
-    .builtRecords()
+  return owner[state].autosaves
+    .allBuilt()
     .map(([name, built]) => ({
       association: resolveAssociation(model, name),
       records: built.filter((record) => record[state].isNew && !claimed.has(record)),
@@ -65,8 +65,8 @@ export interface BelongsToAutosave {
  */
 export function belongsToAutosavesOf(owner: ModelBase): BelongsToAutosave[] {
   const model = modelOf(owner);
-  return owner[state]
-    .belongsToAutosaves()
+  return owner[state].autosaves
+    .allBelongsTo()
     .map(([name, record]) => ({ association: resolveAssociation(model, name), record }));
 }
 
@@ -92,6 +92,6 @@ export function linkBelongsTo(owner: ModelBase, pointedAt: readonly BelongsToAut
   for (const { association, record } of pointedAt) {
     const { name, ownerAttribute, targetAttribute } = association;
     owner[state].pointAt(name, ownerAttribute, record[state].read(targetAttribute), record);
-    owner[state].setBelongsToAutosave(name, undefined);
+    owner[state].autosaves.setBelongsTo(name, undefined);
   }
 }
