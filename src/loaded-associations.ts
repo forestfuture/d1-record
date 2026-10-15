@@ -49,12 +49,11 @@ export class LoadedAssociations {
   }
 
   /**
-   * Starts a load of the association, before its query is sent, for the key `attribute` holds
-   * now: the function it returns keeps the loaded value only if nothing changed the association
+   * Starts a load of the association, before its query is sent, for the key its query was built
+   * for: the function it returns keeps the loaded value only if nothing changed the association
    * meanwhile (#181).
    */
-  startLoad(name: string, attribute: string): (value: unknown) => void {
-    const key = this.#key(attribute);
+  startLoad(name: string, attribute: string, key: unknown): (value: unknown) => void {
     const generation = this.#generation(name);
     return (value) => {
       if (this.#generation(name) === generation) this.#entries.set(name, { attribute, key, value });

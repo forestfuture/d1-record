@@ -60,13 +60,16 @@ export function ownedCollection(
   owner: ModelBase,
   association: ResolvedAssociation,
 ): OwnedCollection {
-  return association.keyOf(owner) === null
-    ? withoutKey(owner, association)
-    : withKey(owner, association);
+  const key = association.keyOf(owner);
+  return key === null ? withoutKey(owner, association) : withKey(owner, association, key);
 }
 
 /** An owner with a key: its loaded records live in its association cache. */
-function withKey(owner: ModelBase, association: ResolvedAssociation): OwnedCollection {
+function withKey(
+  owner: ModelBase,
+  association: ResolvedAssociation,
+  key: unknown,
+): OwnedCollection {
   const recordState = owner[state];
   const loadedAssociations = recordState.associations;
   const { name, ownerAttribute, definition } = association;
@@ -84,7 +87,7 @@ function withKey(owner: ModelBase, association: ResolvedAssociation): OwnedColle
       return stored === undefined ? undefined : withBuilt(stored);
     },
     startFill<M extends ModelBase>() {
-      const keep = loadedAssociations.startLoad(name, ownerAttribute);
+      const keep = loadedAssociations.startLoad(name, ownerAttribute, key);
       return (records: readonly M[]) => {
         keep(records);
         return withBuilt(records);
