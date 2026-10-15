@@ -24,11 +24,16 @@ export const statementParts = Symbol("statementParts");
 export class Statement {
   readonly #executor: Executor;
   readonly #query: CompiledSql;
+  readonly #landed: () => void;
 
-  /** @internal Statements are built by Relations' `to…` methods. */
-  constructor(executor: Executor, query: CompiledSql) {
+  /**
+   * @internal Statements are built by Relations' `to…` methods. `landed` runs once D1 has
+   * written it, alone or in a batch (a hasMany's clears what its owner has loaded, #187).
+   */
+  constructor(executor: Executor, query: CompiledSql, landed: () => void = () => {}) {
     this.#executor = executor;
     this.#query = query;
+    this.#landed = landed;
   }
 
   /** The SQL this Statement sends and its bound values, unsent: see `Relation#toSql`. */
@@ -36,16 +41,18 @@ export class Statement {
     return querySql(this.#query);
   }
 
-  /** @internal The Database's Executor it runs on, and its compiled SQL. */
-  get [statementParts](): { executor: Executor; query: CompiledSql } {
-    return { executor: this.#executor, query: this.#query };
+  /** @internal The Database's Executor it runs on, its compiled SQL, and what runs once written. */
+  get [statementParts](): { executor: Executor; query: CompiledSql; landed: () => void } {
+    return { executor: this.#executor, query: this.#query, landed: this.#landed };
   }
 }
 
-/** Runs a statement on its own, resolving to D1's `meta`: what a Relation's write methods do. */
-export function runAlone(statement: Statement): Promise<D1Meta> {
-  const { executor, query } = statement[statementParts];
-  return executor.run(query);
+/** Runs a statement on its own, then its `landed`, resolving to D1's `meta`: what a Relation's write methods do. */
+export async function runAlone(statement: Statement): Promise<D1Meta> {
+  const { executor, query, landed } = statement[statementParts];
+  const meta = await executor.run(query);
+  landed();
+  return meta;
 }
 
 /**
@@ -68,14 +75,18 @@ export function insertStatement(
   executor: Executor,
   model: ModelClass,
   rows: readonly Record<string, unknown>[],
-  { conflict, method }: { conflict?: Conflict | undefined; method: string },
+  {
+    conflict,
+    method,
+    landed,
+  }: { conflict?: Conflict | undefined; method: string; landed?: () => void },
 ): Statement {
   const given = sameAttributes(rows, method);
   const assigned = rows.map((row) => new Map(insertAssignments(model, row)));
   const names = [...(assigned[0]?.keys() ?? [])];
   if (names.length === 0) {
     if (rows.length === 1 && conflict === undefined) {
-      return new Statement(executor, compileInsert(model, []));
+      return new Statement(executor, compileInsert(model, []), landed);
     }
     throw new TypeError(`${method}(): nothing to insert; give each row at least one attribute`);
   }
@@ -84,7 +95,7 @@ export function insertStatement(
     conflict?.kind === "update"
       ? { ...conflict, update: [...given, ...(names.includes("updatedAt") ? ["updatedAt"] : [])] }
       : conflict;
-  return new Statement(executor, compileInsertRows(model, names, values, resolved));
+  return new Statement(executor, compileInsertRows(model, names, values, resolved), landed);
 }
 
 /** The attributes every row was given; they must be the same for all rows, in any order. */

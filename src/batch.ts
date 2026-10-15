@@ -86,10 +86,12 @@ interface PreparedEntry {
 
 function statementEntry(statement: Statement): PreparedEntry {
   let meta: D1Meta | undefined;
+  const { query, landed } = statement[statementParts];
   const write: PreparedWrite = {
-    statements: [statement[statementParts].query],
+    statements: [query],
     commit: ([result]) => {
       meta = result?.meta;
+      landed();
     },
     after: async () => {},
   };
