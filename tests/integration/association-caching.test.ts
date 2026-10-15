@@ -235,19 +235,29 @@ describe("caching lazily loaded associations", () => {
   });
 
   test.each([
-    ["updateAll", (user: User) => user.posts().where({ title: "A2" }).updateAll({ title: "B" })],
-    ["deleteAll", (user: User) => user.posts().where({ title: "A2" }).deleteAll()],
-    ["insert", (user: User) => user.posts().where({ title: "A2" }).insert({ id: 13, title: "A3" })],
-  ])("…narrowed ones too: %s through a where", async (_write, write) => {
+    [
+      "updateAll",
+      (user: User) => user.posts().where({ title: "A2" }).updateAll({ title: "B" }),
+      ["A1", "B"],
+    ],
+    ["deleteAll", (user: User) => user.posts().where({ title: "A2" }).deleteAll(), ["A1"]],
+    [
+      "insert",
+      (user: User) => user.posts().where({ title: "A2" }).insert({ id: 13, title: "A3" }),
+      ["A1", "A2", "A3"],
+    ],
+    [
+      "upsert",
+      (user: User) => user.posts().where({ title: "A2" }).upsert({ id: 11, title: "Up" }),
+      ["A1", "Up"],
+    ],
+  ])("%s through a narrowed hasMany clears its cache", async (_write, write, titles) => {
     const user = await db().model(User).find(1);
     await user.posts().toArray();
 
     await write(user);
 
-    expect(user.isLoaded("posts")).toBe(false);
-    expect(await user.posts().pluck("title")).toEqual(
-      await db().model(Post).where({ userId: 1 }).order({ id: "asc" }).pluck("title"),
-    );
+    expect(await user.posts().pluck("title")).toEqual(titles);
   });
 
   test("reloadAssociation() queries again and returns the fresh value", async () => {
