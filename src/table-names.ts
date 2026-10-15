@@ -1,4 +1,4 @@
-// A Model's table: its name (inferred, bound, or declared) and whether it reads every column.
+// A Model's table: its name (inferred, bound, or declared) and whether its queries read every column.
 import { ancestors } from "./ancestors.ts";
 import { InvalidModel } from "./errors.ts";
 import { pluralize } from "./inflections.ts";
@@ -11,11 +11,14 @@ import { underscore } from "./naming.ts";
  */
 const bases = new WeakSet<object>();
 
+/** A generated base class's table, and whether its overrides ignore some of its columns. */
+type BoundTable = { table: string; ignoresColumns: boolean };
+
 /**
  * What `ApplicationRecord("products", overrides)` said, by the base class it made: the table, and
  * whether the overrides ignore some of its columns (`{ notes: false }`).
  */
-const boundTables = new WeakMap<object, { table: string; ignoresColumns: boolean }>();
+const boundTables = new WeakMap<object, BoundTable>();
 
 /**
  * Each Model's answer to `ignoresColumns`, remembered since the compiler asks on every query.
@@ -72,7 +75,8 @@ function tableNameSource(model: object): string | undefined {
 
 /**
  * Binds a generated Model's base class to its table: the table isn't inferred, and a subclass
- * can't name another, since the attributes are that table's columns.
+ * can't name another, since the attributes are that table's columns; and records whether its
+ * overrides ignore some columns.
  */
 export function bindTable(
   base: ModelClass,
@@ -83,26 +87,22 @@ export function bindTable(
   boundTables.set(base, { table, ignoresColumns });
 }
 
-/** What the generated base class `model` extends (or is) was bound with, if it has one. */
-function bindingOf(model: object): { table: string; ignoresColumns: boolean } | undefined {
+/** The table the nearest generated base class `model` extends (or is) is bound to, if any. */
+function boundTableOf(model: object): BoundTable | undefined {
   const owner = ancestors(model).find((each) => boundTables.has(each));
   return owner && boundTables.get(owner);
 }
 
-/** The table a generated Model's base class is bound to, if `model` has one. */
-function boundTableOf(model: object): string | undefined {
-  return bindingOf(model)?.table;
-}
-
 /**
  * Whether a Model's base class ignores some of its table's columns, so its queries name their
- * columns rather than `*` and an ignored column is never read, as in Rails. Remembered per Model:
- * the base class is bound before any Model extending it exists, so the answer can't change.
+ * columns rather than `*` and an ignored column is never read, as in Rails. The nearest bound table
+ * decides. Remembered per Model: the base class is bound before any Model extending it exists,
+ * so the answer can't change.
  */
 export function ignoresColumns(model: object): boolean {
   let answer = ignoring.get(model);
   if (answer === undefined) {
-    answer = bindingOf(model)?.ignoresColumns ?? false;
+    answer = boundTableOf(model)?.ignoresColumns ?? false;
     ignoring.set(model, answer);
   }
   return answer;
@@ -123,7 +123,7 @@ export function rejectAbstract(model: ModelClass): void {
 /** A Model must have a table name: its own, or one inferred from its class name. */
 export function requireTableName(model: ModelClass): void {
   const { tableName } = model;
-  const bound = boundTableOf(model);
+  const bound = boundTableOf(model)?.table;
   if (bound !== undefined && tableName !== bound) {
     throw new InvalidModel(
       `${model.name} sets tableName "${String(tableName)}", but its attributes are the ${bound} ` +
