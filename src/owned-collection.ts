@@ -60,17 +60,15 @@ export function ownedCollection(
   owner: ModelBase,
   association: ResolvedAssociation,
 ): OwnedCollection {
-  const key = association.keyOf(owner);
-  return key === null ? withoutKey(owner, association) : withKey(owner, association, key);
+  return association.keyOf(owner) === null
+    ? withoutKey(owner, association)
+    : withKey(owner, association);
 }
 
 /** An owner with a key: its loaded records live in its association cache. */
-function withKey(
-  owner: ModelBase,
-  association: ResolvedAssociation,
-  key: unknown,
-): OwnedCollection {
+function withKey(owner: ModelBase, association: ResolvedAssociation): OwnedCollection {
   const recordState = owner[state];
+  const loadedAssociations = recordState.associations;
   const { name, ownerAttribute, definition } = association;
   const built = () => recordState.built(name);
   // The stored records, then those built through it and not among them, as Rails merges new
@@ -80,20 +78,15 @@ function withKey(
     // Built through this association, so they're of its target Model, as the stored ones are.
     ...(built().filter((record) => !stored.includes(record as M)) as M[]),
   ];
-  const entry = (records: readonly ModelBase[]) => ({
-    attribute: ownerAttribute,
-    key,
-    value: records,
-  });
   const collection: OwnedCollection = {
     loaded() {
-      const stored = recordState.cachedAssociation(name)?.value as ModelBase[] | undefined;
+      const stored = loadedAssociations.get(name)?.value as ModelBase[] | undefined;
       return stored === undefined ? undefined : withBuilt(stored);
     },
     startFill<M extends ModelBase>() {
-      const keep = recordState.startLoad(name);
+      const keep = loadedAssociations.startLoad(name, ownerAttribute);
       return (records: readonly M[]) => {
-        keep(entry(records));
+        keep(records);
         return withBuilt(records);
       };
     },
@@ -101,22 +94,21 @@ function withKey(
       const loaded = collection.loaded();
       // Not loaded: nothing to add to, but a load already sent mustn't land without the record.
       if (loaded === undefined) {
-        recordState.clearAssociation(name);
+        loadedAssociations.clear(name);
         return;
       }
       const index = indexOfRow(loaded, record, association.target.primaryKey);
       // A copy loaded by an overlapping read gives way to the record itself, where it stood.
-      recordState.setAssociation(
+      loadedAssociations.set(
         name,
-        entry(
-          index === -1
-            ? [...loaded, record]
-            : loaded.map((each, at) => (at === index ? record : each)),
-        ),
+        ownerAttribute,
+        index === -1
+          ? [...loaded, record]
+          : loaded.map((each, at) => (at === index ? record : each)),
       );
     },
     built: (record) => recordState.addBuilt(name, record),
-    invalidate: () => recordState.clearAssociation(name),
+    invalidate: () => loadedAssociations.clear(name),
     unsavedCount: () => built().filter((record) => record[state].isNew).length,
     refusal: undefined,
     nullifies: association.deletesOnDeleteAll ? undefined : definition.foreignKey,

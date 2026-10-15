@@ -256,11 +256,11 @@ export async function cachedRead(
   load: (key: unknown) => Promise<ModelBase | null>,
 ): Promise<ModelBase | null> {
   const { name, ownerAttribute } = association;
-  const cached = owner[state].cachedAssociation(name);
+  const cached = owner[state].associations.get(name);
   if (cached !== undefined) return cached.value as ModelBase | null;
   const key = association.keyOf(owner);
   // No key: nothing to find, and nothing to query; that null is cached like any result.
   const value = key === null ? null : await load(key);
-  owner[state].cacheAssociation(name, { attribute: ownerAttribute, key, value });
+  owner[state].associations.cache(name, { attribute: ownerAttribute, key, value });
   return value;
 }
