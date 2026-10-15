@@ -1,11 +1,11 @@
 // A record's private state: its values, changes, errors, and lifecycle flags.
 import { type Attribute, attributeFor } from "./attribute.ts";
 import type { Assignment } from "./compiler.ts";
-import { Autosaves } from "./autosaves.ts";
 import { Errors } from "./errors-collection.ts";
 import { MissingAttribute, NoDatabase, RecordDestroyed } from "./errors.ts";
 import type { Executor } from "./executor.ts";
 import { LoadedAssociations } from "./loaded-associations.ts";
+import { PendingAutosaves } from "./pending-autosaves.ts";
 import { attributeOf, initialValues, type AttributeDefinition } from "./metadata.ts";
 import type { ChangeOptions, ModelBase, ModelClass } from "./model.ts";
 
@@ -45,7 +45,7 @@ export class RecordState {
   /** The associations it has loaded, each kept while its key is current. */
   readonly associations = new LoadedAssociations((attribute) => this.#values[attribute]);
   /** The new records saving it also saves, built through or pointed at by its associations. */
-  readonly autosaves = new Autosaves();
+  readonly autosaves = new PendingAutosaves();
 
   constructor(model: ModelClass) {
     this.#model = model;
@@ -184,13 +184,13 @@ export class RecordState {
   /** Forgets an association: what's loaded and its autosaves (`reloadAssociation`). */
   resetAssociation(name: string): void {
     this.associations.clear(name);
-    this.autosaves.forget(name);
+    this.autosaves.clear(name);
   }
 
-  /** Forgets every association, loaded and autosaved (`reload()`), as Rails' reload does. */
+  /** Forgets every association, loaded and autosaved (`reload()`). */
   clearAssociations(): void {
     this.associations.clearAll();
-    this.autosaves.clear();
+    this.autosaves.clearAll();
   }
 
   /** Loads a D1 row; the record becomes persisted and clean. */

@@ -1,7 +1,7 @@
 // A record's loaded associations: each kept while the key it was loaded for is current (#181, #191).
 
 /** A loaded association, with the owner's attribute and key value it was loaded for. */
-export interface CachedAssociation {
+interface CachedAssociation {
   attribute: string;
   key: unknown;
   value: unknown;

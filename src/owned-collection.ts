@@ -70,10 +70,9 @@ function withKey(
   association: ResolvedAssociation,
   key: unknown,
 ): OwnedCollection {
-  const recordState = owner[state];
-  const loadedAssociations = recordState.associations;
+  const { associations: loadedAssociations, autosaves } = owner[state];
   const { name, ownerAttribute, definition } = association;
-  const built = () => recordState.autosaves.built(name);
+  const built = () => autosaves.built(name);
   // The stored records, then those built through it and not among them, as Rails merges new
   // records into what it loads.
   const withBuilt = <M extends ModelBase>(stored: readonly M[]): M[] => [
@@ -110,7 +109,7 @@ function withKey(
           : loaded.map((each, at) => (at === index ? record : each)),
       );
     },
-    built: (record) => recordState.autosaves.addBuilt(name, record),
+    built: (record) => autosaves.addBuilt(name, record),
     invalidate: () => loadedAssociations.clear(name),
     unsavedCount: () => built().filter((record) => record[state].isNew).length,
     refusal: undefined,
