@@ -14,7 +14,7 @@ import {
   UnknownAttribute,
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
-import { holdStatements } from "../support/hold-statements.ts";
+import { holdStatements, reads } from "../support/hold-statements.ts";
 
 const log: string[] = [];
 
@@ -74,9 +74,6 @@ class Account extends Model({
 }
 
 const past = new Date(Date.UTC(2020, 0, 1));
-
-/** A read of comments. */
-const readsComments = (sql: string) => sql.startsWith("SELECT") && sql.includes('"comments"');
 
 /** The bodies of some comments, in order. */
 const bodies = (comments: readonly { body: string | null }[]) =>
@@ -490,7 +487,11 @@ describe("statements", () => {
       });
 
       test("a collection read sent before a write and answered after it isn't kept", async () => {
-        const { db, arm, held, release } = holdStatements(binding, readsComments, "afterRunning");
+        const { db, arm, held, release } = holdStatements(
+          binding,
+          reads("comments"),
+          "afterRunning",
+        );
         await seedComments(db);
         const post = await db.model(Post).find(1);
         arm();
@@ -506,7 +507,11 @@ describe("statements", () => {
       });
 
       test("a collection read sent before a write through a where and answered after it isn't kept", async () => {
-        const { db, arm, held, release } = holdStatements(binding, readsComments, "afterRunning");
+        const { db, arm, held, release } = holdStatements(
+          binding,
+          reads("comments"),
+          "afterRunning",
+        );
         await seedComments(db);
         const post = await db.model(Post).find(1);
         arm();
@@ -534,7 +539,11 @@ describe("statements", () => {
       });
 
       test("a collection read a write overtook still resolves to its rows with the records built through it", async () => {
-        const { db, arm, held, release } = holdStatements(binding, readsComments, "afterRunning");
+        const { db, arm, held, release } = holdStatements(
+          binding,
+          reads("comments"),
+          "afterRunning",
+        );
         await seedComments(db);
         const post = await db.model(Post).find(1);
         post.comments().build({ body: "draft" });
@@ -550,7 +559,11 @@ describe("statements", () => {
       });
 
       test("a collection read sent after a statement is built and answered after its batch isn't kept", async () => {
-        const { db, arm, held, release } = holdStatements(binding, readsComments, "afterRunning");
+        const { db, arm, held, release } = holdStatements(
+          binding,
+          reads("comments"),
+          "afterRunning",
+        );
         await seedComments(db);
         const post = await db.model(Post).find(1);
         const statement = post.comments().toUpdateAll({ body: "new" });
@@ -566,7 +579,11 @@ describe("statements", () => {
       });
 
       test("a collection read sent before a create through it and answered after it isn't kept", async () => {
-        const { db, arm, held, release } = holdStatements(binding, readsComments, "afterRunning");
+        const { db, arm, held, release } = holdStatements(
+          binding,
+          reads("comments"),
+          "afterRunning",
+        );
         await seedComments(db);
         const post = await db.model(Post).find(1);
         arm();
@@ -600,7 +617,11 @@ describe("statements", () => {
       });
 
       test("a collection read sent before reload() and answered after it isn't kept", async () => {
-        const { db, arm, held, release } = holdStatements(binding, readsComments, "afterRunning");
+        const { db, arm, held, release } = holdStatements(
+          binding,
+          reads("comments"),
+          "afterRunning",
+        );
         await seedComments(db);
         const post = await db.model(Post).find(1);
         arm();
@@ -615,7 +636,11 @@ describe("statements", () => {
       });
 
       test("reloadAssociation sent before a write and answered after it isn't kept", async () => {
-        const { db, arm, held, release } = holdStatements(binding, readsComments, "afterRunning");
+        const { db, arm, held, release } = holdStatements(
+          binding,
+          reads("comments"),
+          "afterRunning",
+        );
         await seedComments(db);
         const post = await db.model(Post).find(1);
         arm();

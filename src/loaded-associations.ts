@@ -1,7 +1,7 @@
-// A record's loaded associations: each kept while the key it was loaded for is current (#181, #191).
+// A record's loaded associations: each kept while the key it was loaded for is current (#181, #189).
 
 /** A loaded association, with the owner's attribute and key value it was loaded for. */
-interface CachedAssociation {
+interface LoadedEntry {
   attribute: string;
   key: unknown;
   value: unknown;
@@ -15,7 +15,7 @@ interface CachedAssociation {
 export class LoadedAssociations {
   /** The owner's attribute value now, which an entry's key is checked against. */
   readonly #keyOf: (attribute: string) => unknown;
-  readonly #entries = new Map<string, CachedAssociation>();
+  readonly #entries = new Map<string, LoadedEntry>();
   /** Counted when an association changes, by name and record-wide, so a stale load isn't kept. */
   readonly #loadsDiscarded = new Map<string, number>();
   #allLoadsDiscarded = 0;
