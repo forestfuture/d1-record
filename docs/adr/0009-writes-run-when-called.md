@@ -9,5 +9,5 @@ Before this, the bulk writes only built a Statement, which ran with `.run()` or 
 - **Return values:** `deleteAll`/`updateAll` resolve to a count, as in Rails; anyone who wants D1's full `meta` for one gets it from `onQuery` or a batch's results. The insert family resolves to `meta`, which carries `last_row_id`.
 - **`none()`:** `deleteAll`/`updateAll` send nothing and resolve to `0`, as in Rails. Its `to…` statements are still sent with their batch, as `WHERE 1 = 0`, since a batch entry needs something to send.
 - **When errors arrive:** the immediate forms are `async`, so an unknown attribute or a refused write rejects their promise. The `to…` forms throw when the statement is built, as before.
-- **Loaded collections:** writing through a loaded `hasMany` clears it when the write is prepared, and again once an immediate write lands, so a read made while the write is in flight can't leave old rows cached.
+- **Loaded collections:** writing through a loaded `hasMany` clears it when the write is prepared, and again once an immediate write lands, so a read sent before or while the write is in flight can't leave old rows cached.
 - **Statements** are only ever batch entries now: they have no methods of their own and are never awaitable.
