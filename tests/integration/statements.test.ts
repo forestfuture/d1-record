@@ -579,6 +579,23 @@ describe("statements", () => {
         expect(bodies(await post.comments().toArray())).toEqual(["one", "two", "four"]);
       });
 
+      test("a record created through a collection loaded while it saves is loaded once", async () => {
+        const writesComments = (sql: string) =>
+          sql.startsWith("INSERT") && sql.includes('"comments"');
+        const { db, arm, held, release } = holdStatements(binding, writesComments, "afterRunning");
+        await seedComments(db);
+        const post = await db.model(Post).find(1);
+        arm();
+
+        const creating = post.comments().create({ id: 4, body: "four" });
+        await held;
+        expect(bodies(await post.comments().toArray())).toEqual(["one", "two", "four"]);
+        release();
+        await creating;
+
+        expect(bodies(post.loaded("comments"))).toEqual(["one", "two", "four"]);
+      });
+
       test("a collection read sent before reload() and answered after it isn't kept", async () => {
         const { db, arm, held, release } = holdStatements(binding, readsComments, "afterRunning");
         await seedComments(db);
