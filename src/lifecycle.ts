@@ -30,7 +30,7 @@ import {
 } from "./declarations.ts";
 import { modelOf, type ModelBase } from "./model.ts";
 import { Negated, type Condition } from "./query.ts";
-import { state } from "./record-state.ts";
+import { linksOf, state } from "./record-state.ts";
 import { column, sql } from "./sql.ts";
 import { timestampsFor } from "./timestamps.ts";
 import { runAfter, writeAll, type PreparedWrite } from "./unit-of-work.ts";
@@ -196,18 +196,11 @@ async function validateAutosaves(record: ModelBase, claimed: Claimed): Promise<v
  * → afterCreate | afterUpdate → afterSave.
  */
 export async function saveLifecycle(record: ModelBase): Promise<Outcome> {
-  const database = await pinBefore(
-    recordsSaving(record).map((each) => each[state]),
-    "save() needs its records",
-  );
+  const database = await pinBefore(linksOf(recordsSaving(record)), "save() needs its records");
   const claimed: Claimed = new Set();
   const plan = await prepareSave(record, claimed);
   if (plan.status !== "ready") return plan;
-  await pinClaimed(
-    [...claimed].map((each) => each[state]),
-    database,
-    "save() needs its records",
-  );
+  await pinClaimed(linksOf(claimed), database, "save() needs its records");
   await runPlan(database, plan);
   return { status: "saved" };
 }
@@ -397,15 +390,11 @@ function saveWrite(record: ModelBase, isInsert: boolean): PreparedWrite {
  * → mark destroyed → afterDestroy. Every write, dependents' included, is one atomic batch.
  */
 export async function destroyLifecycle(record: ModelBase): Promise<DestroyOutcome> {
-  const database = await pinBefore([record[state]], "destroy() needs its records");
+  const database = await pinBefore(linksOf([record]), "destroy() needs its records");
   const claimed: Claimed = new Set();
   const plan = await prepareDestroy(record, claimed);
   if (plan.status !== "ready") return plan;
-  await pinClaimed(
-    [...claimed].map((each) => each[state]),
-    database,
-    "destroy() needs its records",
-  );
+  await pinClaimed(linksOf(claimed), database, "destroy() needs its records");
   await runPlan(database, plan);
   return { status: "destroyed" };
 }

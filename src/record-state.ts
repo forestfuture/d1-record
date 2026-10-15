@@ -10,6 +10,11 @@ import type { ChangeOptions, ModelBase, ModelClass } from "./model.ts";
 /** @internal The hidden slot where a Record keeps its `RecordState`. */
 export const state = Symbol("state");
 
+/** Each record's link to its database (its `RecordState`), for pinning it to one (#93). */
+export function linksOf(records: Iterable<ModelBase>): RecordState[] {
+  return [...records].map((record) => record[state]);
+}
+
 /** A loaded association, with the owner's attribute and key value it was loaded for. */
 export interface CachedAssociation {
   attribute: string;
