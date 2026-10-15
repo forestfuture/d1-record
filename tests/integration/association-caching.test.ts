@@ -213,6 +213,18 @@ describe("caching lazily loaded associations", () => {
     expect(queries).toHaveLength(0);
   });
 
+  test("a statement built through a hasMany clears its cache again when its batch is written", async () => {
+    const database = db();
+    const user = await database.model(User).find(1);
+    const statement = user.posts().toUpdateAll({ title: "Changed" });
+    await user.posts().toArray();
+
+    await database.batch([statement]);
+
+    expect(user.isLoaded("posts")).toBe(false);
+    expect(await user.posts().pluck("title")).toEqual(["Changed", "Changed"]);
+  });
+
   test("a create that doesn't save doesn't join the loaded records", async () => {
     const user = await db().model(User).find(1);
     await user.posts().toArray();

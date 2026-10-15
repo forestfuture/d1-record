@@ -262,7 +262,7 @@ export class Relation<M extends ModelBase, S = {}> {
    * unless `onDuplicate: "skip"` (Rails' `insert`). `toInsert` is the same write, for a batch.
    */
   async insert(attributes: Partial<AttributesOf<M>>, options: InsertOptions = {}): Promise<D1Meta> {
-    return this.#runNow(this.toInsert(attributes, options));
+    return runAlone(this.toInsert(attributes, options));
   }
 
   /** `insert`, as a Statement for `db.batch([...])`. */
@@ -275,7 +275,7 @@ export class Relation<M extends ModelBase, S = {}> {
     rows: readonly Partial<AttributesOf<M>>[],
     options: InsertOptions = {},
   ): Promise<D1Meta> {
-    return this.#runNow(this.toInsertAll(rows, options));
+    return runAlone(this.toInsertAll(rows, options));
   }
 
   /** `insertAll`, as a Statement for `db.batch([...])`. */
@@ -292,7 +292,7 @@ export class Relation<M extends ModelBase, S = {}> {
     attributes: Partial<AttributesOf<M>>,
     options: UpsertOptions<M> = {},
   ): Promise<D1Meta> {
-    return this.#runNow(this.toUpsert(attributes, options));
+    return runAlone(this.toUpsert(attributes, options));
   }
 
   /** `upsert`, as a Statement for `db.batch([...])`. */
@@ -305,7 +305,7 @@ export class Relation<M extends ModelBase, S = {}> {
     rows: readonly Partial<AttributesOf<M>>[],
     options: UpsertOptions<M> = {},
   ): Promise<D1Meta> {
-    return this.#runNow(this.toUpsertAll(rows, options));
+    return runAlone(this.toUpsertAll(rows, options));
   }
 
   /** `upsertAll`, as a Statement for `db.batch([...])`. */
@@ -322,14 +322,28 @@ export class Relation<M extends ModelBase, S = {}> {
     method: string,
   ): Statement {
     this.#requireSavedOwner();
-    this.#collection.invalidate();
+    const landed = this.#clearCollection();
     const inherited = castInherited(
       this.#model,
       inheritedAttributes(this.#query.conditions),
       this.#collection.link,
     );
     const withInherited = rows.map((row) => ({ ...inherited, ...row }));
-    return insertStatement(this.#executor, this.#model, withInherited, { conflict, method });
+    return insertStatement(this.#executor, this.#model, withInherited, {
+      conflict,
+      method,
+      landed,
+    });
+  }
+
+  /**
+   * Clears what an owner has loaded through this Relation's hasMany, for a statement built
+   * through it; the function it returns clears it again once the statement is written (#187).
+   */
+  #clearCollection(): () => void {
+    const collection = this.#collection;
+    collection.invalidate();
+    return () => collection.invalidate();
   }
 
   /**
@@ -346,8 +360,7 @@ export class Relation<M extends ModelBase, S = {}> {
   toUpdateAll(changes: Partial<AttributesOf<M>> | SafeSql): Statement {
     const checked = checkChanges(this.#model, changes);
     const query = compileUpdateAll(this.#writableQuery("updateAll"), checked);
-    this.#collection.invalidate();
-    return new Statement(this.#executor, query);
+    return new Statement(this.#executor, query, this.#clearCollection());
   }
 
   /**
@@ -363,31 +376,18 @@ export class Relation<M extends ModelBase, S = {}> {
   /** `deleteAll`, as a Statement for `db.batch([...])`. */
   toDeleteAll(): Statement {
     const query = this.#writableQuery("deleteAll");
-    this.#collection.invalidate();
+    const landed = this.#clearCollection();
     const nullifies = this.#collection.nullifies;
     const compiled =
       nullifies === undefined
         ? compileDeleteAll(query)
         : compileUpdateAll(query, [[nullifies, null]]);
-    return new Statement(this.#executor, compiled);
+    return new Statement(this.#executor, compiled, landed);
   }
 
   /** Runs a statement built from this Relation: the rows it changed, or 0 without a query on `none()`. */
   async #countOf(statement: Statement): Promise<number> {
-    return this.#runner.changes(() => this.#runNow(statement));
-  }
-
-  /**
-   * Runs a statement built from this Relation now. A loaded collection it writes to was cleared
-   * when the statement was built, and is cleared again once the write lands, in case a read
-   * loaded it while the write was in flight.
-   */
-  async #runNow(statement: Statement): Promise<D1Meta> {
-    try {
-      return await runAlone(statement);
-    } finally {
-      this.#collection.invalidate();
-    }
+    return this.#runner.changes(() => runAlone(statement));
   }
 
   /** Builds and saves a record; resolves to it whether or not it was saved (check `isPersisted()`). */
