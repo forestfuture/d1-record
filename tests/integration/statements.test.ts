@@ -508,6 +508,102 @@ describe("statements", () => {
         ]);
       });
 
+      /**
+       * D1 that, once armed, holds each read of comments back after it has run, until released:
+       * ordered, not timed, so a write sent meanwhile always lands before the read's answer.
+       */
+      function holdingCommentReads(): {
+        db: ReturnType<typeof connect>;
+        arm: () => void;
+        selectRan: Promise<void>;
+        release: () => void;
+      } {
+        type Prepared = ReturnType<TestDatabase["prepare"]>;
+        let armed = false;
+        let ran!: () => void;
+        let release!: () => void;
+        const selectRan = new Promise<void>((resolve) => (ran = resolve));
+        const released = new Promise<void>((resolve) => (release = resolve));
+        const held = (statement: Prepared): Prepared =>
+          new Proxy(statement, {
+            get(inner, name) {
+              if (name === "bind") return (...values: unknown[]) => held(inner.bind(...values));
+              if (name !== "all") return Reflect.get(inner, name, inner);
+              return async () => {
+                const result = await inner.all();
+                ran();
+                await released;
+                return result;
+              };
+            },
+          });
+        const holding = new Proxy(binding, {
+          get(target, property) {
+            if (property !== "prepare") return Reflect.get(target, property, target);
+            return (query: string) => {
+              const statement = target.prepare(query);
+              const read = query.startsWith("SELECT") && query.includes('"comments"');
+              return armed && read ? held(statement) : statement;
+            };
+          },
+        });
+        return { db: connect(holding as never), arm: () => (armed = true), selectRan, release };
+      }
+
+      test("a collection read sent before a write and answered after it isn't kept", async () => {
+        const { db, arm, selectRan, release } = holdingCommentReads();
+        await seedComments(db);
+        const post = await db.model(Post).find(1);
+        arm();
+
+        const reading = post.comments().toArray();
+        await selectRan;
+        await post.comments().updateAll({ body: "new" });
+        release();
+
+        expect((await reading).map((comment) => comment.body)).toEqual(["one", "two"]);
+        expect(post.isLoaded("comments")).toBe(false);
+        expect((await post.comments().toArray()).map((comment) => comment.body)).toEqual([
+          "new",
+          "new",
+        ]);
+      });
+
+      test("a collection read sent before a create through it and answered after it isn't kept", async () => {
+        const { db, arm, selectRan, release } = holdingCommentReads();
+        await seedComments(db);
+        const post = await db.model(Post).find(1);
+        arm();
+
+        const reading = post.comments().toArray();
+        await selectRan;
+        await post.comments().create({ id: 4, body: "four" });
+        release();
+
+        expect((await reading).map((comment) => comment.body)).toEqual(["one", "two"]);
+        expect(post.isLoaded("comments")).toBe(false);
+        expect((await post.comments().toArray()).map((comment) => comment.body)).toEqual([
+          "one",
+          "two",
+          "four",
+        ]);
+      });
+
+      test("reloadAssociation sent before a write and answered after it isn't kept", async () => {
+        const { db, arm, selectRan, release } = holdingCommentReads();
+        await seedComments(db);
+        const post = await db.model(Post).find(1);
+        arm();
+
+        const reloading = post.reloadAssociation("comments");
+        await selectRan;
+        await post.comments().updateAll({ body: "new" });
+        release();
+
+        expect((await reloading).map((comment) => comment.body)).toEqual(["one", "two"]);
+        expect(post.isLoaded("comments")).toBe(false);
+      });
+
       test("the association of an unsaved owner changes nothing", async () => {
         const db = connect(binding);
         await seedComments(db);
