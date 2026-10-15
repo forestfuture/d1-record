@@ -591,9 +591,10 @@ describe("statements", () => {
         await held;
         expect(bodies(await post.comments().toArray())).toEqual(["one", "two", "four"]);
         release();
-        await creating;
+        const created = await creating;
 
         expect(bodies(post.loaded("comments"))).toEqual(["one", "two", "four"]);
+        expect(post.loaded("comments")[2]).toBe(created);
       });
 
       test("a collection read sent before reload() and answered after it isn't kept", async () => {

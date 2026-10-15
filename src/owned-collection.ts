@@ -97,8 +97,14 @@ function withKey(
     created(record) {
       recordState.discardPendingLoads(name);
       const loaded = collection.loaded();
-      if (loaded === undefined || holdsRow(loaded, record, association.target.primaryKey)) return;
-      fill([...loaded, record]);
+      if (loaded === undefined) return;
+      const index = indexOfRow(loaded, record, association.target.primaryKey);
+      // A copy loaded by an overlapping read gives way to the record itself, where it stood.
+      fill(
+        index === -1
+          ? [...loaded, record]
+          : loaded.map((each, at) => (at === index ? record : each)),
+      );
     },
     built: (record) => recordState.addBuilt(name, record),
     invalidate: () => recordState.clearAssociation(name),
@@ -112,12 +118,12 @@ function withKey(
 }
 
 /**
- * Whether `records` hold `record`'s row. By primary key, not identity: a read sent after the
+ * Where `records` hold `record`'s row, or -1. By primary key, not identity: a read sent after the
  * record's INSERT and answered before its create finished loaded its own copy of the row (#181).
  */
-function holdsRow(records: readonly ModelBase[], record: ModelBase, primaryKey: string): boolean {
+function indexOfRow(records: readonly ModelBase[], record: ModelBase, primaryKey: string): number {
   const key = record[state].read(primaryKey);
-  return records.some((loaded) => Object.is(loaded[state].read(primaryKey), key));
+  return records.findIndex((loaded) => Object.is(loaded[state].read(primaryKey), key));
 }
 
 /** An owner without a key: no stored records, just what was built through it. */
