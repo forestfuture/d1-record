@@ -48,6 +48,9 @@ export class RecordState {
   readonly #errors = new Errors();
   #abortReason: string | undefined;
   readonly #associations = new Map<string, CachedAssociation>();
+  /** Bumped when an association changes, by name and record-wide, so a stale load isn't kept. */
+  readonly #generations = new Map<string, number>();
+  #generation = 0;
   readonly #built = new Map<string, ModelBase[]>();
   readonly #belongsTo = new Map<string, ModelBase>();
 
@@ -204,6 +207,17 @@ export class RecordState {
 
   clearAssociation(name: string): void {
     this.#associations.delete(name);
+    this.markAssociationChanged(name);
+  }
+
+  /** Notes that an association changed: a load sent before now isn't kept (#181). */
+  markAssociationChanged(name: string): void {
+    this.#generations.set(name, (this.#generations.get(name) ?? 0) + 1);
+  }
+
+  /** Changes with each change to the association, so a load can tell whether it's still current. */
+  associationGeneration(name: string): number {
+    return this.#generation + (this.#generations.get(name) ?? 0);
   }
 
   /** Records built through one of this record's hasMany associations, for autosave. */
@@ -234,7 +248,7 @@ export class RecordState {
 
   /** Forgets an association: what's cached and what was built through it (`reloadAssociation`). */
   resetAssociation(name: string): void {
-    this.#associations.delete(name);
+    this.clearAssociation(name);
     this.#built.delete(name);
     this.#belongsTo.delete(name);
   }
@@ -242,6 +256,7 @@ export class RecordState {
   /** Forgets every association, cached and built (`reload()`), as Rails' reload does. */
   clearAssociations(): void {
     this.#associations.clear();
+    this.#generation += 1;
     this.#built.clear();
     this.#belongsTo.clear();
   }
