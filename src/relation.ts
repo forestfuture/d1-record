@@ -588,11 +588,11 @@ export class Relation<M extends ModelBase, S = {}> {
     const cached = this.#cached();
     if (cached !== undefined) return [...cached];
     // Started before the query is sent, so a write that lands first keeps its rows out (#181).
-    const fill = this.#collection.startFill?.();
-    if (fill === undefined) return this.#runner.load(this.#query);
+    const keepIfCurrent = this.#collection.startFill?.<M>();
+    if (keepIfCurrent === undefined) return this.#runner.load(this.#query);
     // Loaded for the owner in its order, then target primary-key order, as preloaded.
     const records = await this.#runner.load({ ...this.#query, order: this.#withPrimaryKeyOrder() });
-    return fill(records) as M[];
+    return keepIfCurrent(records);
   }
 
   /** The owner's loaded records for this hasMany, if it has them. */
