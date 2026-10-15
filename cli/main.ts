@@ -3,7 +3,7 @@ import { consoleSubcommand } from "./console/flags.ts";
 import { generateSubcommand } from "./generate/flags.ts";
 import type { Print } from "./plan.ts";
 import { schemaSubcommand } from "./schema/flags.ts";
-import { sharedFlagHelp, type Subcommand } from "./subcommand.ts";
+import { helpFor, type Subcommand } from "./subcommand.ts";
 
 /** Each subcommand by the names it answers to. */
 const subcommands: Record<string, Subcommand> = {
@@ -14,16 +14,10 @@ const subcommands: Record<string, Subcommand> = {
   c: consoleSubcommand,
 };
 
-/** The usage: every subcommand's Usage lines, its notes, its flags, then the shared flags. */
-function helpOf(all: readonly Subcommand[]): string {
-  const usage = `Usage:\n${all.map((subcommand) => subcommand.usage).join("\n")}`;
-  const notes = all.flatMap((subcommand) => subcommand.notes ?? []);
-  return [usage, ...notes, ...all.map((subcommand) => subcommand.flagHelp), sharedFlagHelp].join(
-    "\n\n",
-  );
-}
+/** Each subcommand once, in the order its help is printed. */
+export const everySubcommand = [...new Set(Object.values(subcommands))];
 
-const help = helpOf([...new Set(Object.values(subcommands))]);
+const help = helpFor(everySubcommand);
 
 /** Prints the usage, after what went wrong; 1. */
 function usage(print: Print, problem: string): number {

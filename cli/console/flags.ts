@@ -47,7 +47,7 @@ export const consoleSubcommand = defineSubcommand({
   --no-history        Don't keep what you type in .wrangler/d1-record-history
   --verbose           Print each statement a line runs (.verbose toggles it while it runs)
   -e, --eval <code>   Run this code, print its result, and exit (only the result goes to stdout)`,
-  run({ values, positionals }, print, fail) {
+  action({ values, positionals }, print, fail) {
     if (positionals.length > 0) return fail(`Unexpected ${positionals[0]}`);
     const problem = flagProblem(values);
     if (problem !== undefined) return fail(problem);

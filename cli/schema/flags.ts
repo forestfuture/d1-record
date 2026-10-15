@@ -18,7 +18,7 @@ export const schemaSubcommand = defineSubcommand({
   --out <file>        Write here instead (a folder, with several databases)
   --migrations <dir>  Read migrations from here instead
   --models <dir>      Write ApplicationRecord here (src/models by default)`,
-  run({ values, positionals }, print, fail) {
+  action({ values, positionals }, print, fail) {
     const { watch, help: _, ...options } = values;
     if (positionals.length > 0) return fail(`Unexpected ${positionals[0]}`);
     if (!watch) return runSchema(options, print);
