@@ -1,6 +1,7 @@
 // A record's private state: its values, changes, errors, and lifecycle flags.
 import { type Attribute, attributeFor } from "./attribute.ts";
 import type { Assignment } from "./compiler.ts";
+import { Autosaves } from "./autosaves.ts";
 import { Errors } from "./errors-collection.ts";
 import { MissingAttribute, NoDatabase, RecordDestroyed } from "./errors.ts";
 import type { Executor } from "./executor.ts";
@@ -43,8 +44,8 @@ export class RecordState {
   #abortReason: string | undefined;
   /** The associations it has loaded, each kept while its key is current. */
   readonly associations = new LoadedAssociations((attribute) => this.#values[attribute]);
-  readonly #built = new Map<string, ModelBase[]>();
-  readonly #belongsTo = new Map<string, ModelBase>();
+  /** The new records saving it also saves, built through or pointed at by its associations. */
+  readonly autosaves = new Autosaves();
 
   constructor(model: ModelClass) {
     this.#model = model;
@@ -180,44 +181,16 @@ export class RecordState {
     this.associations.cache(name, { attribute, key: this.#values[attribute], value });
   }
 
-  /** Records built through one of this record's hasMany associations, for autosave. */
-  addBuilt(name: string, record: ModelBase): void {
-    this.#built.set(name, [...(this.#built.get(name) ?? []), record]);
-  }
-
-  /** The records built through the association, in the order they were built. */
-  built(name: string): readonly ModelBase[] {
-    return this.#built.get(name) ?? [];
-  }
-
-  /** A new record a belongsTo points at, saved first when this record is; undefined clears it. */
-  setBelongsToAutosave(name: string, record: ModelBase | undefined): void {
-    if (record === undefined) this.#belongsTo.delete(name);
-    else this.#belongsTo.set(name, record);
-  }
-
-  /** The new records this record's belongsTo associations point at, by association name. */
-  belongsToAutosaves(): [name: string, record: ModelBase][] {
-    return [...this.#belongsTo];
-  }
-
-  /** Every association's built records, by association name. */
-  builtRecords(): [name: string, records: readonly ModelBase[]][] {
-    return [...this.#built];
-  }
-
-  /** Forgets an association: what's cached and what was built through it (`reloadAssociation`). */
+  /** Forgets an association: what's loaded and its autosaves (`reloadAssociation`). */
   resetAssociation(name: string): void {
     this.associations.clear(name);
-    this.#built.delete(name);
-    this.#belongsTo.delete(name);
+    this.autosaves.forget(name);
   }
 
-  /** Forgets every association, cached and built (`reload()`), as Rails' reload does. */
+  /** Forgets every association, loaded and autosaved (`reload()`), as Rails' reload does. */
   clearAssociations(): void {
     this.associations.clearAll();
-    this.#built.clear();
-    this.#belongsTo.clear();
+    this.autosaves.clear();
   }
 
   /** Loads a D1 row; the record becomes persisted and clean. */

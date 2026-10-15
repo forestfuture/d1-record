@@ -54,7 +54,7 @@ function pointOwnerAt(
   }
   const key = record === null ? null : record[state].read(targetAttribute);
   owner[state].pointAt(name, ownerAttribute, key, record);
-  owner[state].setBelongsToAutosave(
+  owner[state].autosaves.setBelongsTo(
     name,
     record !== null && record[state].isNew ? record : undefined,
   );
@@ -73,7 +73,7 @@ export function hasOneAccessor(owner: ModelBase, association: ResolvedAssociatio
   return Object.assign(read, {
     build(attributes: Record<string, unknown> = {}) {
       const record = buildOne(owner, association, attributes);
-      owner[state].addBuilt(association.name, record);
+      owner[state].autosaves.addBuilt(association.name, record);
       return record;
     },
     create: createOne(owner, association, (record) => record.save()),
@@ -96,7 +96,7 @@ function createOne(
     try {
       await save(record);
     } finally {
-      if (record[state].isNew) owner[state].addBuilt(association.name, record);
+      if (record[state].isNew) owner[state].autosaves.addBuilt(association.name, record);
     }
     return record;
   };

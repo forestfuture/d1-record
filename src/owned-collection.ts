@@ -70,7 +70,7 @@ function withKey(owner: ModelBase, association: ResolvedAssociation): OwnedColle
   const recordState = owner[state];
   const loadedAssociations = recordState.associations;
   const { name, ownerAttribute, definition } = association;
-  const built = () => recordState.built(name);
+  const built = () => recordState.autosaves.built(name);
   // The stored records, then those built through it and not among them, as Rails merges new
   // records into what it loads.
   const withBuilt = <M extends ModelBase>(stored: readonly M[]): M[] => [
@@ -107,7 +107,7 @@ function withKey(owner: ModelBase, association: ResolvedAssociation): OwnedColle
           : loaded.map((each, at) => (at === index ? record : each)),
       );
     },
-    built: (record) => recordState.addBuilt(name, record),
+    built: (record) => recordState.autosaves.addBuilt(name, record),
     invalidate: () => loadedAssociations.clear(name),
     unsavedCount: () => built().filter((record) => record[state].isNew).length,
     refusal: undefined,
@@ -131,9 +131,9 @@ function indexOfRow(records: readonly ModelBase[], record: ModelBase, primaryKey
 function withoutKey(owner: ModelBase, association: ResolvedAssociation): OwnedCollection {
   const { name, definition } = association;
   const collection: OwnedCollection = {
-    loaded: () => [...owner[state].built(name)],
+    loaded: () => [...owner[state].autosaves.built(name)],
     created: () => {},
-    built: (record) => owner[state].addBuilt(name, record),
+    built: (record) => owner[state].autosaves.addBuilt(name, record),
     invalidate: () => {},
     unsavedCount: () => 0,
     refusal: association.refusalFor(owner),
