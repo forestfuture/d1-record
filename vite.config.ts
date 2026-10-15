@@ -98,7 +98,11 @@ export default defineConfig({
             "error",
             {
               patterns: [
-                { group: ["../schema/*"], message: "cli/project/ doesn't import cli/schema/." },
+                {
+                  group: ["../schema", "../schema/**", "**/cli/schema/**"],
+                  message:
+                    "cli/project/ sits below cli/schema/: move what both need into cli/project/.",
+                },
               ],
             },
           ],
