@@ -1,11 +1,11 @@
-// A record's autosaves: the new records built through its associations, or a belongsTo points at.
+// A record's pending autosaves: the new records built through its associations, or a belongsTo points at.
 import type { ModelBase } from "./model.ts";
 
 /**
  * The new records saving one record also saves: those built through its hasMany and hasOne
  * associations, after it, and those its belongsTo associations point at, before it.
  */
-export class Autosaves {
+export class PendingAutosaves {
   readonly #built = new Map<string, ModelBase[]>();
   readonly #belongsTo = new Map<string, ModelBase>();
 
@@ -36,13 +36,13 @@ export class Autosaves {
   }
 
   /** Forgets what was built through the association or set on it (`reloadAssociation`). */
-  forget(name: string): void {
+  clear(name: string): void {
     this.#built.delete(name);
     this.#belongsTo.delete(name);
   }
 
   /** Forgets every association's (`reload()`). */
-  clear(): void {
+  clearAll(): void {
     this.#built.clear();
     this.#belongsTo.clear();
   }

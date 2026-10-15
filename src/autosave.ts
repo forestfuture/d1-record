@@ -1,4 +1,4 @@
-// The records saving an owner also saves (built through its associations), and their keys.
+// Saving an owner's autosaves: which records, before or after it, and linking their keys.
 import { modelOf, type ModelBase } from "./model.ts";
 import { state } from "./record-state.ts";
 import { resolveAssociation, type ResolvedAssociation } from "./resolved-association.ts";
