@@ -30,9 +30,8 @@ function flagProblem(values: ConsoleValues): string | undefined {
 
 /** The console's options from its parsed flags. */
 function consoleChoices(values: ConsoleValues): ConsoleOptions {
-  const { database, models, config, verbose, remote, yes } = values;
-  const history = values["no-history"] ? false : values.history || undefined;
-  return { database, models, config, history, verbose, remote, yes, eval: values.eval?.[0] };
+  const { history, "no-history": noHistory, eval: code, help: _, ...flags } = values;
+  return { ...flags, history: noHistory ? false : history || undefined, eval: code?.[0] };
 }
 
 /** `d1-record console`: opens the project's database (local, or remote) and its Models in a REPL. */
