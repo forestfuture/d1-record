@@ -1,5 +1,15 @@
+import type { ParseArgsOptionsConfig } from "node:util";
 import { describe, expect, test } from "vite-plus/test";
+import { consoleSubcommand } from "../../cli/console/flags.ts";
+import { generateSubcommand } from "../../cli/generate/flags.ts";
 import { main } from "../../cli/main.ts";
+import { schemaSubcommand } from "../../cli/schema/flags.ts";
+import {
+  defineSubcommand,
+  sharedFlagHelp,
+  sharedOptions,
+  type Subcommand,
+} from "../../cli/subcommand.ts";
 
 /** `d1-record --help`, as it reads today: the commands, the columns, and each one's flags. */
 const help = `Usage:
@@ -56,5 +66,64 @@ describe("d1-record's help", () => {
     expect(output).toHaveLength(1);
     expect(output[0]).toMatch(/^Unknown option '--chek'/);
     expect(output[0]?.endsWith(`\n\n${help}`)).toBe(true);
+  });
+});
+
+const subcommands: Record<string, Subcommand> = {
+  schema: schemaSubcommand,
+  g: generateSubcommand,
+  console: consoleSubcommand,
+};
+
+/** Whether `help` mentions `--name` (and not only a longer flag that ends in it). */
+function mentions(help: string, flag: string): boolean {
+  return new RegExp(`(?<![\\w-])${flag}(?![\\w-])`).test(help);
+}
+
+describe.each(Object.entries(subcommands))("%s's help and its flags", (_, subcommand) => {
+  const help = `${subcommand.flagHelp}\n${sharedFlagHelp}`;
+  const options: ParseArgsOptionsConfig = { ...sharedOptions, ...subcommand.options };
+
+  test("every flag it takes is in its help", () => {
+    for (const [name, option] of Object.entries(options)) {
+      expect(mentions(help, `--${name}`), `--${name}`).toBe(true);
+      if (option.short !== undefined) {
+        expect(help, `-${option.short}`).toContain(`-${option.short}, --${name}`);
+      }
+    }
+  });
+
+  test("every flag its help names, it takes", () => {
+    const named = [...help.matchAll(/(?<![\w-])--([a-z][a-z-]*)/g)].map((match) => match[1]);
+
+    expect(named.length).toBeGreaterThan(0);
+    for (const name of named) expect(Object.keys(options), `--${name}`).toContain(name);
+  });
+});
+
+describe("a subcommand's parsed flags", () => {
+  test("are typed from its options: a flag it doesn't take is a type error", () => {
+    const seen: unknown[] = [];
+    const subcommand = defineSubcommand({
+      options: { out: { type: "string" } },
+      usage: "",
+      flagHelp: "",
+      run({ values }) {
+        const out: string | undefined = values.out;
+        const config: string | undefined = values.config;
+        // @ts-expect-error -- not one of its flags
+        seen.push(out, config, values.nope);
+        return 0;
+      },
+    });
+
+    expect(
+      subcommand.run(
+        ["--out", "a.ts"],
+        () => {},
+        () => 1,
+      ),
+    ).toBe(0);
+    expect(seen).toEqual(["a.ts", undefined, undefined]);
   });
 });
