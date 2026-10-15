@@ -148,7 +148,7 @@ function withoutKey(owner: ModelBase, association: ResolvedAssociation): OwnedCo
 
 /**
  * A narrowed Relation's form: building, creating and bulk writes still reach the owner (a write
- * through a `where` changes rows the owner holds); reads query.
+ * through a `where` can change what the owner holds); reads query.
  */
 function narrowedOf(collection: OwnedCollection): OwnedCollection {
   const narrowed: OwnedCollection = {
