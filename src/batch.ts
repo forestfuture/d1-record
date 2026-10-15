@@ -8,7 +8,7 @@ import {
   type Claimed,
 } from "./lifecycle.ts";
 import { RecordStatement, recordStatementParts } from "./record-statement.ts";
-import { state } from "./record-state.ts";
+import { linksOf, state } from "./record-state.ts";
 import { runAfter, writeAll, type PreparedWrite } from "./unit-of-work.ts";
 import { pinBefore, pinClaimed, type Executor } from "./executor.ts";
 import type { ModelBase } from "./model.ts";
@@ -41,11 +41,7 @@ export async function runBatch<const T extends readonly BatchEntry[]>(
   const all = [...handles, ...statements.map(executorOf)];
   const records = entries.flatMap(recordsOf);
   if (all.length === 0 && records.length === 0) return [] as BatchResults<T>;
-  const database = await pinBefore(
-    records.map((record) => record[state]),
-    needs,
-    all,
-  );
+  const database = await pinBefore(linksOf(records), needs, all);
   // Each record is written once, even if listed twice or already saved by its owner.
   const claimed: Claimed = new Set();
   const prepared: PreparedEntry[] = [];
@@ -54,11 +50,7 @@ export async function runBatch<const T extends readonly BatchEntry[]>(
       entry instanceof RecordStatement ? await recordEntry(entry, claimed) : statementEntry(entry),
     );
   }
-  await pinClaimed(
-    [...claimed].map((record) => record[state]),
-    database,
-    needs,
-  );
+  await pinClaimed(linksOf(claimed), database, needs);
   const writes = prepared.flatMap(({ writes }) => writes());
   await writeAll(database, writes);
   await runAfter(writes);
