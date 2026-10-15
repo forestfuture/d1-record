@@ -3,6 +3,7 @@ import type { ParseArgsOptionsConfig } from "node:util";
 import { defineSubcommand, type Parsed } from "../subcommand.ts";
 import { runConsole, type ConsoleOptions } from "./command.ts";
 
+// Declared apart from the subcommand, because ConsoleValues is typed from it.
 const options = {
   database: { type: "string" },
   models: { type: "string" },
@@ -15,10 +16,10 @@ const options = {
 } as const satisfies ParseArgsOptionsConfig;
 
 /** The console's parsed flags. */
-type ConsoleFlags = Parsed<typeof options>["values"];
+type ConsoleValues = Parsed<typeof options>["values"];
 
 /** What is wrong with the flags together, if anything. */
-function flagProblem(values: ConsoleFlags): string | undefined {
+function flagProblem(values: ConsoleValues): string | undefined {
   if (values.history && values["no-history"]) return "Use --history or --no-history, not both";
   if (values.yes && !values.remote) return "--yes only goes with --remote";
   const code = values.eval ?? [];
@@ -28,7 +29,7 @@ function flagProblem(values: ConsoleFlags): string | undefined {
 }
 
 /** The console's options from its parsed flags. */
-function consoleChoices(values: ConsoleFlags): ConsoleOptions {
+function consoleChoices(values: ConsoleValues): ConsoleOptions {
   const { database, models, config, verbose, remote, yes } = values;
   const history = values["no-history"] ? false : values.history || undefined;
   return { database, models, config, history, verbose, remote, yes, eval: values.eval?.[0] };
