@@ -91,6 +91,20 @@ export default defineConfig({
         },
       },
       {
+        // The project reader sits below the schema reader: schema/ imports project/, never back.
+        files: ["cli/project/**"],
+        rules: {
+          "no-restricted-imports": [
+            "error",
+            {
+              patterns: [
+                { group: ["../schema/*"], message: "cli/project/ doesn't import cli/schema/." },
+              ],
+            },
+          ],
+        },
+      },
+      {
         // A describe() callback holds a whole suite, so it's long by design.
         files: ["tests/**"],
         rules: { "max-lines-per-function": "off" },
