@@ -234,6 +234,22 @@ describe("caching lazily loaded associations", () => {
     expect(queries).toHaveLength(1);
   });
 
+  test.each([
+    ["updateAll", (user: User) => user.posts().where({ title: "A2" }).updateAll({ title: "B" })],
+    ["deleteAll", (user: User) => user.posts().where({ title: "A2" }).deleteAll()],
+    ["insert", (user: User) => user.posts().where({ title: "A2" }).insert({ id: 13, title: "A3" })],
+  ])("…narrowed ones too: %s through a where", async (_write, write) => {
+    const user = await db().model(User).find(1);
+    await user.posts().toArray();
+
+    await write(user);
+
+    expect(user.isLoaded("posts")).toBe(false);
+    expect(await user.posts().pluck("title")).toEqual(
+      await db().model(Post).where({ userId: 1 }).order({ id: "asc" }).pluck("title"),
+    );
+  });
+
   test("reloadAssociation() queries again and returns the fresh value", async () => {
     const user = await db().model(User).find(1);
     const post = await db().model(Post).find(10);
