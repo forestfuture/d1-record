@@ -146,13 +146,16 @@ function withoutKey(owner: ModelBase, association: ResolvedAssociation): OwnedCo
   return collection;
 }
 
-/** A narrowed Relation's form: building and creating still reach the owner; reads query. */
+/**
+ * A narrowed Relation's form: building, creating and bulk writes still reach the owner (a write
+ * through a `where` changes rows the owner holds); reads query.
+ */
 function narrowedOf(collection: OwnedCollection): OwnedCollection {
   const narrowed: OwnedCollection = {
     loaded: () => undefined,
     created: (record) => collection.created(record),
     built: (record) => collection.built(record),
-    invalidate: () => {},
+    invalidate: () => collection.invalidate(),
     unsavedCount: () => 0,
     refusal: collection.refusal,
     nullifies: undefined,
