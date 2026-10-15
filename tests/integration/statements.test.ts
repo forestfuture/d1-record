@@ -547,6 +547,19 @@ describe("statements", () => {
         expect(bodies(await post.comments().toArray())).toEqual(["new", "new"]);
       });
 
+      test("a collection read for a key the owner no longer holds isn't kept", async () => {
+        const db = connect(binding);
+        await seedComments(db);
+        const post = await db.model(Post).find(1);
+
+        const comments = post.comments();
+        post.id = 2;
+
+        expect(bodies(await comments.toArray())).toEqual(["one", "two"]);
+        expect(post.isLoaded("comments")).toBe(false);
+        expect(bodies(await post.comments().toArray())).toEqual(["three"]);
+      });
+
       test("…and still resolves to its rows with the records built through it", async () => {
         const { db, arm, held, release } = holdStatements(binding, readsComments, "afterRunning");
         await seedComments(db);
