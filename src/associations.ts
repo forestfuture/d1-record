@@ -247,8 +247,9 @@ function hasManyRelation(owner: ModelBase, association: ResolvedAssociation) {
 }
 
 /**
- * A belongsTo or hasOne read: the cached record (or null) while the key it was loaded for is
- * current, otherwise `load` for the key the owner holds now, then cached.
+ * A belongsTo or hasOne read: the loaded record (or null) while the key it was loaded for is
+ * current, otherwise `load` for the key the owner holds now, kept only if nothing changed the
+ * association meanwhile (#189).
  */
 export async function cachedRead(
   owner: ModelBase,
@@ -259,8 +260,9 @@ export async function cachedRead(
   const cached = owner[state].associations.get(name);
   if (cached !== undefined) return cached.value as ModelBase | null;
   const key = association.keyOf(owner);
-  // No key: nothing to find, and nothing to query; that null is cached like any result.
+  const keep = owner[state].associations.startLoad(name, ownerAttribute, key);
+  // No key: nothing to find, and nothing to query; that null is loaded like any result.
   const value = key === null ? null : await load(key);
-  owner[state].associations.cache(name, { attribute: ownerAttribute, key, value });
+  keep(value);
   return value;
 }

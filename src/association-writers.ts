@@ -123,6 +123,6 @@ function buildOne(
   const { [definition.foreignKey]: _given, ...rest } = attributes;
   const record = buildRecord(target, rest, owner[state].executor);
   record[state].writeKey(definition.foreignKey, key, name);
-  owner[state].associations.cache(name, { attribute: ownerAttribute, key, value: record });
+  owner[state].associations.set(name, ownerAttribute, record);
   return record;
 }
