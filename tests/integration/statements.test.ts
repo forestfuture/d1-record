@@ -74,6 +74,56 @@ class Account extends Model({
 
 const past = new Date(Date.UTC(2020, 0, 1));
 
+/** A held statement waits for `release()` before it reaches D1, or after D1 has answered it. */
+type Hold = "beforeRunning" | "afterRunning";
+
+/**
+ * D1 that, once armed, holds each statement whose SQL `matches` until released: ordered, not
+ * timed, so whatever runs meanwhile always lands first. `held` resolves when one is held.
+ */
+function holdStatements(
+  binding: TestDatabase,
+  matches: (sql: string) => boolean,
+  hold: Hold,
+): { db: ReturnType<typeof connect>; arm: () => void; held: Promise<void>; release: () => void } {
+  type Prepared = ReturnType<TestDatabase["prepare"]>;
+  let armed = false;
+  let isHeld!: () => void;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (isHeld = resolve));
+  const released = new Promise<void>((resolve) => (release = resolve));
+  const holding = (statement: Prepared): Prepared =>
+    new Proxy(statement, {
+      get(inner, name) {
+        if (name === "bind") return (...values: unknown[]) => holding(inner.bind(...values));
+        if (name !== "all") return Reflect.get(inner, name, inner);
+        return async () => {
+          const result = hold === "afterRunning" ? await inner.all() : undefined;
+          isHeld();
+          await released;
+          return result ?? inner.all();
+        };
+      },
+    });
+  const proxy = new Proxy(binding, {
+    get(target, property) {
+      if (property !== "prepare") return Reflect.get(target, property, target);
+      return (query: string) => {
+        const statement = target.prepare(query);
+        return armed && matches(query) ? holding(statement) : statement;
+      };
+    },
+  });
+  return { db: connect(proxy as never), arm: () => (armed = true), held, release };
+}
+
+/** A read of comments. */
+const readsComments = (sql: string) => sql.startsWith("SELECT") && sql.includes('"comments"');
+
+/** The bodies of some comments, in order. */
+const bodies = (comments: readonly { body: string | null }[]) =>
+  comments.map((comment) => comment.body);
+
 describe("statements", () => {
   let binding: TestDatabase;
   let dispose: () => Promise<void>;
@@ -464,144 +514,100 @@ describe("statements", () => {
       });
 
       test("a collection read while a write is in flight is loaded again once it's done", async () => {
-        // D1 that holds every UPDATE back until the read has loaded the collection: ordered, not
-        // timed, so the read always lands while the write is in flight.
-        type Prepared = ReturnType<TestDatabase["prepare"]>;
-        let releaseUpdate!: () => void;
-        const readDone = new Promise<void>((resolve) => (releaseUpdate = resolve));
-        const slow = new Proxy(binding, {
-          get(target, property) {
-            if (property !== "prepare") return Reflect.get(target, property, target);
-            return (query: string) => {
-              const delayed = (statement: Prepared): Prepared =>
-                new Proxy(statement, {
-                  get(inner, name) {
-                    if (name === "bind")
-                      return (...values: unknown[]) => delayed(inner.bind(...values));
-                    if (name !== "all") return Reflect.get(inner, name, inner);
-                    return async () => {
-                      await readDone;
-                      return inner.all();
-                    };
-                  },
-                });
-              const statement = target.prepare(query);
-              return query.startsWith("UPDATE") ? delayed(statement) : statement;
-            };
-          },
-        });
-        const db = connect(slow as never);
+        const { db, arm, release } = holdStatements(
+          binding,
+          (sql) => sql.startsWith("UPDATE"),
+          "beforeRunning",
+        );
         await seedComments(db);
         const post = await db.model(Post).find(1);
+        arm();
 
         const writing = post.comments().updateAll({ body: "new" });
-        expect((await post.comments().toArray()).map((comment) => comment.body)).toEqual([
-          "one",
-          "two",
-        ]);
-        releaseUpdate();
+        expect(bodies(await post.comments().toArray())).toEqual(["one", "two"]);
+        release();
         await writing;
 
-        expect((await post.comments().toArray()).map((comment) => comment.body)).toEqual([
-          "new",
-          "new",
-        ]);
+        expect(bodies(await post.comments().toArray())).toEqual(["new", "new"]);
       });
 
-      /**
-       * D1 that, once armed, holds each read of comments back after it has run, until released:
-       * ordered, not timed, so a write sent meanwhile always lands before the read's answer.
-       */
-      function holdingCommentReads(): {
-        db: ReturnType<typeof connect>;
-        arm: () => void;
-        selectRan: Promise<void>;
-        release: () => void;
-      } {
-        type Prepared = ReturnType<TestDatabase["prepare"]>;
-        let armed = false;
-        let ran!: () => void;
-        let release!: () => void;
-        const selectRan = new Promise<void>((resolve) => (ran = resolve));
-        const released = new Promise<void>((resolve) => (release = resolve));
-        const held = (statement: Prepared): Prepared =>
-          new Proxy(statement, {
-            get(inner, name) {
-              if (name === "bind") return (...values: unknown[]) => held(inner.bind(...values));
-              if (name !== "all") return Reflect.get(inner, name, inner);
-              return async () => {
-                const result = await inner.all();
-                ran();
-                await released;
-                return result;
-              };
-            },
-          });
-        const holding = new Proxy(binding, {
-          get(target, property) {
-            if (property !== "prepare") return Reflect.get(target, property, target);
-            return (query: string) => {
-              const statement = target.prepare(query);
-              const read = query.startsWith("SELECT") && query.includes('"comments"');
-              return armed && read ? held(statement) : statement;
-            };
-          },
-        });
-        return { db: connect(holding as never), arm: () => (armed = true), selectRan, release };
-      }
-
       test("a collection read sent before a write and answered after it isn't kept", async () => {
-        const { db, arm, selectRan, release } = holdingCommentReads();
+        const { db, arm, held, release } = holdStatements(binding, readsComments, "afterRunning");
         await seedComments(db);
         const post = await db.model(Post).find(1);
         arm();
 
         const reading = post.comments().toArray();
-        await selectRan;
+        await held;
         await post.comments().updateAll({ body: "new" });
         release();
 
-        expect((await reading).map((comment) => comment.body)).toEqual(["one", "two"]);
+        expect(bodies(await reading)).toEqual(["one", "two"]);
         expect(post.isLoaded("comments")).toBe(false);
-        expect((await post.comments().toArray()).map((comment) => comment.body)).toEqual([
-          "new",
-          "new",
-        ]);
+        expect(bodies(await post.comments().toArray())).toEqual(["new", "new"]);
+      });
+
+      test("…and still resolves to its rows with the records built through it", async () => {
+        const { db, arm, held, release } = holdStatements(binding, readsComments, "afterRunning");
+        await seedComments(db);
+        const post = await db.model(Post).find(1);
+        post.comments().build({ body: "draft" });
+        arm();
+
+        const reading = post.comments().toArray();
+        await held;
+        await post.comments().updateAll({ body: "new" });
+        release();
+
+        expect(bodies(await reading)).toEqual(["one", "two", "draft"]);
+        expect(post.isLoaded("comments")).toBe(false);
       });
 
       test("a collection read sent before a create through it and answered after it isn't kept", async () => {
-        const { db, arm, selectRan, release } = holdingCommentReads();
+        const { db, arm, held, release } = holdStatements(binding, readsComments, "afterRunning");
         await seedComments(db);
         const post = await db.model(Post).find(1);
         arm();
 
         const reading = post.comments().toArray();
-        await selectRan;
+        await held;
         await post.comments().create({ id: 4, body: "four" });
         release();
 
-        expect((await reading).map((comment) => comment.body)).toEqual(["one", "two"]);
+        expect(bodies(await reading)).toEqual(["one", "two"]);
         expect(post.isLoaded("comments")).toBe(false);
-        expect((await post.comments().toArray()).map((comment) => comment.body)).toEqual([
-          "one",
-          "two",
-          "four",
-        ]);
+        expect(bodies(await post.comments().toArray())).toEqual(["one", "two", "four"]);
+      });
+
+      test("a collection read sent before reload() and answered after it isn't kept", async () => {
+        const { db, arm, held, release } = holdStatements(binding, readsComments, "afterRunning");
+        await seedComments(db);
+        const post = await db.model(Post).find(1);
+        arm();
+
+        const reading = post.comments().toArray();
+        await held;
+        await post.reload();
+        release();
+
+        expect(bodies(await reading)).toEqual(["one", "two"]);
+        expect(post.isLoaded("comments")).toBe(false);
       });
 
       test("reloadAssociation sent before a write and answered after it isn't kept", async () => {
-        const { db, arm, selectRan, release } = holdingCommentReads();
+        const { db, arm, held, release } = holdStatements(binding, readsComments, "afterRunning");
         await seedComments(db);
         const post = await db.model(Post).find(1);
         arm();
 
         const reloading = post.reloadAssociation("comments");
-        await selectRan;
+        await held;
         await post.comments().updateAll({ body: "new" });
         release();
 
-        expect((await reloading).map((comment) => comment.body)).toEqual(["one", "two"]);
+        expect(bodies(await reloading)).toEqual(["one", "two"]);
         expect(post.isLoaded("comments")).toBe(false);
+        expect(bodies(await post.comments().toArray())).toEqual(["new", "new"]);
       });
 
       test("the association of an unsaved owner changes nothing", async () => {
