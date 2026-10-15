@@ -80,30 +80,39 @@ function withKey(
     // Built through this association, so they're of its target Model, as the stored ones are.
     ...(built().filter((record) => !stored.includes(record as M)) as M[]),
   ];
-  const fill = (records: readonly ModelBase[]) =>
-    recordState.cacheAssociation(name, { attribute: ownerAttribute, key, value: records });
+  const entry = (records: readonly ModelBase[]) => ({
+    attribute: ownerAttribute,
+    key,
+    value: records,
+  });
   const collection: OwnedCollection = {
     loaded() {
       const stored = recordState.cachedAssociation(name)?.value as ModelBase[] | undefined;
       return stored === undefined ? undefined : withBuilt(stored);
     },
     startFill<M extends ModelBase>() {
-      const generation = recordState.associationGeneration(name);
+      const keep = recordState.startLoad(name);
       return (records: readonly M[]) => {
-        if (recordState.associationGeneration(name) === generation) fill(records);
+        keep(entry(records));
         return withBuilt(records);
       };
     },
     created(record) {
-      recordState.discardPendingLoads(name);
       const loaded = collection.loaded();
-      if (loaded === undefined) return;
+      // Not loaded: nothing to add to, but a load already sent mustn't land without the record.
+      if (loaded === undefined) {
+        recordState.clearAssociation(name);
+        return;
+      }
       const index = indexOfRow(loaded, record, association.target.primaryKey);
       // A copy loaded by an overlapping read gives way to the record itself, where it stood.
-      fill(
-        index === -1
-          ? [...loaded, record]
-          : loaded.map((each, at) => (at === index ? record : each)),
+      recordState.setAssociation(
+        name,
+        entry(
+          index === -1
+            ? [...loaded, record]
+            : loaded.map((each, at) => (at === index ? record : each)),
+        ),
       );
     },
     built: (record) => recordState.addBuilt(name, record),

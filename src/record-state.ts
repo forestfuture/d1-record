@@ -183,10 +183,28 @@ export class RecordState {
 
   /**
    * Caches a loaded association (preloaded or lazily loaded): a record, an array of records,
-   * or null. It stays current while `attribute` still holds `key`.
+   * or null. It stays current while `attribute` still holds `key`. Loads already sent aren't
+   * discarded: the belongsTo and hasOne writers move to `setAssociation` with #189.
    */
   cacheAssociation(name: string, entry: CachedAssociation): void {
     this.#associations.set(name, entry);
+  }
+
+  /** Sets the association to what a write made it; loads of it already sent won't be kept. */
+  setAssociation(name: string, entry: CachedAssociation): void {
+    this.#associations.set(name, entry);
+    this.#discardPendingLoads(name);
+  }
+
+  /**
+   * Starts a load of the association, before its query is sent: the function it returns keeps
+   * the loaded entry only if nothing changed the association meanwhile (#181).
+   */
+  startLoad(name: string): (entry: CachedAssociation) => void {
+    const generation = this.#generation(name);
+    return (entry) => {
+      if (this.#generation(name) === generation) this.#associations.set(name, entry);
+    };
   }
 
   /** The cached association, if it was loaded for the key the record holds now. */
@@ -205,13 +223,13 @@ export class RecordState {
     this.cacheAssociation(name, { attribute, key: this.#values[attribute], value });
   }
 
+  /** Forgets what's cached for the association; loads of it already sent won't be kept. */
   clearAssociation(name: string): void {
     this.#associations.delete(name);
-    this.discardPendingLoads(name);
+    this.#discardPendingLoads(name);
   }
 
-  /** Loads of this association already sent won't be kept. */
-  discardPendingLoads(name: string): void {
+  #discardPendingLoads(name: string): void {
     this.#loadsDiscarded.set(name, (this.#loadsDiscarded.get(name) ?? 0) + 1);
   }
 
@@ -219,7 +237,7 @@ export class RecordState {
    * Changes with each change to the association, so a load can tell whether it's still current.
    * The two counts are summed, so `reload()` makes every name stale without touching the map.
    */
-  associationGeneration(name: string): number {
+  #generation(name: string): number {
     return this.#allLoadsDiscarded + (this.#loadsDiscarded.get(name) ?? 0);
   }
 
