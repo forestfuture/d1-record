@@ -20,7 +20,7 @@ export interface OwnedCollection {
    * rows and gives the load's own records (then those built). It keeps them only if nothing
    * changed the association meanwhile (#181). Only the association itself has it, not narrowed ones.
    */
-  startFill?(): (records: readonly ModelBase[]) => readonly ModelBase[];
+  startFill?<M extends ModelBase>(): (records: readonly M[]) => M[];
   /** A record created through it joins the loaded records, as in Rails. */
   created(record: ModelBase): void;
   /** A record built through it, for autosave. */
@@ -75,9 +75,10 @@ function withKey(
   const built = () => recordState.built(name);
   // The stored records, then those built through it and not among them, as Rails merges new
   // records into what it loads.
-  const withBuilt = (stored: readonly ModelBase[]) => [
+  const withBuilt = <M extends ModelBase>(stored: readonly M[]): M[] => [
     ...stored,
-    ...built().filter((record) => !stored.includes(record)),
+    // Built through this association, so they're of its target Model, as the stored ones are.
+    ...(built().filter((record) => !stored.includes(record as M)) as M[]),
   ];
   const fill = (records: readonly ModelBase[]) =>
     recordState.cacheAssociation(name, { attribute: ownerAttribute, key, value: records });
@@ -86,17 +87,18 @@ function withKey(
       const stored = recordState.cachedAssociation(name)?.value as ModelBase[] | undefined;
       return stored === undefined ? undefined : withBuilt(stored);
     },
-    startFill() {
+    startFill<M extends ModelBase>() {
       const generation = recordState.associationGeneration(name);
-      return (records) => {
+      return (records: readonly M[]) => {
         if (recordState.associationGeneration(name) === generation) fill(records);
         return withBuilt(records);
       };
     },
     created(record) {
-      recordState.markAssociationChanged(name);
+      recordState.discardPendingLoads(name);
       const loaded = collection.loaded();
-      if (loaded !== undefined) fill([...loaded, record]);
+      if (loaded === undefined || holdsRow(loaded, record, association.target.primaryKey)) return;
+      fill([...loaded, record]);
     },
     built: (record) => recordState.addBuilt(name, record),
     invalidate: () => recordState.clearAssociation(name),
@@ -107,6 +109,15 @@ function withKey(
     narrowed: () => narrowedOf(collection),
   };
   return collection;
+}
+
+/**
+ * Whether `records` hold `record`'s row. By primary key, not identity: a read sent after the
+ * record's INSERT and answered before its create finished loaded its own copy of the row (#181).
+ */
+function holdsRow(records: readonly ModelBase[], record: ModelBase, primaryKey: string): boolean {
+  const key = record[state].read(primaryKey);
+  return records.some((loaded) => Object.is(loaded[state].read(primaryKey), key));
 }
 
 /** An owner without a key: no stored records, just what was built through it. */
