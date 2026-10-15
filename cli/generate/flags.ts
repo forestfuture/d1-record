@@ -32,9 +32,9 @@ datetime, json or references; then ! for NOT NULL, =value for a default, and :un
     if (id !== undefined && id !== "integer" && id !== "text") {
       return fail(`--id is integer or text, not ${id}`);
     }
-    const options = { kind, name, columns, models, database, config, out } as const;
+    const generate = { kind, name, columns, models, database, config, out } as const;
     return runGenerate(
-      { ...options, integerId: id === "integer", timestamps: !noTimestamps },
+      { ...generate, integerId: id === "integer", timestamps: !noTimestamps },
       print,
     );
   },
