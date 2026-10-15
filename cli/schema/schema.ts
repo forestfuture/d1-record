@@ -1,13 +1,8 @@
 // Applies a database's migrations to in-memory SQLite and reads back its tables and columns.
 import type { DatabaseSync } from "node:sqlite";
 import { convert, type Column, type Spec } from "./conventions.ts";
+import { byName, type Migration } from "../project/migrations.ts";
 import { exportName } from "../project/names.ts";
-
-export interface Migration {
-  /** The file's name, as Wrangler orders and records it. */
-  name: string;
-  sql: string;
-}
 
 /** One table, ready to generate: its attributes in column order. */
 export interface GeneratedTable {
@@ -62,11 +57,6 @@ function applied(migrations: readonly Migration[]): {
     before = after;
   }
   return { db, changedBy };
-}
-
-/** Plain character order, the same on every machine (unlike `localeCompare`). */
-export function byName(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /**

@@ -1,10 +1,7 @@
 // Where each D1 database's migrations, schema and base class are, from the config and the options.
 // Shared by `d1-record schema`, the generators and the console.
-import { readdirSync, readFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { classify, moduleName } from "./names.ts";
-import { byName, type Migration } from "../schema/schema.ts";
-import { slashed } from "./paths.ts";
 import { readWranglerConfig, type DatabaseConfig } from "./wrangler.ts";
 
 /** Where a project's config, migrations and generated schema are, when not the defaults. */
@@ -87,20 +84,4 @@ export function targetsOf(cwd: string, options: ProjectOptions): Target[] | stri
     return { database, configDir: dir, migrationsDir, out, base };
   });
   return sharedBase(targets) ?? targets;
-}
-
-/** A database's migrations, in the order Wrangler applies them: by file name. */
-export function migrationsOf(target: Target): Migration[] {
-  const { migrationsPattern } = target.database;
-  const files =
-    migrationsPattern === undefined
-      ? readdirSync(target.migrationsDir).filter((name) => name.endsWith(".sql"))
-      : // Loaded when used (Node 22+), so an older Node gets the command's own message (cli/main.ts).
-        process
-          .getBuiltinModule("node:fs")
-          .globSync(migrationsPattern, { cwd: target.configDir })
-          .map((path) => slashed(relative(target.migrationsDir, join(target.configDir, path))));
-  return files
-    .sort(byName)
-    .map((name) => ({ name, sql: readFileSync(join(target.migrationsDir, name), "utf8") }));
 }

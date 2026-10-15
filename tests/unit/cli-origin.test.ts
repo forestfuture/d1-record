@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
 import { migrationTool, originNotes, toolsWithFiles, type Tool } from "../../cli/schema/origin.ts";
-import { schemaOf, type Migration } from "../../cli/schema/schema.ts";
+import type { Migration } from "../../cli/project/migrations.ts";
+import { schemaOf } from "../../cli/schema/schema.ts";
 
 /** A throwaway project folder with these files. */
 function projectWith(...files: string[]): string {
