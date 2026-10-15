@@ -110,6 +110,25 @@ describe("a schema generated from migrations", () => {
     expect(events.map((event) => event.sql).join()).not.toContain("settings");
   });
 
+  test("an ignored column is never read through a Model extending a class that extends the bound base", async () => {
+    class ListingBase extends ApplicationRecord("products", { settings: false }) {}
+    class Featured extends ListingBase {}
+    const events: QueryEvent[] = [];
+    const db = connect(binding, { onQuery: (event) => events.push(event) });
+    const user = await db.model(User).createOrThrow({ email: "edsger@example.com" });
+    const featured = await db
+      .model(Featured)
+      .createOrThrow({ userId: user.id, name: "Chair", priceCents: 12000 });
+
+    events.length = 0;
+    const read = await db.model(Featured).find(featured.id);
+
+    expect(read.attributes()).not.toHaveProperty("settings");
+    expect(events.map((event) => event.sql)).toEqual([
+      expect.stringMatching(/^SELECT "id", "user_id", "name", .*"tagline" FROM "products"/),
+    ]);
+  });
+
   test("a Model declared in full works beside the generated ones", async () => {
     const db = connect(binding);
 
