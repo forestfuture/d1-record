@@ -1,5 +1,5 @@
 // Association types and options, and readying a Model: its associations checked and installed.
-import { ignoresColumns } from "./metadata.ts";
+import { ignoresColumns } from "./table-names.ts";
 import { InvalidModel } from "./errors.ts";
 import { associationsOf } from "./association-fields.ts";
 import { belongsToAccessor, hasOneAccessor } from "./association-writers.ts";

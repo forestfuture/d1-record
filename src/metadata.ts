@@ -1,5 +1,4 @@
 // Attribute metadata: each attribute's type, column and default, resolved from its spec.
-import { ancestors } from "./ancestors.ts";
 import { copiedKeys } from "./spec-keys.ts";
 import type { EpochStorage } from "./epoch-storage.ts";
 import { UnknownAttribute } from "./errors.ts";
@@ -84,39 +83,6 @@ type AttributeValue<S> = S extends AttributeType
 export type AttributeProperties<A extends AttributeSpecs> = {
   -readonly [K in keyof A]: AttributeValue<A[K]>;
 };
-
-/**
- * Models whose table has columns they ignore (`Model("products", { notes: false })`): their
- * queries name their columns rather than `*`, so an ignored column is never read, as in Rails.
- */
-const ignoringColumns = new WeakSet<object>();
-
-/** Marks a Model's base class as ignoring some of its table's columns. */
-export function markIgnoringColumns(base: object): void {
-  // The answer is remembered once asked, so a mark after that would silently not apply.
-  if (ignoring.has(base)) throw new Error("d1-record: a Model was marked after its first use");
-  ignoringColumns.add(base);
-}
-
-/**
- * Each Model's answer to `ignoresColumns`, worked out once when it's made ready. Module-level,
- * but not request state (ADR-0003): derived only from the class.
- */
-const ignoring = new WeakMap<object, boolean>();
-
-/**
- * Whether a Model (or a class it extends) ignores some of its table's columns. Remembered per
- * Model: the mark is set when `ApplicationRecord("table", overrides)` makes the base class,
- * before any Model extending it exists, so it can't change once asked.
- */
-export function ignoresColumns(model: object): boolean {
-  let answer = ignoring.get(model);
-  if (answer === undefined) {
-    answer = ancestors(model).some((each) => ignoringColumns.has(each));
-    ignoring.set(model, answer);
-  }
-  return answer;
-}
 
 /** Resolves an attribute's spec into its type, column and default. */
 export function define(name: string, spec: AttributeSpec): AttributeDefinition {

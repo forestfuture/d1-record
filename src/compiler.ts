@@ -1,6 +1,6 @@
 // Turns a QueryDescription or a write into SQL text and bound values. No other module writes SQL.
 import { type Attribute, attributeFor, noMatch, storedRows } from "./attribute.ts";
-import { ignoresColumns } from "./metadata.ts";
+import { ignoresColumns } from "./table-names.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { Comparison, comparisonParts, type Operator } from "./comparisons.ts";
 import { Either, Negated, type Condition, type QueryDescription } from "./query.ts";
