@@ -1,4 +1,4 @@
-// The one place the library calls D1 (reporting each statement to `onQuery`), and where a database is from.
+// The one place the library calls D1 (reporting each statement to `onQuery`), where a database is from, and the pinning of records to it.
 import { boundValue, shownValue } from "./filtering.ts";
 import type { CompiledSql } from "./compiler.ts";
 import { translateConstraintError } from "./constraints.ts";
