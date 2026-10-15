@@ -1,4 +1,4 @@
-// A Batch's steps: its one database pinned, before-callbacks, one atomic write, then after-callbacks.
+// A Batch's steps, and the free `batch()`: its one database pinned, before-callbacks, one atomic write, then after-callbacks.
 import { RecordNotSaved } from "./errors.ts";
 import {
   prepareDestroy,
@@ -30,7 +30,8 @@ function recordsOf(entry: BatchEntry): ModelBase[] {
 
 /**
  * A batch's steps: its one database found and every record pinned to it, before anything runs
- * (#93); then before-callbacks, one atomic write, then after-callbacks.
+ * (#93); then before-callbacks, one atomic write, then after-callbacks. Records a callback added
+ * on the way are pinned too, before the write.
  */
 export async function runBatch<const T extends readonly BatchEntry[]>(
   entries: T,
