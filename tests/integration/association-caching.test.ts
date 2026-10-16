@@ -282,17 +282,36 @@ describe("caching lazily loaded associations", () => {
   test.each([
     ["or()", (left: Relation<Post>, user: User) => left.or(user.posts()), ["B", "B"]],
     ["merge()", (left: Relation<Post>, user: User) => left.merge(user.posts()), ["A1", "B"]],
-  ])("a write with a hasMany on the right of %s clears its cache", async (_join, join, titles) => {
+  ])(
+    "a write with a hasMany on the right of %s clears the hasMany's loaded collection",
+    async (_join, join, titles) => {
+      const database = db();
+      const user = await database.model(User).find(1);
+      await user.posts().toArray();
+
+      await join(database.model(Post).where({ title: "A2" }), user).updateAll({ title: "B" });
+
+      expect(await user.posts().pluck("title")).toEqual(titles);
+    },
+  );
+
+  test("a create with a hasMany on the right of merge() clears the hasMany's loaded collection", async () => {
     const database = db();
     const user = await database.model(User).find(1);
     await user.posts().toArray();
 
-    await join(database.model(Post).where({ title: "A2" }), user).updateAll({ title: "B" });
+    const created = await database
+      .model(Post)
+      .where({ title: "A3" })
+      .merge(user.posts())
+      .createOrThrow();
 
-    expect(await user.posts().pluck("title")).toEqual(titles);
+    expect(created.userId).toBe(1);
+    expect(user.isLoaded("posts")).toBe(false);
+    expect(await user.posts().pluck("title")).toEqual(["A1", "A2", "A3"]);
   });
 
-  test("a write through or() of two owners' hasManys clears both caches", async () => {
+  test("a write through or() of two owners' hasManys clears both loaded collections", async () => {
     const database = db();
     const first = await database.model(User).find(1);
     const second = await database.model(User).find(2);
@@ -305,7 +324,7 @@ describe("caching lazily loaded associations", () => {
     expect(second.isLoaded("posts")).toBe(false);
   });
 
-  test("a write through a scope that starts a new query clears the hasMany's cache", async () => {
+  test("a write through a scope that starts a new query clears the hasMany's loaded collection", async () => {
     const database = db();
     const user = await database.model(User).find(1);
     await user.posts().toArray();

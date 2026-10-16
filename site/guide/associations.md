@@ -92,6 +92,8 @@ A loaded association is cached on the record. Reading `author()` again doesn’t
 
 - Changing a foreign key makes the next read query again.
 - `reload()` clears the cache, and `await record.reloadAssociation("articles")` reloads one association.
+- A write through a `hasMany` clears its loaded collection: `insert`, `upsert`, `updateAll` and `deleteAll`, alone or in `db.batch`, even after `where` or `order`, or with the association joined by `or()`, `merge()` or a scope. `create` through the association itself adds the new record instead, so the next read still doesn’t query.
+- A write made another way, such as `Article.where({ authorId: 1 }).deleteAll()`, doesn’t touch a loaded collection: reload the association to see it.
 
 ::: warning TIP
 A `belongsTo` whose foreign key is `null`, or an association on an unsaved owner, reads without a query.
