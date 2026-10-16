@@ -146,7 +146,7 @@ describe("the console session", () => {
   });
 
   describe.each(["quit", "exit"])("typing %s", (word) => {
-    /** Types the lines, then ends the input; resolves "left", or "stayed" if it never closes. */
+    /** Types the lines; resolves "left" once the console closes (one that stays times out). */
     async function leaves(...lines: string[]): Promise<string> {
       const terminal = terminalStreams();
       const session = startSession({
@@ -157,10 +157,8 @@ describe("the console session", () => {
       });
       await terminal.ready();
       terminal.input.write(`${lines.join("\n")}\n`);
-      return Promise.race([
-        session.closed.then(() => "left"),
-        new Promise<string>((resolve) => setTimeout(() => resolve("stayed"), 3000)),
-      ]);
+      await session.closed;
+      return "left";
     }
 
     test("leaves the console", async () => {

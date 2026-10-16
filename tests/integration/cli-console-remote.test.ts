@@ -102,8 +102,7 @@ describe("d1-record console --remote", () => {
     // A terminal delivers a paste a line at a time, while the connection is still being made.
     await new Promise((resolve) => setTimeout(resolve, 10));
     terminal.input.write('await User.create({ id: 2, name: "pasted", email: "p@example.com" })\n');
-    await waitFor(() => lines.includes("Models: User"));
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await waitFor(() => terminal.transcript().includes("remote> "));
     terminal.input.write("await User.count()\n");
     await waitFor(() => terminal.transcript().includes("#=>"), 20);
     terminal.input.write("quit\n");

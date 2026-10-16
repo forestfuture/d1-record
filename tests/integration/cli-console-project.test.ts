@@ -35,7 +35,8 @@ export const ApplicationRecord = modelFor({
 } as const);
 `;
 
-describe("loading a project's Models for the console", () => {
+// Each test loads a project, which takes longer than the default 5 s on a loaded machine (#182).
+describe("loading a project's Models for the console", { timeout: 30_000 }, () => {
   test("every Model class in the folder, whatever its imports look like", async () => {
     const cwd = project({
       "src/models/application-record.ts": applicationRecord,

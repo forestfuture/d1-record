@@ -306,7 +306,8 @@ describe("d1-record g migration", () => {
   });
 });
 
-describe("generated files against D1", () => {
+// Each test starts Miniflare, which takes longer than the default 5 s on a loaded machine (#182).
+describe("generated files against D1", { timeout: 30_000 }, () => {
   let mf: Miniflare | undefined;
   afterAll(() => mf?.dispose());
 

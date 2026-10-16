@@ -21,6 +21,18 @@ function run(cwd: string, options: Parameters<typeof runSchema>[0] = {}) {
   return { code, output: output.join("\n") };
 }
 
+/**
+ * Writes `sql` as a second migration and returns the generated schema. Watch tests write it on
+ * every poll, so a watcher that isn't watching yet misses a write, not the test (#182). The poll's
+ * interval is longer than the watcher's 50 ms wait, so writes don't keep putting off regenerating.
+ */
+function editMigration(cwd: string, sql: string): string {
+  writeFileSync(join(cwd, "migrations/0002.sql"), sql);
+  return readFileSync(join(cwd, "src/db/schema.ts"), "utf8");
+}
+
+const untilWatched = { timeout: 30_000, interval: 250 };
+
 const wranglerJsonc = `{
   // A comment, as wrangler.jsonc allows.
   "name": "app",
@@ -360,15 +372,12 @@ Note: migrations/ has its migrations in folders, as Drizzle writes them; set mig
       "migrations/0001.sql": "CREATE TABLE users (id INTEGER PRIMARY KEY);",
     });
     const stop = watchSchema({ cwd }, () => {});
-    // Let the file watcher settle first, as it has by the time anyone edits a migration.
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    writeFileSync(join(cwd, "migrations/0002.sql"), "ALTER TABLE users ADD COLUMN name TEXT;");
 
     await expect
-      .poll(() => readFileSync(join(cwd, "src/db/schema.ts"), "utf8"), { timeout: 5000 })
+      .poll(() => editMigration(cwd, "ALTER TABLE users ADD COLUMN name TEXT;"), untilWatched)
       .toContain('  name: "string",');
     stop();
-  });
+  }, 60_000);
 
   test("--watch carries on after a broken migration, and regenerates once it's fixed", async () => {
     const cwd = project({
@@ -377,15 +386,16 @@ Note: migrations/ has its migrations in folders, as Drizzle writes them; set mig
     });
     const output: string[] = [];
     const stop = watchSchema({ cwd }, (line) => output.push(line));
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    writeFileSync(join(cwd, "migrations/0002.sql"), "ALTER TABLE user ADD COLUMN name TEXT;");
-    await expect.poll(() => output.join("\n"), { timeout: 5000 }).toContain("no such table: user");
-
-    writeFileSync(join(cwd, "migrations/0002.sql"), "ALTER TABLE users ADD COLUMN name TEXT;");
+    await expect
+      .poll(() => {
+        editMigration(cwd, "ALTER TABLE user ADD COLUMN name TEXT;");
+        return output.join("\n");
+      }, untilWatched)
+      .toContain("no such table: user");
 
     await expect
-      .poll(() => readFileSync(join(cwd, "src/db/schema.ts"), "utf8"), { timeout: 5000 })
+      .poll(() => editMigration(cwd, "ALTER TABLE users ADD COLUMN name TEXT;"), untilWatched)
       .toContain('  name: "string",');
     stop();
-  });
+  }, 60_000);
 });

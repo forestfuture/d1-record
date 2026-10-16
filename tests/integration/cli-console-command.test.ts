@@ -235,13 +235,18 @@ describe("d1-record console", () => {
       const done = runConsole({ cwd }, () => {}, terminal);
       await terminal.ready();
 
-      // All typed at once, as pasted: the edit lands while the first line is still awaiting,
-      // so a reload that ran straight away would not see it.
-      terminal.input.write("await new Promise((resolve) => setTimeout(resolve, 600))\n");
+      // All typed at once, as pasted. The first line says it's running, then awaits the edit,
+      // which lands only once it's running: a reload that ran straight away would not see it.
+      const model = join(cwd, "src/models/user.ts");
+      const running = join(cwd, "running");
+      const fs = 'require("node:fs")';
+      terminal.input.write(
+        `${fs}.writeFileSync(${JSON.stringify(running)}, ""); while (!${fs}.readFileSync(${JSON.stringify(model)}, "utf8").includes("edited")) await new Promise((resolve) => setTimeout(resolve, 10))\n`,
+      );
       terminal.input.write("reload!\nUser.edited\n");
       terminal.input.end();
-      await new Promise((resolve) => setTimeout(resolve, 150));
-      writeFileSync(join(cwd, "src/models/user.ts"), edited);
+      await waitFor(() => existsSync(running), 60);
+      writeFileSync(model, edited);
       await done;
 
       expect(terminal.transcript()).toContain("#=> 'yes'");
