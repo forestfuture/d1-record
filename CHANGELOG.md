@@ -1,5 +1,19 @@
 # @forestfuture/d1-record
 
+## 0.4.1
+
+### Patch Changes
+
+- [#197](https://github.com/forestfuture/d1-record/pull/197) [`3d1d30b`](https://github.com/forestfuture/d1-record/commit/3d1d30bdb1dc3ca6f52cf44b464c1174630aa06b) Thanks [@christopherstyles](https://github.com/christopherstyles)! - A statement built through a `hasMany` (`post.comments().toUpdateAll(…)`, `toDeleteAll`, `toInsert`) clears the owner's loaded collection again when `db.batch` writes it, so a collection read between building the statement and running the batch no longer keeps the old rows.
+
+- [#199](https://github.com/forestfuture/d1-record/pull/199) [`6da5f6a`](https://github.com/forestfuture/d1-record/commit/6da5f6a635242e43ae5568131330287611c7674a) Thanks [@christopherstyles](https://github.com/christopherstyles)! - A `hasMany` joined into another Relation now has its loaded collection cleared by writes through that Relation, as writes through the `hasMany` itself already did. This covers a `hasMany` on the right of `or()` or `merge()` (`db.model(Post).where({ … }).or(user.posts()).deleteAll()`) and one passed through a scope that starts a new query, and a `create` through such a Relation too. The next read no longer returns rows the write deleted or changed.
+
+- [#195](https://github.com/forestfuture/d1-record/pull/195) [`280d814`](https://github.com/forestfuture/d1-record/commit/280d814e4b792e80cc40318cec33bd8e6e422631) Thanks [@christopherstyles](https://github.com/christopherstyles)! - A write through a narrowed `hasMany` (`post.comments().where({ … })` and then `deleteAll()`, `updateAll`, `insert`, or `upsert`) clears the owner's loaded collection, as the same write without the `where` does, so the next read no longer returns rows the write deleted or changed.
+
+- [#196](https://github.com/forestfuture/d1-record/pull/196) [`e4156b7`](https://github.com/forestfuture/d1-record/commit/e4156b767e63de2d70cfb3c87d01e8132366971a) Thanks [@christopherstyles](https://github.com/christopherstyles)! - A `belongsTo` or `hasOne` read sent before `set`, `build`, `create` or `reload()` (`post.author.set(…)`, `user.profile.build(…)`), and answered after it, no longer replaces what's loaded: the read still resolves to the record it loaded, what `set`, `build` or `create` made stays loaded, and after `reload()` nothing is.
+
+- [#190](https://github.com/forestfuture/d1-record/pull/190) [`b785ed4`](https://github.com/forestfuture/d1-record/commit/b785ed4ee68608d2e57b4ccf944cc8730cf25a87) Thanks [@christopherstyles](https://github.com/christopherstyles)! - A `hasMany` read sent before a write or `create` through it, and answered after, no longer leaves the old rows loaded: the read still resolves to what it loaded, and the next read queries again. A record created through a loaded collection is loaded once, as the record `create` returned.
+
 ## 0.4.0
 
 ### Minor Changes
