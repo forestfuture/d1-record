@@ -21,17 +21,22 @@ function run(cwd: string, options: Parameters<typeof runSchema>[0] = {}) {
   return { code, output: output.join("\n") };
 }
 
-/**
- * Writes `sql` as a second migration and returns the generated schema. Watch tests write it on
- * every poll, so a watcher that isn't watching yet misses a write, not the test (#182). The poll's
- * interval is longer than the watcher's 50 ms wait, so writes don't keep putting off regenerating.
- */
-function editMigration(cwd: string, sql: string): string {
+/** Writes `sql` as the project's second migration. */
+function writeMigration(cwd: string, sql: string): void {
   writeFileSync(join(cwd, "migrations/0002.sql"), sql);
+}
+
+/** The schema.ts the command generated. */
+function generatedSchema(cwd: string): string {
   return readFileSync(join(cwd, "src/db/schema.ts"), "utf8");
 }
 
-const untilWatched = { timeout: 30_000, interval: 250 };
+/**
+ * How watch tests poll. They write the migration on every poll, so a watcher that isn't watching
+ * yet misses a write, not the test (#182). The interval is longer than the watcher's 50 ms wait,
+ * so the writes don't keep putting off regenerating.
+ */
+const watchPoll = { timeout: 30_000, interval: 250 };
 
 const wranglerJsonc = `{
   // A comment, as wrangler.jsonc allows.
@@ -374,7 +379,10 @@ Note: migrations/ has its migrations in folders, as Drizzle writes them; set mig
     const stop = watchSchema({ cwd }, () => {});
 
     await expect
-      .poll(() => editMigration(cwd, "ALTER TABLE users ADD COLUMN name TEXT;"), untilWatched)
+      .poll(() => {
+        writeMigration(cwd, "ALTER TABLE users ADD COLUMN name TEXT;");
+        return generatedSchema(cwd);
+      }, watchPoll)
       .toContain('  name: "string",');
     stop();
   }, 60_000);
@@ -388,13 +396,16 @@ Note: migrations/ has its migrations in folders, as Drizzle writes them; set mig
     const stop = watchSchema({ cwd }, (line) => output.push(line));
     await expect
       .poll(() => {
-        editMigration(cwd, "ALTER TABLE user ADD COLUMN name TEXT;");
+        writeMigration(cwd, "ALTER TABLE user ADD COLUMN name TEXT;");
         return output.join("\n");
-      }, untilWatched)
+      }, watchPoll)
       .toContain("no such table: user");
 
     await expect
-      .poll(() => editMigration(cwd, "ALTER TABLE users ADD COLUMN name TEXT;"), untilWatched)
+      .poll(() => {
+        writeMigration(cwd, "ALTER TABLE users ADD COLUMN name TEXT;");
+        return generatedSchema(cwd);
+      }, watchPoll)
       .toContain('  name: "string",');
     stop();
   }, 60_000);

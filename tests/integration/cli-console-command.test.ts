@@ -169,6 +169,14 @@ describe("d1-record console", () => {
       export class User extends ApplicationRecord("users") { static edited = "yes"; }
     `;
 
+    /** A console line that writes `started`, then waits until `model` holds the edit. */
+    const waitsForEdit = (model: string, started: string) => {
+      const fs = 'require("node:fs")';
+      const hasEdit = `${fs}.readFileSync(${JSON.stringify(model)}, "utf8").includes("edited")`;
+      const wait = "await new Promise((resolve) => setTimeout(resolve, 10))";
+      return `${fs}.writeFileSync(${JSON.stringify(started)}, ""); while (!${hasEdit}) ${wait}`;
+    };
+
     test("reload! says which Models it loaded", async () => {
       const { cwd, send, end } = await running();
       writeFileSync(join(cwd, "src/models/user.ts"), edited);
@@ -235,17 +243,17 @@ describe("d1-record console", () => {
       const done = runConsole({ cwd }, () => {}, terminal);
       await terminal.ready();
 
-      // All typed at once, as pasted. The first line says it's running, then awaits the edit,
-      // which lands only once it's running: a reload that ran straight away would not see it.
+      // All typed at once, as pasted. The edit lands while the first line is still running, so a
+      // reload that ran straight away would not see it.
       const model = join(cwd, "src/models/user.ts");
-      const running = join(cwd, "running");
-      const fs = 'require("node:fs")';
-      terminal.input.write(
-        `${fs}.writeFileSync(${JSON.stringify(running)}, ""); while (!${fs}.readFileSync(${JSON.stringify(model)}, "utf8").includes("edited")) await new Promise((resolve) => setTimeout(resolve, 10))\n`,
-      );
+      const started = join(cwd, "started");
+      terminal.input.write(`${waitsForEdit(model, started)}\n`);
       terminal.input.write("reload!\nUser.edited\n");
       terminal.input.end();
-      await waitFor(() => existsSync(running), 60);
+      await waitFor(() => existsSync(started), 60);
+      // The first line waits for the edit however late it lands; this gives a reload that didn't
+      // wait the time to run first and show it.
+      await new Promise((resolve) => setTimeout(resolve, 150));
       writeFileSync(model, edited);
       await done;
 
