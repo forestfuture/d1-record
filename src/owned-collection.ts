@@ -147,6 +147,24 @@ function withoutKey(owner: ModelBase, association: ResolvedAssociation): OwnedCo
 }
 
 /**
+ * `collection`, joined with a Relation holding `other` (`or()`, `merge()`, or a scope that starts
+ * a new query): a statement built through it clears `other`'s owner too, since it can reach the
+ * same rows (#194). Nothing else of `other` carries over: records built or created through it
+ * join only `collection`'s owner.
+ */
+export function alsoClearing(collection: OwnedCollection, other: OwnedCollection): OwnedCollection {
+  if (other === unowned || other === collection) return collection;
+  return {
+    ...collection,
+    invalidate() {
+      collection.invalidate();
+      other.invalidate();
+    },
+    narrowed: () => alsoClearing(collection.narrowed(), other),
+  };
+}
+
+/**
  * A narrowed Relation's form: building, creating and bulk writes still reach the owner (a write
  * through a `where` can change what the owner holds); reads query.
  */

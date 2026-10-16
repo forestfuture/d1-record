@@ -51,7 +51,7 @@ import {
   type OrderSpec,
   type UpsertOptions,
 } from "./relation-checks.ts";
-import { unowned, type OwnedCollection } from "./owned-collection.ts";
+import { alsoClearing, unowned, type OwnedCollection } from "./owned-collection.ts";
 import { atMostOne, reversed } from "./finder-order.ts";
 import { insertStatement, runAlone, Statement } from "./statement.ts";
 import { paginate, type CountlessPage, type Page, type PageOptions } from "./pagination.ts";
@@ -600,17 +600,16 @@ export class Relation<M extends ModelBase, S = {}> {
     return this.#collection.loaded() as M[] | undefined;
   }
 
-  /** This Relation on its and `other`'s databases, which must be one when it runs (#93). */
+  /**
+   * This Relation on its and `other`'s databases, which must be one when it runs (#93), and
+   * clearing `other`'s owner's loaded collection too when a statement is built through it (#194).
+   */
   #joining(other: Relation<M, S>, method: string): Relation<M, S> {
     const executor = jointly(this.#executor, other.#executor, `${method} needs its relations`);
-    if (executor === this.#executor) return this;
+    const collection = alsoClearing(this.#collection, other.#collection);
+    if (executor === this.#executor && collection === this.#collection) return this;
     const Class = this.constructor as new (...args: RelationArgs<M>) => Relation<M, S>;
-    return new Class({
-      executor,
-      model: this.#model,
-      query: this.#query,
-      collection: this.#collection,
-    });
+    return new Class({ executor, model: this.#model, query: this.#query, collection });
   }
 
   #requireSameModel(other: Relation<M, S>, method: string): void {

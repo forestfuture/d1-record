@@ -7,6 +7,9 @@ import {
   hasOne,
   Model,
   type QueryEvent,
+  type Relation,
+  type ScopeStatic,
+  withDatabase,
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 import { holdStatements, reads } from "../support/hold-statements.ts";
@@ -29,6 +32,9 @@ class Post extends Model({
   static tableName = "posts";
 
   author = belongsTo(User, { foreignKey: "userId" });
+
+  // Starts again from the Model's statics, so the Relation it returns has no owner.
+  static titled: ScopeStatic<[string]> = this.scope((_q, title: string) => Post.where({ title }));
 
   static {
     this.validates("title", { presence: true });
@@ -271,6 +277,42 @@ describe("caching lazily loaded associations", () => {
     await write(user);
 
     expect(await user.posts().pluck("title")).toEqual(titles);
+  });
+
+  test.each([
+    ["or()", (left: Relation<Post>, user: User) => left.or(user.posts()), ["B", "B"]],
+    ["merge()", (left: Relation<Post>, user: User) => left.merge(user.posts()), ["A1", "B"]],
+  ])("a write with a hasMany on the right of %s clears its cache", async (_join, join, titles) => {
+    const database = db();
+    const user = await database.model(User).find(1);
+    await user.posts().toArray();
+
+    await join(database.model(Post).where({ title: "A2" }), user).updateAll({ title: "B" });
+
+    expect(await user.posts().pluck("title")).toEqual(titles);
+  });
+
+  test("a write through or() of two owners' hasManys clears both caches", async () => {
+    const database = db();
+    const first = await database.model(User).find(1);
+    const second = await database.model(User).find(2);
+    await first.posts().toArray();
+    await second.posts().toArray();
+
+    await first.posts().or(second.posts()).updateAll({ title: "B" });
+
+    expect(first.isLoaded("posts")).toBe(false);
+    expect(second.isLoaded("posts")).toBe(false);
+  });
+
+  test("a write through a scope that starts a new query clears the hasMany's cache", async () => {
+    const database = db();
+    const user = await database.model(User).find(1);
+    await user.posts().toArray();
+
+    await withDatabase(database, () => user.posts().titled("A2").updateAll({ title: "B" }));
+
+    expect(await user.posts().pluck("title")).toEqual(["A1", "B"]);
   });
 
   test("reloadAssociation() queries again and returns the fresh value", async () => {
