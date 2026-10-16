@@ -145,9 +145,9 @@ describe("the console session", () => {
     expect(terminal.transcript()).toContain("#=> \u001b[33m2\u001b[39m");
   });
 
-  describe.each(["quit", "exit"])("typing %s", (word) => {
-    /** Types the lines; resolves "left" once the console closes (one that stays times out). */
-    async function leaves(...lines: string[]): Promise<string> {
+  describe.each(["quit", "exit"])("typing %s", { timeout: 30_000 }, (word) => {
+    /** Types the lines; resolves once the console closes, so one that stays times the test out. */
+    async function leaves(...lines: string[]): Promise<void> {
       const terminal = terminalStreams();
       const session = startSession({
         input: terminal.input,
@@ -158,11 +158,10 @@ describe("the console session", () => {
       await terminal.ready();
       terminal.input.write(`${lines.join("\n")}\n`);
       await session.closed;
-      return "left";
     }
 
     test("leaves the console", async () => {
-      expect(await leaves(word)).toBe("left");
+      await leaves(word);
     });
 
     test("runs no line typed after it", async () => {

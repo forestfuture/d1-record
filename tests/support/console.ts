@@ -1,9 +1,10 @@
 import { PassThrough } from "node:stream";
 import { startSession, type SessionOptions } from "../../cli/console/session.ts";
 
-/** Polls until `done` is true, or about `seconds` have passed. */
+/** Polls until `done` is true; throws, naming what it waited for, after about `seconds`. */
 export async function waitFor(done: () => boolean, seconds = 10): Promise<void> {
-  for (let waited = 0; !done() && waited < seconds * 20; waited++) {
+  for (let waited = 0; !done(); waited++) {
+    if (waited >= seconds * 20) throw new Error(`Waited ${seconds} s for ${done.toString()}`);
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
 }
