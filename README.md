@@ -134,7 +134,7 @@ await batch([
 - **Models** whose attributes come from your migrations (`class Post extends ApplicationRecord("posts")`), typed, with Rails-style generators; or declared with `Model({...})`: camelCase attributes over snake_case columns, defaults (including app-generated keys), timestamps, JSON, and dates converted both ways.
 - **Queries**: `where`/`whereNot`/`or`/`merge`, comparisons (`gte`, `between`, …), ordering (`nulls: "last"`, `reorder`), pagination (`paginate()`: a page and its total in one round trip), `select`, `distinct`, `pluck`, `count`, `size`, `exists`, named scopes, and hand-written conditions only through the `sql` tagged template, so values are always bound.
 - **Persistence**: `save`/`create`/`update`/`destroy` with `…OrThrow` variants, validations (`presence`, `length`, `format`, `inclusion`, `numericality`, `uniqueness`), the full Rails callback lifecycle with `abort()`, dirty tracking (`changes`, `attributeWas`, `savedChangeTo`, …).
-- **Associations**: `belongsTo`, `hasMany`, `hasOne` with scopes, `dependent:` strategies, preloading with `includes` (one query per association, never N+1), caching until reload, autosave, and `build`/`create`/`set` through the association.
+- **Associations**: `belongsTo`, `hasMany`, `hasOne` with scopes, `dependent:` strategies, preloading with `includes` (one query per association, never N+1, and one round trip per level), caching until reload, autosave, and `build`/`create`/`set` through the association.
 - **Queries from the Model**, as in Rails: `User.find(id)`, `User.where(…)`, `User.active()`, on the Model’s binding with no setup.
 - **Bulk writes**: `insert`, `insertAll`, `upsert`, `updateAll`, `deleteAll`, and `batch([...])` mixing those with records’ `toSave()`/`toDestroy()`.
 - **Read replicas**: a request opened with `withDatabase(connect(env.DB, { session }), …)` sends every query through one D1 Session, so it reads its own writes; `db.bookmark()` carries that to the next request.
@@ -146,7 +146,7 @@ d1-record follows Rails wherever D1 allows, and says so where it can’t:
 
 - **No interactive transactions.** D1 can’t hold a transaction open across `await`s, so there’s no `transaction(async tx => …)`. Instead, `batch([...])` writes a prepared set of statements and records atomically, and a record with `dependent: "destroy"` or new associated records is written in one batch when its keys are known in advance.
 - **Keys generated in code are first-class.** A generated `TEXT` key is a UUID made at `build()` (or whatever your `generateId` makes), so records can be linked and saved together atomically before D1 has seen them.
-- **D1’s limits are handled for you.** Lists of any length bind as one value (`json_each`), so the 100-bound-parameter limit never bites; preloads take one query per association.
+- **D1’s limits are handled for you.** Lists of any length bind as one value (`json_each`), so the 100-bound-parameter limit never bites; preloads take one query per association, and each level’s queries go in one batch.
 - **Constraint errors become typed errors** (`RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation`, `CheckViolation`) naming the table, columns, and attributes.
 - **No request state on Model classes.** A query uses the Model’s binding, the same object for every request, or a database opened for its request with `withDatabase`, so concurrent requests on one isolate never share a Session or listener.
 
