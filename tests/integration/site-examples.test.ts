@@ -30,7 +30,7 @@ import * as filtering from "../../site/snippets/guide/filtering.ts";
 import * as hidden from "../../site/snippets/guide/hidden-attributes.ts";
 import worker from "../../site/snippets/getting-started/src/index.ts";
 import { publishDraftsAndRemove } from "../../site/snippets/getting-started/src/publish.ts";
-import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
+import { createTestDatabase, recordingBatches, type TestDatabase } from "../support/d1.ts";
 
 // Inside a Worker, a Model's binding comes from cloudflare:workers; here, Miniflare's D1 stands in.
 const workers: { env: Record<string, unknown> } = { env: {} };
@@ -289,17 +289,20 @@ describe("the guide's examples", () => {
     expect(another.authorId).toBe(grace.id);
   });
 
-  test("Associations: the preload takes 4 queries, and the loop none", async () => {
+  test("Associations: the preload takes 4 queries in 3 round trips, and the loop none", async () => {
     await withDatabase(connect(binding), () => autosaveExample());
     const queries: string[] = [];
+    const recording = recordingBatches(binding);
 
     const authors = await withDatabase(
-      connect(binding, { onQuery: ({ sql }) => queries.push(sql) }),
+      connect(recording.binding, { onQuery: ({ sql }) => queries.push(sql) }),
       () => preloadExample(),
     );
 
     expect(authors.map((author) => author.name).sort()).toEqual(["Ada", "Mary"]);
+    // The authors, then profiles and articles in one batch, then the comments.
     expect(queries).toHaveLength(4);
+    expect(recording.batches).toEqual([2]);
     expect(log).toHaveBeenCalledWith("Mary", 1, "Poet");
     expect(log).toHaveBeenCalledWith("Ada", 2, "Mathematician");
   });

@@ -106,7 +106,7 @@ NULLs sort first in ascending order, as in SQLite. Place them with `nulls: "firs
 - `page` and `perPage` take numbers, or text from a query string. Missing, `null`, or empty, they mean the first page and the default size. Anything that isn’t a whole number from 1 throws `TypeError`.
 - Pages sort by the Relation’s order, then by the primary key, so records that tie keep their pages between requests.
 - A page past the last has no records, but still has the real `total`.
-- `includes()` preloads the page’s associations after it, with one more query per association, as for `toArray()`.
+- `includes()` preloads the page’s associations after it, as for `toArray()`: one more query per association, and one more round trip per level.
 - A Relation with its own `limit` or `offset` throws `IncompatibleRelation`.
 
 ### Skipping the count
@@ -217,4 +217,4 @@ Rails adds the argument’s order to the receiver’s. d1-record replaces it.
 
 ## Preloading associations
 
-`includes` loads associations for every record, with one query per association. See [Associations](./associations#preloading-associations).
+`includes` loads associations for every record, with one query per association, and one round trip per level of nesting. See [Associations](./associations#preloading-associations).
