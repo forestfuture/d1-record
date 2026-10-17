@@ -40,6 +40,15 @@ class Profile extends Model({
   user = belongsTo(User, { foreignKey: "userId" });
 }
 
+class Account extends Model({
+  id: { type: "integer", null: false },
+  userId: "integer",
+}) {
+  static tableName = "accounts";
+
+  user = belongsTo(User, { foreignKey: "userId" });
+}
+
 // Each level of an includes tree is one round trip: its associations go to D1 together.
 describe("preloading sends each level's associations together", () => {
   let binding: TestDatabase;
@@ -60,6 +69,7 @@ describe("preloading sends each level's associations together", () => {
   beforeEach(async () => {
     queries.length = 0;
     await binding.batch([
+      binding.prepare("DELETE FROM accounts"),
       binding.prepare("DELETE FROM comments"),
       binding.prepare("DELETE FROM posts"),
       binding.prepare("DELETE FROM profiles"),
@@ -85,5 +95,37 @@ describe("preloading sends each level's associations together", () => {
     expect(queries).toHaveLength(3);
     expect(users.map(titles)).toEqual([["A1", "A2"], ["B1"], []]);
     expect(users.map((user) => user.loaded("profile")?.bio ?? null)).toEqual([null, "Bee", null]);
+  });
+
+  test("one association is one query, not a batch", async () => {
+    const users = await db().model(User).includes("posts").order({ id: "asc" }).toArray();
+
+    expect(batches).toEqual([]);
+    expect(queries).toHaveLength(2);
+    expect(users.map(titles)).toEqual([["A1", "A2"], ["B1"], []]);
+  });
+
+  test("an association with no keys to look up sends nothing", async () => {
+    await binding.prepare("INSERT INTO accounts (id, user_id) VALUES (1, NULL)").run();
+
+    const [account] = await db().model(Account).includes("user").toArray();
+
+    expect(account?.loaded("user")).toBeNull();
+    expect(batches).toEqual([]);
+    expect(queries).toHaveLength(1);
+  });
+
+  test("a level with only one association to load sends it on its own", async () => {
+    // User 1 has posts but no profile, so the second level reads only the posts' comments.
+    const [user] = await db()
+      .model(User)
+      .includes({ posts: "comments", profile: "user" })
+      .where({ id: 1 })
+      .toArray();
+
+    expect(user?.loaded("profile")).toBeNull();
+    expect(user?.loaded("posts").map((post) => post.loaded("comments"))).toEqual([[], []]);
+    expect(batches).toEqual([2]);
+    expect(queries).toHaveLength(4);
   });
 });
