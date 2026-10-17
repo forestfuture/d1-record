@@ -215,4 +215,19 @@ describe("preloading sends each level's associations together", () => {
     expect(batches).toEqual([]);
     expect(queries).toHaveLength(4);
   });
+
+  test("with a Session, the batch goes through the Session", async () => {
+    const { binding: recording, batches: direct, sessionBatches } = recordingBatches(binding);
+    const sessionDb = connect(recording, { session: "first-primary" });
+
+    const users = await sessionDb
+      .model(User)
+      .includes("posts", "profile")
+      .order({ id: "asc" })
+      .toArray();
+
+    expect(sessionBatches).toEqual([2]);
+    expect(direct).toEqual([]);
+    expect(users.map(titles)).toEqual([["A1", "A2"], ["B1"], []]);
+  });
 });
