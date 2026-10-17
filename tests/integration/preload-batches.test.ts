@@ -83,13 +83,10 @@ class Account extends Model({
 describe("preloading sends each level's associations together", () => {
   let binding: TestDatabase;
   let dispose: () => Promise<void>;
-  let batches: number[] = [];
+  // Made afresh for each test, so its batches are that test's.
+  let recording: ReturnType<typeof recordingBatches>;
   const queries: QueryEvent[] = [];
-  const db = () => {
-    const recording = recordingBatches(binding);
-    batches = recording.batches;
-    return connect(recording.binding, { onQuery: (event) => queries.push(event) });
-  };
+  const db = () => connect(recording.binding, { onQuery: (event) => queries.push(event) });
   const titles = (user: User) => user.loaded("posts").map((post) => post.title);
 
   beforeAll(async () => {
@@ -97,6 +94,7 @@ describe("preloading sends each level's associations together", () => {
   });
   afterAll(() => dispose());
   beforeEach(async () => {
+    recording = recordingBatches(binding);
     queries.length = 0;
     await binding.batch([
       binding.prepare("DELETE FROM accounts"),
@@ -121,7 +119,7 @@ describe("preloading sends each level's associations together", () => {
       .order({ id: "asc" })
       .toArray();
 
-    expect(batches).toEqual([2]);
+    expect(recording.batches).toEqual([2]);
     expect(queries).toHaveLength(3);
     expect(users.map(titles)).toEqual([["A1", "A2"], ["B1"], []]);
     expect(users.map((user) => user.loaded("profile")?.bio ?? null)).toEqual([null, "Bee", null]);
@@ -130,7 +128,7 @@ describe("preloading sends each level's associations together", () => {
   test("one association is one query, not a batch", async () => {
     const users = await db().model(User).includes("posts").order({ id: "asc" }).toArray();
 
-    expect(batches).toEqual([]);
+    expect(recording.batches).toEqual([]);
     expect(queries).toHaveLength(2);
     expect(users.map(titles)).toEqual([["A1", "A2"], ["B1"], []]);
   });
@@ -141,7 +139,7 @@ describe("preloading sends each level's associations together", () => {
     const [account] = await db().model(Account).includes("user").toArray();
 
     expect(account?.loaded("user")).toBeNull();
-    expect(batches).toEqual([]);
+    expect(recording.batches).toEqual([]);
     expect(queries).toHaveLength(1);
   });
 
@@ -155,11 +153,11 @@ describe("preloading sends each level's associations together", () => {
 
     expect(user?.loaded("profile")).toBeNull();
     expect(user?.loaded("posts").map((post) => post.loaded("comments"))).toEqual([[], []]);
-    expect(batches).toEqual([2]);
+    expect(recording.batches).toEqual([2]);
     expect(queries).toHaveLength(4);
   });
 
-  test("nested associations in different branches go together, one batch per level", async () => {
+  test("nested associations in different branches share a level", async () => {
     await binding.prepare("INSERT INTO comments (id, post_id, body) VALUES (1, 12, 'Hm')").run();
 
     const [user] = await db()
@@ -168,7 +166,7 @@ describe("preloading sends each level's associations together", () => {
       .where({ id: 2 })
       .toArray();
 
-    expect(batches).toEqual([2, 2]);
+    expect(recording.batches).toEqual([2, 2]);
     expect(queries).toHaveLength(5);
     const [post] = user!.loaded("posts");
     expect(post?.loaded("comments").map((comment) => comment.body)).toEqual(["Hm"]);
@@ -184,7 +182,7 @@ describe("preloading sends each level's associations together", () => {
       .where({ id: 2 })
       .toArray();
 
-    expect(batches).toEqual([2, 2]);
+    expect(recording.batches).toEqual([2, 2]);
     expect(queries).toHaveLength(5);
     const [post] = user!.loaded("postsWithComments");
     expect(post?.loaded("comments").map((comment) => comment.body)).toEqual(["Hm"]);
@@ -196,20 +194,20 @@ describe("preloading sends each level's associations together", () => {
 
     expect(user?.loaded("noPosts")).toEqual([]);
     expect(user?.loaded("profile")?.bio).toBe("Bee");
-    expect(batches).toEqual([]);
+    expect(recording.batches).toEqual([]);
     expect(queries).toHaveLength(2);
   });
 
-  test("a scope that can't be preloaded, at any level, throws before any preload is sent", async () => {
-    // User 1 has posts and user 3 none: either way, the comments can't be preloaded.
-    for (const id of [1, 3]) {
-      queries.length = 0;
+  // User 1 has posts and user 3 none: either way, the comments can't be preloaded.
+  test.each([1, 3])(
+    "a scope that can't be preloaded, a level down, throws before any preload is sent (user %i)",
+    async (id) => {
       const loading = db().model(User).includes({ posts: "firstComment" }).where({ id }).toArray();
 
       await expect(loading).rejects.toThrow(IncompatibleRelation);
       expect(queries).toHaveLength(1);
-    }
-  });
+    },
+  );
 
   test("an association scope including itself preloads until a level finds nothing", async () => {
     await binding
@@ -220,13 +218,12 @@ describe("preloading sends each level's associations together", () => {
 
     const [child] = root!.loaded("children");
     expect(child?.loaded("children").map((account) => account.id)).toEqual([3]);
-    expect(batches).toEqual([]);
+    expect(recording.batches).toEqual([]);
     expect(queries).toHaveLength(4);
   });
 
   test("with a Session, the batch goes through the Session", async () => {
-    const { binding: recording, batches: direct, sessionBatches } = recordingBatches(binding);
-    const sessionDb = connect(recording, { session: "first-primary" });
+    const sessionDb = connect(recording.binding, { session: "first-primary" });
 
     const users = await sessionDb
       .model(User)
@@ -234,17 +231,26 @@ describe("preloading sends each level's associations together", () => {
       .order({ id: "asc" })
       .toArray();
 
-    expect(sessionBatches).toEqual([2]);
-    expect(direct).toEqual([]);
+    expect(recording.sessionBatches).toEqual([2]);
+    expect(recording.batches).toEqual([]);
     expect(users.map(titles)).toEqual([["A1", "A2"], ["B1"], []]);
   });
 
-  test("a failed batch reports each of its statements with D1's error, and the caller gets it explained", async () => {
+  test("a failed batch rejects with D1's error explained", async () => {
     const loading = db().model(User).includes("posts", "ghosts").toArray();
 
     await expect(loading).rejects.toThrow(InvalidModel);
     await expect(loading).rejects.toThrow(/Ghost's table "ghosts" doesn't exist/);
-    expect(batches).toEqual([2]);
+  });
+
+  test("a failed batch reports each of its statements with D1's error", async () => {
+    await db()
+      .model(User)
+      .includes("posts", "ghosts")
+      .toArray()
+      .catch(() => {});
+
+    expect(recording.batches).toEqual([2]);
     expect(queries.map((query) => [query.model, query.error !== undefined])).toEqual([
       ["User", false],
       ["Post", true],
