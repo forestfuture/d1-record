@@ -33,26 +33,45 @@ export async function createTestDatabase(schema: URL | readonly URL[] = fixtureS
 }
 
 /**
- * `binding`, recording the number of statements in each batch it sends. A batch is one round
- * trip to D1, but onQuery reports its statements one by one, so it can't tell one batch from
- * separate queries.
+ * `binding`, recording the number of statements in each batch it sends, and separately each one
+ * its sessions send. A batch is one round trip to D1, but onQuery reports its statements one by
+ * one, so it can't tell one batch from separate queries.
  */
 export function recordingBatches(binding: TestDatabase): {
   binding: TestDatabase;
   batches: number[];
+  sessionBatches: number[];
 } {
   const batches: number[] = [];
-  const recording = new Proxy(binding, {
-    get(target, key) {
+  const sessionBatches: number[] = [];
+  const recording = recordingProxy(binding, batches, (session) =>
+    recordingProxy(session, sessionBatches, undefined),
+  );
+  return { binding: recording, batches, sessionBatches };
+}
+
+type TestSession = ReturnType<TestDatabase["withSession"]>;
+
+/** `target` with its `batch` recorded in `batches`, and its sessions made by `wrapSession`. */
+function recordingProxy<T extends TestDatabase | TestSession>(
+  target: T,
+  batches: number[],
+  wrapSession: ((session: TestSession) => TestSession) | undefined,
+): T {
+  return new Proxy(target, {
+    get(object, key) {
       if (key === "batch") {
         return (statements: Parameters<TestDatabase["batch"]>[0]) => {
           batches.push(statements.length);
-          return target.batch(statements);
+          return object.batch(statements);
         };
       }
-      const value: unknown = Reflect.get(target, key);
-      return typeof value === "function" ? value.bind(target) : value;
+      if (key === "withSession" && wrapSession !== undefined) {
+        return (constraint?: string) =>
+          wrapSession((object as TestDatabase).withSession(constraint));
+      }
+      const value: unknown = Reflect.get(object, key);
+      return typeof value === "function" ? value.bind(object) : value;
     },
   });
-  return { binding: recording, batches };
 }
