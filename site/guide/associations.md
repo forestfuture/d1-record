@@ -111,6 +111,12 @@ Load an association for every record at once with `includes`, with one query per
 
 Nest with an object: `includes({ articles: "comments" })` or `includes({ articles: ["comments", "tags"] })`.
 
+The associations at each level go to D1 together, in one round trip. The example above sends the authors’ query, then the profiles’ and articles’ together, then the comments’. That’s four queries in three round trips.
+
+::: rails Beyond Rails
+Rails sends each association’s preload query on its own, so every association adds a round trip. Here only each level of nesting does.
+:::
+
 `record.loaded("profile")` reads a preloaded association synchronously, and throws `AssociationNotLoaded` if it wasn’t loaded, so a template never sends a query. `record.isLoaded("profile")` checks first.
 
 ## Creating related records
@@ -142,7 +148,7 @@ Narrow or order an association’s records with `scope`:
 The scope applies to reads and preloads alike, and records created through the association take its equality values. `q` is the target’s Relation, with its attributes and scopes.
 
 ::: warning TIP
-A scope that uses `limit`, `offset`, or `distinct` can’t be preloaded, since it would apply to every owner’s records together. `includes` throws `IncompatibleRelation`.
+A scope that uses `limit`, `offset`, or `distinct` can’t be preloaded, since it would apply to every owner’s records together. `includes` throws `IncompatibleRelation` before it sends any preload.
 :::
 
 ::: details A Model’s association to itself, scoped with its own scopes

@@ -92,7 +92,7 @@ export async function writersExample(ada: Author) {
 
 export async function preloadExample() {
   // #region preload
-  const authors = await Author.includes("profile", { articles: "comments" }) // 4 queries, however many authors
+  const authors = await Author.includes("profile", { articles: "comments" }) // 4 queries in 3 round trips, however many authors
     .toArray();
 
   for (const each of authors) {

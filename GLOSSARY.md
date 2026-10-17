@@ -113,7 +113,7 @@ A named link from one **Model** to another through a foreign-key **Attribute**: 
 _Avoid_: Relationship, relation (a Relation is a query)
 
 **Preload**:
-Loading an **Association** for many **Records** at once, in a small, bounded number of queries, so each becomes a **Loaded association**. You ask for it with `includes`.
+Loading an **Association** for many **Records** at once, in a small, bounded number of queries (one per association, each level's sent together in one round trip), so each becomes a **Loaded association**. You ask for it with `includes`.
 _Avoid_: Eager load, join
 
 **Loaded association**:

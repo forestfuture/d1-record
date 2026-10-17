@@ -12,7 +12,7 @@ import {
   column,
   withDatabase,
 } from "../../src/index.ts";
-import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
+import { createTestDatabase, recordingBatches, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
   id: { type: "integer", null: false },
@@ -40,23 +40,9 @@ describe("paginate", () => {
   let binding: TestDatabase;
   let dispose: () => Promise<void>;
   const events: QueryEvent[] = [];
-  let batches = 0;
-  // The binding, counting its batches: each is one round trip to D1. onQuery reports a batch's
-  // statements one by one, so it can't tell one batch from separate queries.
-  const counting = () =>
-    new Proxy(binding, {
-      get(target, key) {
-        if (key === "batch") {
-          return (statements: Parameters<TestDatabase["batch"]>[0]) => {
-            batches += 1;
-            return target.batch(statements);
-          };
-        }
-        const value: unknown = Reflect.get(target, key);
-        return typeof value === "function" ? value.bind(target) : value;
-      },
-    });
-  const db = () => connect(counting(), { onQuery: (event) => events.push(event) });
+  // Made afresh for each test, so its batches are that test's.
+  let recording: ReturnType<typeof recordingBatches>;
+  const db = () => connect(recording.binding, { onQuery: (event) => events.push(event) });
   const titles = (records: readonly Post[]) => records.map((post) => post.title);
 
   beforeAll(async () => {
@@ -75,7 +61,7 @@ describe("paginate", () => {
       ),
     ]);
     events.length = 0;
-    batches = 0;
+    recording = recordingBatches(binding);
   });
 
   test("resolves to a page of records and its total, by primary key, in one batch", async () => {
@@ -91,7 +77,7 @@ describe("paginate", () => {
       hasNext: true,
       hasPrevious: true,
     });
-    expect(batches).toBe(1);
+    expect(recording.batches).toHaveLength(1);
     expect(events).toHaveLength(2);
   });
 
@@ -136,7 +122,7 @@ describe("paginate", () => {
         hasPrevious: true,
       });
       expect(events).toHaveLength(1);
-      expect(batches).toBe(0);
+      expect(recording.batches).toHaveLength(0);
     });
 
     test("on the last page, has no next", async () => {
@@ -321,7 +307,7 @@ describe("paginate", () => {
       "a@example.com",
       "a@example.com",
     ]);
-    expect([batches, events.length]).toEqual([1, 3]);
+    expect([recording.batches.length, events.length]).toEqual([1, 3]);
   });
 
   test("is a static of every Model, and carries scopes", async () => {

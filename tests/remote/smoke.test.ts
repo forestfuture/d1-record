@@ -3,6 +3,7 @@ import {
   CheckViolation,
   connect,
   hasMany,
+  hasOne,
   InvalidForeignKey,
   Model,
   NotNullViolation,
@@ -24,6 +25,7 @@ function modelsFor(prefix: string) {
     static tableName = `${prefix}users`;
 
     posts = hasMany(Post, { foreignKey: "userId" });
+    firstPost = hasOne(Post, { foreignKey: "userId" });
   }
 
   class Post extends Model({
@@ -150,6 +152,18 @@ describe.skipIf(!configured)("remote D1 smoke", () => {
     const next = connect(remote.binding, { session: bookmark! });
     // Starting from the bookmark, a replica read waits until it has caught up with the write.
     expect((await next.model(User).find(user.id)).role).toBe("admin");
+  });
+
+  // A preload's associations go as one batch (#92), which must go through the Session too.
+  test("a session's preload batch reads its own writes", async () => {
+    const db = connect(remote.binding, { session: "first-unconstrained" });
+    const user = await db.model(User).createOrThrow({ email: "a@example.com" });
+    await db.model(Post).insert({ userId: user.id, title: "Hello", published: true, views: 0 });
+
+    const [loaded] = await db.model(User).includes("posts", "firstPost").toArray();
+
+    expect(loaded?.loaded("posts").map((post) => post.title)).toEqual(["Hello"]);
+    expect(loaded?.loaded("firstPost")?.title).toBe("Hello");
   });
 
   test("insertAll binds its rows as one JSON value, and upsert updates on conflict", async () => {
