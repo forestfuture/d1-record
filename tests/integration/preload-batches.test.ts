@@ -128,4 +128,20 @@ describe("preloading sends each level's associations together", () => {
     expect(batches).toEqual([2]);
     expect(queries).toHaveLength(4);
   });
+
+  test("nested associations in different branches go together, one batch per level", async () => {
+    await binding.prepare("INSERT INTO comments (id, post_id, body) VALUES (1, 12, 'Hm')").run();
+
+    const [user] = await db()
+      .model(User)
+      .includes({ posts: "comments", profile: "user" })
+      .where({ id: 2 })
+      .toArray();
+
+    expect(batches).toEqual([2, 2]);
+    expect(queries).toHaveLength(5);
+    const [post] = user!.loaded("posts");
+    expect(post?.loaded("comments").map((comment) => comment.body)).toEqual(["Hm"]);
+    expect(user?.loaded("profile")?.loaded("user")?.email).toBe("b@example.com");
+  });
 });
