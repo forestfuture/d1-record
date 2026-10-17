@@ -6,6 +6,7 @@ import {
   hasOne,
   type HasMany,
   IncompatibleRelation,
+  InvalidModel,
   Model,
   type QueryEvent,
 } from "../../src/index.ts";
@@ -24,6 +25,7 @@ class User extends Model({
     scope: (q) => q.includes("comments"),
   });
   noPosts = hasMany(Post, { foreignKey: "userId", scope: (q) => q.none() });
+  ghosts = hasMany(Ghost, { foreignKey: "userId" });
 }
 
 class Post extends Model({
@@ -55,6 +57,12 @@ class Profile extends Model({
 
   user = belongsTo(User, { foreignKey: "userId" });
 }
+
+// Its table, inferred as "ghosts", doesn't exist.
+class Ghost extends Model({
+  id: { type: "integer", null: false },
+  userId: "integer",
+}) {}
 
 class Account extends Model({
   id: { type: "integer", null: false },
@@ -229,5 +237,18 @@ describe("preloading sends each level's associations together", () => {
     expect(sessionBatches).toEqual([2]);
     expect(direct).toEqual([]);
     expect(users.map(titles)).toEqual([["A1", "A2"], ["B1"], []]);
+  });
+
+  test("a failed batch reports each of its statements with D1's error, and the caller gets it explained", async () => {
+    const loading = db().model(User).includes("posts", "ghosts").toArray();
+
+    await expect(loading).rejects.toThrow(InvalidModel);
+    await expect(loading).rejects.toThrow(/Ghost's table "ghosts" doesn't exist/);
+    expect(batches).toEqual([2]);
+    expect(queries.map((query) => [query.model, query.error !== undefined])).toEqual([
+      ["User", false],
+      ["Post", true],
+      ["Ghost", true],
+    ]);
   });
 });
