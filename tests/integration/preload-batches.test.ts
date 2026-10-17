@@ -25,6 +25,8 @@ class User extends Model({
     scope: (q) => q.includes("comments"),
   });
   noPosts = hasMany(Post, { foreignKey: "userId", scope: (q) => q.none() });
+  postsByTitle = hasMany(Post, { foreignKey: "userId", scope: (q) => q.order({ title: "desc" }) });
+  postTitles = hasMany(Post, { foreignKey: "userId", scope: (q) => q.select("title") });
   ghosts = hasMany(Ghost, { foreignKey: "userId" });
 }
 
@@ -155,6 +157,43 @@ describe("preloading sends each level's associations together", () => {
     expect(user?.loaded("posts").map((post) => post.loaded("comments"))).toEqual([[], []]);
     expect(recording.batches).toEqual([2]);
     expect(queries).toHaveLength(4);
+  });
+
+  test("a hasMany preloaded in a batch keeps its scope's order", async () => {
+    const [user] = await db()
+      .model(User)
+      .includes("postsByTitle", "profile")
+      .where({ id: 1 })
+      .toArray();
+
+    expect(user?.loaded("postsByTitle").map((post) => post.title)).toEqual(["A2", "A1"]);
+    expect(recording.batches).toEqual([2]);
+  });
+
+  test("a nested level whose branches all found nothing sends nothing", async () => {
+    // User 3 has no posts and no profile, so neither comments nor a profile's user is looked up.
+    const [user] = await db()
+      .model(User)
+      .includes({ posts: "comments", profile: "user" })
+      .where({ id: 3 })
+      .toArray();
+
+    expect(user?.loaded("posts")).toEqual([]);
+    expect(user?.loaded("profile")).toBeNull();
+    expect(recording.batches).toEqual([2]);
+    expect(queries).toHaveLength(3);
+  });
+
+  test("a scope's select() still loads the keys its nested includes need", async () => {
+    const [user] = await db()
+      .model(User)
+      .includes({ postTitles: "author" })
+      .where({ id: 2 })
+      .toArray();
+
+    const [post] = user!.loaded("postTitles");
+    expect(post?.title).toBe("B1");
+    expect(post?.loaded("author")?.email).toBe("b@example.com");
   });
 
   test("nested associations in different branches share a level", async () => {
