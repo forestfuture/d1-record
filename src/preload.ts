@@ -4,7 +4,7 @@ import type { CompiledSql } from "./compiler.ts";
 import type { Executor } from "./executor.ts";
 import { selectFor } from "./load.ts";
 import { hydrate, type ModelBase, type ModelClass } from "./model.ts";
-import { mergeTrees, type IncludeTree, type QueryDescription } from "./query.ts";
+import { mergeTrees, type IncludeTree } from "./query.ts";
 import { state } from "./record-state.ts";
 import { preloadQuery } from "./relation.ts";
 import { resolveAssociation, type ResolvedAssociation } from "./resolved-association.ts";
@@ -17,13 +17,13 @@ interface Preload {
   nested: IncludeTree;
 }
 
-/**
- * A Preload's read: each record's key, and the query for the targets of all of them, or none
- * when nothing can match (no keys, or a scope's `none()`). The query includes what's nested.
- */
+/** A Preload's read: each record's key, and how the targets of all of them are loaded. */
 interface Read extends Preload {
   keys: unknown[];
-  query: QueryDescription | undefined;
+  /** The SELECT for the targets, or none when nothing can match (no keys, or a scope's `none()`). */
+  select: CompiledSql | undefined;
+  /** What to preload for the targets: what's nested, and the scope's own includes. */
+  includes: IncludeTree;
 }
 
 /**
@@ -65,16 +65,15 @@ function checkPreloadable(
 /** Loads one level's associations together and attaches them. Resolves to the next level's. */
 async function loadLevel(level: readonly Preload[], executor: Executor): Promise<Preload[]> {
   const reads = level.map((step) => readFor(step, executor));
-  const sent = reads.filter((read) => read.query !== undefined);
   const rows = await readTogether(
     executor,
-    sent.map((read) => selectFor(read.association.target, read.query!)),
+    reads.map((read) => read.select),
   );
-  return reads.flatMap((read) => {
-    const found = rows[sent.indexOf(read)] ?? [];
+  return reads.flatMap((read, index) => {
+    const found = rows[index] ?? [];
     const targets = found.map((row) => hydrate(read.association.target, row, executor));
     attach(read, targets);
-    return preloadsOf(targets, read.query?.includes ?? {});
+    return preloadsOf(targets, read.includes);
   });
 }
 
@@ -99,16 +98,31 @@ function readFor(step: Preload, executor: Executor): Read {
   const { records, association, nested } = step;
   const keys = records.map((record) => record[state].read(association.ownerAttribute));
   const distinct = [...new Set(keys.filter((key) => key !== null && key !== undefined))];
-  if (distinct.length === 0) return { ...step, keys, query: undefined };
+  const nothing = { ...step, keys, select: undefined, includes: {} };
+  if (distinct.length === 0) return nothing;
   const relation = association.inOrder(association.linkedTo(executor, distinct));
   const query = relation[preloadQuery](association.label);
-  if (query.none) return { ...step, keys, query: undefined };
+  if (query.none) return nothing;
+  const includes = mergeTrees(query.includes ?? {}, nested);
   // Given to the SELECT, so the keys the nested includes need are loaded too.
-  return { ...step, keys, query: { ...query, includes: mergeTrees(query.includes ?? {}, nested) } };
+  return { ...step, keys, select: selectFor(association.target, { ...query, includes }), includes };
 }
 
-/** The rows of each query: one on its own, several as one batch. One round trip either way. */
+/**
+ * The rows of each query, and none for a missing one. The queries go together: one on its own,
+ * several as one batch, so one round trip either way, and none for no queries.
+ */
 async function readTogether(
+  executor: Executor,
+  queries: readonly (CompiledSql | undefined)[],
+): Promise<Record<string, unknown>[][]> {
+  const sent = queries.filter((query) => query !== undefined);
+  const results = (await sendTogether(executor, sent)).values();
+  return queries.map((query) => (query === undefined ? [] : (results.next().value ?? [])));
+}
+
+/** The rows of each of `queries`, sent in one round trip. */
+async function sendTogether(
   executor: Executor,
   queries: readonly CompiledSql[],
 ): Promise<Record<string, unknown>[][]> {
