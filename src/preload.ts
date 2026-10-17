@@ -28,26 +28,33 @@ interface Read extends Preload {
 
 /**
  * Loads the associations named in `tree` for `records` (all of one Model) and attaches them,
- * then recurses into nested includes. One `WHERE key IN (…)` query per association, never one
- * per record, and the associations of one level go to D1 together: one round trip.
+ * then their nested includes, a level at a time. One `WHERE key IN (…)` query per association,
+ * never one per record, and a level's associations, across every branch, go to D1 together:
+ * one round trip per level.
  */
 export async function preload(
   records: readonly ModelBase[],
   tree: IncludeTree,
   executor: Executor,
 ): Promise<void> {
-  const reads = preloadsOf(records, tree).map((step) => readFor(step, executor));
+  let level = preloadsOf(records, tree);
+  while (level.length > 0) level = await loadLevel(level, executor);
+}
+
+/** Loads one level's associations together and attaches them. Resolves to the next level's. */
+async function loadLevel(level: readonly Preload[], executor: Executor): Promise<Preload[]> {
+  const reads = level.map((step) => readFor(step, executor));
   const sent = reads.filter((read) => read.query !== undefined);
   const rows = await readTogether(
     executor,
     sent.map((read) => selectFor(read.association.target, read.query!)),
   );
-  for (const read of reads) {
+  return reads.flatMap((read) => {
     const found = rows[sent.indexOf(read)] ?? [];
     const targets = found.map((row) => hydrate(read.association.target, row, executor));
     attach(read, targets);
-    await preload(targets, read.query?.includes ?? {}, executor);
-  }
+    return preloadsOf(targets, read.query?.includes ?? {});
+  });
 }
 
 /** The associations `tree` names, each to preload for `records`. */
