@@ -1,5 +1,14 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { belongsTo, connect, hasMany, hasOne, Model, type QueryEvent } from "../../src/index.ts";
+import {
+  belongsTo,
+  connect,
+  hasMany,
+  hasOne,
+  type HasMany,
+  IncompatibleRelation,
+  Model,
+  type QueryEvent,
+} from "../../src/index.ts";
 import { createTestDatabase, recordingBatches, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model({
@@ -26,6 +35,7 @@ class Post extends Model({
 
   author = belongsTo(User, { foreignKey: "userId" });
   comments = hasMany(Comment, { foreignKey: "postId" });
+  firstComment = hasMany(Comment, { foreignKey: "postId", scope: (q) => q.limit(1) });
 }
 
 class Comment extends Model({
@@ -53,6 +63,12 @@ class Account extends Model({
   static tableName = "accounts";
 
   user = belongsTo(User, { foreignKey: "userId" });
+  // A tree of accounts, user_id holding the parent's id: each preloads its own children.
+  // Annotated, since the scope names the association it declares.
+  children: HasMany<typeof Account> = hasMany(Account, {
+    foreignKey: "userId",
+    scope: (q) => q.includes("children"),
+  });
 }
 
 // Each level of an includes tree is one round trip: its associations go to D1 together.
@@ -174,5 +190,29 @@ describe("preloading sends each level's associations together", () => {
     expect(user?.loaded("profile")?.bio).toBe("Bee");
     expect(batches).toEqual([]);
     expect(queries).toHaveLength(2);
+  });
+
+  test("a scope that can't be preloaded, at any level, throws before any preload is sent", async () => {
+    // User 1 has posts and user 3 none: either way, the comments can't be preloaded.
+    for (const id of [1, 3]) {
+      queries.length = 0;
+      const loading = db().model(User).includes({ posts: "firstComment" }).where({ id }).toArray();
+
+      await expect(loading).rejects.toThrow(IncompatibleRelation);
+      expect(queries).toHaveLength(1);
+    }
+  });
+
+  test("an association scope including itself preloads until a level finds nothing", async () => {
+    await binding
+      .prepare("INSERT INTO accounts (id, user_id) VALUES (1, NULL), (2, 1), (3, 2)")
+      .run();
+
+    const [root] = await db().model(Account).includes("children").where({ id: 1 }).toArray();
+
+    const [child] = root!.loaded("children");
+    expect(child?.loaded("children").map((account) => account.id)).toEqual([3]);
+    expect(batches).toEqual([]);
+    expect(queries).toHaveLength(4);
   });
 });
