@@ -54,17 +54,22 @@ export default defineConfig({
         extends: true,
         test: { name: "integration", include: ["tests/integration/**/*.test.ts"] },
       },
-      {
-        // Real remote D1 through Wrangler's remote bindings; skipped unless configured
-        // (tests/remote/support.ts, docs/agents/remote-smoke.md).
-        extends: true,
-        test: {
-          name: "remote",
-          include: ["tests/remote/**/*.test.ts"],
-          testTimeout: 60_000,
-          hookTimeout: 120_000,
-        },
-      },
+      // Real remote D1 through Wrangler's remote bindings (docs/agents/remote-smoke.md): only for
+      // `vp run test:remote`, which sets D1_REMOTE_SMOKE, so a plain `vp test` stays local even
+      // with the credentials in the environment (#202). Still skipped without them.
+      ...(process.env["D1_REMOTE_SMOKE"] === "1"
+        ? [
+            {
+              extends: true,
+              test: {
+                name: "remote",
+                include: ["tests/remote/**/*.test.ts"],
+                testTimeout: 60_000,
+                hookTimeout: 120_000,
+              },
+            },
+          ]
+        : []),
     ],
   },
   lint: {

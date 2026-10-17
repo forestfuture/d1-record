@@ -4,9 +4,9 @@
 
 It connects through Wrangler's remote bindings (`getPlatformProxy` with a `remote: true` D1 binding), so the tests use the same `D1Database` binding API as a Worker. Each run creates its own tables with a unique prefix (`smoke_<time>_<random>_`), drops them when it finishes, and drops tables left behind by runs that crashed more than an hour ago.
 
-Without the three environment variables below the suite is skipped, so `vp test` stays local.
+It runs only with `vp run test:remote`, which sets `D1_REMOTE_SMOKE=1`. A plain `vp test` (and `vp run coverage` and `vp run validate`) leaves the suite out, even with the three environment variables below set in your shell. Without them, `vp run test:remote` skips the suite.
 
-**Agents ask first.** Having the variables set in the shell is not permission: the suite reaches a real Cloudflare account, so an agent asks the human before running `vp test --project remote` (or `vp run test:remote`), and says what it ran afterwards.
+**Agents ask first.** Having the variables set in the shell is not permission: the suite reaches a real Cloudflare account, so an agent asks the human before running `vp run test:remote`, and says what it ran afterwards.
 
 ## One-time setup (a human)
 

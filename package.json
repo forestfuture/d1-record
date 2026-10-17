@@ -42,7 +42,7 @@
     "dev": "vp pack --watch",
     "test": "vp test",
     "coverage": "vp test --coverage",
-    "test:remote": "vp test --project remote",
+    "test:remote": "D1_REMOTE_SMOKE=1 vp test --project remote",
     "check:public-types": "node scripts/check-public-types.mjs",
     "check:package": "node scripts/check-package.mjs",
     "bench:hydrate": "node scripts/bench/hydrate.ts",
