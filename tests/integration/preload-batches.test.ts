@@ -10,6 +10,11 @@ class User extends Model({
 
   posts = hasMany(Post, { foreignKey: "userId" });
   profile = hasOne(Profile, { foreignKey: "userId" });
+  postsWithComments = hasMany(Post, {
+    foreignKey: "userId",
+    scope: (q) => q.includes("comments"),
+  });
+  noPosts = hasMany(Post, { foreignKey: "userId", scope: (q) => q.none() });
 }
 
 class Post extends Model({
@@ -19,6 +24,7 @@ class Post extends Model({
 }) {
   static tableName = "posts";
 
+  author = belongsTo(User, { foreignKey: "userId" });
   comments = hasMany(Comment, { foreignKey: "postId" });
 }
 
@@ -143,5 +149,30 @@ describe("preloading sends each level's associations together", () => {
     const [post] = user!.loaded("posts");
     expect(post?.loaded("comments").map((comment) => comment.body)).toEqual(["Hm"]);
     expect(user?.loaded("profile")?.loaded("user")?.email).toBe("b@example.com");
+  });
+
+  test("an association scope's includes go with the next level's", async () => {
+    await binding.prepare("INSERT INTO comments (id, post_id, body) VALUES (1, 12, 'Hm')").run();
+
+    const [user] = await db()
+      .model(User)
+      .includes("profile", { postsWithComments: "author" })
+      .where({ id: 2 })
+      .toArray();
+
+    expect(batches).toEqual([2, 2]);
+    expect(queries).toHaveLength(5);
+    const [post] = user!.loaded("postsWithComments");
+    expect(post?.loaded("comments").map((comment) => comment.body)).toEqual(["Hm"]);
+    expect(post?.loaded("author")?.email).toBe("b@example.com");
+  });
+
+  test("an association scope of none() sends nothing for it", async () => {
+    const [user] = await db().model(User).includes("noPosts", "profile").where({ id: 2 }).toArray();
+
+    expect(user?.loaded("noPosts")).toEqual([]);
+    expect(user?.loaded("profile")?.bio).toBe("Bee");
+    expect(batches).toEqual([]);
+    expect(queries).toHaveLength(2);
   });
 });
