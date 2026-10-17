@@ -38,7 +38,28 @@ export async function preload(
   executor: Executor,
 ): Promise<void> {
   let level = preloadsOf(records, tree);
+  for (const { association, nested } of level) checkPreloadable(association, nested, executor);
   while (level.length > 0) level = await loadLevel(level, executor);
+}
+
+/**
+ * Throws `IncompatibleRelation` if `association`, or one under it (named in `nested` or its
+ * scope's includes), has a scope that can't be preloaded: checked for the whole tree before any
+ * preload is sent, whatever records each level finds. Each association's scope includes are
+ * followed once (`checked`), so a scope that includes itself, a tree of records, still ends.
+ */
+function checkPreloadable(
+  association: ResolvedAssociation,
+  nested: IncludeTree,
+  executor: Executor,
+  checked = new Set<ResolvedAssociation>(),
+): void {
+  const query = association.all(executor)[preloadQuery](association.label);
+  const scoped = checked.has(association) ? {} : (query.includes ?? {});
+  checked.add(association);
+  for (const [name, under] of Object.entries(mergeTrees(scoped, nested))) {
+    checkPreloadable(resolveAssociation(association.target, name), under, executor, checked);
+  }
 }
 
 /** Loads one level's associations together and attaches them. Resolves to the next level's. */
