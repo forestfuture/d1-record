@@ -97,7 +97,7 @@ async function loadAhead<M extends ModelBase>(
 }
 
 /** The SELECT for `query`'s records. */
-function selectFor(model: ModelClass, query: QueryDescription): CompiledSql {
+export function selectFor(model: ModelClass, query: QueryDescription): CompiledSql {
   // A partial record keeps its primary key, so it keeps its identity — except after
   // distinct(), where adding the key would make every row distinct.
   const loaded =

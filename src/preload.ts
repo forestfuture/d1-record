@@ -1,43 +1,100 @@
-// `includes()`: preloading associations, one `WHERE key IN (…)` query per association.
+// `includes()`: preloading associations, one `WHERE key IN (…)` query each, a level's sent together.
 import { attributeFor } from "./attribute.ts";
+import type { CompiledSql } from "./compiler.ts";
 import type { Executor } from "./executor.ts";
-import type { ModelBase, ModelClass } from "./model.ts";
-import { mergeTrees, type IncludeTree } from "./query.ts";
+import { selectFor } from "./load.ts";
+import { hydrate, type ModelBase, type ModelClass } from "./model.ts";
+import { mergeTrees, type IncludeTree, type QueryDescription } from "./query.ts";
 import { state } from "./record-state.ts";
-import { requirePreloadable } from "./relation.ts";
+import { preloadQuery } from "./relation.ts";
 import { resolveAssociation, type ResolvedAssociation } from "./resolved-association.ts";
+
+/** One association to preload for `records`, all of its owner Model. */
+interface Preload {
+  records: readonly ModelBase[];
+  association: ResolvedAssociation;
+  /** What to preload for the association's records. */
+  nested: IncludeTree;
+}
+
+/**
+ * A Preload's read: each record's key, and the query for the targets of all of them, or none
+ * when nothing can match (no keys, or a scope's `none()`). The query includes what's nested.
+ */
+interface Read extends Preload {
+  keys: unknown[];
+  query: QueryDescription | undefined;
+}
 
 /**
  * Loads the associations named in `tree` for `records` (all of one Model) and attaches them,
  * then recurses into nested includes. One `WHERE key IN (…)` query per association, never one
- * per record.
+ * per record, and the associations of one level go to D1 together: one round trip.
  */
 export async function preload(
   records: readonly ModelBase[],
   tree: IncludeTree,
   executor: Executor,
 ): Promise<void> {
-  const [first] = records;
-  if (first === undefined) return;
-  const model = first.constructor as ModelClass;
-  for (const [name, nested] of Object.entries(tree)) {
-    const loaded = await preloadOne(records, resolveAssociation(model, name), executor);
-    await preload(loaded, nested, executor);
+  const reads = preloadsOf(records, tree).map((step) => readFor(step, executor));
+  const sent = reads.filter((read) => read.query !== undefined);
+  const rows = await readTogether(
+    executor,
+    sent.map((read) => selectFor(read.association.target, read.query!)),
+  );
+  for (const read of reads) {
+    const found = rows[sent.indexOf(read)] ?? [];
+    const targets = found.map((row) => hydrate(read.association.target, row, executor));
+    attach(read, targets);
+    await preload(targets, read.query?.includes ?? {}, executor);
   }
 }
 
+/** The associations `tree` names, each to preload for `records`. */
+function preloadsOf(records: readonly ModelBase[], tree: IncludeTree): Preload[] {
+  const [first] = records;
+  if (first === undefined) return [];
+  const model = first.constructor as ModelClass;
+  return Object.entries(tree).map(([name, nested]) => ({
+    records,
+    association: resolveAssociation(model, name),
+    nested,
+  }));
+}
+
 /**
- * Loads one association for `records` and attaches it: each record gets the targets whose
- * linking attribute matches its own (hasMany: all of them; belongsTo/hasOne: the first, or null).
+ * How `step` reads its records: the association's records linked to any of the keys, in its
+ * order, with its scope's includes and those nested under it. One query, whatever the number of
+ * keys, since a list is bound as one value.
  */
-async function preloadOne(
-  records: readonly ModelBase[],
-  association: ResolvedAssociation,
+function readFor(step: Preload, executor: Executor): Read {
+  const { records, association, nested } = step;
+  const keys = records.map((record) => record[state].read(association.ownerAttribute));
+  const distinct = [...new Set(keys.filter((key) => key !== null && key !== undefined))];
+  if (distinct.length === 0) return { ...step, keys, query: undefined };
+  const relation = association.inOrder(association.linkedTo(executor, distinct));
+  const query = relation[preloadQuery](association.label);
+  if (query.none) return { ...step, keys, query: undefined };
+  // Given to the SELECT, so the keys the nested includes need are loaded too.
+  return { ...step, keys, query: { ...query, includes: mergeTrees(query.includes ?? {}, nested) } };
+}
+
+/** The rows of each query: one on its own, several as one batch. One round trip either way. */
+async function readTogether(
   executor: Executor,
-): Promise<ModelBase[]> {
+  queries: readonly CompiledSql[],
+): Promise<Record<string, unknown>[][]> {
+  const [only] = queries;
+  if (queries.length === 1 && only !== undefined) return [await executor.all(only)];
+  return (await executor.batch(queries)).map((result) => result.results);
+}
+
+/**
+ * Attaches `targets`, a read's records, to its owners: each gets the targets whose linking
+ * attribute matches its own (hasMany: all of them; belongsTo/hasOne: the first, or null).
+ */
+function attach({ records, association, keys }: Read, targets: readonly ModelBase[]): void {
   const { name, definition, ownerAttribute, target, targetAttribute } = association;
-  const keys = records.map((record) => record[state].read(ownerAttribute));
-  const targets = await loadByKeys(association, executor, keys);
   const byKey = groupBy(targets, targetAttribute);
   // Looked up as the targets hold it: an integer key matches a text foreign key's digits (#94).
   const targetKey = attributeFor(target, targetAttribute);
@@ -48,7 +105,6 @@ async function preloadOne(
     // through them meanwhile.
     record[state].associations.set(name, ownerAttribute, value);
   }
-  return targets;
 }
 
 /** Records grouped by one attribute's value, keeping their order. */
@@ -61,21 +117,6 @@ function groupBy(records: readonly ModelBase[], attribute: string): Map<unknown,
     else group.push(record);
   }
   return groups;
-}
-
-/**
- * The association's records linked to any of `keys`, in its order: one query, whatever the
- * number of keys, since a list is bound as one value.
- */
-async function loadByKeys(
-  association: ResolvedAssociation,
-  executor: Executor,
-  keys: readonly unknown[],
-): Promise<ModelBase[]> {
-  const distinct = [...new Set(keys.filter((key) => key !== null && key !== undefined))];
-  if (distinct.length === 0) return [];
-  const records = association.linkedTo(executor, distinct)[requirePreloadable](association.label);
-  return association.inOrder(records).toArray();
 }
 
 /** Normalizes `includes()` arguments into a tree, checking every name against its Model. */
