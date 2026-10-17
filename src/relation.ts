@@ -74,8 +74,8 @@ export type IncludeSpec<M> =
         | readonly IncludeSpec<TargetRecord<M[K]>>[];
     };
 
-/** @internal The library's key for checking a Relation can be preloaded in groups. */
-export const requirePreloadable = Symbol("requirePreloadable");
+/** @internal The library's key for the query preloading a Relation sends, checked first. */
+export const preloadQuery = Symbol("preloadQuery");
 
 /** @internal The library's key for making a hasMany Relation of an owner. */
 export const ofOwner = Symbol("ofOwner");
@@ -215,17 +215,17 @@ export class Relation<M extends ModelBase, S = {}> {
   }
 
   /**
-   * @internal This Relation, if an association scope can be preloaded with it: a limit, offset or
-   * distinct would apply to every owner's records together, not to each owner's.
+   * @internal This Relation's query, if an association scope can be preloaded with it: a limit,
+   * offset or distinct would apply to every owner's records together, not to each owner's.
    */
-  [requirePreloadable](association: string): this {
+  [preloadQuery](association: string): QueryDescription {
     const { limit, offset, distinct } = this.#query;
     if (limit !== undefined || offset !== undefined || distinct) {
       throw new IncompatibleRelation(
         `${association} can't be preloaded: its scope uses limit, offset or distinct, which would apply to every owner's records together; read it lazily instead`,
       );
     }
-    return this;
+    return this.#query;
   }
 
   /**

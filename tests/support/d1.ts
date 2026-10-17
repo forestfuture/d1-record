@@ -31,3 +31,28 @@ export async function createTestDatabase(schema: URL | readonly URL[] = fixtureS
   await db.batch(statements);
   return { db, dispose: () => mf.dispose() };
 }
+
+/**
+ * `binding`, recording the number of statements in each batch it sends. A batch is one round
+ * trip to D1, but onQuery reports its statements one by one, so it can't tell one batch from
+ * separate queries.
+ */
+export function recordingBatches(binding: TestDatabase): {
+  binding: TestDatabase;
+  batches: number[];
+} {
+  const batches: number[] = [];
+  const recording = new Proxy(binding, {
+    get(target, key) {
+      if (key === "batch") {
+        return (statements: Parameters<TestDatabase["batch"]>[0]) => {
+          batches.push(statements.length);
+          return target.batch(statements);
+        };
+      }
+      const value: unknown = Reflect.get(target, key);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  return { binding: recording, batches };
+}
