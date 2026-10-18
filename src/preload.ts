@@ -105,10 +105,10 @@ function readFor(step: Preload, executor: Executor): Read {
   if (query.none) return nothing;
   const includes = mergeTrees(query.includes ?? {}, nested);
   // A scope's select keeps the key its records are matched to their owners by (#201).
-  const select = query.select && [...query.select, association.targetAttribute];
+  const columns = query.select && [...query.select, association.targetAttribute];
   // Given to the SELECT, so the keys the nested includes need are loaded too.
-  const sql = selectFor(association.target, { ...query, select, includes });
-  return { ...step, keys, select: sql, includes };
+  const select = selectFor(association.target, { ...query, select: columns, includes });
+  return { ...step, keys, select, includes };
 }
 
 /**
