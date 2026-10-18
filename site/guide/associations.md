@@ -117,6 +117,15 @@ The associations at each level go to D1 together, in one round trip. The example
 Rails sends each association’s preload query on its own, so every association adds a round trip. Here only each level of nesting does.
 :::
 
+::: warning TIP
+`hasMany` and `hasOne` look up their records by the foreign key, when preloading and when reading one owner’s. Index that column, or D1 reads, and bills, every row of the table for each lookup. A `references` column from the [generators](./generators) is indexed already, and you can add an index to any other foreign key yourself:
+
+```sql
+CREATE INDEX index_articles_on_author_id ON articles (author_id);
+```
+
+:::
+
 `record.loaded("profile")` reads a preloaded association synchronously, and throws `AssociationNotLoaded` if it wasn’t loaded, so a template never sends a query. `record.isLoaded("profile")` checks first.
 
 ## Creating related records
