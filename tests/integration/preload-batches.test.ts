@@ -7,6 +7,7 @@ import {
   type HasMany,
   IncompatibleRelation,
   InvalidModel,
+  MissingAttribute,
   Model,
   type QueryEvent,
 } from "../../src/index.ts";
@@ -34,6 +35,7 @@ class Post extends Model({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
+  published: "boolean",
 }) {
   static tableName = "posts";
 
@@ -182,6 +184,20 @@ describe("preloading sends each level's associations together", () => {
     expect(user?.loaded("profile")).toBeNull();
     expect(recording.batches).toEqual([2]);
     expect(queries).toHaveLength(3);
+  });
+
+  test("a scope's select() still loads the key its records are matched by", async () => {
+    const users = await db().model(User).includes("postTitles").order({ id: "asc" }).toArray();
+
+    const posts = users.map((user) => user.loaded("postTitles"));
+    expect(posts.map((own) => own.map((post) => post.title).toSorted())).toEqual([
+      ["A1", "A2"],
+      ["B1"],
+      [],
+    ]);
+    expect(posts[1]?.[0]?.userId).toBe(2);
+    expect(() => posts[1]?.[0]?.published).toThrow(MissingAttribute);
+    expect(queries).toHaveLength(2);
   });
 
   test("a scope's select() still loads the keys its nested includes need", async () => {
