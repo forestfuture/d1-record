@@ -18,6 +18,8 @@ Instance fields compile because their initializers are typed like any member, no
 
   That's invisible next to a deployed D1's own latency. Creating records with `Object.create` (skipping the initializers) measured +19% and +5%. But it skips constructors, and needs a fallback for Models with plain class fields, so it wasn't worth a second construction path. It can be added if a real workload needs it.
 
+  Since #91 (2026-10-20), while the library makes a record, an association's initializer returns one shared placeholder instead of building a declaration, since the field is removed straight away. The constructor still runs. With three associations, that saves about 0.35 µs per record.
+
 - **Inheritance:** a subclass inherits its parent's associations, as class fields, and redeclaring a field replaces one. Removing one isn't possible, as in Rails.
 - **Inferred foreign key:** a field initializer can't tell which class body it's in. So a `hasMany`/`hasOne`'s inferred foreign key comes from the class that extends `Model({...})`, the same class the table name comes from, rather than from the declaring class. Rails uses the declaring class; the two differ only for a subclass that declares one without `foreignKey`.
 - **Typed scopes:** association scopes are typed from the target (`scope: (q) => q.order(...)`), which the old untyped declarations couldn't do. One case stays circular: a Model's association to itself whose scope calls the Model's own named scopes (`children = hasMany(Category, { scope: (q) => q.top() })` inside `Category`). Its field's type has to be written out, `children: HasMany<typeof Category> = hasMany(…)`, and the rest is inferred.
