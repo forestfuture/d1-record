@@ -48,7 +48,7 @@ const models = db.models({ User, Post }); // convenience: models.User has the sa
 
 ## Declaring a Model
 
-_Guide:_ [models](../site/guide/models.md), [untrusted-input](../site/guide/untrusted-input.md), [querying](../site/guide/querying.md), [adopt-a-database](../site/guide/adopt-a-database.md). _Code:_ `src/model.ts`, `src/metadata.ts`, `src/spec-keys.ts`, `src/table-names.ts`, `src/verify-model.ts`, `src/permit.ts`, `src/attribute.ts`, `src/conversion.ts`, `src/attribute-conversions.ts`.
+_Guide:_ [models](../site/guide/models.md), [untrusted-input](../site/guide/untrusted-input.md), [querying](../site/guide/querying.md), [adopt-a-database](../site/guide/adopt-a-database.md). _Code:_ `src/model.ts`, `src/model-statics.ts`, `src/metadata.ts`, `src/spec-keys.ts`, `src/table-names.ts`, `src/verify-model.ts`, `src/permit.ts`, `src/attribute.ts`, `src/conversion.ts`, `src/attribute-conversions.ts`.
 
 ```ts
 class User extends Model({
@@ -204,7 +204,7 @@ _Guide:_ [querying](../site/guide/querying.md), [models](../site/guide/models.md
 
 ## Inheritance, shared behavior and serialization
 
-_Guide:_ [shared-behavior](../site/guide/shared-behavior.md), [models](../site/guide/models.md). _Code:_ `src/ancestors.ts`, `src/declarations.ts`, `src/model.ts`, `src/verify-model.ts`.
+_Guide:_ [shared-behavior](../site/guide/shared-behavior.md), [models](../site/guide/models.md). _Code:_ `src/ancestors.ts`, `src/declarations.ts`, `src/model.ts`, `src/model-statics.ts`, `src/verify-model.ts`.
 
 - A subclass (`class Admin extends User`) inherits a copy of its parent's attributes, validations, callbacks, scopes and associations. Declaring more on the child never changes the parent. Single-table inheritance is out of scope.
 - Share behavior between all Models on the app's base class, `ApplicationRecord`'s `Base` (see "Shared behavior" under The generated schema), as Rails does. Behavior only some Models share can be a plain function called from their `static {}` (e.g. `audited(this)`). A `.with({...})` helper for adding attributes to a subclass of a shared base is deferred (#14).
@@ -276,7 +276,7 @@ class Post extends Model({ id: "integer", userId: "integer" }) {
 
 ## Persistence results
 
-_Guide:_ [persistence](../site/guide/persistence.md). _Code:_ `src/lifecycle.ts`, `src/model.ts`.
+_Guide:_ [persistence](../site/guide/persistence.md). _Code:_ `src/lifecycle.ts`, `src/model.ts`, `src/model-statics.ts`.
 
 | Method                                   | Resolves to                           | Domain errors                                         |
 | ---------------------------------------- | ------------------------------------- | ----------------------------------------------------- |

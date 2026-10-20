@@ -1,4 +1,4 @@
-// `Model({...})` and `ModelBase`: the record class, its statics, and its attribute accessors.
+// `Model({...})` and `ModelBase`: the record class and its attribute accessors (its shared statics are in model-statics.ts).
 import type { Executor, QueryListener } from "./executor.ts";
 import {
   attributeOf,
