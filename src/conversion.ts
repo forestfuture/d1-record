@@ -203,8 +203,11 @@ const isoDateTime =
 /** A stored date and time with no zone, as SQLite's `CURRENT_TIMESTAMP` writes it: UTC (#73). */
 export const zonelessDateTime = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
 
-/** What `toISOString` writes for a year outside 0000-9999: a sign and six digits (`+010000-…`). */
-const expandedYearDateTime = /^[+-]\d{6}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+/**
+ * What `toISOString` writes, the form datetimes are stored in: `2026-01-02T03:04:05.678Z`, or for a
+ * year outside 0000-9999, a sign and six digits (`+010000-…`).
+ */
+const isoStringForm = /^(?:\d{4}|[+-]\d{6})-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 /**
  * A stored datetime as a `Date`: text in a form an assignment accepts (an ISO date, or a date and
@@ -215,14 +218,23 @@ const expandedYearDateTime = /^[+-]\d{6}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
  */
 function readDatetime(value: unknown): unknown {
   if (typeof value !== "string") return uncastable;
-  if (expandedYearDateTime.test(value)) return farYear(value);
+  if (isoStringForm.test(value)) {
+    // The stored form, read with one Date (#91).
+    const date = writtenAs(value);
+    if (date !== undefined) return date;
+    // A far year has no other form; a four-digit year's text gets the checks below.
+    if (!/^\d/.test(value)) return uncastable;
+  }
   return castDatetime(zonelessDateTime.test(value) ? `${value}Z` : value);
 }
 
-/** A far year's text as a `Date`, if `toISOString` would write exactly this text for it. */
-function farYear(value: string): unknown {
+/**
+ * `value` as a `Date`, if `toISOString` writes exactly this text for it. That also refuses a day
+ * that doesn't exist, which `Date` rolls over (`2026-02-30` to 2 March).
+ */
+function writtenAs(value: string): Date | undefined {
   const date = new Date(value);
-  return !isInvalidDate(date) && date.toISOString() === value ? date : uncastable;
+  return !isInvalidDate(date) && date.toISOString() === value ? date : undefined;
 }
 
 /** `1` and `0` are the stored form of a boolean; any other cell isn't one. */
