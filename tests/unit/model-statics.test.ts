@@ -44,6 +44,28 @@ describe("Relation methods as a Model's statics", () => {
   });
 });
 
+describe("callback statics", () => {
+  test("each is typed for the class it's declared on", () => {
+    // Type-checked, never run: declaring callbacks on User would leak into other tests.
+    const typed = () => {
+      const isAdmin = (admin: Admin) => expectTypeOf(admin).toEqualTypeOf<Admin>();
+      Admin.beforeValidation(isAdmin);
+      Admin.afterValidation(isAdmin);
+      Admin.beforeSave(isAdmin);
+      Admin.beforeCreate(isAdmin);
+      Admin.beforeUpdate(isAdmin);
+      Admin.afterCreate(isAdmin);
+      Admin.afterUpdate(isAdmin);
+      Admin.afterSave(isAdmin);
+      Admin.beforeDestroy(isAdmin);
+      Admin.afterDestroy(isAdmin);
+      // @ts-expect-error a User callback can't take only Admins
+      User.beforeSave(isAdmin);
+    };
+    void typed; // type-checked only
+  });
+});
+
 describe("none() with no database", () => {
   test("finders and counts answer, since it never reaches D1", async () => {
     const none = User.none();
