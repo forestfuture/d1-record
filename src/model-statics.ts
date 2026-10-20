@@ -1,5 +1,6 @@
-// The statics every Model gets from ModelBase: its Relation methods (`Product.where(…)`), typed and defined from one list.
-import type { AttributesOf, ModelBase, ModelClass, ScopesOf } from "./model.ts";
+// The statics every Model gets from ModelBase: its Relation methods (`Product.where(…)`) and callbacks (`this.beforeSave(…)`), typed and defined from their lists.
+import { declare, type CallbackKind } from "./declarations.ts";
+import type { AttributesOf, Callback, ModelBase, ModelClass, ScopesOf } from "./model.ts";
 import type { PaginateStatic } from "./pagination.ts";
 import type { Relation, Scoped } from "./relation.ts";
 
@@ -98,6 +99,47 @@ interface OverloadedStatics {
   };
 }
 
+/** A callback static, typed for the class it's declared on: `this.beforeSave((record) => …)`. */
+type CallbackStatic = <C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>) => void;
+
+/** Every callback kind as a static, each documented here, so its doc comment shows on hover. */
+interface CallbackStatics extends Record<CallbackKind, CallbackStatic> {
+  /** Runs before the validators, e.g. to normalize input. May `throw abort(reason)`. */
+  beforeValidation: CallbackStatic;
+  /** Runs after the validators, whether or not they passed. May `throw abort(reason)`. */
+  afterValidation: CallbackStatic;
+  /** Runs before every save (create or update), after validation. May `throw abort(reason)`. */
+  beforeSave: CallbackStatic;
+  /** Runs before inserting a new record, after `beforeSave`. May `throw abort(reason)`. */
+  beforeCreate: CallbackStatic;
+  /** Runs before updating a persisted record, after `beforeSave`. May `throw abort(reason)`. */
+  beforeUpdate: CallbackStatic;
+  /** Runs after a new record was inserted, before `afterSave`. */
+  afterCreate: CallbackStatic;
+  /** Runs after a persisted record was saved (even with nothing to write), before `afterSave`. */
+  afterUpdate: CallbackStatic;
+  /** Runs after every successful save; the record is already persisted and clean. */
+  afterSave: CallbackStatic;
+  /** Runs before deleting the row. May `throw abort(reason)` to refuse the destroy. */
+  beforeDestroy: CallbackStatic;
+  /** Runs after the row was deleted; the record is already destroyed. */
+  afterDestroy: CallbackStatic;
+}
+
+/** The callback kinds, one static each; `satisfies` makes the list name every kind, and only those. */
+const callbackKinds = Object.keys({
+  beforeValidation: true,
+  afterValidation: true,
+  beforeSave: true,
+  beforeCreate: true,
+  beforeUpdate: true,
+  afterCreate: true,
+  afterUpdate: true,
+  afterSave: true,
+  beforeDestroy: true,
+  afterDestroy: true,
+} satisfies Record<CallbackKind, true>) as CallbackKind[];
+
 /**
  * The class ModelBase extends, for its statics' types only: at runtime it's empty, and
  * `defineStatics` puts the statics on ModelBase itself, where scopes look for the names they
@@ -105,10 +147,23 @@ interface OverloadedStatics {
  */
 export const ModelStatics = class {} as unknown as (abstract new () => object) &
   RelationStatics &
-  OverloadedStatics;
+  OverloadedStatics &
+  CallbackStatics;
 
-/** Defines every Relation method on `base` as a static, as Rails delegates them to `all`. */
+/**
+ * Defines the statics on `base`: every Relation method, as Rails delegates them to `all`, and
+ * a static for each callback kind, which declares a callback of that kind.
+ */
 export function defineStatics(base: object): void {
+  for (const kind of callbackKinds) {
+    Object.defineProperty(base, kind, {
+      value(this: object, callback: Callback<ModelBase>): void {
+        declare(this, kind, callback);
+      },
+      writable: true,
+      configurable: true,
+    });
+  }
   for (const name of [...relationMethods, "find", "pluck", "paginate"]) {
     Object.defineProperty(base, name, {
       value(this: ModelClass, ...args: unknown[]): unknown {
