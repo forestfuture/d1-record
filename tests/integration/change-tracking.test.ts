@@ -76,6 +76,11 @@ describe("change tracking", () => {
 
     expect(key.changed().sort()).toEqual(["expiresAt", "scopes"]);
     expect(key.changes()["scopes"]).toEqual([["read"], ["read", "write"]]);
+    expect(key.changes()["expiresAt"]).toEqual([
+      new Date("2026-01-01T00:00:00.000Z"),
+      new Date("2030-01-01T00:00:00.000Z"),
+    ]);
+    expect(key.attributeWas("expiresAt")).toEqual(new Date("2026-01-01T00:00:00.000Z"));
   });
 
   test("a new record's changes are its assigned attributes", () => {
