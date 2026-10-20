@@ -100,6 +100,16 @@ describe("reading a cell of any shape as an attribute", () => {
     );
   });
 
+  test("refuses a day that doesn't exist, even in the form toISOString writes", () => {
+    for (const cell of ["2026-02-30T10:00:00.000Z", "2026-13-01T00:00:00.000Z", "2026-02-30"]) {
+      expect([cell, read("stamp", cell).ok]).toEqual([cell, false]);
+    }
+    expect(read("stamp", "2026-02-28T10:00:00.000Z")).toEqual({
+      ok: true,
+      value: new Date("2026-02-28T10:00:00.000Z"),
+    });
+  });
+
   test("reads a far year only in the exact form toISOString writes", () => {
     fc.assert(
       fc.property(
