@@ -12,16 +12,19 @@ import type { Changes, RecordState } from "./record-state.ts";
 
 /** An unsaved change: the new value, and the one the record was loaded or saved with, if any. */
 class Unsaved {
-  constructor(
-    private readonly value: unknown,
-    private readonly previous: unknown,
-  ) {}
+  readonly #value: unknown;
+  readonly #previous: unknown;
+
+  constructor(value: unknown, previous: unknown) {
+    this.#value = value;
+    this.#previous = previous;
+  }
 
   [inspectCustom](_depth: number, options: object, inspect: Inspect): string {
-    const now = inspect(this.value, options);
-    return this.previous === undefined
+    const now = inspect(this.#value, options);
+    return this.#previous === undefined
       ? `${now} (changed)`
-      : `${now} (was ${inspect(this.previous, options)})`;
+      : `${now} (was ${inspect(this.#previous, options)})`;
   }
 }
 

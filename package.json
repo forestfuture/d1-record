@@ -45,7 +45,7 @@
     "test:remote": "D1_REMOTE_SMOKE=1 vp test --project remote",
     "check:public-types": "node scripts/check-public-types.mjs",
     "check:package": "node scripts/check-package.mjs",
-    "bench:hydrate": "node scripts/bench/hydrate.ts",
+    "bench:load": "node scripts/bench/load.ts",
     "check": "vp check",
     "validate": "node scripts/validate.mjs",
     "prepack": "vp run build && vp run docs:build && node scripts/pack-docs.mjs",

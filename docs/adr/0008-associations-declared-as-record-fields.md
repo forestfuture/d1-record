@@ -12,7 +12,7 @@ Instance fields compile because their initializers are typed like any member, no
 
 ## Consequences
 
-- **A per-record cost:** JavaScript runs a record's field initializers each time one is created. The library reads a Model's declarations once, from a probe record, and removes the fields from each record it makes, so the accessors on the prototype answer, as before. Measured with `vp run bench:hydrate`:
+- **A per-record cost:** JavaScript runs a record's field initializers each time one is created. The library reads a Model's declarations once, from a probe record, and removes the fields from each record it makes, so the accessors on the prototype answer, as before. Measured with `vp run bench:hydrate` (now `bench:load`):
   - Hydrating 10,000 records went from 9.6 ms to 13.8 ms, about 0.4 µs per record.
   - `toArray()` of 10,000 rows from Miniflare's D1 went from 58 ms to 66 ms.
 
