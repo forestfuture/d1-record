@@ -122,6 +122,39 @@ describe("association declarations", () => {
     }
   });
 
+  test("a record made in another's field initializer keeps its associations", () => {
+    class Comment extends Model({ id: "integer", noteId: "integer" }) {}
+    class Note extends Model({ id: "integer" }) {
+      comments = hasMany(Comment);
+    }
+    // Note is first used while a Board is being made, after Board's own first use.
+    let pinning = false;
+    class Board extends Model({ id: "integer" }) {
+      pinned = pinning ? db.model(Note).build() : null;
+    }
+    db.model(Board).build();
+    pinning = true;
+
+    const board = db.model(Board).build();
+
+    expect(board.pinned?.comments().build().noteId).toBeNull();
+    expect(() => db.model(Note).includes("comments")).not.toThrow();
+  });
+
+  test("a record constructed directly in another's field initializer throws NoDatabase", () => {
+    class Comment extends Model({ id: "integer", noteId: "integer" }) {}
+    class Note extends Model({ id: "integer" }) {
+      comments = hasMany(Comment);
+    }
+    class Board extends Model({ id: "integer" }) {
+      draft = new Note();
+    }
+
+    const board = db.model(Board).build();
+
+    expect(() => board.draft.comments()).toThrow(NoDatabase);
+  });
+
   test("plain class fields stay on records, beside associations", () => {
     class User extends Model({ id: "integer" }) {
       greeting = "hello";

@@ -21,8 +21,22 @@ import { modelClassName } from "./table-names.ts";
  */
 let makingRecords = 0;
 
-/** Every association field's value while `newRecord` constructs a record, which removes it. */
-const removedField = Object.freeze(() => {});
+/** A field's accessor on a record constructed directly: it and its methods throw `NoDatabase`. */
+function throwingField(): () => never {
+  const field = () => {
+    throw new NoDatabase(
+      "this record was constructed directly (new …); build or load records through db.model(…) to use its associations",
+    );
+  };
+  return Object.assign(field, { set: field, build: field, create: field, createOrThrow: field });
+}
+
+/**
+ * Every association field's value while `newRecord` constructs a record. That record's fields are
+ * removed, but one constructed directly meanwhile (`new Other()` in a field initializer) keeps
+ * them, so it throws as a real field does.
+ */
+const placeholderField = Object.freeze(throwingField());
 
 /** Marks a record field's value as an association declaration, and holds it. */
 const declarationKey = Symbol("d1-record association");
@@ -35,14 +49,8 @@ const declarationKey = Symbol("d1-record association");
  */
 function declaration<A>(kind: AssociationKind, target: ModelClass, options: object): A {
   // A field newRecord removes straight away: nothing reads it, so nothing is built for it (#91).
-  if (makingRecords > 0) return removedField as A;
-  const field = () => {
-    throw new NoDatabase(
-      "this record was constructed directly (new …); build or load records through db.model(…) to use its associations",
-    );
-  };
-  // On a record constructed directly, the accessor's methods throw the same way.
-  Object.assign(field, { set: field, build: field, create: field, createOrThrow: field });
+  if (makingRecords > 0) return placeholderField as A;
+  const field = throwingField();
   // The target's class is passed directly (no `() => Post`): a field's initializer runs when a
   // record is made, by which time every Model class exists, in whatever order they're declared.
   return Object.assign(field, {
@@ -87,7 +95,14 @@ const probes = new WeakMap<object, ModelBase>();
 export function probeOf(model: ModelClass): ModelBase {
   let probe = probes.get(model);
   if (probe === undefined) {
-    probe = new model();
+    // Its fields are read, so they're real declarations, even inside a newRecord (#91).
+    const making = makingRecords;
+    makingRecords = 0;
+    try {
+      probe = new model();
+    } finally {
+      makingRecords = making;
+    }
     probes.set(model, probe);
   }
   return probe;
@@ -125,7 +140,7 @@ export function associationsOf(model: ModelClass): ReadonlyMap<string, Associati
  * they usually are, that undoes their additions and keeps the object's shape fast.
  */
 export function newRecord<M extends ModelBase>(model: ModelClass<M>): M {
-  const record = constructed(model);
+  const record = constructWithoutAssociations(model);
   const names = [...associationsOf(model).keys()];
   for (let index = names.length - 1; index >= 0; index--) {
     delete (record as unknown as Record<string, unknown>)[names[index]!];
@@ -133,8 +148,8 @@ export function newRecord<M extends ModelBase>(model: ModelClass<M>): M {
   return record;
 }
 
-/** A record of `model` from its constructor, its association fields left as `removedField`. */
-function constructed<M extends ModelBase>(model: ModelClass<M>): M {
+/** A record of `model` from its constructor, its association fields left as `placeholderField`. */
+function constructWithoutAssociations<M extends ModelBase>(model: ModelClass<M>): M {
   makingRecords++;
   try {
     return new model();
