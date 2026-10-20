@@ -154,24 +154,22 @@ export const ModelStatics = class {} as unknown as (abstract new () => object) &
  * Defines the statics on `base`: every Relation method, as Rails delegates them to `all`, and
  * a static for each callback kind, which declares a callback of that kind.
  */
-export function defineStatics(base: object): void {
+export function defineStatics(base: typeof ModelBase): void {
   for (const kind of callbackKinds) {
-    Object.defineProperty(base, kind, {
-      value(this: object, callback: Callback<ModelBase>): void {
-        declare(this, kind, callback);
-      },
-      writable: true,
-      configurable: true,
+    defineStatic(base, kind, function (this: object, callback: Callback<ModelBase>): void {
+      declare(this, kind, callback);
     });
   }
   for (const name of [...relationMethods, "find", "pluck", "paginate"]) {
-    Object.defineProperty(base, name, {
-      value(this: ModelClass, ...args: unknown[]): unknown {
-        const relation = this.all() as unknown as Record<string, (...args: unknown[]) => unknown>;
-        return relation[name]!(...args);
-      },
-      writable: true,
-      configurable: true,
+    defineStatic(base, name, function (this: ModelClass, ...args: unknown[]): unknown {
+      const relation = this.all() as unknown as Record<string, (...args: unknown[]) => unknown>;
+      return relation[name]!(...args);
     });
   }
+}
+
+/** `method` as the static `name` of `base`, named and described as a class's own static is. */
+function defineStatic(base: object, name: string, method: (...args: never) => unknown): void {
+  Object.defineProperty(method, "name", { value: name });
+  Object.defineProperty(base, name, { value: method, writable: true, configurable: true });
 }

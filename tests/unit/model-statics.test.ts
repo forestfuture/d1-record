@@ -120,6 +120,22 @@ describe("the statics' list", () => {
         "function",
       ]);
     }
+    // Named as they're called, as class methods are, so stack traces and inspect say which.
+    const callbackKinds = [
+      "beforeValidation",
+      "afterValidation",
+      "beforeSave",
+      "beforeCreate",
+      "beforeUpdate",
+      "afterCreate",
+      "afterUpdate",
+      "afterSave",
+      "beforeDestroy",
+      "afterDestroy",
+    ];
+    for (const name of [...relationMethods, ...callbackKinds]) {
+      expect((User as unknown as Record<string, () => unknown>)[name]?.name).toBe(name);
+    }
     // And in the types: no public Relation method is missing from a Model's statics.
     type Missing = Exclude<Extract<keyof Relation<User>, string>, keyof typeof User>;
     expectTypeOf<Missing>().toEqualTypeOf<never>();
