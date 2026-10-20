@@ -5,7 +5,7 @@ import type { PaginateStatic } from "./pagination.ts";
 import type { Relation, Scoped } from "./relation.ts";
 
 /** A Model's Relation, as its statics return them: `Product.where(…)` is `Product.all().where(…)`. */
-type On<C extends ModelClass> = Scoped<InstanceType<C>, ScopesOf<C>>;
+type RelationOf<C extends ModelClass> = Scoped<InstanceType<C>, ScopesOf<C>>;
 
 /** The Relation methods every Model has as statics (besides the overloaded ones). */
 const relationMethods = [
@@ -59,8 +59,8 @@ type RelationMethod = (typeof relationMethods)[number];
  */
 type RelationStatic<K extends RelationMethod> = <C extends ModelClass>(
   this: C,
-  ...args: On<C>[K] extends (...args: infer A) => unknown ? A : never
-) => On<C>[K] extends (...args: never) => infer R ? R : never;
+  ...args: RelationOf<C>[K] extends (...args: infer A) => unknown ? A : never
+) => RelationOf<C>[K] extends (...args: never) => infer R ? R : never;
 
 /** Every Relation method in the list as a static, mapped over Relation's so each keeps its doc comment. */
 type RelationStatics = {
@@ -103,7 +103,7 @@ interface OverloadedStatics {
 type CallbackStatic = <C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>) => void;
 
 /** Every callback kind as a static, each documented here, so its doc comment shows on hover. */
-interface CallbackStatics extends Record<CallbackKind, CallbackStatic> {
+interface CallbackStatics {
   /** Runs before the validators, e.g. to normalize input. May `throw abort(reason)`. */
   beforeValidation: CallbackStatic;
   /** Runs after the validators, whether or not they passed. May `throw abort(reason)`. */
@@ -126,7 +126,10 @@ interface CallbackStatics extends Record<CallbackKind, CallbackStatic> {
   afterDestroy: CallbackStatic;
 }
 
-/** The callback kinds, one static each; `satisfies` makes the list name every kind, and only those. */
+/**
+ * The callback kinds, one static each. Both `satisfies` make the list, `CallbackKind` and
+ * `CallbackStatics` name the same kinds: none missing from any, and none extra.
+ */
 const callbackKinds = Object.keys({
   beforeValidation: true,
   afterValidation: true,
@@ -138,7 +141,10 @@ const callbackKinds = Object.keys({
   afterSave: true,
   beforeDestroy: true,
   afterDestroy: true,
-} satisfies Record<CallbackKind, true>) as CallbackKind[];
+} satisfies Record<CallbackKind, true> satisfies Record<
+  keyof CallbackStatics,
+  true
+>) as CallbackKind[];
 
 /**
  * The class ModelBase extends, for its statics' types only: at runtime it's empty, and
