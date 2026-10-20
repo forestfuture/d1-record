@@ -28,7 +28,7 @@ import { inspectCustom, type Inspect, type InspectOptions } from "./inspect-supp
 import { inspectRecord } from "./record-inspect.ts";
 import { readyModel, type BelongsTo, type HasOne } from "./associations.ts";
 import type { Relation, Scope, Scoped } from "./relation.ts";
-import type { PaginateStatic } from "./pagination.ts";
+import { defineStatics, ModelStatics } from "./model-statics.ts";
 import { currentRelation } from "./current-database.ts";
 import { scopeBodies, scopeName, useModelBase } from "./scoped-relation.ts";
 import type { Validation, ValidationOptions } from "./validations.ts";
@@ -52,64 +52,6 @@ export type ScopesOf<C> = {
     K in Exclude<keyof C, "prototype"> as C[K] extends { readonly [scopeBrand]: true } ? K : never
   ]: C[K];
 };
-
-/** A Model's Relation, as its statics return them: `Product.where(…)` is `Product.all().where(…)`. */
-type On<C extends ModelClass> = Scoped<InstanceType<C>, ScopesOf<C>>;
-
-/** A Relation method with no overloads, by name. */
-type RelationMethod = (typeof relationMethods)[number];
-
-/**
- * A Relation method as a static of every Model, typed for the class it's called on: `Product.where`
- * returns a Relation of `Product`, and on a subclass, of the subclass.
- */
-type RelationStatic<K extends RelationMethod> = <C extends ModelClass>(
-  this: C,
-  ...args: On<C>[K] extends (...args: infer A) => unknown ? A : never
-) => On<C>[K] extends (...args: never) => infer R ? R : never;
-
-/** The Relation methods every Model has as statics (besides the overloaded ones). */
-const relationMethods = [
-  "where",
-  "whereNot",
-  "none",
-  "or",
-  "merge",
-  "order",
-  "reorder",
-  "limit",
-  "offset",
-  "select",
-  "distinct",
-  "includes",
-  "build",
-  "insert",
-  "toInsert",
-  "insertAll",
-  "toInsertAll",
-  "upsert",
-  "toUpsert",
-  "upsertAll",
-  "toUpsertAll",
-  "updateAll",
-  "toUpdateAll",
-  "deleteAll",
-  "toDeleteAll",
-  "create",
-  "createOrThrow",
-  "findBy",
-  "findByOrThrow",
-  "first",
-  "last",
-  "take",
-  "count",
-  "size",
-  "isEmpty",
-  "hasAny",
-  "exists",
-  "toArray",
-  "toSql",
-] as const;
 
 /** What `loaded()` returns for an association accessor: its records, or its record or null. */
 export type LoadedValue<F> = F extends () => Promise<infer R>
@@ -149,7 +91,7 @@ export interface ChangeOptions<V = unknown> {
 /** The declared attributes of a record type, excluding methods and getters. */
 export type AttributesOf<M> = M extends { readonly [attributeTypes]?: infer A } ? A : never;
 
-export class ModelBase {
+export class ModelBase extends ModelStatics {
   /** The table's name: inferred from the class name (`BlogPost` → `blog_posts`) unless set. */
   static tableName: string;
   static primaryKey = "id";
@@ -224,76 +166,6 @@ export class ModelBase {
   static all<C extends ModelClass>(this: C): Scoped<InstanceType<C>, ScopesOf<C>> {
     return currentRelation(this);
   }
-
-  // Every Relation method, as Rails delegates them to `all`: `Product.find(id)`, `Product.where(…)`.
-  // Defined below the class, all the same way; declared here for their types.
-  declare static where: RelationStatic<"where">;
-  declare static whereNot: RelationStatic<"whereNot">;
-  declare static none: RelationStatic<"none">;
-  declare static or: RelationStatic<"or">;
-  declare static merge: RelationStatic<"merge">;
-  declare static order: RelationStatic<"order">;
-  declare static reorder: RelationStatic<"reorder">;
-  declare static limit: RelationStatic<"limit">;
-  declare static offset: RelationStatic<"offset">;
-  declare static select: RelationStatic<"select">;
-  declare static distinct: RelationStatic<"distinct">;
-  declare static includes: RelationStatic<"includes">;
-  declare static build: RelationStatic<"build">;
-  declare static insert: RelationStatic<"insert">;
-  declare static toInsert: RelationStatic<"toInsert">;
-  declare static insertAll: RelationStatic<"insertAll">;
-  declare static toInsertAll: RelationStatic<"toInsertAll">;
-  declare static upsert: RelationStatic<"upsert">;
-  declare static toUpsert: RelationStatic<"toUpsert">;
-  declare static upsertAll: RelationStatic<"upsertAll">;
-  declare static toUpsertAll: RelationStatic<"toUpsertAll">;
-  declare static updateAll: RelationStatic<"updateAll">;
-  declare static toUpdateAll: RelationStatic<"toUpdateAll">;
-  declare static deleteAll: RelationStatic<"deleteAll">;
-  declare static toDeleteAll: RelationStatic<"toDeleteAll">;
-  declare static create: RelationStatic<"create">;
-  declare static createOrThrow: RelationStatic<"createOrThrow">;
-  declare static findBy: RelationStatic<"findBy">;
-  declare static findByOrThrow: RelationStatic<"findByOrThrow">;
-  declare static first: RelationStatic<"first">;
-  declare static last: RelationStatic<"last">;
-  declare static take: RelationStatic<"take">;
-  declare static count: RelationStatic<"count">;
-  declare static size: RelationStatic<"size">;
-  declare static isEmpty: RelationStatic<"isEmpty">;
-  declare static hasAny: RelationStatic<"hasAny">;
-  declare static exists: RelationStatic<"exists">;
-  declare static toArray: RelationStatic<"toArray">;
-  declare static toSql: RelationStatic<"toSql">;
-  declare static paginate: PaginateStatic;
-  declare static find: {
-    <C extends ModelClass>(this: C, id: string | number): Promise<InstanceType<C>>;
-    <C extends ModelClass>(this: C, ids: readonly (string | number)[]): Promise<InstanceType<C>[]>;
-    <C extends ModelClass>(
-      this: C,
-      first: string | number,
-      second: string | number,
-      ...rest: (string | number)[]
-    ): Promise<InstanceType<C>[]>;
-  };
-  declare static pluck: {
-    <C extends ModelClass, K extends keyof AttributesOf<InstanceType<C>> & string>(
-      this: C,
-      attribute: K,
-    ): Promise<AttributesOf<InstanceType<C>>[K][]>;
-    <
-      C extends ModelClass,
-      const K extends readonly [
-        keyof AttributesOf<InstanceType<C>> & string,
-        keyof AttributesOf<InstanceType<C>> & string,
-        ...(keyof AttributesOf<InstanceType<C>> & string)[],
-      ],
-    >(
-      this: C,
-      ...attributes: K
-    ): Promise<{ -readonly [I in keyof K]: AttributesOf<InstanceType<C>>[K[I]] }[]>;
-  };
 
   /**
    * Only the named attributes of untrusted input (a JSON body, `FormData` or
@@ -648,16 +520,7 @@ export class ModelBase {
 export type ModelClass<M extends ModelBase = ModelBase> = (new () => M) &
   Omit<typeof ModelBase, "prototype">;
 
-for (const name of [...relationMethods, "find", "pluck", "paginate"]) {
-  Object.defineProperty(ModelBase, name, {
-    value(this: ModelClass, ...args: unknown[]): unknown {
-      const relation = this.all() as unknown as Record<string, (...args: unknown[]) => unknown>;
-      return relation[name]!(...args);
-    },
-    writable: true,
-    configurable: true,
-  });
-}
+defineStatics(ModelBase);
 
 // ModelBase and its statics are all defined now: scopes stop at it, and can't take its names;
 // and relationFor makes each Model ready with readyModel (hoisted, so it exists already).
