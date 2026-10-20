@@ -15,6 +15,15 @@ import { withForeignKeys } from "./foreign-keys.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { modelClassName } from "./table-names.ts";
 
+/**
+ * How many `newRecord` calls are constructing a record now. Module-level, but not request state
+ * (ADR-0003): it's back to 0 before `newRecord` returns, with no await in between.
+ */
+let makingRecords = 0;
+
+/** Every association field's value while `newRecord` constructs a record, which removes it. */
+const removedField = Object.freeze(() => {});
+
 /** Marks a record field's value as an association declaration, and holds it. */
 const declarationKey = Symbol("d1-record association");
 
@@ -25,6 +34,8 @@ const declarationKey = Symbol("d1-record association");
  * (`new User()`), calling the field throws `NoDatabase`, as any database operation does.
  */
 function declaration<A>(kind: AssociationKind, target: ModelClass, options: object): A {
+  // A field newRecord removes straight away: nothing reads it, so nothing is built for it (#91).
+  if (makingRecords > 0) return removedField as A;
   const field = () => {
     throw new NoDatabase(
       "this record was constructed directly (new …); build or load records through db.model(…) to use its associations",
@@ -114,12 +125,22 @@ export function associationsOf(model: ModelClass): ReadonlyMap<string, Associati
  * they usually are, that undoes their additions and keeps the object's shape fast.
  */
 export function newRecord<M extends ModelBase>(model: ModelClass<M>): M {
-  const record = new model();
+  const record = constructed(model);
   const names = [...associationsOf(model).keys()];
   for (let index = names.length - 1; index >= 0; index--) {
     delete (record as unknown as Record<string, unknown>)[names[index]!];
   }
   return record;
+}
+
+/** A record of `model` from its constructor, its association fields left as `removedField`. */
+function constructed<M extends ModelBase>(model: ModelClass<M>): M {
+  makingRecords++;
+  try {
+    return new model();
+  } finally {
+    makingRecords--;
+  }
 }
 
 /** A Model's association by name; `UnknownAssociation` for any other name. */
