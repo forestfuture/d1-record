@@ -27,10 +27,14 @@ function styled(options: InspectOptions, text: string): string {
 
 /** A filtered value's stand-in: prints unquoted, so it isn't taken for a string, as a special value. */
 export class FilteredMark {
-  constructor(private readonly changed: boolean) {}
+  readonly #changed: boolean;
+
+  constructor(changed: boolean) {
+    this.#changed = changed;
+  }
 
   [inspectCustom](_depth: number, options: InspectOptions): string {
-    return styled(options, FILTERED) + (this.changed ? " (changed)" : "");
+    return styled(options, FILTERED) + (this.#changed ? " (changed)" : "");
   }
 }
 

@@ -16,6 +16,8 @@
     "esModuleInterop": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
+    // Only TypeScript that type stripping can remove, so Node runs the scripts as they are.
+    "erasableSyntaxOnly": true,
     "skipLibCheck": true,
     // The documentation's examples import the package by name, as an app would.
     "paths": { "@forestfuture/d1-record": ["./src/index.ts"] }
