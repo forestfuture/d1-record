@@ -104,6 +104,9 @@ describe("reading a cell of any shape as an attribute", () => {
     for (const cell of ["2026-02-30T10:00:00.000Z", "2026-13-01T00:00:00.000Z", "2026-02-30"]) {
       expect([cell, read("stamp", cell).ok]).toEqual([cell, false]);
     }
+  });
+
+  test("reads the form toISOString writes as that moment", () => {
     expect(read("stamp", "2026-02-28T10:00:00.000Z")).toEqual({
       ok: true,
       value: new Date("2026-02-28T10:00:00.000Z"),

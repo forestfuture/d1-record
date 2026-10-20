@@ -197,14 +197,14 @@ export class RecordState {
 
   /** Loads a D1 row; the record becomes persisted and clean. */
   loadRow(row: Record<string, unknown>): void {
-    let cells = 0;
+    let loadedCount = 0;
     for (const [name, definition] of this.#model.attributeDefinitions) {
       const { column } = definition;
       if (!(column in row)) continue;
       this.#values[name] = this.#attribute(name).read(row[column]);
-      cells++;
+      loadedCount++;
     }
-    this.#markSaved(row, cells);
+    this.#markSaved(row, loadedCount);
   }
 
   /** The loaded attributes as a plain object (the record's own values, not copies). */
@@ -226,9 +226,7 @@ export class RecordState {
   changes(): Changes {
     const changes: Changes = {};
     for (const name of this.changedNames()) {
-      const before = this.#inSnapshot(name)
-        ? this.#attribute(name).read(this.#snapshotOf(name))
-        : null;
+      const before = this.#inSnapshot(name) ? this.#snapshotValue(name) : null;
       changes[name] = [before, this.#copyOf(name)];
     }
     return changes;
@@ -256,7 +254,7 @@ export class RecordState {
   valueInDatabase(name: string): unknown {
     this.read(name);
     const attribute = this.#attribute(name);
-    if (this.#inSnapshot(name)) return attribute.read(this.#snapshotOf(name));
+    if (this.#inSnapshot(name)) return this.#snapshotValue(name);
     return this.#initialValues.has(name) ? attribute.read(this.#initialValues.get(name)) : null;
   }
 
@@ -283,7 +281,7 @@ export class RecordState {
     for (const name of names) {
       const attribute = this.#attribute(name);
       if (this.#lifecycle !== "new") {
-        if (this.#inSnapshot(name)) this.#values[name] = attribute.read(this.#snapshotOf(name));
+        if (this.#inSnapshot(name)) this.#values[name] = this.#snapshotValue(name);
       } else if (this.#initialValues.has(name)) {
         this.#values[name] = attribute.read(this.#initialValues.get(name));
       } else {
@@ -403,15 +401,16 @@ export class RecordState {
   }
 
   /**
-   * The current values become the Snapshot: persisted and clean. After a load, `row`'s `cells`
-   * become entries only when first used, so a record that's only read never writes them (#91).
+   * The current values become the Snapshot: persisted and clean. After a load, the entries for
+   * `row`'s cells (`loadedCount` of the values) are made only when first used, so a record that's
+   * only read never writes them (#91).
    */
-  #markSaved(row?: Record<string, unknown>, cells = 0): void {
+  #markSaved(row?: Record<string, unknown>, loadedCount = 0): void {
     this.#snapshot.clear();
     this.#snapshotRow = row;
     const names = Object.keys(this.#values);
     // Values the row didn't hold (none, unless a column is missing from it) are stored now.
-    if (names.length !== cells) {
+    if (names.length !== loadedCount) {
       for (const name of names) {
         if (!this.#inRow(name)) this.#snapshot.set(name, this.#storedForm(name));
       }
@@ -429,11 +428,17 @@ export class RecordState {
   #snapshotOf(name: string): unknown {
     if (this.#snapshot.has(name) || !this.#inRow(name)) return this.#snapshot.get(name);
     const attribute = this.#attribute(name);
+    // #inRow said the row is held and has the cell.
     const stored = attribute.write(
       attribute.read(this.#snapshotRow![this.#definition(name).column]),
     );
     this.#snapshot.set(name, stored);
     return stored;
+  }
+
+  /** `name`'s value as loaded or saved: a fresh copy, read back from its Snapshot entry. */
+  #snapshotValue(name: string): unknown {
+    return this.#attribute(name).read(this.#snapshotOf(name));
   }
 
   /** Whether the row the Snapshot was loaded from has a cell for `name`. */
