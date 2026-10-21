@@ -72,7 +72,7 @@ async function checkRestriction(
   return owner.errors[addFailure]("base", {
     type: "restrictDependentDestroy",
     values: { record },
-    associationKind: kind === "hasOne" ? "hasOne" : "hasMany",
+    form: kind === "hasOne" ? "hasOne" : "hasMany",
   });
 }
 
