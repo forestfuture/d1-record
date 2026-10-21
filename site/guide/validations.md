@@ -114,22 +114,26 @@ Each message is looked up when you read it:
 
 ### Naming attributes
 
-`fullMessages()` starts each message with the attribute’s name, made from the attribute itself: `createdAt` reads as “Created at”. To use another name, call `this.humanAttributeNames`, in the base class or a Model, as the examples above do. For a form’s label, `Product.humanAttributeName("priceCents")` returns the same name.
+`fullMessages()` starts each message with the attribute’s name, made from the attribute itself: `createdAt` reads as “Created at”. To use another name, call `this.humanAttributeNames`, as the examples above do. Call it in the base class for every Model, or in a Model for its own attributes.
+
+::: warning TIP
+`Product.humanAttributeName("priceCents")` returns the same name, for a form’s label.
+:::
 
 In a Model, `attributes` and `humanAttributeNames` can only name the Model’s attributes, its associations, and `"base"`, so a misspelled name is a compile error. Names in the base class can be any attribute: a Model without that attribute ignores them.
 
-### Placeholders
+### Filling in placeholders
 
 A message can show these values:
 
 - **`%{count}`**: the number in the rule, such as the `minimum` of `tooShort` or the bound of `greaterThan`.
 - **`%{attribute}`**: the attribute’s name, as `fullMessages()` shows it.
-- **`%{model}`**: the Model’s name, so `BlogPost` reads as “Blog post”.
+- **`%{model}`**: the Model’s class name in words, so `BlogPost` reads as “Blog post”. A bundler that renames classes changes it too.
 - **`%{value}`**: the attribute’s value. A [filtered attribute](./models#filtering-attributes) shows `[FILTERED]`.
 
 A value passed to `errors.add` with the type, such as `count`, fills in the placeholder of the same name.
 
-### Which message is used
+### Looking messages up
 
 For each error, the first message found is used:
 
@@ -141,5 +145,5 @@ For each error, the first message found is used:
 A type with no message anywhere throws a `TypeError` when the error is added.
 
 ::: rails Compared with Rails
-Rails looks messages up in its locale files, in the same order: the Model’s, then its ancestors’, then the shared ones. d1-record keeps them on the classes instead, so a Model’s messages sit next to its validations. Their keys are d1-record’s error types, in camelCase. Rails shows “Translation missing” for a type with no message, where d1-record throws when the error is added. Messages in other languages aren’t here yet.
+Rails looks messages up in its locale files, in nearly the same order: the Model’s, then its ancestors’, then the shared ones. Among the shared ones, Rails tries a message for the type before one for the attribute. Your base class tries the attribute’s first, as every class does. d1-record keeps messages on the classes instead, so a Model’s messages sit next to its validations. Their keys are d1-record’s error types, in camelCase. Rails shows “Translation missing” for a type with no message, where d1-record throws when the error is added. Messages in other languages aren’t here yet.
 :::
