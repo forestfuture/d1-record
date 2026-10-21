@@ -14,6 +14,9 @@ import type { Validation } from "./validations.ts";
  */
 const registry = new WeakMap<object, Map<string, readonly unknown[]>>();
 
+/** The declarations each class made itself, without its parent's, for reading class by class. */
+const ownRegistry = new WeakMap<object, Map<string, readonly unknown[]>>();
+
 /** Models that have been used; their declarations can no longer change. */
 const sealed = new WeakSet<object>();
 
@@ -44,17 +47,11 @@ export type AfterCallbackKind = "afterCreate" | "afterUpdate" | "afterSave" | "a
 
 export type CallbackKind = BeforeCallbackKind | AfterCallbackKind;
 
-/** A declaration kept with the class it was made on, whose own come first when it's read (#88). */
-interface ClassDeclaration<T> {
-  from: object;
-  value: T;
-}
-
 /** Every kind of per-Model declaration, and what one entry of it is. */
 export type Declarations = {
   validations: Validation;
-  errorMessages: ClassDeclaration<ErrorMessages>;
-  humanAttributeNames: ClassDeclaration<Readonly<Record<string, string>>>;
+  errorMessages: ErrorMessages;
+  humanAttributeNames: Readonly<Record<string, string>>;
 } & {
   [K in CallbackKind]: Callback<ModelBase>;
 };
@@ -71,6 +68,17 @@ export function declared<K extends keyof Declarations>(
   return [];
 }
 
+/** The declarations of `kind` that `model` and each class it extends made themselves, nearest first. */
+export function declaredByClass<K extends keyof Declarations>(
+  model: object,
+  kind: K,
+): { from: object; values: readonly Declarations[K][] }[] {
+  return ancestors(model).flatMap((from) => {
+    const values = ownRegistry.get(from)?.get(kind) as readonly Declarations[K][] | undefined;
+    return values === undefined ? [] : [{ from, values }];
+  });
+}
+
 /** Adds a declaration of `kind` to `model`, copying its inherited list first. */
 export function declare<K extends keyof Declarations>(
   model: object,
@@ -83,7 +91,10 @@ export function declare<K extends keyof Declarations>(
       `${name} has already been used; declare validations, callbacks and messages in its static {} block`,
     );
   }
-  const own = registry.get(model) ?? new Map<string, readonly unknown[]>();
-  registry.set(model, own);
-  own.set(kind, [...declared(model, kind), entry]);
+  const lists = registry.get(model) ?? new Map<string, readonly unknown[]>();
+  registry.set(model, lists);
+  lists.set(kind, [...declared(model, kind), entry]);
+  const own = ownRegistry.get(model) ?? new Map<string, readonly unknown[]>();
+  ownRegistry.set(model, own);
+  own.set(kind, [...(own.get(kind) ?? []), entry]);
 }
