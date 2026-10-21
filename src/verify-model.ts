@@ -1,8 +1,8 @@
 // Checks a Model's declaration the first time it's used, then seals its declarations.
-// It checks the table, the primary key, the attribute names, the spec keys, hidden attributes, messages, and page sizes.
+// It checks the table, the primary key, the attribute names, the spec keys, hidden attributes, message names, and page sizes.
 import { ancestors } from "./ancestors.ts";
 import { associationsOf, declarationIn, probeOf } from "./association-fields.ts";
-import { rejectUnknownMessageNames } from "./error-messages.ts";
+import { messageNameLists } from "./error-messages.ts";
 import { seal } from "./declarations.ts";
 import { InvalidModel } from "./errors.ts";
 import { ModelBase, type ModelClass } from "./model.ts";
@@ -22,7 +22,7 @@ export function verifyModel(model: ModelClass): void {
   rejectReservedAttributeNames(model);
   rejectBadSpecs(model);
   rejectUnknownHiddenAttributes(model);
-  rejectUnknownMessageNames(model, associationsOf(model).keys());
+  rejectUnknownMessageNames(model);
   rejectShadowingFields(model);
   rejectBadPageSizes(model);
   // The classes it inherits declarations from too (an app's Base), so none can change later.
@@ -97,11 +97,34 @@ function rejectUnknownHiddenAttributes(model: ModelClass): void {
 function namesListedByAttributelessAncestors(model: ModelClass): Set<string> {
   const names = new Set<string>();
   for (const each of ancestors(model).slice(1) as Partial<ModelClass>[]) {
-    if (Object.hasOwn(each, "hiddenAttributes") && each.attributeDefinitions?.size === 0) {
+    if (Object.hasOwn(each, "hiddenAttributes") && hasNoAttributes(each)) {
       each.hiddenAttributes?.forEach((name) => names.add(name));
     }
   }
   return names;
+}
+
+/**
+ * A Model's messages and attribute names must be for its attributes, its associations or
+ * `"base"`, so a typo isn't left unused. Those of a class without attributes (the app's base
+ * class) are the exception: they apply to the Models that have them (#88).
+ */
+function rejectUnknownMessageNames(model: ModelClass): void {
+  const associations = associationsOf(model).keys();
+  const known = new Set(["base", ...model.attributeDefinitions.keys(), ...associations]);
+  for (const { from, where, names } of messageNameLists(model)) {
+    const unknown = names.find((name) => !known.has(name));
+    if (unknown === undefined || hasNoAttributes(from)) continue;
+    throw new InvalidModel(
+      `${(from as ModelClass).name}'s ${where} "${unknown}", which isn't one of its ` +
+        "attributes or associations; name them exactly",
+    );
+  }
+}
+
+/** Whether a class has no attributes, as the app's base class: names it lists apply where a Model has them. */
+function hasNoAttributes(each: Partial<ModelClass>): boolean {
+  return each.attributeDefinitions?.size === 0;
 }
 
 function rejectShadowingFields(model: ModelClass): void {

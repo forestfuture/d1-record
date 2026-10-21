@@ -1,6 +1,5 @@
 // Error messages: the built-in English ones, a Model's own, and looking one up when it's read (#88).
 import { declared, declaredByClass, isSealed } from "./declarations.ts";
-import { InvalidModel } from "./errors.ts";
 import type { ModelClass } from "./model.ts";
 import { FILTERED, isFiltered } from "./filtering.ts";
 import { underscore } from "./naming.ts";
@@ -194,8 +193,10 @@ function missingMessage(model: ModelClass, entry: ErrorEntry): TypeError {
   );
 }
 
-/** The attribute names each class's declarations use, with the class. */
-function namesIn(model: ModelClass): { from: object; where: string; names: string[] }[] {
+/** The attribute names each class's `errorMessages` and `humanAttributeNames` use, with the class. */
+export function messageNameLists(
+  model: ModelClass,
+): { from: object; where: string; names: string[] }[] {
   return [
     ...declaredByClass(model, "errorMessages").map(({ from, values }) => ({
       from,
@@ -208,22 +209,4 @@ function namesIn(model: ModelClass): { from: object; where: string; names: strin
       names: values.flatMap((value) => Object.keys(value)),
     })),
   ];
-}
-
-/**
- * A Model's messages and attribute names must be for its attributes, its associations or
- * `"base"`, so a typo isn't left unused. Those of a class without attributes (the app's base
- * class) are the exception: they apply to the Models that have them.
- */
-export function rejectUnknownMessageNames(model: ModelClass, associations: Iterable<string>): void {
-  const known = new Set(["base", ...model.attributeDefinitions.keys(), ...associations]);
-  for (const { from, where, names } of namesIn(model)) {
-    if ((from as ModelClass).attributeDefinitions.size === 0) continue;
-    const unknown = names.find((name) => !known.has(name));
-    if (unknown === undefined) continue;
-    throw new InvalidModel(
-      `${(from as ModelClass).name}'s ${where} "${unknown}", which isn't one of its ` +
-        "attributes or associations; name them exactly",
-    );
-  }
 }
