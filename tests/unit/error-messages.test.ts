@@ -33,8 +33,28 @@ class Post extends ApplicationRecord("posts") {
   }
 }
 
+class Member extends ApplicationRecord("accounts") {
+  static override errorMessages: ErrorMessages = {
+    blank: "must be filled in",
+    attributes: { email: { blank: "is needed to sign in" } },
+  };
+
+  static {
+    this.validates("email", { presence: true });
+    this.validates("handle", { presence: true, length: { minimum: 3 } });
+  }
+}
+
+class Admin extends Member {
+  static override errorMessages: ErrorMessages = {
+    attributes: { handle: { tooShort: "is too short for an admin" } },
+  };
+}
+
+class Guest extends Member {}
+
 /** The full messages of a record of `model` built from `attributes`, once validated. */
-async function messagesOf(model: typeof Account | typeof Post, attributes: object) {
+async function messagesOf(model: typeof Account | typeof Post | typeof Member, attributes: object) {
   const record = db.model(model as typeof Account).build(attributes as never);
   await record.isValid();
   return record.errors.fullMessages();
@@ -51,5 +71,35 @@ describe("error messages", () => {
       "Title is required",
       "Title needs at least 1 character",
     ]);
+  });
+
+  test("a Model's own messages win, an attribute's first, then those of each class it extends", async () => {
+    const blankAndShort = { email: "", handle: "" };
+
+    expect(await messagesOf(Member, blankAndShort)).toEqual([
+      "Email is needed to sign in",
+      "Handle must be filled in",
+      "Handle needs at least 3 characters",
+    ]);
+    expect(await messagesOf(Admin, blankAndShort)).toEqual([
+      "Email is needed to sign in",
+      "Handle must be filled in",
+      "Handle is too short for an admin",
+    ]);
+    expect(await messagesOf(Guest, blankAndShort)).toEqual(await messagesOf(Member, blankAndShort));
+  });
+
+  test("a class's own type wins over an attribute's message from a class it extends", async () => {
+    class Strict extends Base {
+      static override errorMessages: ErrorMessages = { attributes: { title: { blank: "x" } } };
+    }
+    class Note extends modelFor(tables, Strict)("posts") {
+      static override errorMessages: ErrorMessages = { blank: "is empty" };
+      static {
+        this.validates("title", { presence: true });
+      }
+    }
+
+    expect(await messagesOf(Note as never, { title: "" })).toEqual(["Title is empty"]);
   });
 });
