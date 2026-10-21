@@ -42,7 +42,7 @@ Every validation runs, in the order declared, so one attribute can collect sever
 - **`message`** replaces the default messages from that call.
 - **`if: (record) => boolean`** validates only when it returns `true`.
 
-The default messages are in English: “can’t be blank”, “is too short (minimum is 3 characters)”, “has already been taken”, and so on. [Changing error messages](#changing-error-messages) shows how to replace them.
+The default messages are in English: “can’t be blank”, “is too short (minimum is 3 characters)”, “has already been taken”, and so on. [Finding a built-in message](#finding-a-built-in-message) lists them all, and [Changing error messages](#changing-error-messages) shows how to replace them.
 
 ### Validator details
 
@@ -102,7 +102,7 @@ To change the message of one validation, pass `message` to `validates`. To chang
 
 <<< @/snippets/guide/error-messages.ts#base{ts}
 
-Each key is an error type from [the validators’ table](#available-validators), or a type of your own. A message with a count, such as `tooShort`, can have a form for one and a form for any other count.
+Each key is a [built-in error type](#finding-a-built-in-message), or a type of your own. A message with a count, such as `tooShort`, can have a form for one and a form for any other count.
 
 A Model’s own messages win over the base class’s, and a later call’s over an earlier one’s. Messages under `attributes` apply to one attribute:
 
@@ -143,6 +143,30 @@ For each error, the first message found is used:
 4. The built-in English message.
 
 A type with no message anywhere throws a `TypeError` when the error is added.
+
+### Finding a built-in message
+
+Each error type has a built-in message, which is the key to replace in `errorMessages`:
+
+| Type                       | Added by                                              | Message                                                   |
+| -------------------------- | ----------------------------------------------------- | --------------------------------------------------------- |
+| `blank`                    | `presence`                                            | can’t be blank                                            |
+| `invalid`                  | `format`, and an autosaved association that’s invalid | is invalid                                                |
+| `inclusion`                | `inclusion`                                           | is not included in the list                               |
+| `tooShort`                 | `length: { minimum }`                                 | is too short (minimum is %{count} characters)             |
+| `tooLong`                  | `length: { maximum }`                                 | is too long (maximum is %{count} characters)              |
+| `wrongLength`              | `length: { is }`                                      | is the wrong length (should be %{count} characters)       |
+| `notANumber`               | `numericality`                                        | is not a number                                           |
+| `notAnInteger`             | `numericality: { onlyInteger }`                       | must be an integer                                        |
+| `greaterThan`              | `numericality: { greaterThan }`                       | must be greater than %{count}                             |
+| `greaterThanOrEqualTo`     | `numericality: { greaterThanOrEqualTo }`              | must be greater than or equal to %{count}                 |
+| `lessThan`                 | `numericality: { lessThan }`                          | must be less than %{count}                                |
+| `lessThanOrEqualTo`        | `numericality: { lessThanOrEqualTo }`                 | must be less than or equal to %{count}                    |
+| `taken`                    | `uniqueness`                                          | has already been taken                                    |
+| `restrictDependentDestroy` | a has-one with `dependent: "restrictWithError"`       | Cannot delete record because a dependent %{record} exists |
+| `restrictDependentDestroy` | a has-many with `dependent: "restrictWithError"`      | Cannot delete record because dependent %{record} exist    |
+
+With a count of 1, the three `length` messages say “1 character”. `restrictDependentDestroy` goes on `"base"`, and `%{record}` is the association’s name in lowercase. To replace it, give both forms: `restrictDependentDestroy: { hasOne: "…", hasMany: "…" }`.
 
 ::: rails Compared with Rails
 Rails looks messages up in its locale files, in nearly the same order: the Model’s, then its ancestors’, then the shared ones. Among the shared ones, Rails tries a message for the type before one for the attribute. Your base class tries the attribute’s first, as every class does. d1-record keeps messages on the classes instead, so a Model’s messages sit next to its validations. Their keys are d1-record’s error types, in camelCase. Rails shows “Translation missing” for a type with no message, where d1-record throws when the error is added. Messages in other languages aren’t here yet.
