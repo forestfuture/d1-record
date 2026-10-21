@@ -3,6 +3,7 @@ import { associationsOf } from "./association-fields.ts";
 import type { CompiledSql } from "./compiler.ts";
 import { DeleteRestriction } from "./errors.ts";
 import { addEntry } from "./errors-collection.ts";
+import { humanAttributeName } from "./error-messages.ts";
 import { prepareDestroy, refusalError, type Claimed } from "./lifecycle.ts";
 import { modelOf, type ModelBase } from "./model.ts";
 import { state } from "./record-state.ts";
@@ -66,9 +67,10 @@ async function checkRestriction(
   if (dependent === "restrictWithException") {
     throw new DeleteRestriction(`Cannot delete record because of dependent ${name}`);
   }
-  const entry = { attribute: "base", type: "restrictDependentDestroy", values: { record: name } };
-  owner.errors[addEntry]({ ...entry, variant: kind === "hasOne" ? "hasOne" : "hasMany" });
-  return owner.errors.get("base").at(-1);
+  // The association by its human name, in lowercase, as Rails' %{record}.
+  const record = humanAttributeName(modelOf(owner), name).toLowerCase();
+  const entry = { attribute: "base", type: "restrictDependentDestroy", values: { record } };
+  return owner.errors[addEntry]({ ...entry, variant: kind === "hasOne" ? "hasOne" : "hasMany" });
 }
 
 /**

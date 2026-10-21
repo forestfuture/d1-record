@@ -95,9 +95,10 @@ export class Errors {
     return printed("Errors", "Errors", () => this.toArray(), { depth, options, inspect });
   }
 
-  /** @internal Adds an error the library found, such as a validator's. */
-  [addEntry](entry: ErrorEntry): void {
+  /** @internal Adds an error the library found, such as a validator's, returning its message. */
+  [addEntry](entry: ErrorEntry): string {
     this.#entries.push(entry);
+    return messageOf(this.#source, entry);
   }
 
   /** @internal Called at the start of each validation run. */
