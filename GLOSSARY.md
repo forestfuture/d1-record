@@ -56,6 +56,14 @@ _Avoid_: Redacted, masked, sensitive field; and "filter" alone, which means a **
 An attribute `toJSON()` leaves out, named by the Model's `hiddenAttributes`, by exact name. `attributes()` still has it. Independent of a **Filtered attribute**, which is about logs and errors.
 _Avoid_: Private, protected, excluded
 
+**Error message**:
+The text of a validation error, looked up from its type (`blank`, `tooShort`, or one of the app's own) each time it's read: the Model's `errorMessages` (for the attribute first), then those of each class it extends, then the built-in English. Text given to `validates` or `errors.add` is used as it is.
+_Avoid_: Translation, locale string, i18n key (no locales yet)
+
+**Human attribute name**:
+An attribute's name as error messages show it: from `humanAttributeNames`, or the attribute in words (`createdAt` → "Created at").
+_Avoid_: Label, display name, title
+
 **Snapshot**:
 A Record's attribute values as last loaded from or saved to D1. Changes are measured against it, and `reload()` replaces it.
 _Avoid_: Original, previous values, dirty state

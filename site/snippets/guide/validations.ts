@@ -1,4 +1,4 @@
-import { Model } from "@forestfuture/d1-record";
+import { Model, type ErrorMessages } from "@forestfuture/d1-record";
 
 // #region validates
 export class Account extends Model({
@@ -32,10 +32,12 @@ export class Booking extends Model({
   startsAt: { type: "datetime", null: false },
   endsAt: { type: "datetime", null: false },
 }) {
+  static override errorMessages: ErrorMessages = { afterStart: "must be after the start" };
+
   static {
     this.afterValidation((booking) => {
       if (booking.endsAt <= booking.startsAt) {
-        booking.errors.add("endsAt", "must be after the start", { type: "afterStart" });
+        booking.errors.add("endsAt", { type: "afterStart" });
       }
       if (booking.startsAt.getUTCDay() === 0) {
         booking.errors.add("base", "The room is closed on Sundays");

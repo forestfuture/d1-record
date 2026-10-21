@@ -77,4 +77,4 @@ The generators follow `rails generate model` and `rails generate migration`. A c
 
 ## Not built yet
 
-Default scopes, `has_many :through`, polymorphic associations, single-table inheritance, counter caches, `destroy_async`, and i18n of error messages.
+Default scopes, `has_many :through`, polymorphic associations, single-table inheritance, counter caches, `destroy_async`, and error messages in other languages.
