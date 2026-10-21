@@ -90,17 +90,19 @@ function own<T>(object: { readonly [key: string]: T } | undefined, key: string):
   return object !== undefined && Object.hasOwn(object, key) ? object[key] : undefined;
 }
 
-/** The model, then each class it extends: where its messages come from. */
+/** The model, then each class it extends: where its messages and attribute names come from. */
 function* lineage(model: ModelClass | undefined): Generator<ModelClass> {
   for (let each = model; each && each !== Function.prototype; each = Object.getPrototypeOf(each)) {
     yield each;
   }
 }
 
-/** The classes' own `errorMessages`, nearest first. */
-function* ownMessages(model: ModelClass | undefined): Generator<ErrorMessages> {
-  for (const each of lineage(model))
-    if (Object.hasOwn(each, "errorMessages")) yield each.errorMessages;
+/** The classes' own `name` statics, nearest first. */
+function* ownStatics<K extends "errorMessages" | "humanAttributeNames">(
+  model: ModelClass | undefined,
+  name: K,
+): Generator<ModelClass[K]> {
+  for (const each of lineage(model)) if (Object.hasOwn(each, name)) yield each[name];
 }
 
 /** The message for a type: for the attribute, then the class's own, nearest class first (Rails' order). */
@@ -110,7 +112,7 @@ function templateFor(
   type: string,
 ): Template | undefined {
   if (type === "attributes") return undefined;
-  for (const messages of [...ownMessages(model), builtIn]) {
+  for (const messages of [...ownStatics(model, "errorMessages"), builtIn]) {
     const found = own(own(messages.attributes, attribute), type) ?? own(messages, type);
     if (found !== undefined) return found as Template;
   }
@@ -139,7 +141,11 @@ function displayName(name: string): string {
 }
 
 /** An attribute's name as messages show it: a class's `humanAttributeNames`, or "Created at". */
-export function humanAttributeName(_model: ModelClass | undefined, attribute: string): string {
+export function humanAttributeName(model: ModelClass | undefined, attribute: string): string {
+  for (const names of ownStatics(model, "humanAttributeNames")) {
+    const name = own(names, attribute);
+    if (name !== undefined) return name;
+  }
   return displayName(attribute);
 }
 

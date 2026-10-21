@@ -13,6 +13,10 @@ const tables = {
 } as const;
 
 class Base extends Model.Base {
+  static override humanAttributeNames: Record<string, string> = {
+    createdAt: "Signed up",
+    email: "Email",
+  };
   static override errorMessages: ErrorMessages = {
     blank: "is required",
     tooShort: { one: "needs at least 1 character", other: "needs at least %{count} characters" },
@@ -101,5 +105,27 @@ describe("error messages", () => {
     }
 
     expect(await messagesOf(Note as never, { title: "" })).toEqual(["Title is empty"]);
+  });
+
+  test("an attribute's name in full messages and %{attribute} comes from humanAttributeNames", async () => {
+    class Signup extends ApplicationRecord("accounts") {
+      static override humanAttributeNames = { email: "Email address" };
+      static override errorMessages: ErrorMessages = {
+        attributes: { createdAt: { blank: "is missing: %{attribute} is set on save" } },
+      };
+      static {
+        this.validates("email", { presence: true });
+        this.validates("createdAt", { presence: true });
+      }
+    }
+
+    expect(await messagesOf(Signup as never, { email: "" })).toEqual([
+      "Email address is required",
+      "Signed up is missing: Signed up is set on save",
+    ]);
+    expect(Signup.humanAttributeName("email")).toBe("Email address");
+    expect(Signup.humanAttributeName("createdAt")).toBe("Signed up");
+    expect(Signup.humanAttributeName("handle")).toBe("Handle");
+    expect(Model.Base.humanAttributeName("updatedAt")).toBe("Updated at");
   });
 });

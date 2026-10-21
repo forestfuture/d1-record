@@ -12,7 +12,7 @@ import { type Permitted, permitted } from "./permit.ts";
 import { type AttributeConversions, conversionsFor } from "./attribute-conversions.ts";
 import { defaultFilterAttributes, type FilterAttribute } from "./filtering.ts";
 import type { Errors } from "./errors-collection.ts";
-import type { ErrorMessages } from "./error-messages.ts";
+import { humanAttributeName, type ErrorMessages } from "./error-messages.ts";
 import { declare } from "./declarations.ts";
 import {
   AssociationNotLoaded,
@@ -130,6 +130,18 @@ export class ModelBase extends ModelStatics {
    * included (#88).
    */
   static errorMessages: ErrorMessages = {};
+
+  /**
+   * Attribute names as error messages show them, in place of the name made from the attribute
+   * ("createdAt" → "Created at"): `{ createdAt: "Signed up" }`. A Model's own win over those of
+   * the classes it extends (#88).
+   */
+  static humanAttributeNames: Readonly<Record<string, string>> = {};
+
+  /** An attribute's name as error messages show it: from `humanAttributeNames`, or "Created at". */
+  static humanAttributeName(attribute: string): string {
+    return humanAttributeName(this as ModelClass, attribute);
+  }
 
   /** Records on a page of `paginate()` when it isn't given `perPage` (#100). */
   static perPage = 25;
