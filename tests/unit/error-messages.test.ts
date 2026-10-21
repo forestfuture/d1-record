@@ -20,14 +20,13 @@ const tables = {
 } as const;
 
 class Base extends Model.Base {
-  static override humanAttributeNames: Record<string, string> = {
-    createdAt: "Signed up",
-    email: "Email",
-  };
-  static override errorMessages: ErrorMessages = {
-    blank: "is required",
-    tooShort: { one: "needs at least 1 character", other: "needs at least %{count} characters" },
-  };
+  static {
+    this.humanAttributeNames({ createdAt: "Signed up", email: "Email" });
+    this.errorMessages({
+      blank: "is required",
+      tooShort: { one: "needs at least 1 character", other: "needs at least %{count} characters" },
+    });
+  }
 }
 const ApplicationRecord = modelFor(tables, Base);
 
@@ -45,21 +44,20 @@ class Post extends ApplicationRecord("posts") {
 }
 
 class Member extends ApplicationRecord("accounts") {
-  static override errorMessages: ErrorMessages = {
-    blank: "must be filled in",
-    attributes: { email: { blank: "is needed to sign in" } },
-  };
-
   static {
+    this.errorMessages({
+      blank: "must be filled in",
+      attributes: { email: { blank: "is needed to sign in" } },
+    });
     this.validates("email", { presence: true });
     this.validates("handle", { presence: true, length: { minimum: 3 } });
   }
 }
 
 class Admin extends Member {
-  static override errorMessages: ErrorMessages = {
-    attributes: { handle: { tooShort: "is too short for an admin" } },
-  };
+  static {
+    this.errorMessages({ attributes: { handle: { tooShort: "is too short for an admin" } } });
+  }
 }
 
 class Guest extends Member {}
@@ -102,11 +100,13 @@ describe("error messages", () => {
 
   test("a class's own type wins over an attribute's message from a class it extends", async () => {
     class Strict extends Base {
-      static override errorMessages: ErrorMessages = { attributes: { title: { blank: "x" } } };
+      static {
+        this.errorMessages({ attributes: { title: { blank: "x" } } });
+      }
     }
     class Note extends modelFor(tables, Strict)("posts") {
-      static override errorMessages: ErrorMessages = { blank: "is empty" };
       static {
+        this.errorMessages({ blank: "is empty" });
         this.validates("title", { presence: true });
       }
     }
@@ -116,11 +116,11 @@ describe("error messages", () => {
 
   test("an attribute's name in full messages and %{attribute} comes from humanAttributeNames", async () => {
     class Signup extends ApplicationRecord("accounts") {
-      static override humanAttributeNames = { email: "Email address" };
-      static override errorMessages: ErrorMessages = {
-        attributes: { createdAt: { blank: "is missing: %{attribute} is set on save" } },
-      };
       static {
+        this.humanAttributeNames({ email: "Email address" });
+        this.errorMessages({
+          attributes: { createdAt: { blank: "is missing: %{attribute} is set on save" } },
+        });
         this.validates("email", { presence: true });
         this.validates("createdAt", { presence: true });
       }
@@ -139,7 +139,9 @@ describe("error messages", () => {
   test("errors.add with a type alone looks its message up, filling in the values given", () => {
     const member = db.model(Member).build({ handle: "ab" });
     class Booking extends ApplicationRecord("posts") {
-      static override errorMessages: ErrorMessages = { afterStart: "must be after the start" };
+      static {
+        this.errorMessages({ afterStart: "must be after the start" });
+      }
     }
     const booking = db.model(Booking).build();
 
@@ -191,17 +193,25 @@ describe("error messages", () => {
 
   test("a Model's messages or names for an attribute it doesn't have are refused at first use", () => {
     class Typo extends ApplicationRecord("accounts") {
-      static override errorMessages: ErrorMessages = { attributes: { emial: { blank: "x" } } };
+      static {
+        // @ts-expect-error a Model's messages name its attributes, associations or base
+        this.errorMessages({ attributes: { emial: { blank: "x" } } });
+      }
     }
     class Renamed extends ApplicationRecord("accounts") {
-      static override humanAttributeNames = { emial: "Email address" };
+      static {
+        // @ts-expect-error the same for its attribute names
+        this.humanAttributeNames({ emial: "Email address" });
+      }
     }
     class Owner extends ApplicationRecord("accounts") {
       posts = hasMany(Post, { foreignKey: "id" });
-      static override errorMessages: ErrorMessages = {
-        attributes: { base: { blank: "x" }, posts: { invalid: "have a problem" } },
-      };
-      static override humanAttributeNames = { posts: "Articles" };
+      static {
+        this.errorMessages({
+          attributes: { base: { blank: "x" }, posts: { invalid: "have a problem" } },
+        });
+        this.humanAttributeNames({ posts: "Articles" });
+      }
     }
 
     expect(() => db.model(Typo)).toThrow(InvalidModel);
@@ -216,10 +226,8 @@ describe("error messages", () => {
 
   test("%{value} is the attribute's value, [FILTERED] when it's filtered, and %{model} the Model", async () => {
     class BlogAccount extends ApplicationRecord("accounts") {
-      static override errorMessages: ErrorMessages = {
-        invalid: "%{value} isn't allowed for a %{model}",
-      };
       static {
+        this.errorMessages({ invalid: "%{value} isn't allowed for a %{model}" });
         this.validates("handle", { format: /^[a-z]+$/ });
         this.validates("email", { format: /@/ });
       }
@@ -229,5 +237,23 @@ describe("error messages", () => {
       "Handle Ada! isn't allowed for a Blog account",
       "Email [FILTERED] isn't allowed for a Blog account",
     ]);
+  });
+
+  test("a class's calls add up, a later one's message winning, and none is allowed after first use", async () => {
+    const shared: ErrorMessages = { blank: "is required here" };
+    class Twice extends ApplicationRecord("posts") {
+      static {
+        this.errorMessages(shared);
+        this.errorMessages({ tooShort: "is too short" });
+        this.errorMessages({ blank: "is required, twice" });
+        this.validates("title", { presence: true, length: { minimum: 1 } });
+      }
+    }
+
+    expect(await messagesOf(Twice as never, { title: "" })).toEqual([
+      "Title is required, twice",
+      "Title is too short",
+    ]);
+    expect(() => Twice.errorMessages({ blank: "later" })).toThrow(InvalidModel);
   });
 });

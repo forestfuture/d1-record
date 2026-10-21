@@ -1,20 +1,19 @@
-import { Model, modelFor, type ErrorMessages } from "@forestfuture/d1-record";
+import { Model, modelFor } from "@forestfuture/d1-record";
 import { tables } from "../db/schema";
 
 // #region base
 // src/models/application-record.ts
 class Base extends Model.Base {
-  static override errorMessages: ErrorMessages = {
-    blank: "is required",
-    tooShort: {
-      one: "needs at least 1 character",
-      other: "needs at least %{count} characters",
-    },
-  };
-
-  static override humanAttributeNames: Record<string, string> = {
-    createdAt: "Added on",
-  };
+  static {
+    this.errorMessages({
+      blank: "is required",
+      tooShort: {
+        one: "needs at least 1 character",
+        other: "needs at least %{count} characters",
+      },
+    });
+    this.humanAttributeNames({ createdAt: "Added on" });
+  }
 }
 
 export const ApplicationRecord = modelFor(tables, Base);
@@ -22,16 +21,15 @@ export const ApplicationRecord = modelFor(tables, Base);
 
 // #region model
 export class Product extends ApplicationRecord("products") {
-  static override errorMessages: ErrorMessages = {
-    greaterThan: "must be more than %{count}",
-    attributes: {
-      name: { blank: "needs a name customers will see" },
-    },
-  };
-
-  static override humanAttributeNames = { priceCents: "Price" };
-
   static {
+    this.errorMessages({
+      greaterThan: "must be more than %{count}",
+      attributes: {
+        name: { blank: "needs a name customers will see" },
+      },
+    });
+    this.humanAttributeNames({ priceCents: "Price" });
+
     this.validates("name", { presence: true, length: { minimum: 3 } });
     this.validates("priceCents", { numericality: { greaterThan: 0 } });
   }

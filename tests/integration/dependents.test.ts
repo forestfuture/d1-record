@@ -3,7 +3,6 @@ import {
   abort,
   connect,
   DeleteRestriction,
-  type ErrorMessages,
   hasMany,
   hasOne,
   InvalidForeignKey,
@@ -87,12 +86,14 @@ class RestrictingWithError extends Model(userAttributes) {
 }
 
 class RestrictingWithMessages extends RestrictingWithError {
-  static override errorMessages: ErrorMessages = {
-    restrictDependentDestroy: {
-      hasOne: "can't be deleted while it has a %{record}",
-      hasMany: "can't be deleted while it has %{record}",
-    },
-  };
+  static {
+    this.errorMessages({
+      restrictDependentDestroy: {
+        hasOne: "can't be deleted while it has a %{record}",
+        hasMany: "can't be deleted while it has %{record}",
+      },
+    });
+  }
 }
 
 class Aborting extends Model(userAttributes) {
