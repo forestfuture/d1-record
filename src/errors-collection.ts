@@ -1,9 +1,7 @@
 // `record.errors`: the validation failures a record collects.
 import {
-  hasMessage,
   humanAttributeName,
   messageOf,
-  missingMessage,
   type ErrorEntry,
   type ErrorValues,
   type MessageSource,
@@ -28,10 +26,10 @@ export const addEntry = Symbol("addEntry");
 /** A record's validation errors: `record.errors`. Cleared at the start of each validation run. */
 export class Errors {
   #entries: ErrorEntry[] = [];
-  readonly #source: MessageSource | undefined;
+  readonly #source: MessageSource;
 
   /** @internal Made by the library for each record. */
-  constructor(source?: MessageSource) {
+  constructor(source: MessageSource) {
     this.#source = source;
   }
 
@@ -53,7 +51,7 @@ export class Errors {
     const { type, ...values } = message;
     if (typeof type !== "string") throw new TypeError("errors.add needs a message or a type");
     const entry = { attribute, type, values };
-    if (!hasMessage(this.#source?.model, entry)) throw missingMessage(this.#source?.model, entry);
+    messageOf(this.#source, entry); // throws when no class has a message for its type
     this.#entries.push(entry);
   }
 
@@ -69,7 +67,7 @@ export class Errors {
     return this.#entries.map((entry) => {
       const message = messageOf(this.#source, entry);
       if (entry.attribute === "base") return message;
-      return `${humanAttributeName(this.#source?.model, entry.attribute)} ${message}`;
+      return `${humanAttributeName(this.#source.model, entry.attribute)} ${message}`;
     });
   }
 
