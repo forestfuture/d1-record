@@ -32,8 +32,8 @@ export interface ErrorMessages<N extends string = string> {
   readonly restrictDependentDestroy?: RestrictMessages;
 }
 
-/** Rails' English messages, used where no class has its own. */
-const builtIn: ErrorMessages = {
+/** @internal Rails' English messages, used where no class has its own (listed in the guide). */
+export const builtInMessages: ErrorMessages = {
   blank: "can't be blank",
   invalid: "is invalid",
   inclusion: "is not included in the list",
@@ -125,7 +125,7 @@ function templateFor(model: ModelClass, attribute: string, type: string): Templa
   if (type === "attributes") return undefined;
   for (const messages of [
     ...declarationsByClass(model, "errorMessages").map(mergedCalls),
-    builtIn,
+    builtInMessages,
   ]) {
     const found =
       ownValue(ownValue(messages.attributes, attribute), type) ?? ownValue(messages, type);
