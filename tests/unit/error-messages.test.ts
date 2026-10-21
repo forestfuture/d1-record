@@ -213,4 +213,21 @@ describe("error messages", () => {
     expect(() => db.model(Post)).not.toThrow();
     expect(() => db.model(Owner)).not.toThrow();
   });
+
+  test("%{value} is the attribute's value, [FILTERED] when it's filtered, and %{model} the Model", async () => {
+    class BlogAccount extends ApplicationRecord("accounts") {
+      static override errorMessages: ErrorMessages = {
+        invalid: "%{value} isn't allowed for a %{model}",
+      };
+      static {
+        this.validates("handle", { format: /^[a-z]+$/ });
+        this.validates("email", { format: /@/ });
+      }
+    }
+
+    expect(await messagesOf(BlogAccount as never, { handle: "Ada!", email: "ada" })).toEqual([
+      "Handle Ada! isn't allowed for a Blog account",
+      "Email [FILTERED] isn't allowed for a Blog account",
+    ]);
+  });
 });
