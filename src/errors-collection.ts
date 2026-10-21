@@ -1,8 +1,11 @@
 // `record.errors`: the validation failures a record collects.
 import {
+  hasMessage,
   humanAttributeName,
   messageOf,
+  missingMessage,
   type ErrorEntry,
+  type ErrorValues,
   type MessageSource,
 } from "./error-messages.ts";
 import { inspectCustom, printed, type Inspect, type InspectOptions } from "./inspect-support.ts";
@@ -30,9 +33,26 @@ export class Errors {
     this.#source = source;
   }
 
-  /** Adds an error; `type` defaults to `"invalid"`. Use `"base"` for the record as a whole. */
-  add(attribute: string, message: string, options: { type?: string } = {}): void {
-    this.#entries.push({ attribute, type: options.type ?? "invalid", values: {}, message });
+  /**
+   * Adds an error with this message; `type` defaults to `"invalid"`. Use `"base"` for the
+   * record as a whole.
+   */
+  add(attribute: string, message: string, options?: { type?: string }): void;
+  /**
+   * Adds an error of this type, whose message is looked up in `errorMessages` when it's read,
+   * with `%{name}` filled in from the values given: `{ type: "tooShort", count: 3 }`.
+   */
+  add(attribute: string, error: { type: string } & ErrorValues): void;
+  add(attribute: string, message: string | ErrorValues, options: { type?: string } = {}): void {
+    if (typeof message === "string") {
+      this.#entries.push({ attribute, type: options.type ?? "invalid", values: {}, message });
+      return;
+    }
+    const { type, ...values } = message;
+    if (typeof type !== "string") throw new TypeError("errors.add needs a message or a type");
+    const entry = { attribute, type, values };
+    if (!hasMessage(this.#source?.model, entry)) throw missingMessage(this.#source?.model, entry);
+    this.#entries.push(entry);
   }
 
   /** The messages for one attribute (always an array). */
