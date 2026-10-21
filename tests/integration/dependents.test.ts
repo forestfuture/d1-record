@@ -3,6 +3,7 @@ import {
   abort,
   connect,
   DeleteRestriction,
+  type ErrorMessages,
   hasMany,
   hasOne,
   InvalidForeignKey,
@@ -83,6 +84,15 @@ class RestrictingWithError extends Model(userAttributes) {
   static tableName = "users";
   posts = hasMany(Post, { foreignKey: "userId", dependent: "restrictWithError" });
   profile = hasOne(Profile, { foreignKey: "userId", dependent: "restrictWithError" });
+}
+
+class RestrictingWithMessages extends RestrictingWithError {
+  static override errorMessages: ErrorMessages = {
+    restrictDependentDestroy: {
+      hasOne: "can't be deleted while it has a %{record}",
+      hasMany: "can't be deleted while it has %{record}",
+    },
+  };
 }
 
 class Aborting extends Model(userAttributes) {
@@ -286,6 +296,24 @@ describe("dependent: strategies", () => {
       "Cannot delete record because a dependent profile exists",
     ]);
     expect(await count("users")).toBe(2);
+  });
+
+  test("restrictDependentDestroy's messages can be replaced, for has-one and has-many", async () => {
+    await binding.batch([
+      binding.prepare("DELETE FROM comments WHERE id = 2"),
+      binding.prepare("DELETE FROM posts WHERE id = 12"),
+      binding.prepare("INSERT INTO profiles (id, user_id) VALUES (1, 2)"),
+    ]);
+    const [withPosts, withProfile] = await db()
+      .model(RestrictingWithMessages)
+      .order({ id: "asc" })
+      .toArray();
+
+    await withPosts!.destroy();
+    await withProfile!.destroy();
+
+    expect(withPosts!.errors.get("base")).toEqual(["can't be deleted while it has posts"]);
+    expect(withProfile!.errors.get("base")).toEqual(["can't be deleted while it has a profile"]);
   });
 
   test("restricting lets an owner without records be destroyed", async () => {

@@ -103,16 +103,16 @@ function* ownMessages(model: ModelClass | undefined): Generator<ErrorMessages> {
     if (Object.hasOwn(each, "errorMessages")) yield each.errorMessages;
 }
 
-/** The message an entry's type has: for its attribute, then the class's, nearest class first. */
+/** The message for a type: for the attribute, then the class's own, nearest class first (Rails' order). */
 function templateFor(
   model: ModelClass | undefined,
-  _attribute: string,
+  attribute: string,
   type: string,
 ): Template | undefined {
   if (type === "attributes") return undefined;
   for (const messages of [...ownMessages(model), builtIn]) {
-    const found = own(messages, type) as Template | undefined;
-    if (found !== undefined) return found;
+    const found = own(own(messages.attributes, attribute), type) ?? own(messages, type);
+    if (found !== undefined) return found as Template;
   }
   return undefined;
 }
