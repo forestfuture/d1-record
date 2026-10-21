@@ -173,6 +173,15 @@ describe("error messages", () => {
     );
   });
 
+  test("humanAttributeName() before a Model's first use sees names declared after it", () => {
+    class Early extends ApplicationRecord("accounts") {}
+
+    const before = Early.humanAttributeName("handle");
+    Early.humanAttributeNames({ handle: "Username" });
+
+    expect([before, Early.humanAttributeName("handle")]).toEqual(["Handle", "Username"]);
+  });
+
   test("errors.add with a type alone looks its message up", () => {
     class Booking extends ApplicationRecord("posts") {
       static {
