@@ -64,7 +64,7 @@ export class Errors {
       .map((entry) => messageOf(this.#source, entry));
   }
 
-  /** Every message with its attribute's display name first: "Email can't be blank". */
+  /** Every message with its attribute's human name first: "Email can't be blank". */
   fullMessages(): string[] {
     return this.#entries.map((entry) => {
       const message = messageOf(this.#source, entry);
