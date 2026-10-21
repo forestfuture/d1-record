@@ -1,4 +1,4 @@
-// `Model({...})` and `ModelBase`: the record class and its attribute accessors (its shared statics are in model-statics.ts).
+// `Model({...})` and `ModelBase`: the record class, its attribute accessors and its declarations (validations, error messages); its shared statics are in model-statics.ts.
 import type { Executor, QueryListener } from "./executor.ts";
 import {
   attributeOf,
@@ -93,7 +93,7 @@ export interface ChangeOptions<V = unknown> {
  * What a Model's error messages and attribute names can name: its attributes, its associations
  * and `"base"`; any name on a class without attributes (the app's base class).
  */
-export type MessageName<R> = [AttributesOf<R>] extends [never]
+export type ErrorAttributeName<R> = [AttributesOf<R>] extends [never]
   ? string
   : AttributeKey<R> | AssociationName<R> | "base";
 
@@ -229,7 +229,7 @@ export class ModelBase extends ModelStatics {
    */
   static errorMessages<C extends ModelClass>(
     this: C,
-    messages: ErrorMessages<MessageName<InstanceType<C>>>,
+    messages: ErrorMessages<ErrorAttributeName<InstanceType<C>>>,
   ): void {
     declare(this, "errorMessages", { from: this, value: messages as ErrorMessages });
   }
@@ -241,7 +241,7 @@ export class ModelBase extends ModelStatics {
    */
   static humanAttributeNames<C extends ModelClass>(
     this: C,
-    names: { readonly [K in MessageName<InstanceType<C>>]?: string },
+    names: { readonly [K in ErrorAttributeName<InstanceType<C>>]?: string },
   ): void {
     const value = names as Readonly<Record<string, string>>;
     declare(this, "humanAttributeNames", { from: this, value });

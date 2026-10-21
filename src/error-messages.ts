@@ -72,8 +72,8 @@ export interface ErrorEntry {
   values: ErrorValues;
   /** A message given as text, used as it is. */
   message?: string;
-  /** Which of an entry's messages applies, beside the plural form: `hasOne` or `hasMany`. */
-  variant?: keyof RestrictMessages;
+  /** The kind of association that refused, choosing between `restrictDependentDestroy`'s messages. */
+  associationKind?: keyof RestrictMessages;
 }
 
 /** Where an error's message comes from: the record's Model, and its values for `%{value}`. */
@@ -88,12 +88,15 @@ type Template = ErrorMessage | RestrictMessages;
 const plurals = new Intl.PluralRules("en");
 
 /** `object[key]` when it's the object's own, so `toString` is never a message. */
-function own<T>(object: { readonly [key: string]: T } | undefined, key: string): T | undefined {
+function ownValue<T>(
+  object: { readonly [key: string]: T } | undefined,
+  key: string,
+): T | undefined {
   return object !== undefined && Object.hasOwn(object, key) ? object[key] : undefined;
 }
 
 /** A model's declarations of `kind`, a class's together, nearest class first. */
-function byClass<K extends "errorMessages" | "humanAttributeNames">(
+function declarationsByClass<K extends "errorMessages" | "humanAttributeNames">(
   model: ModelClass | undefined,
   kind: K,
 ): Declarations[K]["value"][][] {
@@ -107,7 +110,7 @@ function byClass<K extends "errorMessages" | "humanAttributeNames">(
 }
 
 /** One class's `errorMessages` calls as one: a later call's message wins, type by type. */
-function merged(calls: readonly ErrorMessages[]): ErrorMessages {
+function mergedCalls(calls: readonly ErrorMessages[]): ErrorMessages {
   const attributes: Record<string, Record<string, ErrorMessage>> = {};
   for (const call of calls) {
     for (const [name, types] of Object.entries(call.attributes ?? {})) {
@@ -124,18 +127,22 @@ function templateFor(
   type: string,
 ): Template | undefined {
   if (type === "attributes") return undefined;
-  for (const messages of [...byClass(model, "errorMessages").map(merged), builtIn]) {
-    const found = own(own(messages.attributes, attribute), type) ?? own(messages, type);
+  for (const messages of [
+    ...declarationsByClass(model, "errorMessages").map(mergedCalls),
+    builtIn,
+  ]) {
+    const found =
+      ownValue(ownValue(messages.attributes, attribute), type) ?? ownValue(messages, type);
     if (found !== undefined) return found as Template;
   }
   return undefined;
 }
 
-/** The text of a message: its variant's, or its plural form's for `count`. */
-function textOf(template: Template | undefined, entry: ErrorEntry): string | undefined {
+/** The text of a message: the one for its association's kind, or its plural form's for `count`. */
+function messageText(template: Template | undefined, entry: ErrorEntry): string | undefined {
   if (template === undefined || typeof template === "string") return template;
   if ("hasOne" in template)
-    return entry.variant === undefined ? undefined : template[entry.variant];
+    return entry.associationKind === undefined ? undefined : template[entry.associationKind];
   const { count } = entry.values;
   const form = typeof count === "number" ? plurals.select(count) : "other";
   return (form === "one" ? template.one : undefined) ?? template.other;
@@ -143,22 +150,22 @@ function textOf(template: Template | undefined, entry: ErrorEntry): string | und
 
 /** Whether a message is found for `type` on `attribute`, here or built in. */
 export function hasMessage(model: ModelClass | undefined, entry: ErrorEntry): boolean {
-  return textOf(templateFor(model, entry.attribute, entry.type), entry) !== undefined;
+  return messageText(templateFor(model, entry.attribute, entry.type), entry) !== undefined;
 }
 
 /** "createdAt" → "Created at" */
-function displayName(name: string): string {
+function inWords(name: string): string {
   const words = underscore(name).replaceAll("_", " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 /** An attribute's name as messages show it: a class's `humanAttributeNames`, or "Created at". */
 export function humanAttributeName(model: ModelClass | undefined, attribute: string): string {
-  for (const calls of byClass(model, "humanAttributeNames")) {
-    const name = calls.findLast((names) => own(names, attribute) !== undefined)?.[attribute];
+  for (const calls of declarationsByClass(model, "humanAttributeNames")) {
+    const name = calls.findLast((names) => ownValue(names, attribute) !== undefined)?.[attribute];
     if (name !== undefined) return name;
   }
-  return displayName(attribute);
+  return inWords(attribute);
 }
 
 /** An attribute's value as `%{value}` shows it. */
@@ -175,13 +182,13 @@ function shownValue(source: MessageSource, attribute: string): string {
 export function messageOf(source: MessageSource | undefined, entry: ErrorEntry): string {
   if (entry.message !== undefined) return entry.message;
   const model = source?.model;
-  const text = textOf(templateFor(model, entry.attribute, entry.type), entry);
+  const text = messageText(templateFor(model, entry.attribute, entry.type), entry);
   if (text === undefined) throw missingMessage(model, entry);
   return text.replace(/%\{(\w+)\}/g, (placeholder, name: string) => {
     if (name === "attribute") return humanAttributeName(model, entry.attribute);
-    if (name === "model") return displayName(model?.name ?? "");
+    if (name === "model") return inWords(model?.name ?? "");
     if (name === "value" && source) return shownValue(source, entry.attribute);
-    return String(own(entry.values, name) ?? placeholder);
+    return String(ownValue(entry.values, name) ?? placeholder);
   });
 }
 

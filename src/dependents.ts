@@ -70,7 +70,10 @@ async function checkRestriction(
   // The association by its human name, in lowercase, as Rails' %{record}.
   const record = humanAttributeName(modelOf(owner), name).toLowerCase();
   const entry = { attribute: "base", type: "restrictDependentDestroy", values: { record } };
-  return owner.errors[addEntry]({ ...entry, variant: kind === "hasOne" ? "hasOne" : "hasMany" });
+  return owner.errors[addEntry]({
+    ...entry,
+    associationKind: kind === "hasOne" ? "hasOne" : "hasMany",
+  });
 }
 
 /**
