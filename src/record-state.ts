@@ -42,7 +42,7 @@ export class RecordState {
   /** A new record's initial values in stored form, which `restore` returns attributes to. */
   readonly #initialValues = new Map<string, unknown>();
   #savedChanges: Changes = {};
-  readonly #errors = new Errors();
+  readonly #errors: Errors;
   #abortReason: string | undefined;
   /** The associations it has loaded, each kept while its key is current. */
   readonly associations = new LoadedAssociations((attribute) => this.#values[attribute]);
@@ -51,6 +51,9 @@ export class RecordState {
 
   constructor(model: ModelClass) {
     this.#model = model;
+    // `%{value}` in a message: an attribute that isn't one, or wasn't loaded, shows as nothing.
+    const read = (name: string) => (Object.hasOwn(this.#values, name) ? this.#values[name] : null);
+    this.#errors = new Errors({ model, read });
   }
 
   /** The record's validation errors, filled by the last validation run. */
