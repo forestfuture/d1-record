@@ -89,6 +89,14 @@ export interface ChangeOptions<V = unknown> {
   to?: V;
 }
 
+/**
+ * What a Model's error messages and attribute names can name: its attributes, its associations
+ * and `"base"`; any name on a class without attributes (the app's base class).
+ */
+export type MessageName<R> = [AttributesOf<R>] extends [never]
+  ? string
+  : AttributeKey<R> | AssociationName<R> | "base";
+
 /** The declared attributes of a record type, excluding methods and getters. */
 export type AttributesOf<M> = M extends { readonly [attributeTypes]?: infer A } ? A : never;
 
@@ -123,20 +131,6 @@ export class ModelBase extends ModelStatics {
    * names; none by default. `attributes()` still has them (#101).
    */
   static hiddenAttributes: readonly string[] = [];
-
-  /**
-   * Error messages in place of the built-in ones, by type, and under `attributes` by attribute
-   * and type. A Model's own win over those of the classes it extends, the app's base class's
-   * included (#88).
-   */
-  static errorMessages: ErrorMessages = {};
-
-  /**
-   * Attribute names as error messages show them, in place of the name made from the attribute
-   * ("createdAt" → "Created at"): `{ createdAt: "Signed up" }`. A Model's own win over those of
-   * the classes it extends (#88).
-   */
-  static humanAttributeNames: Readonly<Record<string, string>> = {};
 
   /** An attribute's name as error messages show it: from `humanAttributeNames`, or "Created at". */
   static humanAttributeName(attribute: string): string {
@@ -226,6 +220,31 @@ export class ModelBase extends ModelStatics {
     }
     const validation: Validation = { attribute, options: options as ValidationOptions<never> };
     declare(this, "validations", validation);
+  }
+
+  /**
+   * Error messages in place of the built-in ones, by type (`blank`, or a type of your own), and
+   * under `attributes` by attribute and type. A Model's own win over those of the classes it
+   * extends, the app's base class's included; a later call's over an earlier one's (#88).
+   */
+  static errorMessages<C extends ModelClass>(
+    this: C,
+    messages: ErrorMessages<MessageName<InstanceType<C>>>,
+  ): void {
+    declare(this, "errorMessages", { from: this, value: messages as ErrorMessages });
+  }
+
+  /**
+   * Attribute names as error messages show them, in place of the name made from the attribute
+   * ("createdAt" → "Created at"): `{ createdAt: "Signed up" }`. A Model's own win over those of
+   * the classes it extends (#88).
+   */
+  static humanAttributeNames<C extends ModelClass>(
+    this: C,
+    names: { readonly [K in MessageName<InstanceType<C>>]?: string },
+  ): void {
+    const value = names as Readonly<Record<string, string>>;
+    declare(this, "humanAttributeNames", { from: this, value });
   }
 
   /** @internal This record's values, lifecycle and Snapshot; only `RecordState` changes them. */

@@ -1,4 +1,5 @@
 // Error messages: the built-in English ones, a Model's own, and looking one up when it's read (#88).
+import { declared, type Declarations } from "./declarations.ts";
 import { InvalidModel } from "./errors.ts";
 import type { ModelClass } from "./model.ts";
 import { FILTERED, isFiltered } from "./filtering.ts";
@@ -16,18 +17,18 @@ export interface RestrictMessages {
   readonly hasMany: string;
 }
 
-/** Messages by attribute name, then error type. */
-export interface AttributeErrorMessages {
-  readonly [attribute: string]: { readonly [type: string]: ErrorMessage };
-}
+/** Messages by attribute name (`N`: the names a Model has), then error type. */
+export type AttributeErrorMessages<N extends string = string> = {
+  readonly [K in N]?: { readonly [type: string]: ErrorMessage };
+};
 
 /**
- * A class's `errorMessages`: messages by error type (`blank`, `tooShort`, or a type of your
+ * What `errorMessages` declares: messages by error type (`blank`, `tooShort`, or a type of your
  * own), and under `attributes`, by attribute and type, which win over the class's others.
  */
-export interface ErrorMessages {
-  readonly [type: string]: ErrorMessage | RestrictMessages | AttributeErrorMessages | undefined;
-  readonly attributes?: AttributeErrorMessages;
+export interface ErrorMessages<N extends string = string> {
+  readonly [type: string]: ErrorMessage | RestrictMessages | AttributeErrorMessages<N> | undefined;
+  readonly attributes?: AttributeErrorMessages<N>;
   readonly restrictDependentDestroy?: RestrictMessages;
 }
 
@@ -91,19 +92,29 @@ function own<T>(object: { readonly [key: string]: T } | undefined, key: string):
   return object !== undefined && Object.hasOwn(object, key) ? object[key] : undefined;
 }
 
-/** The model, then each class it extends: where its messages and attribute names come from. */
-function* lineage(model: ModelClass | undefined): Generator<ModelClass> {
-  for (let each = model; each && each !== Function.prototype; each = Object.getPrototypeOf(each)) {
-    yield each;
+/** A model's declarations of `kind`, a class's together, nearest class first. */
+function byClass<K extends "errorMessages" | "humanAttributeNames">(
+  model: ModelClass | undefined,
+  kind: K,
+): Declarations[K]["value"][][] {
+  const groups: { from: object; values: Declarations[K]["value"][] }[] = [];
+  for (const { from, value } of model ? declared(model, kind) : []) {
+    const last = groups.at(-1);
+    if (last?.from === from) last.values.push(value);
+    else groups.push({ from, values: [value] });
   }
+  return groups.reverse().map((group) => group.values);
 }
 
-/** The classes' own `name` statics, nearest first. */
-function* ownStatics<K extends "errorMessages" | "humanAttributeNames">(
-  model: ModelClass | undefined,
-  name: K,
-): Generator<ModelClass[K]> {
-  for (const each of lineage(model)) if (Object.hasOwn(each, name)) yield each[name];
+/** One class's `errorMessages` calls as one: a later call's message wins, type by type. */
+function merged(calls: readonly ErrorMessages[]): ErrorMessages {
+  const attributes: Record<string, Record<string, ErrorMessage>> = {};
+  for (const call of calls) {
+    for (const [name, types] of Object.entries(call.attributes ?? {})) {
+      attributes[name] = { ...attributes[name], ...types };
+    }
+  }
+  return Object.assign({}, ...calls, { attributes }) as ErrorMessages;
 }
 
 /** The message for a type: for the attribute, then the class's own, nearest class first (Rails' order). */
@@ -113,7 +124,7 @@ function templateFor(
   type: string,
 ): Template | undefined {
   if (type === "attributes") return undefined;
-  for (const messages of [...ownStatics(model, "errorMessages"), builtIn]) {
+  for (const messages of [...byClass(model, "errorMessages").map(merged), builtIn]) {
     const found = own(own(messages.attributes, attribute), type) ?? own(messages, type);
     if (found !== undefined) return found as Template;
   }
@@ -143,8 +154,8 @@ function displayName(name: string): string {
 
 /** An attribute's name as messages show it: a class's `humanAttributeNames`, or "Created at". */
 export function humanAttributeName(model: ModelClass | undefined, attribute: string): string {
-  for (const names of ownStatics(model, "humanAttributeNames")) {
-    const name = own(names, attribute);
+  for (const calls of byClass(model, "humanAttributeNames")) {
+    const name = calls.findLast((names) => own(names, attribute) !== undefined)?.[attribute];
     if (name !== undefined) return name;
   }
   return displayName(attribute);
@@ -183,16 +194,20 @@ export function missingMessage(model: ModelClass | undefined, entry: ErrorEntry)
   );
 }
 
-/** The names a class's `errorMessages` and `humanAttributeNames` give messages or names for. */
-function namesIn(each: ModelClass): [string, string[]][] {
-  const listed: [string, string[]][] = [];
-  if (Object.hasOwn(each, "errorMessages")) {
-    listed.push(["has messages for", Object.keys(each.errorMessages.attributes ?? {})]);
-  }
-  if (Object.hasOwn(each, "humanAttributeNames")) {
-    listed.push(["names", Object.keys(each.humanAttributeNames)]);
-  }
-  return listed;
+/** The names each declaration names an attribute by, with the class it was made on. */
+function namesIn(model: ModelClass): { from: object; where: string; names: string[] }[] {
+  return [
+    ...declared(model, "errorMessages").map(({ from, value }) => ({
+      from,
+      where: "errorMessages has messages for",
+      names: Object.keys(value.attributes ?? {}),
+    })),
+    ...declared(model, "humanAttributeNames").map(({ from, value }) => ({
+      from,
+      where: "humanAttributeNames names",
+      names: Object.keys(value),
+    })),
+  ];
 }
 
 /**
@@ -202,18 +217,13 @@ function namesIn(each: ModelClass): [string, string[]][] {
  */
 export function rejectUnknownMessageNames(model: ModelClass, associations: Iterable<string>): void {
   const known = new Set(["base", ...model.attributeDefinitions.keys(), ...associations]);
-  for (const each of lineage(model)) {
-    // Above Model.Base, a class has no attributeDefinitions at all.
-    const definitions = (each as Partial<ModelClass>).attributeDefinitions;
-    if (definitions === undefined || definitions.size === 0) continue;
-    for (const [what, names] of namesIn(each)) {
-      const unknown = names.find((name) => !known.has(name));
-      if (unknown === undefined) continue;
-      const where = what === "names" ? "humanAttributeNames" : "errorMessages";
-      throw new InvalidModel(
-        `${each.name}'s ${where} ${what} "${unknown}", which isn't one of its attributes or ` +
-          "associations; name them exactly",
-      );
-    }
+  for (const { from, where, names } of namesIn(model)) {
+    if ((from as ModelClass).attributeDefinitions.size === 0) continue;
+    const unknown = names.find((name) => !known.has(name));
+    if (unknown === undefined) continue;
+    throw new InvalidModel(
+      `${(from as ModelClass).name}'s ${where} "${unknown}", which isn't one of its ` +
+        "attributes or associations; name them exactly",
+    );
   }
 }

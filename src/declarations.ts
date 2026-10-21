@@ -1,7 +1,8 @@
-// A Model's declared callbacks and validations, inherited, and sealed on its first use.
+// A Model's declared callbacks, validations and error messages, inherited, and sealed on its first use.
 import { ancestors } from "./ancestors.ts";
 import { InvalidModel } from "./errors.ts";
 import type { Callback, ModelBase } from "./model.ts";
+import type { ErrorMessages } from "./error-messages.ts";
 import type { Validation } from "./validations.ts";
 
 /**
@@ -38,8 +39,18 @@ export type AfterCallbackKind = "afterCreate" | "afterUpdate" | "afterSave" | "a
 
 export type CallbackKind = BeforeCallbackKind | AfterCallbackKind;
 
+/** A declaration kept with the class it was made on, whose own come first when it's read (#88). */
+export interface ClassDeclaration<T> {
+  from: object;
+  value: T;
+}
+
 /** Every kind of per-Model declaration, and what one entry of it is. */
-export type Declarations = { validations: Validation } & {
+export type Declarations = {
+  validations: Validation;
+  errorMessages: ClassDeclaration<ErrorMessages>;
+  humanAttributeNames: ClassDeclaration<Readonly<Record<string, string>>>;
+} & {
   [K in CallbackKind]: Callback<ModelBase>;
 };
 
@@ -64,7 +75,7 @@ export function declare<K extends keyof Declarations>(
   if (sealed.has(model)) {
     const { name } = model as { name: string };
     throw new InvalidModel(
-      `${name} has already been used; declare validations and callbacks in its static {} block`,
+      `${name} has already been used; declare validations, callbacks and messages in its static {} block`,
     );
   }
   const own = registry.get(model) ?? new Map<string, readonly unknown[]>();

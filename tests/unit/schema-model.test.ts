@@ -257,7 +257,7 @@ describe("modelFor(tables, Base): an app's own base class, as Rails' Application
 
     expect(() => Sealed.beforeSave(() => {})).toThrow(
       new InvalidModel(
-        "Sealed has already been used; declare validations and callbacks in its static {} block",
+        "Sealed has already been used; declare validations, callbacks and messages in its static {} block",
       ),
     );
   });
