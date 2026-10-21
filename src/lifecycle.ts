@@ -28,6 +28,7 @@ import {
   type BeforeCallbackKind,
   type CallbackKind,
 } from "./declarations.ts";
+import { addEntry } from "./errors-collection.ts";
 import { modelOf, type ModelBase } from "./model.ts";
 import { Negated, type Condition } from "./query.ts";
 import { linksOf, state } from "./record-state.ts";
@@ -176,7 +177,7 @@ async function validateAutosaves(record: ModelBase, claimed: Claimed): Promise<v
     const { name } = association;
     if (!pointedAt[state].isNew || claimed.has(pointedAt)) continue;
     if ((await validation(pointedAt, claimed)) !== "valid") {
-      record[state].errors.add(name, "is invalid");
+      record[state].errors[addEntry]({ attribute: name, type: "invalid", values: {} });
     }
   }
   for (const { association, records } of autosavesOf(record, claimed)) {
@@ -185,7 +186,7 @@ async function validateAutosaves(record: ModelBase, claimed: Claimed): Promise<v
     for (const each of records) {
       if ((await validation(each, claimed)) !== "valid") valid = false;
     }
-    if (!valid) record[state].errors.add(name, "is invalid");
+    if (!valid) record[state].errors[addEntry]({ attribute: name, type: "invalid", values: {} });
   }
 }
 

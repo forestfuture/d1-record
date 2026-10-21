@@ -1,5 +1,6 @@
 // Validators (`presence`, `length`, `uniqueness`, …) and running them on a record.
-import type { Errors } from "./errors-collection.ts";
+import { addEntry, type Errors } from "./errors-collection.ts";
+import type { ErrorValues } from "./error-messages.ts";
 import type { AttributesOf } from "./model.ts";
 
 export interface LengthOptions {
@@ -53,9 +54,10 @@ export interface Validation {
   options: ValidationOptions<never>;
 }
 
+/** A failed rule: its type, and the values its message shows, such as `count`. */
 interface Failure {
   type: string;
-  message: string;
+  values?: ErrorValues;
 }
 
 type Check = (value: unknown, options: ValidationOptions<never>) => Failure[];
@@ -65,12 +67,7 @@ function isBlank(value: unknown): boolean {
 }
 
 const presence: Check = (value, { presence: required }) =>
-  required && isBlank(value) ? [{ type: "blank", message: "can't be blank" }] : [];
-
-/** "1 character", "3 characters" */
-function characters(count: number): string {
-  return `${count} character${count === 1 ? "" : "s"}`;
-}
+  required && isBlank(value) ? [{ type: "blank" }] : [];
 
 const length: Check = (value, { length: rule }) => {
   if (rule === undefined) return [];
@@ -78,22 +75,13 @@ const length: Check = (value, { length: rule }) => {
   const size = typeof value === "string" || Array.isArray(value) ? value.length : 0;
   const failures: Failure[] = [];
   if (rule.is !== undefined && size !== rule.is) {
-    failures.push({
-      type: "wrongLength",
-      message: `is the wrong length (should be ${characters(rule.is)})`,
-    });
+    failures.push({ type: "wrongLength", values: { count: rule.is } });
   }
   if (rule.minimum !== undefined && size < rule.minimum) {
-    failures.push({
-      type: "tooShort",
-      message: `is too short (minimum is ${characters(rule.minimum)})`,
-    });
+    failures.push({ type: "tooShort", values: { count: rule.minimum } });
   }
   if (rule.maximum !== undefined && size > rule.maximum) {
-    failures.push({
-      type: "tooLong",
-      message: `is too long (maximum is ${characters(rule.maximum)})`,
-    });
+    failures.push({ type: "tooLong", values: { count: rule.maximum } });
   }
   return failures;
 };
@@ -103,7 +91,7 @@ const format: Check = (value, { format: rule }) => {
   const pattern = rule instanceof RegExp ? rule : rule.with;
   // search() always starts at 0 and ignores the pattern's lastIndex, unlike test() with /g or /y.
   const matches = typeof value === "string" && value.search(pattern) !== -1;
-  return matches ? [] : [{ type: "invalid", message: "is invalid" }];
+  return matches ? [] : [{ type: "invalid" }];
 };
 
 /** Equality for inclusion: dates match by their time, everything else by identity. */
@@ -116,31 +104,29 @@ const inclusion: Check = (value, { inclusion: rule }) => {
   if (rule === undefined) return [];
   const allowed = Array.isArray(rule) ? rule : (rule as { in: readonly unknown[] }).in;
   const included = allowed.some((item) => sameValue(item, value));
-  return included ? [] : [{ type: "inclusion", message: "is not included in the list" }];
+  return included ? [] : [{ type: "inclusion" }];
 };
 
 const COMPARISONS = [
-  ["greaterThan", "must be greater than", (a: number, b: number) => a > b],
-  ["greaterThanOrEqualTo", "must be greater than or equal to", (a: number, b: number) => a >= b],
-  ["lessThan", "must be less than", (a: number, b: number) => a < b],
-  ["lessThanOrEqualTo", "must be less than or equal to", (a: number, b: number) => a <= b],
+  ["greaterThan", (a: number, b: number) => a > b],
+  ["greaterThanOrEqualTo", (a: number, b: number) => a >= b],
+  ["lessThan", (a: number, b: number) => a < b],
+  ["lessThanOrEqualTo", (a: number, b: number) => a <= b],
 ] as const;
 
 /** Only real numbers pass; a numeric string like "12" is not a number (convert input first). */
 const numericality: Check = (value, { numericality: rule }) => {
   if (rule === undefined || rule === false) return [];
   if (typeof value !== "number" || Number.isNaN(value)) {
-    return [{ type: "notANumber", message: "is not a number" }];
+    return [{ type: "notANumber" }];
   }
   const options = rule === true ? {} : rule;
   if (options.onlyInteger && !Number.isInteger(value)) {
-    return [{ type: "notAnInteger", message: "must be an integer" }];
+    return [{ type: "notAnInteger" }];
   }
-  return COMPARISONS.flatMap(([type, words, holds]) => {
+  return COMPARISONS.flatMap(([type, holds]) => {
     const bound = options[type];
-    return bound === undefined || holds(value, bound)
-      ? []
-      : [{ type, message: `${words} ${bound}` }];
+    return bound === undefined || holds(value, bound) ? [] : [{ type, values: { count: bound } }];
   });
 };
 
@@ -164,7 +150,7 @@ async function uniquenessFailures(
 ): Promise<Failure[]> {
   if (rule === undefined || rule === false || value === null) return [];
   const taken = await target.isTaken(attribute, value, rule === true ? {} : rule);
-  return taken ? [{ type: "taken", message: "has already been taken" }] : [];
+  return taken ? [{ type: "taken" }] : [];
 }
 
 /** Runs every validation in declaration order, adding failures to `errors`. */
@@ -180,8 +166,8 @@ export async function runValidations(
       ...CHECKS.flatMap((check) => check(value, options)),
       ...(await uniquenessFailures(target, attribute, value, options)),
     ];
-    for (const failure of failures) {
-      target.errors.add(attribute, options.message ?? failure.message, { type: failure.type });
+    for (const { type, values = {} } of failures) {
+      target.errors[addEntry]({ attribute, type, values, message: options.message });
     }
   }
 }

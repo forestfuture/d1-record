@@ -2,6 +2,7 @@
 import { associationsOf } from "./association-fields.ts";
 import type { CompiledSql } from "./compiler.ts";
 import { DeleteRestriction } from "./errors.ts";
+import { addEntry } from "./errors-collection.ts";
 import { prepareDestroy, refusalError, type Claimed } from "./lifecycle.ts";
 import { modelOf, type ModelBase } from "./model.ts";
 import { state } from "./record-state.ts";
@@ -65,12 +66,9 @@ async function checkRestriction(
   if (dependent === "restrictWithException") {
     throw new DeleteRestriction(`Cannot delete record because of dependent ${name}`);
   }
-  const message =
-    kind === "hasOne"
-      ? `Cannot delete record because a dependent ${name} exists`
-      : `Cannot delete record because dependent ${name} exist`;
-  owner.errors.add("base", message, { type: "restrictDependentDestroy" });
-  return message;
+  const entry = { attribute: "base", type: "restrictDependentDestroy", values: { record: name } };
+  owner.errors[addEntry]({ ...entry, variant: kind === "hasOne" ? "hasOne" : "hasMany" });
+  return owner.errors.get("base").at(-1);
 }
 
 /**
