@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vite-plus/test";
-import { connect, Model, modelFor, type ErrorMessages } from "../../src/index.ts";
+import {
+  connect,
+  hasMany,
+  InvalidModel,
+  Model,
+  modelFor,
+  type ErrorMessages,
+} from "../../src/index.ts";
 
 // No D1 needed: none of these validations asks it anything.
 const db = connect({} as never);
@@ -180,5 +187,30 @@ describe("error messages", () => {
       },
       { attribute: "base", type: "blank", message: "is required", values: { reason: "locked" } },
     ]);
+  });
+
+  test("a Model's messages or names for an attribute it doesn't have are refused at first use", () => {
+    class Typo extends ApplicationRecord("accounts") {
+      static override errorMessages: ErrorMessages = { attributes: { emial: { blank: "x" } } };
+    }
+    class Renamed extends ApplicationRecord("accounts") {
+      static override humanAttributeNames = { emial: "Email address" };
+    }
+    class Owner extends ApplicationRecord("accounts") {
+      posts = hasMany(Post, { foreignKey: "id" });
+      static override errorMessages: ErrorMessages = {
+        attributes: { base: { blank: "x" }, posts: { invalid: "have a problem" } },
+      };
+      static override humanAttributeNames = { posts: "Articles" };
+    }
+
+    expect(() => db.model(Typo)).toThrow(InvalidModel);
+    expect(() => db.model(Typo)).toThrow(
+      /Typo's errorMessages has messages for "emial", which isn't one of its attributes/,
+    );
+    expect(() => db.model(Renamed)).toThrow(/Renamed's humanAttributeNames names "emial"/);
+    // The app's base class names createdAt and email, which Post doesn't have.
+    expect(() => db.model(Post)).not.toThrow();
+    expect(() => db.model(Owner)).not.toThrow();
   });
 });

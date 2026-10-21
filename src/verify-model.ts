@@ -1,7 +1,8 @@
 // Checks a Model's declaration the first time it's used, then seals its declarations.
-// It checks the table, the primary key, the attribute names, the spec keys, hidden attributes, and page sizes.
+// It checks the table, the primary key, the attribute names, the spec keys, hidden attributes, messages, and page sizes.
 import { ancestors } from "./ancestors.ts";
-import { declarationIn, probeOf } from "./association-fields.ts";
+import { associationsOf, declarationIn, probeOf } from "./association-fields.ts";
+import { rejectUnknownMessageNames } from "./error-messages.ts";
 import { seal } from "./declarations.ts";
 import { InvalidModel } from "./errors.ts";
 import { ModelBase, type ModelClass } from "./model.ts";
@@ -21,6 +22,7 @@ export function verifyModel(model: ModelClass): void {
   rejectReservedAttributeNames(model);
   rejectBadSpecs(model);
   rejectUnknownHiddenAttributes(model);
+  rejectUnknownMessageNames(model, associationsOf(model).keys());
   rejectShadowingFields(model);
   rejectBadPageSizes(model);
   // The classes it inherits declarations from too (an app's Base), so none can change later.
