@@ -90,13 +90,31 @@ function own<T>(object: { readonly [key: string]: T } | undefined, key: string):
   return object !== undefined && Object.hasOwn(object, key) ? object[key] : undefined;
 }
 
+/** The model, then each class it extends: where its messages come from. */
+function* lineage(model: ModelClass | undefined): Generator<ModelClass> {
+  for (let each = model; each && each !== Function.prototype; each = Object.getPrototypeOf(each)) {
+    yield each;
+  }
+}
+
+/** The classes' own `errorMessages`, nearest first. */
+function* ownMessages(model: ModelClass | undefined): Generator<ErrorMessages> {
+  for (const each of lineage(model))
+    if (Object.hasOwn(each, "errorMessages")) yield each.errorMessages;
+}
+
 /** The message an entry's type has: for its attribute, then the class's, nearest class first. */
 function templateFor(
-  _model: ModelClass | undefined,
+  model: ModelClass | undefined,
   _attribute: string,
   type: string,
 ): Template | undefined {
-  return type === "attributes" ? undefined : (own(builtIn, type) as Template | undefined);
+  if (type === "attributes") return undefined;
+  for (const messages of [...ownMessages(model), builtIn]) {
+    const found = own(messages, type) as Template | undefined;
+    if (found !== undefined) return found;
+  }
+  return undefined;
 }
 
 /** The text of a message: its variant's, or its plural form's for `count`. */

@@ -12,6 +12,7 @@ import { type Permitted, permitted } from "./permit.ts";
 import { type AttributeConversions, conversionsFor } from "./attribute-conversions.ts";
 import { defaultFilterAttributes, type FilterAttribute } from "./filtering.ts";
 import type { Errors } from "./errors-collection.ts";
+import type { ErrorMessages } from "./error-messages.ts";
 import { declare } from "./declarations.ts";
 import {
   AssociationNotLoaded,
@@ -122,6 +123,13 @@ export class ModelBase extends ModelStatics {
    * names; none by default. `attributes()` still has them (#101).
    */
   static hiddenAttributes: readonly string[] = [];
+
+  /**
+   * Error messages in place of the built-in ones, by type, and under `attributes` by attribute
+   * and type. A Model's own win over those of the classes it extends, the app's base class's
+   * included (#88).
+   */
+  static errorMessages: ErrorMessages = {};
 
   /** Records on a page of `paginate()` when it isn't given `perPage` (#100). */
   static perPage = 25;
