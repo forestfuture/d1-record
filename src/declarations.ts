@@ -40,7 +40,7 @@ export type AfterCallbackKind = "afterCreate" | "afterUpdate" | "afterSave" | "a
 export type CallbackKind = BeforeCallbackKind | AfterCallbackKind;
 
 /** A declaration kept with the class it was made on, whose own come first when it's read (#88). */
-export interface ClassDeclaration<T> {
+interface ClassDeclaration<T> {
   from: object;
   value: T;
 }
