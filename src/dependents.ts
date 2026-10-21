@@ -2,7 +2,7 @@
 import { associationsOf } from "./association-fields.ts";
 import type { CompiledSql } from "./compiler.ts";
 import { DeleteRestriction } from "./errors.ts";
-import { addEntry } from "./errors-collection.ts";
+import { addFailure } from "./errors-collection.ts";
 import { humanAttributeName } from "./error-messages.ts";
 import { prepareDestroy, refusalError, type Claimed } from "./lifecycle.ts";
 import { modelOf, type ModelBase } from "./model.ts";
@@ -69,9 +69,9 @@ async function checkRestriction(
   }
   // The association by its human name, in lowercase, as Rails' %{record}.
   const record = humanAttributeName(modelOf(owner), name).toLowerCase();
-  const entry = { attribute: "base", type: "restrictDependentDestroy", values: { record } };
-  return owner.errors[addEntry]({
-    ...entry,
+  return owner.errors[addFailure]("base", {
+    type: "restrictDependentDestroy",
+    values: { record },
     associationKind: kind === "hasOne" ? "hasOne" : "hasMany",
   });
 }

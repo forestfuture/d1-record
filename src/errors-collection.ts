@@ -20,8 +20,13 @@ export interface ValidationError {
 /** @internal The library's key for emptying an errors collection. */
 export const clearErrors = Symbol("clearErrors");
 
-/** @internal The library's key for adding an entry whose message is looked up when it's read. */
-export const addEntry = Symbol("addEntry");
+/** @internal The library's key for adding a failure it found, with an optional message to use as it is. */
+export const addFailure = Symbol("addFailure");
+
+/** @internal A failure the library found: its type, the values its message shows, and any message given. */
+export type Failure = Pick<ErrorEntry, "type" | "message" | "associationKind"> & {
+  values?: ErrorValues;
+};
 
 /** A record's validation errors: `record.errors`. Cleared at the start of each validation run. */
 export class Errors {
@@ -94,7 +99,8 @@ export class Errors {
   }
 
   /** @internal Adds an error the library found, such as a validator's, returning its message. */
-  [addEntry](entry: ErrorEntry): string {
+  [addFailure](attribute: string, { values = {}, ...failure }: Failure): string {
+    const entry = { attribute, values, ...failure };
     this.#entries.push(entry);
     return messageOf(this.#source, entry);
   }

@@ -1,6 +1,5 @@
 // Validators (`presence`, `length`, `uniqueness`, …) and running them on a record.
-import { addEntry, type Errors } from "./errors-collection.ts";
-import type { ErrorValues } from "./error-messages.ts";
+import { addFailure, type Errors, type Failure } from "./errors-collection.ts";
 import type { AttributesOf } from "./model.ts";
 
 export interface LengthOptions {
@@ -52,12 +51,6 @@ export interface ValidationOptions<R = never> {
 export interface Validation {
   attribute: string;
   options: ValidationOptions<never>;
-}
-
-/** A failed rule: its type, and the values its message shows, such as `count`. */
-interface Failure {
-  type: string;
-  values?: ErrorValues;
 }
 
 type Check = (value: unknown, options: ValidationOptions<never>) => Failure[];
@@ -166,8 +159,8 @@ export async function runValidations(
       ...CHECKS.flatMap((check) => check(value, options)),
       ...(await uniquenessFailures(target, attribute, value, options)),
     ];
-    for (const { type, values = {} } of failures) {
-      target.errors[addEntry]({ attribute, type, values, message: options.message });
+    for (const failure of failures) {
+      target.errors[addFailure](attribute, { ...failure, message: options.message });
     }
   }
 }
