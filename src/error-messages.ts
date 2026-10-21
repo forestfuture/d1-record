@@ -1,4 +1,5 @@
 // Error messages: the built-in English ones, a Model's own, and looking one up when it's read (#88).
+import { InvalidModel } from "./errors.ts";
 import type { ModelClass } from "./model.ts";
 import { FILTERED, isFiltered } from "./filtering.ts";
 import { underscore } from "./naming.ts";
@@ -180,4 +181,39 @@ export function missingMessage(model: ModelClass | undefined, entry: ErrorEntry)
     `No message for the error "${entry.type}" on "${entry.attribute}": add one to ${where}, ` +
       `as ${entry.type} or attributes.${entry.attribute}.${entry.type}`,
   );
+}
+
+/** The names a class's `errorMessages` and `humanAttributeNames` give messages or names for. */
+function namesIn(each: ModelClass): [string, string[]][] {
+  const listed: [string, string[]][] = [];
+  if (Object.hasOwn(each, "errorMessages")) {
+    listed.push(["has messages for", Object.keys(each.errorMessages.attributes ?? {})]);
+  }
+  if (Object.hasOwn(each, "humanAttributeNames")) {
+    listed.push(["names", Object.keys(each.humanAttributeNames)]);
+  }
+  return listed;
+}
+
+/**
+ * A Model's messages and attribute names must be for its attributes, its associations or
+ * `"base"`, so a typo isn't left unused. Those of a class without attributes (the app's base
+ * class) are the exception: they apply to the Models that have them.
+ */
+export function rejectUnknownMessageNames(model: ModelClass, associations: Iterable<string>): void {
+  const known = new Set(["base", ...model.attributeDefinitions.keys(), ...associations]);
+  for (const each of lineage(model)) {
+    // Above Model.Base, a class has no attributeDefinitions at all.
+    const definitions = (each as Partial<ModelClass>).attributeDefinitions;
+    if (definitions === undefined || definitions.size === 0) continue;
+    for (const [what, names] of namesIn(each)) {
+      const unknown = names.find((name) => !known.has(name));
+      if (unknown === undefined) continue;
+      const where = what === "names" ? "humanAttributeNames" : "errorMessages";
+      throw new InvalidModel(
+        `${each.name}'s ${where} ${what} "${unknown}", which isn't one of its attributes or ` +
+          "associations; name them exactly",
+      );
+    }
+  }
 }
