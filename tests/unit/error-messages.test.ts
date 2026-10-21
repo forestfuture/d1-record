@@ -128,4 +128,40 @@ describe("error messages", () => {
     expect(Signup.humanAttributeName("handle")).toBe("Handle");
     expect(Model.Base.humanAttributeName("updatedAt")).toBe("Updated at");
   });
+
+  test("errors.add with a type alone looks its message up, filling in the values given", () => {
+    const member = db.model(Member).build({ handle: "ab" });
+    class Booking extends ApplicationRecord("posts") {
+      static override errorMessages: ErrorMessages = { afterStart: "must be after the start" };
+    }
+    const booking = db.model(Booking).build();
+
+    booking.errors.add("title", { type: "afterStart" });
+    member.errors.add("handle", { type: "tooShort", count: 5 });
+    member.errors.add("base", "Account is locked");
+
+    expect(booking.errors.fullMessages()).toEqual(["Title must be after the start"]);
+    expect(member.errors.fullMessages()).toEqual([
+      "Handle needs at least 5 characters",
+      "Account is locked",
+    ]);
+  });
+
+  test("a type with no message anywhere is refused when it's added", () => {
+    const member = db.model(Member).build();
+
+    expect(() => member.errors.add("handle", { type: "afterStart" })).toThrow(
+      /No message for the error "afterStart" on "handle": add one to Member's errorMessages/,
+    );
+    expect(member.errors.size).toBe(0);
+  });
+
+  test("errors.add's options are typed", () => {
+    const member = db.model(Member).build();
+
+    // @ts-expect-error a type is required when there's no message
+    expect(() => member.errors.add("handle", { count: 3 })).toThrow();
+    // @ts-expect-error a value is text or a number
+    expect(() => member.errors.add("handle", { type: "blank", at: new Date() })).not.toThrow();
+  });
 });
