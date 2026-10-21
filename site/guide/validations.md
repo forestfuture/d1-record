@@ -98,13 +98,13 @@ Rails’ `errors.add(:ends_at, :after_start)` is `errors.add("endsAt", { type: "
 
 ## Changing error messages
 
-To change the message of one validation, pass `message` to `validates`. To change a message for every Model, set `static errorMessages` on your app’s base class:
+To change the message of one validation, pass `message` to `validates`. To change a message for every Model, call `this.errorMessages` in your app’s base class:
 
 <<< @/snippets/guide/error-messages.ts#base{ts}
 
 Each key is an error type from [the validators’ table](#available-validators), or a type of your own. A message with a count, such as `tooShort`, can have a form for one and a form for any other count.
 
-A Model’s own messages win over the base class’s. Messages under `attributes` apply to one attribute:
+A Model’s own messages win over the base class’s, and a later call’s over an earlier one’s. Messages under `attributes` apply to one attribute:
 
 <<< @/snippets/guide/error-messages.ts#model{ts}
 
@@ -112,15 +112,11 @@ Each message is looked up when you read it:
 
 <<< @/snippets/guide/error-messages.ts#read{ts}
 
-::: warning TIP
-Give the base class’s `errorMessages` the `ErrorMessages` type, and its `humanAttributeNames` the `Record<string, string>` type, as above. Otherwise a Model can only set the keys the base class set.
-:::
-
 ### Naming attributes
 
-`fullMessages()` starts each message with the attribute’s name, made from the attribute itself: `createdAt` reads as “Created at”. To use another name, set `static humanAttributeNames`, on the base class or a Model, as the examples above do. For a form’s label, `Product.humanAttributeName("priceCents")` returns the same name.
+`fullMessages()` starts each message with the attribute’s name, made from the attribute itself: `createdAt` reads as “Created at”. To use another name, call `this.humanAttributeNames`, in the base class or a Model, as the examples above do. For a form’s label, `Product.humanAttributeName("priceCents")` returns the same name.
 
-A Model’s `attributes` and `humanAttributeNames` can only name its own attributes, its associations, and `"base"`. Any other name throws `InvalidModel` when the Model is first used, so a typo can’t go unnoticed. Names on the base class are the exception: a Model without that attribute ignores them.
+In a Model, `attributes` and `humanAttributeNames` can only name the Model’s attributes, its associations, and `"base"`, so a misspelled name is a compile error. Names in the base class can be any attribute: a Model without that attribute ignores them.
 
 ### Placeholders
 
