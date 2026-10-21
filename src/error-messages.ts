@@ -97,11 +97,11 @@ function ownValue<T>(
 
 /** A model's declarations of `kind`, a class's together, nearest class first. */
 function declarationsByClass<K extends "errorMessages" | "humanAttributeNames">(
-  model: ModelClass | undefined,
+  model: ModelClass,
   kind: K,
 ): Declarations[K]["value"][][] {
   const groups: { from: object; values: Declarations[K]["value"][] }[] = [];
-  for (const { from, value } of model ? declared(model, kind) : []) {
+  for (const { from, value } of declared(model, kind)) {
     const last = groups.at(-1);
     if (last?.from === from) last.values.push(value);
     else groups.push({ from, values: [value] });
@@ -121,11 +121,7 @@ function mergedCalls(calls: readonly ErrorMessages[]): ErrorMessages {
 }
 
 /** The message for a type: for the attribute, then the class's own, nearest class first (Rails' order). */
-function templateFor(
-  model: ModelClass | undefined,
-  attribute: string,
-  type: string,
-): Template | undefined {
+function templateFor(model: ModelClass, attribute: string, type: string): Template | undefined {
   if (type === "attributes") return undefined;
   for (const messages of [
     ...declarationsByClass(model, "errorMessages").map(mergedCalls),
@@ -148,11 +144,6 @@ function messageText(template: Template | undefined, entry: ErrorEntry): string 
   return (form === "one" ? template.one : undefined) ?? template.other;
 }
 
-/** Whether a message is found for `type` on `attribute`, here or built in. */
-export function hasMessage(model: ModelClass | undefined, entry: ErrorEntry): boolean {
-  return messageText(templateFor(model, entry.attribute, entry.type), entry) !== undefined;
-}
-
 /** "createdAt" → "Created at" */
 function inWords(name: string): string {
   const words = underscore(name).replaceAll("_", " ");
@@ -160,7 +151,7 @@ function inWords(name: string): string {
 }
 
 /** An attribute's name as messages show it: a class's `humanAttributeNames`, or "Created at". */
-export function humanAttributeName(model: ModelClass | undefined, attribute: string): string {
+export function humanAttributeName(model: ModelClass, attribute: string): string {
   for (const calls of declarationsByClass(model, "humanAttributeNames")) {
     const name = calls.findLast((names) => ownValue(names, attribute) !== undefined)?.[attribute];
     if (name !== undefined) return name;
@@ -179,22 +170,22 @@ function shownValue(source: MessageSource, attribute: string): string {
 }
 
 /** An entry's message: given, or looked up now, with its `%{name}` placeholders filled in. */
-export function messageOf(source: MessageSource | undefined, entry: ErrorEntry): string {
+export function messageOf(source: MessageSource, entry: ErrorEntry): string {
   if (entry.message !== undefined) return entry.message;
-  const model = source?.model;
+  const { model } = source;
   const text = messageText(templateFor(model, entry.attribute, entry.type), entry);
   if (text === undefined) throw missingMessage(model, entry);
   return text.replace(/%\{(\w+)\}/g, (placeholder, name: string) => {
     if (name === "attribute") return humanAttributeName(model, entry.attribute);
-    if (name === "model") return inWords(model?.name ?? "");
-    if (name === "value" && source) return shownValue(source, entry.attribute);
+    if (name === "model") return inWords(model.name);
+    if (name === "value") return shownValue(source, entry.attribute);
     return String(ownValue(entry.values, name) ?? placeholder);
   });
 }
 
 /** The error for a type no class has a message for. */
-export function missingMessage(model: ModelClass | undefined, entry: ErrorEntry): TypeError {
-  const where = model ? `${model.name}'s errorMessages, or a class it extends` : "errorMessages";
+function missingMessage(model: ModelClass, entry: ErrorEntry): TypeError {
+  const where = `${model.name}'s errorMessages, or a class it extends`;
   return new TypeError(
     `No message for the error "${entry.type}" on "${entry.attribute}": add one to ${where}, ` +
       `as ${entry.type} or attributes.${entry.attribute}.${entry.type}`,
