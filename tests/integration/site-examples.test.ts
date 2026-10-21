@@ -28,6 +28,7 @@ import * as untrusted from "../../site/snippets/guide/untrusted-input.ts";
 import * as paginating from "../../site/snippets/guide/paginating.ts";
 import * as filtering from "../../site/snippets/guide/filtering.ts";
 import * as hidden from "../../site/snippets/guide/hidden-attributes.ts";
+import { messagesExample, Product } from "../../site/snippets/guide/error-messages.ts";
 import worker from "../../site/snippets/getting-started/src/index.ts";
 import { publishDraftsAndRemove } from "../../site/snippets/getting-started/src/publish.ts";
 import { createTestDatabase, recordingBatches, type TestDatabase } from "../support/d1.ts";
@@ -235,6 +236,18 @@ describe("the guide's examples", () => {
       "Ends at must be after the start",
       "The room is closed on Sundays",
     ]);
+  });
+
+  test("Validations: changed messages read as the messages example shows", async () => {
+    const product = await withDatabase(connect(binding), () => messagesExample());
+
+    expect(product.errors.fullMessages()).toEqual([
+      "Name needs a name customers will see",
+      "Name needs at least 3 characters",
+      "Price must be more than 0",
+    ]);
+    expect(Product.humanAttributeName("priceCents")).toBe("Price");
+    expect(Product.humanAttributeName("createdAt")).toBe("Added on");
   });
 
   test("Associations: reading, creating through, and deleting through an association", async () => {

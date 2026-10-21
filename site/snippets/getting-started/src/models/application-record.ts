@@ -30,6 +30,11 @@ class Base extends Model.Base {
   // attributes() still has them):
   // static override hiddenAttributes = ["passwordDigest"];
 
+  // Error messages in place of the built-in English, for every Model (import type
+  // ErrorMessages too). A Model can set its own, and attributes: { email: { … } } is for one
+  // attribute:
+  // static override errorMessages: ErrorMessages = { blank: "is required" };
+
   // How new TEXT keys are made (a UUID by default), e.g. time-ordered ones from a
   // library you choose:
   // static override generateId = () => uuidv7();
