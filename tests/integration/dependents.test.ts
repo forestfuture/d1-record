@@ -96,6 +96,12 @@ class RestrictingWithMessages extends RestrictingWithError {
   }
 }
 
+class RestrictingRenamed extends RestrictingWithError {
+  static {
+    this.humanAttributeNames({ posts: "Articles" });
+  }
+}
+
 class Aborting extends Model(userAttributes) {
   static tableName = "users";
   posts = hasMany(Post, { foreignKey: "userId", dependent: "deleteAll" });
@@ -315,6 +321,16 @@ describe("dependent: strategies", () => {
 
     expect(withPosts!.errors.get("base")).toEqual(["can't be deleted while it has posts"]);
     expect(withProfile!.errors.get("base")).toEqual(["can't be deleted while it has a profile"]);
+  });
+
+  test("restrictDependentDestroy names the association by its human name, in lowercase", async () => {
+    const withPosts = await db().model(RestrictingRenamed).find(1);
+
+    await withPosts.destroy();
+
+    expect(withPosts.errors.get("base")).toEqual([
+      "Cannot delete record because dependent articles exist",
+    ]);
   });
 
   test("restricting lets an owner without records be destroyed", async () => {
