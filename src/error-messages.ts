@@ -1,5 +1,5 @@
 // Error messages: the built-in English ones, a Model's own, and looking one up when it's read (#88).
-import { declared, isSealed } from "./declarations.ts";
+import { declared, declaredByClass, isSealed } from "./declarations.ts";
 import { InvalidModel } from "./errors.ts";
 import type { ModelClass } from "./model.ts";
 import { FILTERED, isFiltered } from "./filtering.ts";
@@ -95,17 +95,6 @@ function ownValue<T>(
   return object !== undefined && Object.hasOwn(object, key) ? object[key] : undefined;
 }
 
-/** A Model's `errorMessages` calls, a class's together, nearest class first. */
-function declarationsByClass(model: ModelClass): ErrorMessages[][] {
-  const groups: { from: object; values: ErrorMessages[] }[] = [];
-  for (const { from, value } of declared(model, "errorMessages")) {
-    const last = groups.at(-1);
-    if (last?.from === from) last.values.push(value);
-    else groups.push({ from, values: [value] });
-  }
-  return groups.reverse().map((group) => group.values);
-}
-
 /** One class's `errorMessages` calls as one: a later call's message wins, type by type. */
 function mergedCalls(calls: readonly ErrorMessages[]): ErrorMessages {
   const attributes: Record<string, Record<string, ErrorMessage>> = {};
@@ -132,10 +121,11 @@ function catalogOf(model: ModelClass): Catalog {
   if (kept !== undefined) return kept;
   const names = new Map<string, string>();
   // In declaration order, the base class first, so the nearest class's latest name wins.
-  for (const { value } of declared(model, "humanAttributeNames")) {
+  for (const value of declared(model, "humanAttributeNames")) {
     for (const [attribute, name] of Object.entries(value)) names.set(attribute, name);
   }
-  const messages = [...declarationsByClass(model).map(mergedCalls), builtInMessages];
+  const byClass = declaredByClass(model, "errorMessages");
+  const messages = [...byClass.map(({ values }) => mergedCalls(values)), builtInMessages];
   const catalog = { messages, names };
   if (isSealed(model)) catalogs.set(model, catalog);
   return catalog;
@@ -204,18 +194,18 @@ function missingMessage(model: ModelClass, entry: ErrorEntry): TypeError {
   );
 }
 
-/** The names each declaration names an attribute by, with the class it was made on. */
+/** The attribute names each class's declarations use, with the class. */
 function namesIn(model: ModelClass): { from: object; where: string; names: string[] }[] {
   return [
-    ...declared(model, "errorMessages").map(({ from, value }) => ({
+    ...declaredByClass(model, "errorMessages").map(({ from, values }) => ({
       from,
       where: "errorMessages has messages for",
-      names: Object.keys(value.attributes ?? {}),
+      names: values.flatMap((value) => Object.keys(value.attributes ?? {})),
     })),
-    ...declared(model, "humanAttributeNames").map(({ from, value }) => ({
+    ...declaredByClass(model, "humanAttributeNames").map(({ from, values }) => ({
       from,
       where: "humanAttributeNames names",
-      names: Object.keys(value),
+      names: values.flatMap((value) => Object.keys(value)),
     })),
   ];
 }

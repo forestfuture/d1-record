@@ -231,7 +231,7 @@ export class ModelBase extends ModelStatics {
     this: C,
     messages: ErrorMessages<ErrorAttributeName<InstanceType<C>>>,
   ): void {
-    declare(this, "errorMessages", { from: this, value: messages as ErrorMessages });
+    declare(this, "errorMessages", messages as ErrorMessages);
   }
 
   /**
@@ -243,8 +243,7 @@ export class ModelBase extends ModelStatics {
     this: C,
     names: { readonly [K in ErrorAttributeName<InstanceType<C>>]?: string },
   ): void {
-    const value = names as Readonly<Record<string, string>>;
-    declare(this, "humanAttributeNames", { from: this, value });
+    declare(this, "humanAttributeNames", names as Readonly<Record<string, string>>);
   }
 
   /** @internal This record's values, lifecycle and Snapshot; only `RecordState` changes them. */
