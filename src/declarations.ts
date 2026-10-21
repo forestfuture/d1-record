@@ -25,6 +25,11 @@ export function seal(model: object): void {
   sealed.add(model);
 }
 
+/** Whether a Model has been used, so its declarations, and its ancestors', can no longer change. */
+export function isSealed(model: object): boolean {
+  return sealed.has(model);
+}
+
 /** Callbacks that run before the D1 write, and may `throw abort(reason)` to refuse it. */
 export type BeforeCallbackKind =
   | "beforeValidation"

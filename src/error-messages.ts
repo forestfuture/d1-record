@@ -1,5 +1,5 @@
 // Error messages: the built-in English ones, a Model's own, and looking one up when it's read (#88).
-import { declared, type Declarations } from "./declarations.ts";
+import { declared, isSealed } from "./declarations.ts";
 import { InvalidModel } from "./errors.ts";
 import type { ModelClass } from "./model.ts";
 import { FILTERED, isFiltered } from "./filtering.ts";
@@ -95,13 +95,10 @@ function ownValue<T>(
   return object !== undefined && Object.hasOwn(object, key) ? object[key] : undefined;
 }
 
-/** A model's declarations of `kind`, a class's together, nearest class first. */
-function declarationsByClass<K extends "errorMessages" | "humanAttributeNames">(
-  model: ModelClass,
-  kind: K,
-): Declarations[K]["value"][][] {
-  const groups: { from: object; values: Declarations[K]["value"][] }[] = [];
-  for (const { from, value } of declared(model, kind)) {
+/** A Model's `errorMessages` calls, a class's together, nearest class first. */
+function declarationsByClass(model: ModelClass): ErrorMessages[][] {
+  const groups: { from: object; values: ErrorMessages[] }[] = [];
+  for (const { from, value } of declared(model, "errorMessages")) {
     const last = groups.at(-1);
     if (last?.from === from) last.values.push(value);
     else groups.push({ from, values: [value] });
@@ -120,13 +117,34 @@ function mergedCalls(calls: readonly ErrorMessages[]): ErrorMessages {
   return Object.assign({}, ...calls, { attributes }) as ErrorMessages;
 }
 
+/** A Model's messages, each class's calls as one, nearest class first, then the built-in ones; and its attribute names. */
+interface Catalog {
+  messages: readonly ErrorMessages[];
+  names: ReadonlyMap<string, string>;
+}
+
+// Module-level, but not request state (ADR-0003): a sealed Model's declarations never change.
+const catalogs = new WeakMap<ModelClass, Catalog>();
+
+/** A Model's catalog, built once it's sealed; before that, built afresh, as declarations can still come. */
+function catalogOf(model: ModelClass): Catalog {
+  const kept = catalogs.get(model);
+  if (kept !== undefined) return kept;
+  const names = new Map<string, string>();
+  // In declaration order, the base class first, so the nearest class's latest name wins.
+  for (const { value } of declared(model, "humanAttributeNames")) {
+    for (const [attribute, name] of Object.entries(value)) names.set(attribute, name);
+  }
+  const messages = [...declarationsByClass(model).map(mergedCalls), builtInMessages];
+  const catalog = { messages, names };
+  if (isSealed(model)) catalogs.set(model, catalog);
+  return catalog;
+}
+
 /** The message for a type: for the attribute, then the class's own, nearest class first (Rails' order). */
 function templateFor(model: ModelClass, attribute: string, type: string): Template | undefined {
   if (type === "attributes") return undefined;
-  for (const messages of [
-    ...declarationsByClass(model, "errorMessages").map(mergedCalls),
-    builtInMessages,
-  ]) {
+  for (const messages of catalogOf(model).messages) {
     const found =
       ownValue(ownValue(messages.attributes, attribute), type) ?? ownValue(messages, type);
     if (found !== undefined) return found as Template;
@@ -152,11 +170,7 @@ function inWords(name: string): string {
 
 /** An attribute's name as messages show it: a class's `humanAttributeNames`, or "Created at". */
 export function humanAttributeName(model: ModelClass, attribute: string): string {
-  for (const calls of declarationsByClass(model, "humanAttributeNames")) {
-    const name = calls.findLast((names) => ownValue(names, attribute) !== undefined)?.[attribute];
-    if (name !== undefined) return name;
-  }
-  return inWords(attribute);
+  return catalogOf(model).names.get(attribute) ?? inWords(attribute);
 }
 
 /** An attribute's value as `%{value}` shows it. */
