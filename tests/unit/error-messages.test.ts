@@ -76,26 +76,40 @@ describe("error messages", () => {
       "Email is required",
       "Handle needs at least 3 characters",
     ]);
+  });
+
+  test("a base class's plural message has a form for a count of one", async () => {
     expect(await messagesOf(Post, { title: "" })).toEqual([
       "Title is required",
       "Title needs at least 1 character",
     ]);
   });
 
-  test("a Model's own messages win, an attribute's first, then those of each class it extends", async () => {
-    const blankAndShort = { email: "", handle: "" };
-
-    expect(await messagesOf(Member, blankAndShort)).toEqual([
+  test("a Model's message for an attribute wins over its message for the type", async () => {
+    expect(await messagesOf(Member, { email: "", handle: "ab" })).toEqual([
       "Email is needed to sign in",
+      "Handle needs at least 3 characters",
+    ]);
+  });
+
+  test("a Model's message for a type wins over the base class's", async () => {
+    expect(await messagesOf(Member, { email: "a@example.com", handle: "" })).toEqual([
       "Handle must be filled in",
       "Handle needs at least 3 characters",
     ]);
-    expect(await messagesOf(Admin, blankAndShort)).toEqual([
-      "Email is needed to sign in",
+  });
+
+  test("a subclass's own messages win over its parent Model's", async () => {
+    expect(await messagesOf(Admin, { email: "a@example.com", handle: "" })).toEqual([
       "Handle must be filled in",
       "Handle is too short for an admin",
     ]);
-    expect(await messagesOf(Guest, blankAndShort)).toEqual(await messagesOf(Member, blankAndShort));
+  });
+
+  test("a subclass without messages of its own has its parent Model's", async () => {
+    expect(await messagesOf(Guest, { email: "", handle: "abc" })).toEqual([
+      "Email is needed to sign in",
+    ]);
   });
 
   test("a class's own type wins over an attribute's message from a class it extends", async () => {
@@ -114,7 +128,22 @@ describe("error messages", () => {
     expect(await messagesOf(Note as never, { title: "" })).toEqual(["Title is empty"]);
   });
 
-  test("an attribute's name in full messages and %{attribute} comes from humanAttributeNames", async () => {
+  test("a message is worked out when it's read, so %{value} is the value then", async () => {
+    class Handle extends ApplicationRecord("accounts") {
+      static {
+        this.errorMessages({ invalid: "%{value} isn't a handle" });
+        this.validates("handle", { format: /^[a-z]+$/ });
+      }
+    }
+    const account = db.model(Handle).build({ handle: "Ada!" });
+    await account.isValid();
+
+    account.handle = "Ada?";
+
+    expect(account.errors.get("handle")).toEqual(["Ada? isn't a handle"]);
+  });
+
+  test("full messages and %{attribute} use the names from humanAttributeNames", async () => {
     class Signup extends ApplicationRecord("accounts") {
       static {
         this.humanAttributeNames({ email: "Email address" });
@@ -130,14 +159,21 @@ describe("error messages", () => {
       "Email address is required",
       "Signed up is missing: Signed up is set on save",
     ]);
-    expect(Signup.humanAttributeName("email")).toBe("Email address");
-    expect(Signup.humanAttributeName("createdAt")).toBe("Signed up");
-    expect(Signup.humanAttributeName("handle")).toBe("Handle");
-    expect(Model.Base.humanAttributeName("updatedAt")).toBe("Updated at");
   });
 
-  test("errors.add with a type alone looks its message up, filling in the values given", () => {
-    const member = db.model(Member).build({ handle: "ab" });
+  test("humanAttributeName() gives a Model's name for an attribute, its base class's, or one in words", () => {
+    class Signup extends ApplicationRecord("accounts") {
+      static {
+        this.humanAttributeNames({ email: "Email address" });
+      }
+    }
+
+    expect(["email", "createdAt", "handle"].map((name) => Signup.humanAttributeName(name))).toEqual(
+      ["Email address", "Signed up", "Handle"],
+    );
+  });
+
+  test("errors.add with a type alone looks its message up", () => {
     class Booking extends ApplicationRecord("posts") {
       static {
         this.errorMessages({ afterStart: "must be after the start" });
@@ -146,14 +182,24 @@ describe("error messages", () => {
     const booking = db.model(Booking).build();
 
     booking.errors.add("title", { type: "afterStart" });
-    member.errors.add("handle", { type: "tooShort", count: 5 });
-    member.errors.add("base", "Account is locked");
 
     expect(booking.errors.fullMessages()).toEqual(["Title must be after the start"]);
-    expect(member.errors.fullMessages()).toEqual([
-      "Handle needs at least 5 characters",
-      "Account is locked",
-    ]);
+  });
+
+  test("errors.add fills a message's placeholders from the values given", () => {
+    const member = db.model(Member).build({ handle: "ab" });
+
+    member.errors.add("handle", { type: "tooShort", count: 5 });
+
+    expect(member.errors.fullMessages()).toEqual(["Handle needs at least 5 characters"]);
+  });
+
+  test("errors.add with a message uses it as it is", () => {
+    const member = db.model(Member).build();
+
+    member.errors.add("base", "Account is locked");
+
+    expect(member.errors.fullMessages()).toEqual(["Account is locked"]);
   });
 
   test("a type with no message anywhere is refused when it's added", () => {
@@ -191,19 +237,33 @@ describe("error messages", () => {
     ]);
   });
 
-  test("a Model's messages or names for an attribute it doesn't have are refused at first use", () => {
+  test("messages for an attribute a Model doesn't have are refused at first use", () => {
     class Typo extends ApplicationRecord("accounts") {
       static {
         // @ts-expect-error a Model's messages name its attributes, associations or base
         this.errorMessages({ attributes: { emial: { blank: "x" } } });
       }
     }
+
+    expect(() => db.model(Typo)).toThrow(
+      new InvalidModel(
+        "Typo's errorMessages has messages for \"emial\", which isn't one of its attributes or associations; name them exactly",
+      ),
+    );
+  });
+
+  test("a name for an attribute a Model doesn't have is refused at first use", () => {
     class Renamed extends ApplicationRecord("accounts") {
       static {
         // @ts-expect-error the same for its attribute names
         this.humanAttributeNames({ emial: "Email address" });
       }
     }
+
+    expect(() => db.model(Renamed)).toThrow(/Renamed's humanAttributeNames names "emial"/);
+  });
+
+  test("a Model's messages and names can be for its associations and base", () => {
     class Owner extends ApplicationRecord("accounts") {
       posts = hasMany(Post, { foreignKey: "id" });
       static {
@@ -214,32 +274,41 @@ describe("error messages", () => {
       }
     }
 
-    expect(() => db.model(Typo)).toThrow(InvalidModel);
-    expect(() => db.model(Typo)).toThrow(
-      /Typo's errorMessages has messages for "emial", which isn't one of its attributes/,
-    );
-    expect(() => db.model(Renamed)).toThrow(/Renamed's humanAttributeNames names "emial"/);
-    // The app's base class names createdAt and email, which Post doesn't have.
-    expect(() => db.model(Post)).not.toThrow();
     expect(() => db.model(Owner)).not.toThrow();
   });
 
-  test("%{value} is the attribute's value, [FILTERED] when it's filtered, and %{model} the Model", async () => {
+  test("the base class's names apply where a Model has the attribute, and are ignored elsewhere", () => {
+    // The app's base class names createdAt and email, which Post doesn't have.
+    expect(() => db.model(Post)).not.toThrow();
+  });
+
+  test("%{value} is the attribute's value, and %{model} the Model in words", async () => {
     class BlogAccount extends ApplicationRecord("accounts") {
       static {
         this.errorMessages({ invalid: "%{value} isn't allowed for a %{model}" });
         this.validates("handle", { format: /^[a-z]+$/ });
+      }
+    }
+
+    expect(await messagesOf(BlogAccount as never, { handle: "Ada!" })).toEqual([
+      "Handle Ada! isn't allowed for a Blog account",
+    ]);
+  });
+
+  test("%{value} of a filtered attribute is [FILTERED]", async () => {
+    class Contact extends ApplicationRecord("accounts") {
+      static {
+        this.errorMessages({ invalid: "%{value} isn't an email" });
         this.validates("email", { format: /@/ });
       }
     }
 
-    expect(await messagesOf(BlogAccount as never, { handle: "Ada!", email: "ada" })).toEqual([
-      "Handle Ada! isn't allowed for a Blog account",
-      "Email [FILTERED] isn't allowed for a Blog account",
+    expect(await messagesOf(Contact as never, { email: "ada" })).toEqual([
+      "Email [FILTERED] isn't an email",
     ]);
   });
 
-  test("a class's calls add up, a later one's message winning, and none is allowed after first use", async () => {
+  test("a class's calls add up, and a later one's message wins", async () => {
     const shared: ErrorMessages = { blank: "is required here" };
     class Twice extends ApplicationRecord("posts") {
       static {
@@ -254,6 +323,27 @@ describe("error messages", () => {
       "Title is required, twice",
       "Title is too short",
     ]);
-    expect(() => Twice.errorMessages({ blank: "later" })).toThrow(InvalidModel);
+  });
+
+  test("a class's calls add up for an attribute too, type by type", async () => {
+    class Twice extends ApplicationRecord("posts") {
+      static {
+        this.errorMessages({ attributes: { title: { blank: "first", tooShort: "short" } } });
+        this.errorMessages({ attributes: { title: { blank: "second" } } });
+        this.validates("title", { presence: true, length: { minimum: 1 } });
+      }
+    }
+
+    expect(await messagesOf(Twice as never, { title: "" })).toEqual([
+      "Title second",
+      "Title short",
+    ]);
+  });
+
+  test("messages can't be declared once a Model is used", () => {
+    class Late extends ApplicationRecord("posts") {}
+    db.model(Late);
+
+    expect(() => Late.errorMessages({ blank: "later" })).toThrow(InvalidModel);
   });
 });

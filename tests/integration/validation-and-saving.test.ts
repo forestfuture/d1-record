@@ -14,6 +14,19 @@ class User extends Model({
   }
 }
 
+class Signup extends Model({
+  id: { type: "integer", null: false },
+  email: "string",
+}) {
+  static tableName = "users";
+
+  static {
+    this.errorMessages({ attributes: { email: { taken: "is already registered" } } });
+    this.humanAttributeNames({ email: "Email address" });
+    this.validates("email", { uniqueness: true });
+  }
+}
+
 describe("validation when saving", () => {
   let binding: TestDatabase;
   let dispose: () => Promise<void>;
@@ -73,5 +86,14 @@ describe("validation when saving", () => {
 
     expect(user.changes()).toEqual({ email: ["a@example.com", " "] });
     expect((await users.find(user.id)).email).toBe("a@example.com");
+  });
+
+  test("a uniqueness failure reads the Model's message, and RecordInvalid says it (#88)", async () => {
+    const signups = connect(binding).model(Signup);
+    await signups.create({ email: "a@example.com" });
+
+    const error = await signups.createOrThrow({ email: "a@example.com" }).catch((caught) => caught);
+
+    expect((error as Error).message).toBe("Validation failed: Email address is already registered");
   });
 });
