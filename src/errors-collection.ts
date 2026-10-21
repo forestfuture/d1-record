@@ -15,6 +15,8 @@ export interface ValidationError {
   attribute: string;
   type: string;
   message: string;
+  /** The values its message shows, such as `count`, when it has some; never the attribute's. */
+  values?: ErrorValues;
 }
 
 /** @internal The library's key for emptying an errors collection. */
@@ -71,13 +73,13 @@ export class Errors {
     });
   }
 
-  /** Every error as `{ attribute, type, message }` (copies). */
+  /** Every error as `{ attribute, type, message }`, with its `values` when it has some (copies). */
   toArray(): ValidationError[] {
-    return this.#entries.map((entry) => ({
-      attribute: entry.attribute,
-      type: entry.type,
-      message: messageOf(this.#source, entry),
-    }));
+    return this.#entries.map((entry) => {
+      const { attribute, type, values } = entry;
+      const error = { attribute, type, message: messageOf(this.#source, entry) };
+      return Object.keys(values).length === 0 ? error : { ...error, values: { ...values } };
+    });
   }
 
   isEmpty(): boolean {
