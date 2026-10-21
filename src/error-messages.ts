@@ -72,8 +72,8 @@ export interface ErrorEntry {
   values: ErrorValues;
   /** A message given as text, used as it is. */
   message?: string;
-  /** The kind of association that refused, choosing between `restrictDependentDestroy`'s messages. */
-  associationKind?: keyof RestrictMessages;
+  /** The message's form to use, such as `restrictDependentDestroy`'s `hasOne`; else `count`'s plural form. */
+  form?: string;
 }
 
 /** Where an error's message comes from: the record's Model, and its values for `%{value}`. */
@@ -82,8 +82,8 @@ export interface MessageSource {
   read: (attribute: string) => unknown;
 }
 
-/** A message as a class declares it, for one type. */
-type Template = ErrorMessage | RestrictMessages;
+/** A message as a class declares it, for one type: its text, or its forms by name. */
+type Template = string | { readonly [form: string]: string | undefined };
 
 const plurals = new Intl.PluralRules("en");
 
@@ -152,14 +152,12 @@ function templateFor(model: ModelClass, attribute: string, type: string): Templa
   return undefined;
 }
 
-/** The text of a message: the one for its association's kind, or its plural form's for `count`. */
+/** The text of a message: the form the entry names, or else the plural form for `count`. */
 function messageText(template: Template | undefined, entry: ErrorEntry): string | undefined {
   if (template === undefined || typeof template === "string") return template;
-  if ("hasOne" in template)
-    return entry.associationKind === undefined ? undefined : template[entry.associationKind];
   const { count } = entry.values;
-  const form = typeof count === "number" ? plurals.select(count) : "other";
-  return (form === "one" ? template.one : undefined) ?? template.other;
+  const form = entry.form ?? (typeof count === "number" ? plurals.select(count) : "other");
+  return ownValue(template, form) ?? template.other;
 }
 
 /** "createdAt" → "Created at" */

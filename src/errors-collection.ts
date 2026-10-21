@@ -24,7 +24,7 @@ export const clearErrors = Symbol("clearErrors");
 export const addFailure = Symbol("addFailure");
 
 /** @internal A failure the library found: its type, the values its message shows, and any message given. */
-export type Failure = Pick<ErrorEntry, "type" | "message" | "associationKind"> & {
+export type Failure = Pick<ErrorEntry, "type" | "message" | "form"> & {
   values?: ErrorValues;
 };
 
