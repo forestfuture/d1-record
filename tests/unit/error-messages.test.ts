@@ -164,4 +164,21 @@ describe("error messages", () => {
     // @ts-expect-error a value is text or a number
     expect(() => member.errors.add("handle", { type: "blank", at: new Date() })).not.toThrow();
   });
+
+  test("toArray() gives an error's values, when it has some, but never the attribute's value", async () => {
+    const account = db.model(Account).build({ email: "", handle: "ab" });
+    await account.isValid();
+    account.errors.add("base", { type: "blank", reason: "locked" });
+
+    expect(account.errors.toArray()).toStrictEqual([
+      { attribute: "email", type: "blank", message: "is required" },
+      {
+        attribute: "handle",
+        type: "tooShort",
+        message: "needs at least 3 characters",
+        values: { count: 3 },
+      },
+      { attribute: "base", type: "blank", message: "is required", values: { reason: "locked" } },
+    ]);
+  });
 });
