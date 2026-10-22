@@ -91,10 +91,17 @@ export function declare<K extends keyof Declarations>(
       `${name} has already been used; declare validations, callbacks and messages in its static {} block`,
     );
   }
-  const lists = registry.get(model) ?? new Map<string, readonly unknown[]>();
-  registry.set(model, lists);
-  lists.set(kind, [...declared(model, kind), entry]);
-  const own = ownRegistry.get(model) ?? new Map<string, readonly unknown[]>();
-  ownRegistry.set(model, own);
+  listsOf(registry, model).set(kind, [...declared(model, kind), entry]);
+  const own = listsOf(ownRegistry, model);
   own.set(kind, [...(own.get(kind) ?? []), entry]);
+}
+
+/** `model`'s lists in a registry, by kind, made empty the first time. */
+function listsOf(
+  lists: WeakMap<object, Map<string, readonly unknown[]>>,
+  model: object,
+): Map<string, readonly unknown[]> {
+  const found = lists.get(model) ?? new Map<string, readonly unknown[]>();
+  lists.set(model, found);
+  return found;
 }
