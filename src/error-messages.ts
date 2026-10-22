@@ -1,5 +1,5 @@
 // Error messages: the built-in English ones, a Model's own, and looking one up when it's read (#88).
-import { declared, declaredByClass, isSealed } from "./declarations.ts";
+import { declaredByClass, isSealed } from "./declarations.ts";
 import type { ModelClass } from "./model.ts";
 import { FILTERED, isFiltered } from "./filtering.ts";
 import { underscore } from "./naming.ts";
@@ -119,9 +119,11 @@ function catalogOf(model: ModelClass): Catalog {
   const kept = catalogs.get(model);
   if (kept !== undefined) return kept;
   const names = new Map<string, string>();
-  // In declaration order, the base class first, so the nearest class's latest name wins.
-  for (const value of declared(model, "humanAttributeNames")) {
-    for (const [attribute, name] of Object.entries(value)) names.set(attribute, name);
+  // The base class first, each class's calls in order, so the nearest class's latest name wins.
+  for (const { values } of declaredByClass(model, "humanAttributeNames").toReversed()) {
+    for (const value of values) {
+      for (const [attribute, name] of Object.entries(value)) names.set(attribute, name);
+    }
   }
   const byClass = declaredByClass(model, "errorMessages");
   const messages = [...byClass.map(({ values }) => mergedCalls(values)), builtInMessages];
