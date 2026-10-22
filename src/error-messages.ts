@@ -195,19 +195,19 @@ function missingMessage(model: ModelClass, entry: ErrorEntry): TypeError {
   );
 }
 
-/** The attribute names each class's `errorMessages` and `humanAttributeNames` use, with the class. */
-export function messageNameLists(
+/** The attributes each class names in its `errorMessages` or `humanAttributeNames`, nearest class first. */
+export function attributesNamedInMessages(
   model: ModelClass,
-): { from: object; where: string; names: string[] }[] {
+): { from: ModelClass; declaration: "errorMessages" | "humanAttributeNames"; names: string[] }[] {
   return [
     ...declaredByClass(model, "errorMessages").map(({ from, values }) => ({
-      from,
-      where: "errorMessages has messages for",
+      from: from as ModelClass,
+      declaration: "errorMessages" as const,
       names: values.flatMap((value) => Object.keys(value.attributes ?? {})),
     })),
     ...declaredByClass(model, "humanAttributeNames").map(({ from, values }) => ({
-      from,
-      where: "humanAttributeNames names",
+      from: from as ModelClass,
+      declaration: "humanAttributeNames" as const,
       names: values.flatMap((value) => Object.keys(value)),
     })),
   ];

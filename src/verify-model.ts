@@ -2,7 +2,7 @@
 // It checks the table, the primary key, the attribute names, the spec keys, hidden attributes, message names, and page sizes.
 import { ancestors } from "./ancestors.ts";
 import { associationsOf, declarationIn, probeOf } from "./association-fields.ts";
-import { messageNameLists } from "./error-messages.ts";
+import { attributesNamedInMessages } from "./error-messages.ts";
 import { seal } from "./declarations.ts";
 import { InvalidModel } from "./errors.ts";
 import { ModelBase, type ModelClass } from "./model.ts";
@@ -112,19 +112,23 @@ function namesListedByAttributelessAncestors(model: ModelClass): Set<string> {
 function rejectUnknownMessageNames(model: ModelClass): void {
   const associations = associationsOf(model).keys();
   const known = new Set(["base", ...model.attributeDefinitions.keys(), ...associations]);
-  for (const { from, where, names } of messageNameLists(model)) {
+  for (const { from, declaration, names } of attributesNamedInMessages(model)) {
     const unknown = names.find((name) => !known.has(name));
     if (unknown === undefined || hasNoAttributes(from)) continue;
+    const where =
+      declaration === "errorMessages"
+        ? "errorMessages has messages for"
+        : "humanAttributeNames names";
     throw new InvalidModel(
-      `${(from as ModelClass).name}'s ${where} "${unknown}", which isn't one of its ` +
+      `${from.name}'s ${where} "${unknown}", which isn't one of its ` +
         "attributes or associations; name them exactly",
     );
   }
 }
 
 /** Whether a class has no attributes, as the app's base class: names it lists apply where a Model has them. */
-function hasNoAttributes(each: Partial<ModelClass>): boolean {
-  return each.attributeDefinitions?.size === 0;
+function hasNoAttributes(model: Partial<ModelClass>): boolean {
+  return model.attributeDefinitions?.size === 0;
 }
 
 function rejectShadowingFields(model: ModelClass): void {
