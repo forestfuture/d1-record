@@ -57,7 +57,7 @@ An attribute `toJSON()` leaves out, named by the Model's `hiddenAttributes`, by 
 _Avoid_: Private, protected, excluded
 
 **Error message**:
-The text of a validation error, looked up from its type (`blank`, `tooShort`, or one of the app's own) each time it's read: the Model's `errorMessages` (for the attribute first), then those of each class it extends, then the built-in English. Text given to `validates` or `errors.add` is used as it is.
+The text of a validation error, looked up from its type (`blank`, `tooShort`, or one of the app's own) each time it's read: the Model's `errorMessages` (for the attribute first), then those of each class it extends, then the built-in English. A message can have **forms**: `{ one, other }`, chosen by the error's `count`, or `restrictDependentDestroy`'s `{ hasOne, hasMany }`, chosen by the kind of association. Text given to `validates` or `errors.add` is used as it is.
 _Avoid_: Translation, locale string, i18n key (no locales yet)
 
 **Human attribute name**:
