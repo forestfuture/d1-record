@@ -182,6 +182,19 @@ describe("error messages", () => {
     expect([before, Early.humanAttributeName("handle")]).toEqual(["Handle", "Username"]);
   });
 
+  test("a parent's names declared after its subclass's still reach the subclass, as its messages do", () => {
+    class Parent extends ApplicationRecord("accounts") {}
+    class Child extends Parent {
+      static {
+        this.humanAttributeNames({ email: "Email address" });
+      }
+    }
+
+    Parent.humanAttributeNames({ handle: "Username" });
+
+    expect(Child.humanAttributeName("handle")).toBe("Username");
+  });
+
   test("errors.add with a type alone looks its message up", () => {
     class Booking extends ApplicationRecord("posts") {
       static {
