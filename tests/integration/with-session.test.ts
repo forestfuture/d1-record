@@ -53,4 +53,26 @@ describe("withSession(request, env.DB, fn)", () => {
       expect.stringMatching(/^d1-bookmark=[^;]+; Path=\/; HttpOnly; Secure; SameSite=Lax$/),
     ]);
   });
+
+  test("the next request's bookmark cookie is where its Session starts, so it reads the last request's write", async () => {
+    const first = await withSession(get(), binding, async () => {
+      await User.create({ id: 1, email: "ada@example.com" });
+      return new Response("created");
+    });
+    const bookmark = bookmarkFrom(first);
+
+    const next = await withSession(get({ cookie: `d1-bookmark=${bookmark}` }), binding, async () =>
+      Response.json(await User.find(1)),
+    );
+
+    expect(starts).toEqual(["first-unconstrained", bookmark]);
+    expect(await next.json()).toMatchObject({ email: "ada@example.com" });
+    expect(bookmarkFrom(next)).toEqual(expect.any(String));
+  });
 });
+
+/** The bookmark a response's d1-bookmark cookie carries. */
+function bookmarkFrom(response: Response): string | undefined {
+  const cookie = response.headers.getSetCookie().find((c) => c.startsWith("d1-bookmark="));
+  return cookie?.slice("d1-bookmark=".length).split(";")[0];
+}
