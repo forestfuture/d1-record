@@ -14,7 +14,7 @@ _Code:_ `vite.config.ts`, `package.json`.
 
 ## Connecting
 
-_Guide:_ [connecting](../site/guide/connecting.md), [query-databases](../site/guide/query-databases.md), [several-databases](../site/guide/several-databases.md), [read-your-own-writes](../site/guide/read-your-own-writes.md). _Code:_ `src/database.ts`, `src/current-database.ts`, `src/executor.ts`.
+_Guide:_ [connecting](../site/guide/connecting.md), [query-databases](../site/guide/query-databases.md), [several-databases](../site/guide/several-databases.md), [read-your-own-writes](../site/guide/read-your-own-writes.md). _Code:_ `src/database.ts`, `src/current-database.ts`, `src/with-session.ts`, `src/executor.ts`.
 
 A query finds its database one of three ways (#77):
 
@@ -29,13 +29,22 @@ await withDatabase(connect(env.DB, { session: bookmark, onQuery }), () => User.f
 // 3. An explicit database, always its own
 const db = connect(env.DB); // plain binding: every query goes to the primary
 const db = connect(env.DB, { session: "first-unconstrained" | "first-primary" | bookmark });
-db.bookmark(); // pass to the next request
+db.bookmark(); // pass to the next request (withSession does it for you)
+
+// A request's Session, carried from the user's last request in a cookie or a header (#220)
+withSession(request, env.DB, (db) => handle(request));
+withSession(request, env.DB, { header: "x-d1-bookmark", start: "first-primary", onQuery }, fn);
 const users = db.model(User); // a Relation on this database
 const models = db.models({ User, Post }); // convenience: models.User has the same type as db.model(User)
 ```
 
 - A Database with a session sends every query through that one D1 Session: record reads and writes, uniqueness checks, association reads, preloads, statements and batches. So the request reads its own writes even when reads are served by replicas. `session` takes D1's own values: `"first-primary"`, `"first-unconstrained"`, or a bookmark. Apps that want a primary Database and a replica Database call `connect()` twice.
 - `db.bookmark()` is the Session's latest bookmark (D1's `getBookmark()`), `null` before its first query. Pass it to the next request's `connect(env.DB, { session: bookmark })` to read at least as new as this request wrote. On a Database opened without a session it throws `NoSession`, since a `null` there would quietly mean "no session" next time.
+- `withSession(request, env.DB, [options,] fn)` opens the request's Database with a Session, runs `fn(db)` inside `withDatabase(db, …)`, and resolves to `fn`'s Response with the Session's bookmark set on it (#220). The Session starts from the bookmark the request carries, or from `start` (`"first-unconstrained"` unless set) when it carries none. The bookmark set is `db.bookmark()`, or the request's own when `fn` sent no query; with neither, nothing is set. The bookmark isn't checked: D1 decides what a malformed one does.
+  - **Where it travels:** by default a `d1-bookmark` cookie, read from the request's `Cookie` header (an empty value is none) and appended as `Set-Cookie: d1-bookmark=…; Path=/; HttpOnly; Secure; SameSite=Lax`, after any cookies `fn` set. It has no `Max-Age`, so it lasts the browser's session: an old bookmark only asks for data at least that new. `cookie` renames it. `header` carries it in that request header and response header instead (set, replacing one `fn` set), with no cookie. `cookie` and `header` together are a type error, and throw `TypeError` before `fn` runs. The options also take `connect()`'s `onQuery`.
+  - **The response:** one whose headers can't change (from `fetch()` or `Response.redirect()`) is copied, with its status and headers, before the bookmark is set; any other is returned as it is.
+  - **Errors:** what `fn` throws reaches the caller unchanged, and no bookmark is set.
+  - One binding per call. For several, nest calls, each with its own `cookie` or `header`: `withDatabase` adds nested databases to the outer ones.
 - **Statics:** every Relation method is a static of every Model (`find`, `findBy`, `where`, `whereNot`, `order`, `first`, `count`, `pluck`, `build`, `create`, `insert`, `insertAll`, `upsert`, `updateAll`, `deleteAll`, the `to…` forms, …), as Rails delegates them to `all`, plus `Model.all()`, the Relation itself, and the Model's scopes (`User.active()`). Each is typed for the class it's called on, so on a subclass it returns that subclass's records. They query the **current database**: the request's, then the Model's binding. Building a Relation never queries, so statics can be called anywhere; running one needs a database.
 - **The binding (level 1):** `static binding` names the D1 binding a Model queries when there's no request database, as Rails' `connects_to`; it's inherited, and `d1-record schema` writes it on the app's base class. It's read from `import { env } from "cloudflare:workers"`, loaded only when a query needs it, so the library imports fine in Node. Each binding gets one Database, holding nothing per request (no Session, no listener), shared by every request: safe across concurrent requests in one isolate.
 - **The request's database (level 2):** `withDatabase(db | [db, …], fn)` runs `fn` with those databases as the request's own, through Workers' `AsyncLocalStorage`: every query started from a Model inside it, and everything it awaits, uses the one whose D1 binding is that Model's binding, with its Session and `onQuery`. Nested calls add to the outer ones. Outside a Worker (Node, scripts), where there's no binding to match, the request's database serves every Model if there's one, and several are an error. `AsyncLocalStorage` is loaded with `process.getBuiltinModule("node:async_hooks")` when `withDatabase` is first called, so Workers without Node.js compatibility still build; calling it there throws `NoDatabase` naming the setting (a `compatibility_date` of 2026-08-04 or later, or `nodejs_compat`).
