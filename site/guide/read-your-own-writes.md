@@ -21,6 +21,10 @@ The cookie is `HttpOnly`, `Secure`, and `SameSite=Lax`, with `Path=/`. To name i
 :::
 
 ::: warning TIP
+For a second D1 database, call `withSession` again inside the first one. Give each its own cookie name.
+:::
+
+::: warning TIP
 `withSession` needs Node.js compatibility, which is on by default for compatibility dates from 2026-08-04. For an earlier date, add `"compatibility_flags": ["nodejs_compat"]`.
 :::
 
@@ -50,7 +54,7 @@ A request without a bookmark starts at the nearest instance. To start it at the 
 
 After the first query, each query reads data at least as new as the one before, including the request’s own writes.
 
-- **Your handler gets the request’s database** as its argument, for `db.batch(…)` or `db.model(…)`.
+- **Your handler gets the request’s database** as its argument. Use it for `db.batch(…)` and `db.model(…)`.
 - **To log the request’s queries**, pass `onQuery` to `withSession`, as you would to `connect`.
-- **`db.bookmark()`** is the Session’s latest bookmark, if you carry it yourself. It’s `null` before the first query, and throws `NoSession` on a database opened without a Session.
+- **To carry the bookmark yourself**, use `db.bookmark()`. It’s the Session’s latest bookmark. It’s `null` before the first query, and throws `NoSession` on a database opened without a Session.
 - **To mix the primary and replicas**, open two databases, and use `db.model(…)` with each.

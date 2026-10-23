@@ -137,7 +137,7 @@ await batch([
 - **Associations**: `belongsTo`, `hasMany`, `hasOne` with scopes, `dependent:` strategies, preloading with `includes` (one query per association, never N+1, and one round trip per level), caching until reload, autosave, and `build`/`create`/`set` through the association.
 - **Queries from the Model**, as in Rails: `User.find(id)`, `User.where(…)`, `User.active()`, on the Model’s binding with no setup.
 - **Bulk writes**: `insert`, `insertAll`, `upsert`, `updateAll`, `deleteAll`, and `batch([...])` mixing those with records’ `toSave()`/`toDestroy()`.
-- **Read replicas**: a request run in `withSession(request, env.DB, fn)` sends every query through one D1 Session, so it reads its own writes, and the Session’s bookmark goes to the user’s next request in a cookie (or a header).
+- **Read replicas**: a request run in `withSession(request, env.DB, fn)` sends every query through one D1 Session, so it reads its own writes, and the Session’s bookmark goes to the user’s next request in a cookie or a header.
 - **Observability**: `connect(env.DB, { onQuery })` sees every statement with its SQL, bound values, timing, and D1’s `meta`. `toSql()` shows a query’s SQL and values without sending it.
 
 ## Honest about D1
