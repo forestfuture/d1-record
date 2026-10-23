@@ -4,6 +4,7 @@ import {
   Model,
   modelFor,
   withDatabase,
+  withSession,
   type Database,
   type QueryListener,
 } from "@forestfuture/d1-record";
@@ -22,40 +23,25 @@ export const plain = {
   },
 } satisfies ExportedHandler<Env>;
 
-/** A cookie's value from a request's Cookie header. */
-function cookie(request: Request, name: string): string | undefined {
-  const pair = request.headers
-    .get("cookie")
-    ?.split(/;\s*/)
-    .find((each) => each.startsWith(`${name}=`));
-  return pair?.slice(name.length + 1);
-}
-
 async function handle(_request: Request): Promise<Response> {
   const user = await User.createOrThrow({ email: "ada@example.com" });
   return Response.json(await User.find(user.id)); // reads its own write
 }
 
 // #region session
-// Middleware: each request reads at least as new as this browser's last write, from any replica.
-async function withSession(request: Request, env: Env, next: () => Promise<Response>) {
-  const bookmark = cookie(request, "d1-bookmark") ?? "first-unconstrained";
-  const db = connect(env.DB, { session: bookmark });
-
-  const response = await withDatabase(db, next); // every query in it uses the Session
-
-  const latest = db.bookmark() ?? bookmark;
-  response.headers.append(
-    "set-cookie",
-    `d1-bookmark=${latest}; Path=/; HttpOnly; Secure; SameSite=Lax`,
-  );
-  return response;
-}
-
+// src/worker.ts: each request reads at least as new as this browser's last write, from any replica.
 export default {
-  fetch: (request, env) => withSession(request, env, () => handle(request)),
+  fetch: (request, env) => withSession(request, env.DB, () => handle(request)),
 } satisfies ExportedHandler<Env>;
 // #endregion session
+
+// #region session-header
+// An API's clients send back the x-d1-bookmark header of the response before.
+export const api = {
+  fetch: (request, env) =>
+    withSession(request, env.DB, { header: "x-d1-bookmark" }, () => handle(request)),
+} satisfies ExportedHandler<Env>;
+// #endregion session-header
 
 // #region app-wide
 // src/models/application-record.ts: every query, from every Model, whichever database runs it.

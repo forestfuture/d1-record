@@ -149,7 +149,7 @@ The name of the D1 binding a Model queries, from the Wrangler config (`static bi
 _Avoid_: Connection name, database name
 
 **Session**:
-A D1 session that one **Database** can be opened with. Every query in that request goes through it, so the request reads its own writes even when reads are served by replicas.
+A D1 session that one **Database** can be opened with. Every query in that request goes through it, so the request reads its own writes even when reads are served by replicas. Its **bookmark** (`db.bookmark()`) starts the user's next request's Session, so that request reads at least as new as this one wrote; `withSession` carries it between requests in a cookie or a header.
 _Avoid_: Transaction, connection
 
 **Statement**:
