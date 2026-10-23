@@ -526,7 +526,8 @@ export class Relation<M extends ModelBase, S = {}> {
   /** Whether any record matches, optionally with extra conditions. */
   async exists(conditions?: Conditions<M> | SafeSql): Promise<boolean> {
     const relation = conditions === undefined ? this : this.where(conditions);
-    const query = { ...relation.#query, limit: atMostOne(relation.#query.limit) };
+    // Whether a row exists never depends on the order, even past an offset (#215).
+    const query = { ...relation.#query, order: [], limit: atMostOne(relation.#query.limit) };
     return (await this.#runner.rows(compileSelect(query, "1"))).length > 0;
   }
 
