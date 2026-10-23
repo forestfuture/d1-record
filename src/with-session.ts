@@ -61,9 +61,13 @@ function carrierFor(cookie: string | undefined, header: string | undefined): Car
   if (cookie !== undefined) {
     throw new TypeError("withSession takes a cookie or a header for the bookmark, not both");
   }
+  return headerCarrier(header);
+}
+
+function headerCarrier(name: string): Carrier {
   return {
-    read: (request) => request.headers.get(header) || undefined,
-    write: (headers, bookmark) => headers.set(header, bookmark),
+    read: (request) => request.headers.get(name) || undefined,
+    write: (headers, bookmark) => headers.set(name, bookmark),
   };
 }
 
