@@ -84,5 +84,9 @@ test("GET lists users", async () => {
 Each test file gets its own database.
 
 ::: warning TIP
+If your Worker uses [`withSession`](./read-your-own-writes), call `fetch` without `withDatabase`. Pass the test’s database as `env.DB` instead, and `withSession` opens it for the request.
+:::
+
+::: warning TIP
 To run tests inside the Workers runtime itself, use Cloudflare’s [Vitest integration](https://developers.cloudflare.com/workers/testing/vitest-integration/).
 :::
