@@ -25,6 +25,7 @@ describe("the Workers runtime, as Product.find(id) assumes it", () => {
       dynamicImport: true,
       asyncLocalStorage: true,
       inspectCustom: { depth: 2, stylize: "function", inspect: "function" },
+      copiedResponse: { redirectImmutable: true, status: 303, setCookie: "a=1" },
     });
   });
 

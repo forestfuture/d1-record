@@ -19,13 +19,28 @@ export async function withSession(
   const response = await withDatabase(db, () => fn(db));
   // Before its first query, a Session may have no bookmark of its own: the request's still holds.
   const latest = db.bookmark() ?? bookmark;
-  if (latest !== undefined) {
-    response.headers.append(
-      "set-cookie",
-      `${cookieName}=${latest}; Path=/; HttpOnly; Secure; SameSite=Lax`,
-    );
+  if (latest === undefined) return response;
+  return withHeader(
+    response,
+    "set-cookie",
+    `${cookieName}=${latest}; Path=/; HttpOnly; Secure; SameSite=Lax`,
+  );
+}
+
+/**
+ * `response` with the header appended. A response whose headers can't change (one from
+ * `fetch()` or `Response.redirect()`) is copied first; any other is returned as it is, so a
+ * WebSocket upgrade keeps its socket.
+ */
+function withHeader(response: Response, name: string, value: string): Response {
+  try {
+    response.headers.append(name, value);
+    return response;
+  } catch {
+    const copy = new Response(response.body, response);
+    copy.headers.append(name, value);
+    return copy;
   }
-  return response;
 }
 
 /** The value of the request's cookie named `name`, if it sent one that isn't empty. */
