@@ -220,7 +220,7 @@ function readDatetime(value: unknown): unknown {
   if (typeof value !== "string") return uncastable;
   // The stored form, read with one Date (#91); other text, such as a day that doesn't exist, gets
   // the checks below.
-  const stored = isoStringForm.test(value) ? dateIfCanonical(value) : undefined;
+  const stored = isoStringForm.test(value) ? dateIfOnCalendar(value) : undefined;
   if (stored !== undefined) return stored;
   // A far year has no other form.
   if (expandedYearDateTime.test(value)) return dateIfCanonical(value) ?? uncastable;
@@ -228,8 +228,21 @@ function readDatetime(value: unknown): unknown {
 }
 
 /**
+ * Text in the stored form as a `Date`, if it names a moment on the calendar. Every character is a
+ * digit or a fixed separator, so only the calendar can be wrong, and `Date` rolls a day that
+ * doesn't exist over (`2026-02-30` to 2 March, `T24:00` to the next day): a date whose day or
+ * month isn't the text's is refused. Cheaper than writing the text back to compare (#216).
+ */
+function dateIfOnCalendar(value: string): Date | undefined {
+  const date = new Date(value);
+  const month = Number(value.slice(5, 7));
+  const day = Number(value.slice(8, 10));
+  return date.getUTCDate() === day && date.getUTCMonth() + 1 === month ? date : undefined;
+}
+
+/**
  * `value` as a `Date`, if `toISOString` writes exactly this text for it. That also refuses a day
- * that doesn't exist, which `Date` rolls over (`2026-02-30` to 2 March).
+ * that doesn't exist, and a year written with more digits than it needs (`+002026`).
  */
 function dateIfCanonical(value: string): Date | undefined {
   const date = new Date(value);
