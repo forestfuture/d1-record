@@ -69,6 +69,39 @@ describe("withSession(request, env.DB, fn)", () => {
     expect(await next.json()).toMatchObject({ email: "ada@example.com" });
     expect(bookmarkFrom(next)).toEqual(expect.any(String));
   });
+
+  test("the request's other cookies are read past, and an empty bookmark is no bookmark", async () => {
+    const ok = () => Promise.resolve(new Response("ok"));
+    await withSession(get({ cookie: "theme=dark; d1-bookmark=abc=1 ; lang=en" }), binding, ok);
+    await withSession(get({ cookie: "theme=dark; d1-bookmark=" }), binding, ok);
+
+    expect(starts).toEqual(["abc=1", "first-unconstrained"]);
+  });
+
+  test("cookies fn sets are kept, the bookmark's added beside them", async () => {
+    const response = await withSession(get(), binding, async () => {
+      await User.count();
+      const response = new Response("ok");
+      response.headers.append("set-cookie", "theme=dark; Path=/");
+      return response;
+    });
+
+    expect(response.headers.getSetCookie()).toEqual([
+      "theme=dark; Path=/",
+      expect.stringMatching(/^d1-bookmark=/),
+    ]);
+  });
+
+  test("when fn sends no query, the request's bookmark is set again, or none when it had none", async () => {
+    const ok = () => Promise.resolve(new Response("ok"));
+    const again = await withSession(get({ cookie: "d1-bookmark=abc" }), binding, ok);
+    const none = await withSession(get(), binding, ok);
+
+    expect(again.headers.getSetCookie()).toEqual([
+      "d1-bookmark=abc; Path=/; HttpOnly; Secure; SameSite=Lax",
+    ]);
+    expect(none.headers.getSetCookie()).toEqual([]);
+  });
 });
 
 /** The bookmark a response's d1-bookmark cookie carries. */
