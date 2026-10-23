@@ -6,6 +6,7 @@ import {
   compileColumns,
   compileCount,
   compileDeleteAll,
+  compileExists,
   compileSelect,
   compileUpdateAll,
   querySql,
@@ -526,9 +527,8 @@ export class Relation<M extends ModelBase, S = {}> {
   /** Whether any record matches, optionally with extra conditions. */
   async exists(conditions?: Conditions<M> | SafeSql): Promise<boolean> {
     const relation = conditions === undefined ? this : this.where(conditions);
-    // Whether a row exists never depends on the order, even past an offset (#215).
-    const query = { ...relation.#query, order: [], limit: atMostOne(relation.#query.limit) };
-    return (await this.#runner.rows(compileSelect(query, "1"))).length > 0;
+    const query = { ...relation.#query, limit: atMostOne(relation.#query.limit) };
+    return (await this.#runner.rows(compileExists(query))).length > 0;
   }
 
   /** Converted values of one attribute, or tuples of several, in this Relation's order. */
