@@ -1,0 +1,5 @@
+CREATE TABLE entries (
+  id INTEGER PRIMARY KEY,
+  level TEXT NOT NULL,
+  message TEXT NOT NULL
+);
