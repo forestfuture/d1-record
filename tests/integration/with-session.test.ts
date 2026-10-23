@@ -22,11 +22,16 @@ afterAll(() => dispose());
 beforeEach(async () => {
   await database.prepare("DELETE FROM users").run();
   starts = [];
-  binding = new Proxy(database, {
+  binding = recordingStarts(database, starts);
+});
+
+/** `database`, recording in `into` what each Session it opens starts from. */
+function recordingStarts(database: TestDatabase, into: (string | undefined)[]): TestDatabase {
+  return new Proxy(database, {
     get(object, key) {
       if (key === "withSession") {
         return (constraint?: string) => {
-          starts.push(constraint);
+          into.push(constraint);
           return object.withSession(constraint);
         };
       }
@@ -34,7 +39,7 @@ beforeEach(async () => {
       return typeof value === "function" ? value.bind(object) : value;
     },
   });
-});
+}
 
 function getRequest(headers: Record<string, string> = {}): Request {
   return new Request("https://example.com/posts", { headers });
@@ -236,6 +241,35 @@ describe("withSession(request, env.DB, options, fn)", () => {
     await withSession(getRequest(), binding, { onQuery: ({ sql }) => heard.push(sql) }, count);
 
     expect(heard).toEqual([expect.stringMatching(/^SELECT COUNT\(\*\)/)]);
+  });
+});
+
+describe("nested withSession calls, one per binding", () => {
+  let logs: TestDatabase;
+  let disposeLogs: () => Promise<void>;
+
+  beforeAll(async () => {
+    ({ db: logs, dispose: disposeLogs } = await createTestDatabase());
+  });
+  afterAll(() => disposeLogs());
+
+  test("each Session starts from its own cookie, and the response carries both", async () => {
+    const request = getRequest({ cookie: "d1-bookmark=main; logs-bookmark=logged" });
+    const logsStarts: (string | undefined)[] = [];
+    const logsBinding = recordingStarts(logs, logsStarts);
+    const response = await withSession(request, binding, (db) =>
+      withSession(request, logsBinding, { cookie: "logs-bookmark" }, async (logsDb) => {
+        await db.model(User).count();
+        await logsDb.model(User).count();
+        return new Response("ok");
+      }),
+    );
+
+    expect([starts, logsStarts]).toEqual([["main"], ["logged"]]);
+    expect(response.headers.getSetCookie()).toEqual([
+      expect.stringMatching(/^logs-bookmark=[^;]+;/),
+      expect.stringMatching(/^d1-bookmark=[^;]+;/),
+    ]);
   });
 });
 
