@@ -169,9 +169,10 @@ export async function batched(): Promise<void> {
   // #endregion batch
 }
 
-export function several(env: Env & { LOGS: D1Database }, handle: () => Promise<Response>) {
+export function several(env: Env, handle: () => Promise<Response>) {
   // #region several
-  const databases: Database[] = [connect(env.DB, { session: "first-primary" }), connect(env.LOGS)];
+  const onQuery: QueryListener = ({ sql }) => console.log(sql);
+  const databases: Database[] = [connect(env.DB, { onQuery }), connect(env.LOGS, { onQuery })];
   return withDatabase(databases, handle); // each Model uses the one on its binding
   // #endregion several
 }

@@ -12,18 +12,18 @@ npm install --save-dev vitest miniflare@4
 
 ## Creating a test database
 
-Start Miniflare with a D1 database, and apply your migrations to it, in order:
+Start Miniflare with a D1 database, and apply a folder of migrations to it, in order:
 
 ```ts [test/d1.ts]
 import { readdirSync, readFileSync } from "node:fs";
 import { Miniflare } from "miniflare";
 
-export async function testDatabase() {
+export async function testDatabase(folder = "migrations") {
   const mf = new Miniflare({ modules: true, script: "export default {}", d1Databases: ["DB"] });
   const binding = await mf.getD1Database("DB");
-  for (const file of readdirSync("migrations").sort()) {
+  for (const file of readdirSync(folder).sort()) {
     // Each migration's statements, without its comments, applied together.
-    const statements = readFileSync(`migrations/${file}`, "utf8")
+    const statements = readFileSync(`${folder}/${file}`, "utf8")
       .replace(/^\s*--.*$/gm, "")
       .split(/;\s*$/m)
       .map((statement) => statement.trim())
