@@ -42,10 +42,25 @@ function roundTrips(text: string): boolean {
   return !Number.isNaN(date.getTime()) && date.toISOString() === text;
 }
 
+/** Text `toISOString` writes, mostly: a real date's, or digits that happen to name one. */
+const writtenText = fc.oneof(
+  {
+    arbitrary: fc
+      .date({
+        min: new Date("0000-01-01"),
+        max: new Date("9999-12-31T23:59:59.999Z"),
+        noInvalidDate: true,
+      })
+      .map((date) => date.toISOString()),
+    weight: 4,
+  },
+  { arbitrary: storedText, weight: 1 },
+);
+
 describe("reading a datetime cell in the stored form", () => {
   test("gives the instant the text names when toISOString writes it back", () => {
     fc.assert(
-      fc.property(storedText, (text) => {
+      fc.property(writtenText, (text) => {
         fc.pre(roundTrips(text));
 
         expect(stamp.deserialize(text)).toEqual(new Date(text));
@@ -54,7 +69,7 @@ describe("reading a datetime cell in the stored form", () => {
     );
   });
 
-  test("is read as it would be cast when toISOString writes other text", () => {
+  test("gives what casting gives when toISOString writes other text", () => {
     fc.assert(
       fc.property(storedText, (text) => {
         fc.pre(!roundTrips(text));
