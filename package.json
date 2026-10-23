@@ -46,6 +46,7 @@
     "check:public-types": "node scripts/check-public-types.mjs",
     "check:package": "node scripts/check-package.mjs",
     "bench:load": "node scripts/bench/load.ts",
+    "bench:ordered-reads": "node scripts/bench/ordered-reads.ts",
     "check": "vp check",
     "validate": "node scripts/validate.mjs",
     "prepack": "vp run build && vp run docs:build && node scripts/pack-docs.mjs",
