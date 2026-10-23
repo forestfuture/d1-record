@@ -261,24 +261,32 @@ export function compileColumns(
  * `count(attr)` counts non-null values, or distinct non-null values after `distinct()`.
  */
 export function compileCount(query: QueryDescription, attribute?: string): CompiledSql {
-  const rows = countedRows(query);
+  const toCount = queryToCount(query);
   if (attribute === undefined) {
-    const inner = compileSelect(rows);
+    const inner = compileSelect(toCount);
     return { ...inner, sql: `SELECT COUNT(*) AS count FROM (${inner.sql})` };
   }
-  const inner = compileSelect({ ...rows, select: undefined, distinct: false });
+  const inner = compileSelect({ ...toCount, select: undefined, distinct: false });
   const column = quoteIdentifier(attributeFor(query.model, attribute).column);
   const counted = query.distinct ? `DISTINCT ${column}` : column;
   return { ...inner, sql: `SELECT COUNT(${counted}) AS count FROM (${inner.sql})` };
 }
 
 /**
- * The rows a count reads: without the order unless a limit or offset picks them by it, so
- * SQLite doesn't sort every match only to count it (#215).
+ * The query a count reads: without the order unless a limit or offset picks the rows by it,
+ * so SQLite doesn't sort every match only to count it (#215).
  */
-function countedRows(query: QueryDescription): QueryDescription {
+function queryToCount(query: QueryDescription): QueryDescription {
   if (query.limit !== undefined || query.offset !== undefined) return query;
   return { ...query, order: [] };
+}
+
+/**
+ * `SELECT 1 …` for whether any row `query` describes exists, within its limit and offset. The
+ * order is left out: it can't change whether a row exists, even past an offset (#215).
+ */
+export function compileExists(query: QueryDescription): CompiledSql {
+  return compileSelect({ ...query, order: [] }, "1");
 }
 
 /** `attr >= ?`, `attr BETWEEN ? AND ?`, …, with the values converted like the attribute's. */
