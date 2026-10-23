@@ -1,5 +1,5 @@
 ---
-description: "Use two or more D1 databases from one Worker: a schema and base class for each binding, generators that choose a database, and per-request options for several at once."
+description: "Use two or more D1 databases from one Worker: a schema and base class for each binding, queries and writes on each, a Session for each, tests with both, and the console on one."
 ---
 
 # Multiple databases
@@ -60,12 +60,86 @@ npx d1-record g model Entry 'level:string!' message --database LOGS
 npx wrangler d1 migrations apply my-app-logs --local
 ```
 
-## Opening several for a request
+## Using both in a request
 
-To open a request’s databases with a Session or `onQuery`, pass them all to `withDatabase`. Each Model uses the one on its binding:
+Query each Model as usual. Each one uses the database its base class names:
 
-<<< @/snippets/guide/connecting.ts#several{ts}
+<<< @/snippets/guide/several-databases.ts#request{ts}
+
+Records remember their database, so `user.save()` writes back to `DB`, and `entry.save()` to `LOGS`.
+
+## Writing to both
+
+Each write goes to one database. Write to the database that matters most first:
+
+<<< @/snippets/guide/several-databases.ts#sign-up{ts}
+
+If `createOrThrow` throws, nothing reaches `LOGS`.
+
+::: warning Two databases aren’t one write
+The second write can still fail after the first one succeeds. A batch can’t join them either. It writes to one database, so entries from two throw `IncompatibleRelation`.
+:::
+
+## Reading your own writes on each
+
+With read replication, give each database its own Session. Nest a `withSession` call for each, and give each its own cookie name:
+
+<<< @/snippets/guide/several-databases.ts#sessions{ts}
+
+Every query in `handle` goes through the Session of its Model’s database. See [Read replicas](./read-your-own-writes) for where each Session starts.
 
 ::: warning TIP
-A batch writes to one database, so entries from two databases throw `IncompatibleRelation`.
+To pass per-request options without Sessions, such as `onQuery`, open the databases yourself and pass them all to `withDatabase`:
+
+<<< @/snippets/guide/connecting.ts#several{ts}
 :::
+
+## Testing with several databases
+
+Outside a Worker, a Model can’t look up its binding. Give your tests the bindings by mocking `cloudflare:workers`. First, let Vitest’s mocks reach d1-record:
+
+```ts [vitest.config.ts]
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  test: { server: { deps: { inline: ["@forestfuture/d1-record"] } } },
+});
+```
+
+Then mock the module with your test databases as its `env`, using the `testDatabase` helper from [Testing](./testing):
+
+```ts [test/worker.test.ts]
+import { afterAll, beforeAll, expect, test, vi } from "vitest";
+import worker from "../src/index";
+import { testDatabase } from "./d1";
+
+const env = vi.hoisted(() => ({}) as Env);
+vi.mock("cloudflare:workers", () => ({ env }));
+
+let databases: Awaited<ReturnType<typeof testDatabase>>[];
+beforeAll(async () => {
+  databases = await Promise.all([testDatabase(), testDatabase("logs-migrations")]);
+  Object.assign(env, { DB: databases[0].binding, LOGS: databases[1].binding });
+});
+afterAll(() => Promise.all(databases.map((database) => database.dispose())));
+
+test("signing in logs an entry", async () => {
+  const request = new Request("https://example.com/?email=ada@example.com");
+  const response = await worker.fetch(request, env);
+  expect(response.status).toBe(200);
+});
+```
+
+Each Model now finds its own database, as it does in a Worker. Call your Worker’s `fetch` without `withDatabase`.
+
+::: warning TIP
+Assign the bindings onto the mocked `env` object, as above. d1-record reads `env` the first time a Model needs its binding, so it never sees an object assigned later.
+:::
+
+## Opening one in the console
+
+Name the binding with `--database`:
+
+```sh
+npx d1-record console --database LOGS
+```
