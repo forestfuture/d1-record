@@ -30,6 +30,7 @@ import * as filtering from "../../site/snippets/guide/filtering.ts";
 import * as hidden from "../../site/snippets/guide/hidden-attributes.ts";
 import { messagesExample, Product } from "../../site/snippets/guide/error-messages.ts";
 import worker from "../../site/snippets/getting-started/src/index.ts";
+import * as several from "../../site/snippets/guide/several-databases.ts";
 import { publishDraftsAndRemove } from "../../site/snippets/getting-started/src/publish.ts";
 import { createTestDatabase, recordingBatches, type TestDatabase } from "../support/d1.ts";
 
@@ -580,5 +581,65 @@ describe("Querying: raw statements bind and read a value as the attribute stores
 
   test("deserialize reads NULL as null", async () => {
     expect(await paidAt(binding, 3)).toBeNull();
+  });
+});
+
+describe("Multiple databases: each Model on its own binding", () => {
+  let db: TestDatabase;
+  let logs: TestDatabase;
+  let disposeAll: () => Promise<void>;
+  const sql = (name: string) => new URL(`../../site/snippets/guide/${name}.sql`, import.meta.url);
+
+  beforeAll(async () => {
+    const [main, second] = await Promise.all([
+      createTestDatabase(sql("several-databases-db")),
+      createTestDatabase(sql("several-databases-logs")),
+    ]);
+    ({ db } = main);
+    ({ db: logs } = second);
+    disposeAll = async () => {
+      await Promise.all([main.dispose(), second.dispose()]);
+    };
+  });
+  afterAll(() => disposeAll());
+  beforeEach(async () => {
+    await db.prepare("DELETE FROM users").run();
+    await logs.prepare("DELETE FROM entries").run();
+    // The library reads cloudflare:workers' env once, so this changes that object, not replaces it.
+    Object.assign(workers.env, { DB: db, LOGS: logs });
+  });
+
+  const messages = async () =>
+    (await logs.prepare("SELECT message FROM entries ORDER BY id").all()).results;
+  const env = () => workers.env as Parameters<typeof several.replicas.fetch>[1];
+
+  test("a request reads a user from DB and logs an entry on LOGS", async () => {
+    await db.prepare("INSERT INTO users VALUES (1, 'ada@example.com')").run();
+    const request = new Request("https://example.com/?email=ada@example.com");
+    const response = await several.default.fetch(request, env());
+
+    expect(await response.json()).toMatchObject({ email: "ada@example.com" });
+    expect(await messages()).toEqual([{ message: "ada@example.com signed in" }]);
+  });
+
+  test("signUp writes the user first, so a refused user logs nothing", async () => {
+    await several.signUp("ada@example.com");
+    await expect(several.signUp("ada@example.com")).rejects.toThrow();
+
+    expect(await messages()).toEqual([{ message: "ada@example.com signed up" }]);
+  });
+
+  test("nested withSession calls carry each database's bookmark in its own cookie", async () => {
+    const request = new Request("https://example.com/?email=ada@example.com");
+    const response = await several.replicas.fetch(request, env());
+
+    expect(response.headers.getSetCookie()).toEqual([
+      expect.stringMatching(/^logs-bookmark=/),
+      expect.stringMatching(/^d1-bookmark=/),
+    ]);
+    expect((await db.prepare("SELECT email FROM users").all()).results).toEqual([
+      { email: "ada@example.com" },
+    ]);
+    expect(await messages()).toEqual([{ message: "ada@example.com signed up" }]);
   });
 });
