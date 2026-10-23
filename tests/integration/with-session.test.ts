@@ -102,6 +102,17 @@ describe("withSession(request, env.DB, fn)", () => {
     ]);
     expect(none.headers.getSetCookie()).toEqual([]);
   });
+
+  test("a response whose headers can't change, such as a redirect, is copied to carry the bookmark", async () => {
+    const response = await withSession(get(), binding, async () => {
+      await User.count();
+      return Response.redirect("https://example.com/posts/1", 303);
+    });
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("https://example.com/posts/1");
+    expect(bookmarkFrom(response)).toEqual(expect.any(String));
+  });
 });
 
 /** The bookmark a response's d1-bookmark cookie carries. */
