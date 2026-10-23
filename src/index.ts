@@ -47,6 +47,7 @@ export type {
 } from "./error-messages.ts";
 export { Model, type ScopeStatic } from "./model.ts";
 export { withDatabase } from "./current-database.ts";
+export { withSession } from "./with-session.ts";
 export { modelFor, type SchemaModel, type TableSchema, type TableSchemas } from "./schema-model.ts";
 export type {
   LengthOptions,
