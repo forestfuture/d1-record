@@ -149,8 +149,12 @@ The name of the D1 binding a Model queries, from the Wrangler config (`static bi
 _Avoid_: Connection name, database name
 
 **Session**:
-A D1 session that one **Database** can be opened with. Every query in that request goes through it, so the request reads its own writes even when reads are served by replicas. Its **bookmark** (`db.bookmark()`) starts the user's next request's Session, so that request reads at least as new as this one wrote; `withSession` carries it between requests in a cookie or a header.
+A D1 session that one **Database** can be opened with. Every query in that request goes through it, so the request reads its own writes even when reads are served by replicas.
 _Avoid_: Transaction, connection
+
+**Bookmark**:
+Where a **Session** has got to, from `db.bookmark()`. The next request's Session starts from it, so that request reads at least as new as this one wrote. `withSession` carries it between requests in a cookie or a header.
+_Avoid_: Token, cursor, version
 
 **Statement**:
 A bulk write prepared for a **Batch** rather than run (`toInsert`, `toUpdateAll`, `toDeleteAll`, …), skipping validations and callbacks. It runs only with its **Batch**, and is never run by being awaited. Its SQL can be read with `toSql()`, unsent.
