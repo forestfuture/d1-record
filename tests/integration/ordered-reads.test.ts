@@ -6,11 +6,15 @@ class Post extends Model({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
+  createdAt: "datetime",
 }) {
   static tableName = "posts";
 }
 
-/** 50 posts, titled so that ordering by title reverses their ids; `title` has no index. */
+/**
+ * 50 posts, titled so that ordering by title reverses their ids; `title` has no index. Only
+ * posts 1 to 10 have a `createdAt`, so which rows a limit keeps changes `count("createdAt")`.
+ */
 const POSTS = 50;
 
 describe("an order that can't change the answer isn't sent (#215)", () => {
@@ -31,6 +35,7 @@ describe("an order that can't change the answer isn't sent (#215)", () => {
           "INSERT INTO posts (id, user_id, title) SELECT value, 1, printf('Post %02d', ? - value) FROM json_each(?)",
         )
         .bind(POSTS, JSON.stringify(Array.from({ length: POSTS }, (_, index) => index + 1))),
+      binding.prepare("UPDATE posts SET created_at = '2026-01-01T00:00:00.000Z' WHERE id <= 10"),
     ]);
   });
   afterAll(() => dispose());
@@ -63,5 +68,25 @@ describe("an order that can't change the answer isn't sent (#215)", () => {
   test("count() on an ordered Relation reads each row once, with no sort", async () => {
     expect(await ordered().count()).toBe(POSTS);
     expect(rowsRead()).toBe(POSTS);
+  });
+
+  test("count(attribute) on an ordered Relation reads each row once, with no sort", async () => {
+    expect(await ordered().count("createdAt")).toBe(10);
+    expect(rowsRead()).toBe(POSTS);
+  });
+
+  test("paginate()'s count reads each row once, and its page keeps the order", async () => {
+    const page = await ordered().paginate({ perPage: 10 });
+
+    expect(page.total).toBe(POSTS);
+    expect(page.records.map((post) => post.title).slice(0, 2)).toEqual(["Post 00", "Post 01"]);
+    const count = events.find((event) => event.sql.startsWith("SELECT COUNT"));
+    expect(count?.meta?.rows_read).toBe(POSTS);
+  });
+
+  test("with a limit, count(attribute) counts the rows the order picks", async () => {
+    // Ascending titles start at post 50, so the first five have no createdAt; descending, post 1.
+    expect(await ordered().limit(5).count("createdAt")).toBe(0);
+    expect(await db().model(Post).order({ title: "desc" }).limit(5).count("createdAt")).toBe(5);
   });
 });
