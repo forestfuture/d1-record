@@ -134,6 +134,73 @@ describe("withSession(request, env.DB, fn)", () => {
   });
 });
 
+describe("withSession(request, env.DB, options, fn)", () => {
+  const count = async () => Response.json(await User.count());
+
+  test("start: a request with no bookmark starts there", async () => {
+    await withSession(get(), binding, { start: "first-primary" }, count);
+    await withSession(
+      get({ cookie: "d1-bookmark=abc" }),
+      binding,
+      { start: "first-primary" },
+      count,
+    );
+
+    expect(starts).toEqual(["first-primary", "abc"]);
+  });
+
+  test("cookie: the bookmark travels in a cookie of that name", async () => {
+    const options = { cookie: "replica" };
+    const response = await withSession(get({ cookie: "replica=abc" }), binding, options, count);
+
+    expect(starts).toEqual(["abc"]);
+    expect(response.headers.getSetCookie()).toEqual([
+      expect.stringMatching(/^replica=[^;]+; Path=\/; HttpOnly; Secure; SameSite=Lax$/),
+    ]);
+  });
+
+  test("header: the bookmark is read from the request's header and set on the response's, with no cookie", async () => {
+    const options = { header: "x-d1-bookmark" };
+    const request = get({ "x-d1-bookmark": "abc", cookie: "d1-bookmark=other" });
+    const response = await withSession(request, binding, options, count);
+
+    expect(starts).toEqual(["abc"]);
+    expect(response.headers.get("x-d1-bookmark")).toEqual(expect.any(String));
+    expect(response.headers.getSetCookie()).toEqual([]);
+  });
+
+  test("a header that's already on the response is replaced", async () => {
+    const options = { header: "x-d1-bookmark" };
+    const response = await withSession(get(), binding, options, async () => {
+      await User.count();
+      return new Response("ok", { headers: { "x-d1-bookmark": "stale" } });
+    });
+
+    expect(response.headers.get("x-d1-bookmark")).not.toMatch(/stale/);
+  });
+
+  test("cookie and header together throw, before fn runs", async () => {
+    const options = { cookie: "replica", header: "x-d1-bookmark" } as never;
+    let ran = false;
+    const result = withSession(get(), binding, options, async () => {
+      ran = true;
+      return new Response("ok");
+    });
+
+    await expect(result).rejects.toThrow(
+      new TypeError("withSession takes a cookie or a header for the bookmark, not both"),
+    );
+    expect(ran).toBe(false);
+  });
+
+  test("onQuery hears the request's queries", async () => {
+    const heard: string[] = [];
+    await withSession(get(), binding, { onQuery: ({ sql }) => heard.push(sql) }, count);
+
+    expect(heard).toEqual([expect.stringMatching(/^SELECT COUNT\(\*\)/)]);
+  });
+});
+
 /** The bookmark a response's d1-bookmark cookie carries. */
 function bookmarkFrom(response: Response): string | undefined {
   const cookie = response.headers.getSetCookie().find((c) => c.startsWith("d1-bookmark="));
