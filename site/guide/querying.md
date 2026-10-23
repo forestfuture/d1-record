@@ -143,6 +143,10 @@ Run a query with one of these methods:
 - `count()` always agrees with what `toArray()` returns, even with `limit`, `offset`, or `distinct`.
 - `size()`, `isEmpty()`, and `hasAny()` count records, or check for any. On a loaded association, they answer without a query.
 
+::: tip
+`exists()`, `isEmpty()`, and `hasAny()` ignore the Relation’s order, so D1 stops at the first matching row. `count()` ignores it too, unless a `limit` or `offset` needs it. D1 bills each row it reads, so checks and counts stay cheap on an ordered Relation, such as an ordered association.
+:::
+
 ::: rails Compared with Rails
 `size()`, `isEmpty()`, and `hasAny()` are Rails’ `size`, `empty?`, and `any?`.
 :::
