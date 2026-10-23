@@ -1,8 +1,8 @@
 import { Model } from "../../src/index.ts";
 
 // One attribute of every type and storage, shared by the property tests that try values of any
-// shape against them (assigned: casting-properties; stored: reading-properties; conversions:
-// type-for-attribute-properties).
+// shape against them (assigned: casting-properties; stored: reading-properties and
+// stored-datetime-properties; conversions: type-for-attribute-properties).
 export const declared = {
   label: "string",
   quantity: "integer",
