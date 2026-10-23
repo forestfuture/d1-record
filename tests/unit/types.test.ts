@@ -15,6 +15,7 @@ import {
   type RecordStatement,
   Relation,
   sql,
+  withSession,
 } from "../../src/index.ts";
 
 class User extends Model({
@@ -504,6 +505,22 @@ describe("types", () => {
       expectTypeOf(Note.typeForAttribute("id").cast("a")).toEqualTypeOf<string>();
       // @ts-expect-error not an attribute of Note
       Note.typeForAttribute("closedAt");
+    };
+    expectTypeOf(typeOnly).toBeFunction();
+  });
+
+  test("withSession takes a cookie or a header for the bookmark, not both (#220)", () => {
+    const typeOnly = (request: Request, binding: Parameters<typeof withSession>[1]) => {
+      const ok = () => new Response("ok");
+      expectTypeOf(withSession(request, binding, ok)).toEqualTypeOf<Promise<Response>>();
+      void withSession(request, binding, { cookie: "replica", start: "first-primary" }, ok);
+      void withSession(request, binding, { header: "x-d1-bookmark", onQuery: () => {} }, ok);
+      // @ts-expect-error a cookie or a header, not both
+      void withSession(request, binding, { cookie: "replica", header: "x-d1-bookmark" }, ok);
+      // @ts-expect-error the bookmark comes from the request
+      void withSession(request, binding, { session: "first-primary" }, ok);
+      // @ts-expect-error fn returns the Response
+      void withSession(request, binding, () => "ok");
     };
     expectTypeOf(typeOnly).toBeFunction();
   });
