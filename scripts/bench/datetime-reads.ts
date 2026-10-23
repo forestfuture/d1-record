@@ -1,9 +1,9 @@
-// CPU of hydrating rows with none, one or two stored datetimes (#216), in-process, no D1.
+// Time to hydrate rows with none, one or two stored datetimes (#216), in-process, no D1.
 // Not part of CI; run with `vp run bench:datetime-reads` before and after a change to how
 // datetimes are read.
 import { D1Executor } from "../../src/executor.ts";
 import { Model } from "../../src/index.ts";
-import { hydrate } from "../../src/model.ts";
+import { hydrate, type ModelClass } from "../../src/model.ts";
 
 const ROWS = 10_000;
 const RUNS = 40;
@@ -38,9 +38,9 @@ const rows = Array.from({ length: ROWS }, (_, i) => ({
 }));
 const executor = new D1Executor({} as never);
 
-function measure(label: string, model: typeof NoDates | typeof OneDate | typeof TwoDates) {
+function measure(label: string, model: ModelClass) {
   const run = () => {
-    for (const row of rows) hydrate(model as never, row, executor);
+    for (const row of rows) hydrate(model, row, executor);
   };
   for (let warm = 0; warm < 5; warm++) run();
   const started = performance.now();
