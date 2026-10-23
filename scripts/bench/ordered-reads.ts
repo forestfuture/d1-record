@@ -1,5 +1,5 @@
 // Rows D1 reads for exists(), count() and paginate()'s count on an ordered Relation (#215).
-// Run with `node scripts/bench/ordered-reads.ts` before and after the change.
+// Run with `vp run bench:ordered-reads` before and after a change to how they're compiled.
 import { Miniflare } from "miniflare";
 import { connect, Model, type QueryEvent } from "../../src/index.ts";
 
