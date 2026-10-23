@@ -14,7 +14,7 @@ export async function withSession(
   binding: D1Database,
   fn: (db: Database) => Response | Promise<Response>,
 ): Promise<Response> {
-  const db = connect(binding, { session: "first-unconstrained" });
+  const db = connect(binding, { session: cookie(request, cookieName) ?? "first-unconstrained" });
   const response = await withDatabase(db, () => fn(db));
   const latest = db.bookmark();
   if (latest !== null) {
@@ -24,4 +24,13 @@ export async function withSession(
     );
   }
   return response;
+}
+
+/** The value of the request's cookie named `name`, if it sent one. */
+function cookie(request: Request, name: string): string | undefined {
+  for (const pair of (request.headers.get("cookie") ?? "").split(";")) {
+    const [key, ...value] = pair.split("=");
+    if (key?.trim() === name) return value.join("=").trim();
+  }
+  return undefined;
 }
