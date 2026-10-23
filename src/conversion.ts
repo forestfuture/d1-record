@@ -228,8 +228,9 @@ function readDatetime(value: unknown): unknown {
 }
 
 /**
- * Text in the stored form as a `Date`, if it names a moment on the calendar. Every character is a
- * digit or a fixed separator, so only the calendar can be wrong, and `Date` rolls a day that
+ * Text in the stored form as a `Date`, if it names a moment on the calendar. `value` must match
+ * `isoStringForm`, which fixes where the month and day are. Every character is then a digit or a
+ * fixed separator, so only the calendar can be wrong, and `Date` rolls a day that
  * doesn't exist over (`2026-02-30` to 2 March, `T24:00` to the next day): a date whose day or
  * month isn't the text's is refused. Cheaper than writing the text back to compare (#216).
  */
