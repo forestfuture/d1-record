@@ -43,19 +43,26 @@ describe("an order that can't change the answer isn't sent (#215)", () => {
     events.length = 0;
   });
 
-  test("exists() on an ordered Relation reads one row, and so do isEmpty() and hasAny()", async () => {
+  test("exists() on an ordered Relation reads one row", async () => {
     expect(await ordered().exists()).toBe(true);
     expect(rowsRead()).toBe(1);
+  });
 
-    events.length = 0;
+  test("isEmpty() and hasAny() on an ordered Relation read one row each", async () => {
     expect([await ordered().isEmpty(), await ordered().hasAny()]).toEqual([false, true]);
     expect(rowsRead()).toBe(2);
   });
 
-  test("exists() past an offset gives the same answer in any order, reading only to the offset", async () => {
+  test("exists() past an offset reads only up to the offset, ascending or descending", async () => {
     expect(await ordered().offset(10).exists()).toBe(true);
     expect(rowsRead()).toBe(11);
 
+    events.length = 0;
+    expect(await db().model(Post).order({ title: "desc" }).offset(10).exists()).toBe(true);
+    expect(rowsRead()).toBe(11);
+  });
+
+  test("exists() finds the last row, and nothing past it, with or without a limit", async () => {
     expect(await ordered().offset(POSTS).exists()).toBe(false);
     expect(
       await ordered()
