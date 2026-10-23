@@ -59,4 +59,9 @@ describe("an order that can't change the answer isn't sent (#215)", () => {
         .exists(),
     ).toBe(true);
   });
+
+  test("count() on an ordered Relation reads each row once, with no sort", async () => {
+    expect(await ordered().count()).toBe(POSTS);
+    expect(rowsRead()).toBe(POSTS);
+  });
 });

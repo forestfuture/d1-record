@@ -261,14 +261,24 @@ export function compileColumns(
  * `count(attr)` counts non-null values, or distinct non-null values after `distinct()`.
  */
 export function compileCount(query: QueryDescription, attribute?: string): CompiledSql {
+  const rows = countedRows(query);
   if (attribute === undefined) {
-    const inner = compileSelect(query);
+    const inner = compileSelect(rows);
     return { ...inner, sql: `SELECT COUNT(*) AS count FROM (${inner.sql})` };
   }
-  const inner = compileSelect({ ...query, select: undefined, distinct: false });
+  const inner = compileSelect({ ...rows, select: undefined, distinct: false });
   const column = quoteIdentifier(attributeFor(query.model, attribute).column);
   const counted = query.distinct ? `DISTINCT ${column}` : column;
   return { ...inner, sql: `SELECT COUNT(${counted}) AS count FROM (${inner.sql})` };
+}
+
+/**
+ * The rows a count reads: without the order unless a limit or offset picks them by it, so
+ * SQLite doesn't sort every match only to count it (#215).
+ */
+function countedRows(query: QueryDescription): QueryDescription {
+  if (query.limit !== undefined || query.offset !== undefined) return query;
+  return { ...query, order: [] };
 }
 
 /** `attr >= ?`, `attr BETWEEN ? AND ?`, …, with the values converted like the attribute's. */
