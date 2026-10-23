@@ -113,6 +113,25 @@ describe("withSession(request, env.DB, fn)", () => {
     expect(response.headers.get("location")).toBe("https://example.com/posts/1");
     expect(bookmarkFrom(response)).toEqual(expect.any(String));
   });
+
+  test("an error fn throws reaches the caller unchanged", async () => {
+    const thrown = new Error("not found");
+    const result = withSession(get(), binding, async () => {
+      await User.count();
+      throw thrown;
+    });
+
+    await expect(result).rejects.toBe(thrown);
+  });
+
+  test("fn gets the request's Database", async () => {
+    const response = await withSession(get(), binding, async (db) => {
+      await db.model(User).create({ id: 1, email: "ada@example.com" });
+      return Response.json({ bookmark: db.bookmark() });
+    });
+
+    expect(await response.json()).toEqual({ bookmark: bookmarkFrom(response) });
+  });
 });
 
 /** The bookmark a response's d1-bookmark cookie carries. */
