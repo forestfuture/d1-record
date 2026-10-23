@@ -46,4 +46,17 @@ describe("an order that can't change the answer isn't sent (#215)", () => {
     expect([await ordered().isEmpty(), await ordered().hasAny()]).toEqual([false, true]);
     expect(rowsRead()).toBe(2);
   });
+
+  test("exists() past an offset gives the same answer in any order, reading only to the offset", async () => {
+    expect(await ordered().offset(10).exists()).toBe(true);
+    expect(rowsRead()).toBe(11);
+
+    expect(await ordered().offset(POSTS).exists()).toBe(false);
+    expect(
+      await ordered()
+        .limit(5)
+        .offset(POSTS - 1)
+        .exists(),
+    ).toBe(true);
+  });
 });
