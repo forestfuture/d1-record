@@ -33,11 +33,16 @@ export interface PreloadPlan {
  */
 type Owners = { query: QueryDescription } | { records: readonly ModelBase[] };
 
-/** Records of one Model, and the associations to preload for them. */
+/**
+ * Records of one Model, and the associations to preload for them. `written` is the part of
+ * `tree` a caller wrote out, not reached through a scope's includes: it ends, so it's planned
+ * in full.
+ */
 interface Start {
   model: ModelClass;
   owners: Owners;
   tree: IncludeTree;
+  written: IncludeTree;
 }
 
 /** One association's preload in a plan. */
@@ -61,7 +66,7 @@ export function planPreload(query: QueryDescription, executor: Executor): Preloa
   for (const [name, nested] of Object.entries(tree)) {
     checkPreloadable(resolveAssociation(query.model, name), nested, executor);
   }
-  return planFrom([{ model: query.model, owners: { query }, tree }], executor);
+  return planFrom([{ model: query.model, owners: { query }, tree, written: tree }], executor);
 }
 
 /**
@@ -105,12 +110,13 @@ interface Planning {
 
 /**
  * Adds a step for each association in `start`'s tree, each followed by the steps under it.
- * `path` holds the associations above: one a scope's includes reach again (a tree of records)
- * is left for later, since how deep it goes isn't known until its records are.
+ * `path` holds the associations above: one a scope's includes reach again (a tree of records),
+ * and the caller didn't write out there, is left for later, since how deep it goes isn't known
+ * until its records are.
  */
 function planSteps(
   planning: Planning,
-  { model, owners, tree }: Start,
+  { model, owners, tree, written }: Start,
   index: number,
   path: ReadonlySet<ResolvedAssociation>,
 ): void {
@@ -122,9 +128,10 @@ function planSteps(
     if (query === undefined) continue;
     const { select, includes } = targetsOf(association, query, nested);
     const under = new Set([...path, association]);
-    const { now, later } = splitRepeated(association.target, includes, under);
+    const writtenUnder = written[name] ?? {};
+    const { now, later } = splitRepeated(association.target, includes, under, writtenUnder);
     Object.assign(step, { select, later });
-    const next = { model: association.target, owners: { query }, tree: now };
+    const next = { model: association.target, owners: { query }, tree: now, written: writtenUnder };
     planSteps(planning, next, position, under);
   }
 }
@@ -155,16 +162,21 @@ function linkedQuery(
   return { ...scoped, conditions: [...scoped.conditions, linked] };
 }
 
-/** `tree`, of `model`'s associations, split into those not in `path`, and those that are. */
+/**
+ * `tree`, of `model`'s associations, split into those to plan now, and those in `path` that
+ * `written` doesn't name, for later.
+ */
 function splitRepeated(
   model: ModelClass,
   tree: IncludeTree,
   path: ReadonlySet<ResolvedAssociation>,
+  written: IncludeTree,
 ): { now: IncludeTree; later: IncludeTree } {
   const now: Record<string, IncludeTree> = {};
   const later: Record<string, IncludeTree> = {};
   for (const [name, nested] of Object.entries(tree)) {
-    (path.has(resolveAssociation(model, name)) ? later : now)[name] = nested;
+    const repeated = written[name] === undefined && path.has(resolveAssociation(model, name));
+    (repeated ? later : now)[name] = nested;
   }
   return { now, later };
 }
@@ -189,7 +201,7 @@ async function attachSteps(
     attach(owners[index] ?? [], association, targets);
     owners.push(targets);
     if (targets.length > 0 && Object.keys(tree).length > 0) {
-      later.push({ model: association.target, owners: { records: targets }, tree });
+      later.push({ model: association.target, owners: { records: targets }, tree, written: {} });
     }
   }
   if (later.length > 0) await preloadStarts(later, executor);

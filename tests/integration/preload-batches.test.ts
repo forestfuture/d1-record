@@ -303,6 +303,34 @@ describe("preloading sends the records' query and its associations together", ()
     expect(queries).toHaveLength(4);
   });
 
+  test("an association written out again further down goes in the one batch", async () => {
+    const [post] = await db()
+      .model(Post)
+      .includes({ author: { posts: "author" } })
+      .where({ id: 12 })
+      .toArray();
+
+    const [again] = post!.loaded("author")!.loaded("posts");
+    expect(again?.loaded("author")?.email).toBe("b@example.com");
+    expect(recording.batches).toEqual([4]);
+  });
+
+  test("a scope including itself, written out a level down too, plans that level and ends", async () => {
+    await binding
+      .prepare("INSERT INTO accounts (id, user_id) VALUES (1, NULL), (2, 1), (3, 2), (4, 3)")
+      .run();
+
+    const [root] = await db()
+      .model(Account)
+      .includes({ children: "children" })
+      .where({ id: 1 })
+      .toArray();
+
+    const [grandchild] = root!.loaded("children")[0]!.loaded("children");
+    expect(grandchild?.loaded("children").map((account) => account.id)).toEqual([4]);
+    expect(recording.batches.slice(0, 1)).toEqual([3]);
+  });
+
   test("a counted page sends its count, its records and their preloads in one batch", async () => {
     const page = await db().model(User).includes("posts").paginate({ perPage: 2 });
 
