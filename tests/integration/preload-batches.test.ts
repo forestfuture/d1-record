@@ -321,6 +321,18 @@ describe("preloading sends the records' query and its associations together", ()
     expect(queries).toHaveLength(2);
   });
 
+  test("a none() scope a level down sends nothing for it", async () => {
+    const [user] = await db()
+      .model(User)
+      .includes({ profile: { user: "noPosts" } })
+      .where({ id: 2 })
+      .toArray();
+
+    expect(user?.loaded("profile")?.loaded("user")?.loaded("noPosts")).toEqual([]);
+    expect(recording.batches).toEqual([3]);
+    expect(queries).toHaveLength(3);
+  });
+
   // User 1 has posts and user 3 none: either way, the comments can't be preloaded.
   test.each([1, 3])(
     "a scope that can't be preloaded, a level down, throws before anything is sent (user %i)",
