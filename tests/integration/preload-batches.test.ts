@@ -270,6 +270,48 @@ describe("preloading sends the records' query and its associations together", ()
     expect(recording.batches).toEqual([3]);
   });
 
+  // D1 binds at most 100 values a statement, and a level binds the values of the levels above.
+  test("a level that would bind over 100 values is preloaded after, by its owners' keys", async () => {
+    const conditions = Array.from({ length: 25 }, (_, index) => -4 * index);
+    const users = conditions
+      .reduce(
+        (query, id) => query.where(sql`id NOT IN (${id - 1}, ${id - 2}, ${id - 3}, ${id - 4})`),
+        db().model(User),
+      )
+      .includes("posts", "laterPosts")
+      .order({ id: "asc" });
+
+    const loaded = await users.toArray();
+
+    expect(loaded.map((user) => user.loaded("laterPosts").map((post) => post.title))).toEqual([
+      ["A2"],
+      ["B1"],
+      [],
+    ]);
+    expect(loaded.map(titles)).toEqual([["A1", "A2"], ["B1"], []]);
+    expect(recording.batches).toEqual([2]);
+    expect(queries).toHaveLength(3);
+  });
+
+  test("so is such a level further down, after the levels above it", async () => {
+    await binding.prepare("INSERT INTO accounts (id, user_id) VALUES (1, 1), (2, 2)").run();
+    const conditions = Array.from({ length: 25 }, (_, index) => -4 * index);
+    const accounts = conditions
+      .reduce(
+        (query, id) => query.where(sql`id NOT IN (${id - 1}, ${id - 2}, ${id - 3}, ${id - 4})`),
+        db().model(Account),
+      )
+      .includes({ user: "laterPosts" })
+      .order({ id: "asc" });
+
+    const loaded = await accounts.toArray();
+
+    const later = loaded.map((account) => account.loaded("user")?.loaded("laterPosts"));
+    expect(later.map((posts) => posts?.map((post) => post.title))).toEqual([["A2"], ["B1"]]);
+    expect(recording.batches).toEqual([2]);
+    expect(queries).toHaveLength(3);
+  });
+
   test("an association scope of none() sends nothing for it", async () => {
     const [user] = await db().model(User).includes("noPosts", "profile").where({ id: 2 }).toArray();
 

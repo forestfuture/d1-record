@@ -49,12 +49,18 @@ interface Start {
 interface Step {
   association: ResolvedAssociation;
   /** Where its owners are: a plan's start, or after the starts, an earlier step's targets. */
-  owners: number;
+  ownersAt: number;
   /** The SELECT for the targets, or none when nothing can match (no keys, or a `none()` scope). */
   select: CompiledSql | undefined;
-  /** What to preload for the targets afterwards: a scope that includes an association it's under. */
-  later: IncludeTree;
 }
+
+/** What to preload once records are loaded: for the owners at `ownersAt`, the start's tree. */
+interface Afterwards extends Omit<Start, "owners"> {
+  ownersAt: number;
+}
+
+/** D1's limit of values bound in one statement. */
+const BOUND_VALUES = 100;
 
 /**
  * Plans the preloads of `query`'s includes before the query is sent, so they go with it, every
@@ -91,49 +97,86 @@ function checkPreloadable(
 
 /** The plan preloading each start's tree. */
 function planFrom(starts: readonly Start[], executor: Executor): PreloadPlan {
-  const steps: Step[] = [];
-  const offset = starts.length;
-  const planning = { steps, offset, executor };
-  starts.forEach((start, index) => planSteps(planning, start, index, new Set()));
+  const planning: Planning = { steps: [], afterwards: [], offset: starts.length, executor };
+  starts.forEach((start, ownersAt) => planSteps(planning, start, { ownersAt, path: new Set() }));
   return {
-    statements: steps.flatMap((step) => step.select ?? []),
-    attach: (records, rows, database) => attachSteps(steps, records, rows, database),
+    statements: planning.steps.flatMap((step) => step.select ?? []),
+    attach: (records, rows, database) => attachSteps(planning, records, rows, database),
   };
 }
 
-/** The steps being planned, how many starts come before them, and where their queries go. */
+/**
+ * The steps being planned, what's left until their records are loaded, how many starts come
+ * before the steps, and where their queries go.
+ */
 interface Planning {
   steps: Step[];
+  afterwards: Afterwards[];
   offset: number;
   executor: Executor;
 }
 
+/** Where a start's steps go: after the position of its records, under the associations above. */
+interface Level {
+  ownersAt: number;
+  path: ReadonlySet<ResolvedAssociation>;
+}
+
 /**
- * Adds a step for each association in `start`'s tree, each followed by the steps under it.
- * `path` holds the associations above: one a scope's includes reach again (a tree of records),
- * and the caller didn't write out there, is left for later, since how deep it goes isn't known
- * until its records are.
+ * Adds a step for each association in `start`'s tree, each followed by the steps under it. One
+ * in `level`'s path, that a scope's includes reach again (a tree of records) and the caller
+ * didn't write out there, is left for afterwards: how deep it goes isn't known until its
+ * records are.
  */
-function planSteps(
+function planSteps(planning: Planning, start: Start, level: Level): void {
+  const { now, later } = splitRepeated(start, level.path);
+  const { model } = start;
+  leaveForAfterwards(planning, { ownersAt: level.ownersAt, model, tree: later, written: {} });
+  for (const name of Object.keys(now)) planStep(planning, { ...start, tree: now }, level, name);
+}
+
+/**
+ * Adds the step for one association of `start`'s, then the steps under it. One that, with the
+ * subqueries of the levels above, would bind more values than D1 allows is left for
+ * afterwards, when its owners' keys are bound as one value.
+ */
+function planStep(
   planning: Planning,
   { model, owners, tree, written }: Start,
-  index: number,
-  path: ReadonlySet<ResolvedAssociation>,
+  { ownersAt, path }: Level,
+  name: string,
 ): void {
-  for (const [name, nested] of Object.entries(tree)) {
-    const association = resolveAssociation(model, name);
-    const query = linkedQuery(association, owners, planning.executor);
-    const step: Step = { association, owners: index, select: undefined, later: {} };
-    const position = planning.offset + planning.steps.push(step) - 1;
-    if (query === undefined) continue;
-    const { select, includes } = targetsOf(association, query, nested);
-    const under = new Set([...path, association]);
-    const writtenUnder = written[name] ?? {};
-    const { now, later } = splitRepeated(association.target, includes, under, writtenUnder);
-    Object.assign(step, { select, later });
-    const next = { model: association.target, owners: { query }, tree: now, written: writtenUnder };
-    planSteps(planning, next, position, under);
+  const association = resolveAssociation(model, name);
+  const query = linkedQuery(association, owners, planning.executor);
+  const targets = query && targetsOf(association, query, tree[name] ?? {});
+  if (targets !== undefined && "query" in owners && targets.select.params.length > BOUND_VALUES) {
+    const part = (from: IncludeTree) => (from[name] === undefined ? {} : { [name]: from[name] });
+    leaveForAfterwards(planning, { ownersAt, model, tree: part(tree), written: part(written) });
+    return;
   }
+  const step = { association, ownersAt, select: targets?.select };
+  const position = planning.offset + planning.steps.push(step) - 1;
+  if (query === undefined || targets === undefined) return;
+  const { target } = association;
+  const next = {
+    model: target,
+    owners: { query },
+    tree: targets.includes,
+    written: written[name] ?? {},
+  };
+  planSteps(planning, next, { ownersAt: position, path: new Set([...path, association]) });
+}
+
+/** Adds `left` to what's preloaded afterwards, with anything else left for the same owners. */
+function leaveForAfterwards(planning: Planning, left: Afterwards): void {
+  if (Object.keys(left.tree).length === 0) return;
+  const same = planning.afterwards.find(({ ownersAt }) => ownersAt === left.ownersAt);
+  if (same === undefined) {
+    planning.afterwards.push(left);
+    return;
+  }
+  same.tree = mergeTrees(same.tree, left.tree);
+  same.written = mergeTrees(same.written, left.written);
 }
 
 /**
@@ -163,14 +206,12 @@ function linkedQuery(
 }
 
 /**
- * `tree`, of `model`'s associations, split into those to plan now, and those in `path` that
- * `written` doesn't name, for later.
+ * `start`'s tree split into the associations to plan now, and those in `path` that the part
+ * the caller wrote out doesn't name, for afterwards.
  */
 function splitRepeated(
-  model: ModelClass,
-  tree: IncludeTree,
+  { model, tree, written }: Start,
   path: ReadonlySet<ResolvedAssociation>,
-  written: IncludeTree,
 ): { now: IncludeTree; later: IncludeTree } {
   const now: Record<string, IncludeTree> = {};
   const later: Record<string, IncludeTree> = {};
@@ -184,27 +225,27 @@ function splitRepeated(
 /**
  * Attaches each step's targets, from its statement's rows, to its owners: `records`, a plan's
  * starts, or an earlier step's targets. Then preloads, together in one more round trip, what
- * each step left for later.
+ * was left for afterwards.
  */
 async function attachSteps(
-  steps: readonly Step[],
+  { steps, afterwards }: Planning,
   records: readonly (readonly ModelBase[])[],
   rows: readonly Rows[],
-  executor: Executor,
+  database: Executor,
 ): Promise<void> {
   const owners = [...records];
   const results = rows.values();
-  const later: Start[] = [];
-  for (const { association, owners: index, select, later: tree } of steps) {
+  for (const { association, ownersAt, select } of steps) {
     const found = select === undefined ? [] : (results.next().value ?? []);
-    const targets = found.map((row) => hydrate(association.target, row, executor));
-    attach(owners[index] ?? [], association, targets);
+    const targets = found.map((row) => hydrate(association.target, row, database));
+    attach(owners[ownersAt] ?? [], association, targets);
     owners.push(targets);
-    if (targets.length > 0 && Object.keys(tree).length > 0) {
-      later.push({ model: association.target, owners: { records: targets }, tree, written: {} });
-    }
   }
-  if (later.length > 0) await preloadStarts(later, executor);
+  const starts = afterwards.flatMap(({ ownersAt, ...left }): Start[] => {
+    const loaded = owners[ownersAt] ?? [];
+    return loaded.length === 0 ? [] : [{ ...left, owners: { records: loaded } }];
+  });
+  if (starts.length > 0) await preloadStarts(starts, database);
 }
 
 /** Preloads each start's tree from records already loaded, in one round trip. */
