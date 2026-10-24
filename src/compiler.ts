@@ -83,24 +83,26 @@ function compileCondition(
 }
 
 /**
- * `attr IN (SELECT key FROM … WHERE …)`: the keys of the rows `keys` describes. With a limit or
- * offset, its order picks those rows; without, it's left out, as it can't change them. A key
- * that isn't text, selected for a text `attr`, is cast to text: SQLite would compare them by
- * number, which can't search `attr`'s index, and which `'09'` matches.
+ * `attr IN (SELECT key FROM … WHERE …)`: the keys of the records `owners` finds. With a limit
+ * or offset, its order picks those records; without, it's left out, as it can't change them.
+ * A key that isn't text, selected for a text `attr`, is cast to text: SQLite would compare them
+ * by number, which can't search `attr`'s index, and which `'09'` matches.
  */
 function compileLinkedTo(
-  { attribute, keys, key }: LinkedTo,
+  { attribute, owners, ownerKey }: LinkedTo,
   model: ModelClass<ModelBase>,
   params: unknown[],
 ): string {
   const linked = attributeFor(model, attribute);
-  const keyAttribute = attributeFor(keys.model, key);
+  const keyAttribute = attributeFor(owners.model, ownerKey);
   const column = quoteIdentifier(linked.column);
   const keyColumn = quoteIdentifier(keyAttribute.column);
   const selected = linked.isText && !keyAttribute.isText ? `CAST(${keyColumn} AS TEXT)` : keyColumn;
-  const limited = keys.limit !== undefined || keys.offset !== undefined;
-  const order = limited ? keys.order : [];
-  const inner = compileSelect({ ...keys, order, distinct: false }, selected);
+  const limited = owners.limit !== undefined || owners.offset !== undefined;
+  const order = limited ? owners.order : [];
+  // A distinct() with includes selects every column (a distinct select() can't be preloaded),
+  // so the primary key already makes each row distinct: left out, it changes nothing.
+  const inner = compileSelect({ ...owners, order, distinct: false }, selected);
   params.push(...inner.params);
   return `${column} IN (${inner.sql})`;
 }

@@ -2,15 +2,12 @@
 import { attributeFor } from "./attribute.ts";
 import type { CompiledSql } from "./compiler.ts";
 import type { Executor } from "./executor.ts";
-import { selectFor } from "./load.ts";
+import { selectFor, sendTogether, type Rows } from "./load.ts";
 import { hydrate, type ModelBase, type ModelClass } from "./model.ts";
 import { LinkedTo, mergeTrees, type IncludeTree, type QueryDescription } from "./query.ts";
 import { state } from "./record-state.ts";
-import { preloadQuery } from "./relation.ts";
+import { preloadQuery, type Scoped } from "./relation.ts";
 import { resolveAssociation, type ResolvedAssociation } from "./resolved-association.ts";
-
-/** Rows D1 returned for one statement. */
-type Rows = readonly Record<string, unknown>[];
 
 /** What preloading sends, and how it attaches the rows that come back. */
 export interface PreloadPlan {
@@ -23,7 +20,7 @@ export interface PreloadPlan {
   attach(
     records: readonly (readonly ModelBase[])[],
     rows: readonly Rows[],
-    executor: Executor,
+    database: Executor,
   ): Promise<void>;
 }
 
@@ -189,20 +186,25 @@ function linkedQuery(
   owners: Owners,
   executor: Executor,
 ): QueryDescription | undefined {
-  const { label, ownerAttribute, targetAttribute } = association;
-  if ("records" in owners) {
-    const keys = owners.records.map((record) => record[state].read(ownerAttribute));
-    const distinct = [...new Set(keys.filter((key) => key !== null && key !== undefined))];
-    if (distinct.length === 0) return undefined;
-    const query = association
-      .inOrder(association.linkedTo(executor, distinct))
-      [preloadQuery](label);
-    return query.none ? undefined : query;
+  const { ownerAttribute, targetAttribute } = association;
+  if ("query" in owners) {
+    const linked = new LinkedTo(targetAttribute, owners.query, ownerAttribute);
+    const scoped = scopedQuery(association, association.all(executor));
+    return scoped && { ...scoped, conditions: [...scoped.conditions, linked] };
   }
-  const scoped = association.inOrder(association.all(executor))[preloadQuery](label);
-  if (scoped.none) return undefined;
-  const linked = new LinkedTo(targetAttribute, owners.query, ownerAttribute);
-  return { ...scoped, conditions: [...scoped.conditions, linked] };
+  const keys = owners.records.map((record) => record[state].read(ownerAttribute));
+  const distinct = [...new Set(keys.filter((key) => key !== null && key !== undefined))];
+  if (distinct.length === 0) return undefined;
+  return scopedQuery(association, association.linkedTo(executor, distinct));
+}
+
+/** `relation`, of `association`'s targets, in its order, as a preload: none for a `none()`. */
+function scopedQuery(
+  association: ResolvedAssociation,
+  relation: Scoped<ModelBase>,
+): QueryDescription | undefined {
+  const query = association.inOrder(relation)[preloadQuery](association.label);
+  return query.none ? undefined : query;
 }
 
 /**
@@ -255,6 +257,7 @@ async function preloadStarts(starts: readonly Start[], executor: Executor): Prom
   const records = starts.map(({ owners }) => ("records" in owners ? owners.records : []));
   await plan.attach(records, rows, executor);
 }
+
 /** The SELECT for an association's targets, `query`, and what to preload for them. */
 function targetsOf(
   association: ResolvedAssociation,
@@ -267,16 +270,6 @@ function targetsOf(
   // Given to the SELECT, so the keys the nested includes need are loaded too.
   const select = selectFor(association.target, { ...query, select: columns, includes });
   return { select, includes };
-}
-
-/** The rows of each of `queries`, sent in one round trip. */
-export async function sendTogether(
-  executor: Executor,
-  queries: readonly CompiledSql[],
-): Promise<Record<string, unknown>[][]> {
-  const [only] = queries;
-  if (queries.length === 1 && only !== undefined) return [await executor.all(only)];
-  return (await executor.batch(queries)).map((result) => result.results);
 }
 
 /**
