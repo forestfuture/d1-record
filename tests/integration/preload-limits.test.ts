@@ -83,7 +83,7 @@ describe("preloading for a limited query", () => {
     expect(found && notesOf(found)).toEqual(["a", ["On a"]]);
   });
 
-  test("an order by an sql fragment that ties ends with the key too", async () => {
+  test("an order by an sql fragment that ties ends with the key", async () => {
     const found = await notebooks()
       .order(sql`color`)
       .limit(2)

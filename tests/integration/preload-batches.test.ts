@@ -92,6 +92,18 @@ class Account extends Model({
   });
 }
 
+// `relation`, binding 100 values in conditions every record meets: D1 binds at most 100 values
+// a statement, and a preload's statement binds the values of the queries above it too.
+function bindingHundredValues<R extends { where(condition: ReturnType<typeof sql>): R }>(
+  relation: R,
+): R {
+  const conditions = Array.from({ length: 25 }, (_, index) => -4 * index);
+  return conditions.reduce(
+    (query, id) => query.where(sql`id NOT IN (${id - 1}, ${id - 2}, ${id - 3}, ${id - 4})`),
+    relation,
+  );
+}
+
 // An includes tree goes to D1 with the records' query, in one round trip (#217).
 describe("preloading sends the records' query and its associations together", () => {
   let binding: TestDatabase;
@@ -276,12 +288,7 @@ describe("preloading sends the records' query and its associations together", ()
 
   // D1 binds at most 100 values a statement, and a level binds the values of the levels above.
   test("a level that would bind over 100 values is preloaded after, by its owners' keys", async () => {
-    const conditions = Array.from({ length: 25 }, (_, index) => -4 * index);
-    const users = conditions
-      .reduce(
-        (query, id) => query.where(sql`id NOT IN (${id - 1}, ${id - 2}, ${id - 3}, ${id - 4})`),
-        db().model(User),
-      )
+    const users = bindingHundredValues(db().model(User))
       .includes("posts", "laterPosts")
       .order({ id: "asc" });
 
@@ -297,14 +304,9 @@ describe("preloading sends the records' query and its associations together", ()
     expect(queries).toHaveLength(3);
   });
 
-  test("so is such a level further down, after the levels above it", async () => {
+  test("a level further down over 100 values is preloaded after the levels above it", async () => {
     await binding.prepare("INSERT INTO accounts (id, user_id) VALUES (1, 1), (2, 2)").run();
-    const conditions = Array.from({ length: 25 }, (_, index) => -4 * index);
-    const accounts = conditions
-      .reduce(
-        (query, id) => query.where(sql`id NOT IN (${id - 1}, ${id - 2}, ${id - 3}, ${id - 4})`),
-        db().model(Account),
-      )
+    const accounts = bindingHundredValues(db().model(Account))
       .includes({ user: "laterPosts" })
       .order({ id: "asc" });
 
@@ -316,13 +318,9 @@ describe("preloading sends the records' query and its associations together", ()
     expect(queries).toHaveLength(3);
   });
 
-  test("such a level whose owners have no keys sends nothing more", async () => {
+  test("a level over 100 values whose owners have no keys sends nothing more", async () => {
     await binding.prepare("INSERT INTO accounts (id, user_id) VALUES (1, NULL)").run();
-    const conditions = Array.from({ length: 25 }, (_, index) => -4 * index);
-    const accounts = conditions.reduce(
-      (query, id) => query.where(sql`id NOT IN (${id - 1}, ${id - 2}, ${id - 3}, ${id - 4})`),
-      db().model(Account),
-    );
+    const accounts = bindingHundredValues(db().model(Account));
 
     const [account] = await accounts.includes("namedUser").toArray();
 

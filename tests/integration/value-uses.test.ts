@@ -137,22 +137,26 @@ describe("values by their use", () => {
 
     // A preload selects the keys with a subquery (#217), where SQLite would compare an integer
     // with text by its number: an integer key matches only its own digits, as a condition does.
-    test("a hasMany and a hasOne with an integer key find its digits, not '09'", async () => {
-      await db().model(Owner).insert({ id: 9, email: "ada@example.com" });
-      await db()
-        .model(Note)
-        .insertAll([
-          { id: 1, label: "9" },
-          { id: 2, label: "09" },
-        ]);
+    test.each(["notes", "note"] as const)(
+      "%s finds the text foreign keys that are an integer key's digits, not '09'",
+      async (name) => {
+        await db().model(Owner).insert({ id: 9, email: "ada@example.com" });
+        await db()
+          .model(Note)
+          .insertAll([
+            { id: 1, label: "9" },
+            { id: 2, label: "09" },
+          ]);
 
-      const [owner] = await db().model(Owner).includes("notes", "note").toArray();
+        const [owner] = await db().model(Owner).includes(name).toArray();
 
-      expect(owner!.loaded("notes").map((each) => each.id)).toEqual([1]);
-      expect(owner!.loaded("note")?.id).toBe(1);
-    });
+        // The hasMany's records, or the hasOne's record, as a list.
+        const found = [owner!.loaded(name)].flat();
+        expect(found.map((each) => each?.id)).toEqual([1]);
+      },
+    );
 
-    test("a belongsTo with an integer foreign key finds its digits, not '09'", async () => {
+    test("a belongsTo finds the text key that is an integer foreign key's digits, not '09'", async () => {
       await db()
         .model(Code)
         .insertAll([
@@ -198,7 +202,7 @@ describe("values by their use", () => {
       });
     });
 
-    test("a hasMany with a text key finds the integer keys it casts to, as a condition does", async () => {
+    test("a hasMany finds the integer foreign keys a text key casts to, as a condition does", async () => {
       await db()
         .model(Code)
         .insertAll([
@@ -217,7 +221,7 @@ describe("values by their use", () => {
       expect(codes.map((code) => code.loaded("counted").map((each) => each.id))).toEqual([[1], []]);
     });
 
-    test("so does a belongsTo with a text foreign key", async () => {
+    test("a belongsTo finds the integer key a text foreign key casts to, as a condition does", async () => {
       await db().model(Note).insert({ id: 3, label: "09" });
       await db().model(Owner).insert({ id: 9, email: "ada@example.com" });
 
