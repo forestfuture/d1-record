@@ -419,17 +419,19 @@ describe("preloading sends the records' query and its associations together", ()
     expect(recording.batches).toEqual([2]);
   });
 
-  test("first, find and findBy send their preloads with them", async () => {
-    const first = await db().model(User).includes("posts").first();
-    const found = await db().model(User).includes("posts").find(2);
-    const foundBy = await db().model(User).includes("posts").findBy({ email: "a@example.com" });
+  test.each([
+    ["first", () => db().model(User).includes("posts").first(), ["A1", "A2"]],
+    ["find", () => db().model(User).includes("posts").find(2), ["B1"]],
+    [
+      "findBy",
+      () => db().model(User).includes("posts").findBy({ email: "a@example.com" }),
+      ["A1", "A2"],
+    ],
+  ] as const)("%s sends its preloads with it", async (_, finding, expected) => {
+    const user = await finding();
 
-    expect([first, found, foundBy].map((user) => user && titles(user))).toEqual([
-      ["A1", "A2"],
-      ["B1"],
-      ["A1", "A2"],
-    ]);
-    expect(recording.batches).toEqual([2, 2, 2]);
+    expect(user && titles(user)).toEqual(expected);
+    expect(recording.batches).toEqual([2]);
   });
 
   test("with a Session, the batch goes through the Session", async () => {
