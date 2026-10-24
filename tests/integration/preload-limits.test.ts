@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
-import { connect, hasMany, Model } from "../../src/index.ts";
+import { belongsTo, connect, hasMany, Model, sql } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class Note extends Model({
@@ -8,6 +8,8 @@ class Note extends Model({
   body: "string",
 }) {
   static tableName = "notes";
+
+  notebook = belongsTo(Notebook);
 }
 
 class Notebook extends Model({
@@ -21,8 +23,8 @@ class Notebook extends Model({
 }
 
 // The preloads select a limited query's keys with a subquery of it (#217), so both must pick the
-// same records. The notebooks are written out of key order: reading the table and reading the
-// key's index give their rows in different orders.
+// same records. The notebooks and notes are written out of key order: reading the table and
+// reading the key's index give their rows in different orders.
 describe("preloading for a limited query", () => {
   let binding: TestDatabase;
   let dispose: () => Promise<void>;
@@ -42,7 +44,7 @@ describe("preloading for a limited query", () => {
         "INSERT INTO notebooks (id, title, color) VALUES ('c', 'C', 'red'), ('b', 'B', 'red'), ('a', 'A', 'red')",
       ),
       binding.prepare(
-        "INSERT INTO notes (id, notebook_id, body) VALUES ('n1', 'a', 'On a'), ('n2', 'b', 'On b'), ('n3', 'c', 'On c')",
+        "INSERT INTO notes (id, notebook_id, body) VALUES ('n3', 'c', 'On c'), ('n2', 'b', 'On b'), ('n1', 'a', 'On a')",
       ),
     ]);
   });
@@ -79,5 +81,36 @@ describe("preloading for a limited query", () => {
     const found = await notebooks().includes("notes").take();
 
     expect(found && notesOf(found)).toEqual(["a", ["On a"]]);
+  });
+
+  test("an order by an sql fragment that ties ends with the key too", async () => {
+    const found = await notebooks()
+      .order(sql`color`)
+      .limit(2)
+      .includes("notes")
+      .toArray();
+
+    expect(found.map(notesOf)).toEqual([
+      ["a", ["On a"]],
+      ["b", ["On b"]],
+    ]);
+  });
+
+  test("a level under the limited one preloads for the records above it", async () => {
+    const found = await notebooks().limit(2).includes({ notes: "notebook" }).toArray();
+
+    const notebookOfNotes = found.map((notebook) =>
+      notebook.loaded("notes").map((note) => note.loaded("notebook")?.id),
+    );
+    expect(notebookOfNotes).toEqual([["a"], ["b"]]);
+  });
+
+  test("a belongsTo preloads for the limited records' foreign keys", async () => {
+    const found = await db().model(Note).limit(2).includes("notebook").toArray();
+
+    expect(found.map((note) => [note.id, note.loaded("notebook")?.id])).toEqual([
+      ["n1", "a"],
+      ["n2", "b"],
+    ]);
   });
 });
