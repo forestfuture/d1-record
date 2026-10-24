@@ -4,7 +4,7 @@ import { compileColumns, compileSelect, type CompiledSql } from "./compiler.ts";
 import { databaseNow, type Executor } from "./executor.ts";
 import { stableOrder } from "./finder-order.ts";
 import { hydrate, primaryKeyOf, type ModelBase, type ModelClass } from "./model.ts";
-import { keysForIncludes, planPreload, sendTogether } from "./preload.ts";
+import { keysForIncludes, planPreload } from "./preload.ts";
 import type { QueryDescription } from "./query.ts";
 import { sql } from "./sql.ts";
 
@@ -102,9 +102,6 @@ async function loadAhead<M extends ModelBase>(
   return { records, hasMore: (results[0]?.length ?? 0) > query.limit };
 }
 
-/** Rows D1 returned for one statement. */
-type Rows = Record<string, unknown>[];
-
 /**
  * What a load sends of its own (its SELECT, and a count) for the query it loads, and which of
  * their rows are records.
@@ -145,6 +142,19 @@ function withPreloadOrder(model: ModelClass, query: QueryDescription): QueryDesc
   if (query.includes === undefined) return query;
   if (query.limit === undefined && query.offset === undefined) return query;
   return { ...query, order: stableOrder(model, query) };
+}
+
+/** Rows D1 returned for one statement. */
+export type Rows = Record<string, unknown>[];
+
+/** The rows of each of `queries`, sent in one round trip. */
+export async function sendTogether(
+  executor: Executor,
+  queries: readonly CompiledSql[],
+): Promise<Rows[]> {
+  const [only] = queries;
+  if (queries.length === 1 && only !== undefined) return [await executor.all(only)];
+  return (await executor.batch(queries)).map((result) => result.results);
 }
 
 /** The SELECT for `query`'s records. */
