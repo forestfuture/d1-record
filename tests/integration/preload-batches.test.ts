@@ -83,8 +83,8 @@ class Account extends Model({
   });
 }
 
-// Each level of an includes tree is one round trip: its associations go to D1 together.
-describe("preloading sends each level's associations together", () => {
+// An includes tree goes to D1 with the records' query, in one round trip (#217).
+describe("preloading sends the records' query and its associations together", () => {
   let binding: TestDatabase;
   let dispose: () => Promise<void>;
   // Made afresh for each test, so its batches are that test's.
@@ -116,39 +116,39 @@ describe("preloading sends each level's associations together", () => {
     ]);
   });
 
-  test("two associations: the records' query, then one batch of both", async () => {
+  test("two associations go in one batch with the records' query", async () => {
     const users = await db()
       .model(User)
       .includes("posts", "profile")
       .order({ id: "asc" })
       .toArray();
 
-    expect(recording.batches).toEqual([2]);
+    expect(recording.batches).toEqual([3]);
     expect(queries).toHaveLength(3);
     expect(users.map(titles)).toEqual([["A1", "A2"], ["B1"], []]);
     expect(users.map((user) => user.loaded("profile")?.bio ?? null)).toEqual([null, "Bee", null]);
   });
 
-  test("one association is one query, not a batch", async () => {
+  test("one association goes in one batch with the records' query", async () => {
     const users = await db().model(User).includes("posts").order({ id: "asc" }).toArray();
 
-    expect(recording.batches).toEqual([]);
+    expect(recording.batches).toEqual([2]);
     expect(queries).toHaveLength(2);
     expect(users.map(titles)).toEqual([["A1", "A2"], ["B1"], []]);
   });
 
-  test("an association with no keys to look up sends nothing", async () => {
+  test("an association with no keys to look up finds nothing, in the same round trip", async () => {
     await binding.prepare("INSERT INTO accounts (id, user_id) VALUES (1, NULL)").run();
 
     const [account] = await db().model(Account).includes("user").toArray();
 
     expect(account?.loaded("user")).toBeNull();
-    expect(recording.batches).toEqual([]);
-    expect(queries).toHaveLength(1);
+    expect(recording.batches).toEqual([2]);
+    expect(queries).toHaveLength(2);
   });
 
-  test("a level with only one association to load sends it on its own", async () => {
-    // User 1 has posts but no profile, so the second level reads only the posts' comments.
+  test("every level of a tree goes in the one batch", async () => {
+    // User 1 has posts but no profile: the profile's user is looked up all the same.
     const [user] = await db()
       .model(User)
       .includes({ posts: "comments", profile: "user" })
@@ -157,8 +157,8 @@ describe("preloading sends each level's associations together", () => {
 
     expect(user?.loaded("profile")).toBeNull();
     expect(user?.loaded("posts").map((post) => post.loaded("comments"))).toEqual([[], []]);
-    expect(recording.batches).toEqual([2]);
-    expect(queries).toHaveLength(4);
+    expect(recording.batches).toEqual([5]);
+    expect(queries).toHaveLength(5);
   });
 
   test("a hasMany preloaded in a batch keeps its scope's order", async () => {
@@ -169,11 +169,11 @@ describe("preloading sends each level's associations together", () => {
       .toArray();
 
     expect(user?.loaded("postsByTitle").map((post) => post.title)).toEqual(["A2", "A1"]);
-    expect(recording.batches).toEqual([2]);
+    expect(recording.batches).toEqual([3]);
   });
 
-  test("a nested level whose branches all found nothing sends nothing", async () => {
-    // User 3 has no posts and no profile, so neither comments nor a profile's user is looked up.
+  test("a nested level under owners that found nothing is sent in the same batch", async () => {
+    // User 3 has no posts and no profile: the batch is planned before anything is found.
     const [user] = await db()
       .model(User)
       .includes({ posts: "comments", profile: "user" })
@@ -182,8 +182,8 @@ describe("preloading sends each level's associations together", () => {
 
     expect(user?.loaded("posts")).toEqual([]);
     expect(user?.loaded("profile")).toBeNull();
-    expect(recording.batches).toEqual([2]);
-    expect(queries).toHaveLength(3);
+    expect(recording.batches).toEqual([5]);
+    expect(queries).toHaveLength(5);
   });
 
   test("a scope's select() still loads the key its records are matched by", async () => {
@@ -212,7 +212,7 @@ describe("preloading sends each level's associations together", () => {
     expect(post?.loaded("author")?.email).toBe("b@example.com");
   });
 
-  test("nested associations in different branches share a level", async () => {
+  test("nested associations in different branches go in the one batch", async () => {
     await binding.prepare("INSERT INTO comments (id, post_id, body) VALUES (1, 12, 'Hm')").run();
 
     const [user] = await db()
@@ -221,14 +221,14 @@ describe("preloading sends each level's associations together", () => {
       .where({ id: 2 })
       .toArray();
 
-    expect(recording.batches).toEqual([2, 2]);
+    expect(recording.batches).toEqual([5]);
     expect(queries).toHaveLength(5);
     const [post] = user!.loaded("posts");
     expect(post?.loaded("comments").map((comment) => comment.body)).toEqual(["Hm"]);
     expect(user?.loaded("profile")?.loaded("user")?.email).toBe("b@example.com");
   });
 
-  test("an association scope's includes go with the next level's", async () => {
+  test("an association scope's includes go in the one batch", async () => {
     await binding.prepare("INSERT INTO comments (id, post_id, body) VALUES (1, 12, 'Hm')").run();
 
     const [user] = await db()
@@ -237,7 +237,7 @@ describe("preloading sends each level's associations together", () => {
       .where({ id: 2 })
       .toArray();
 
-    expect(recording.batches).toEqual([2, 2]);
+    expect(recording.batches).toEqual([5]);
     expect(queries).toHaveLength(5);
     const [post] = user!.loaded("postsWithComments");
     expect(post?.loaded("comments").map((comment) => comment.body)).toEqual(["Hm"]);
@@ -249,18 +249,18 @@ describe("preloading sends each level's associations together", () => {
 
     expect(user?.loaded("noPosts")).toEqual([]);
     expect(user?.loaded("profile")?.bio).toBe("Bee");
-    expect(recording.batches).toEqual([]);
+    expect(recording.batches).toEqual([2]);
     expect(queries).toHaveLength(2);
   });
 
   // User 1 has posts and user 3 none: either way, the comments can't be preloaded.
   test.each([1, 3])(
-    "a scope that can't be preloaded, a level down, throws before any preload is sent (user %i)",
+    "a scope that can't be preloaded, a level down, throws before anything is sent (user %i)",
     async (id) => {
       const loading = db().model(User).includes({ posts: "firstComment" }).where({ id }).toArray();
 
       await expect(loading).rejects.toThrow(IncompatibleRelation);
-      expect(queries).toHaveLength(1);
+      expect(queries).toHaveLength(0);
     },
   );
 
@@ -273,7 +273,7 @@ describe("preloading sends each level's associations together", () => {
 
     const [child] = root!.loaded("children");
     expect(child?.loaded("children").map((account) => account.id)).toEqual([3]);
-    expect(recording.batches).toEqual([]);
+    expect(recording.batches).toEqual([2]);
     expect(queries).toHaveLength(4);
   });
 
@@ -286,7 +286,7 @@ describe("preloading sends each level's associations together", () => {
       .order({ id: "asc" })
       .toArray();
 
-    expect(recording.sessionBatches).toEqual([2]);
+    expect(recording.sessionBatches).toEqual([3]);
     expect(recording.batches).toEqual([]);
     expect(users.map(titles)).toEqual([["A1", "A2"], ["B1"], []]);
   });
@@ -305,9 +305,9 @@ describe("preloading sends each level's associations together", () => {
       .toArray()
       .catch(() => {});
 
-    expect(recording.batches).toEqual([2]);
+    expect(recording.batches).toEqual([3]);
     expect(queries.map((query) => [query.model, query.error !== undefined])).toEqual([
-      ["User", false],
+      ["User", true],
       ["Post", true],
       ["Ghost", true],
     ]);

@@ -303,7 +303,7 @@ describe("the guide's examples", () => {
     expect(another.authorId).toBe(grace.id);
   });
 
-  test("Associations: the preload takes 4 queries in 3 round trips, and the loop none", async () => {
+  test("Associations: the preload takes 4 queries in 1 round trip, and the loop none", async () => {
     await withDatabase(connect(binding), () => autosaveExample());
     const queries: string[] = [];
     const recording = recordingBatches(binding);
@@ -314,9 +314,9 @@ describe("the guide's examples", () => {
     );
 
     expect(authors.map((author) => author.name).sort()).toEqual(["Ada", "Mary"]);
-    // The authors, then profiles and articles in one batch, then the comments.
+    // The authors, profiles, articles and comments, all in one batch.
     expect(queries).toHaveLength(4);
-    expect(recording.batches).toEqual([2]);
+    expect(recording.batches).toEqual([4]);
     expect(log).toHaveBeenCalledWith("Mary", 1, "Poet");
     expect(log).toHaveBeenCalledWith("Ada", 2, "Mathematician");
   });

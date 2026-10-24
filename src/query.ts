@@ -44,7 +44,24 @@ export interface QueryDescription {
   includes?: IncludeTree;
 }
 
-export type Condition = Record<string, unknown> | SafeSql | Negated | Either;
+export type Condition = Record<string, unknown> | SafeSql | Negated | Either | LinkedTo;
+
+/**
+ * A condition from preloading (#217): `attribute` is one of the `key` values `keys` selects, so
+ * a preload finds its owners' keys with a subquery, not with keys bound once they're loaded.
+ */
+export class LinkedTo {
+  readonly attribute: string;
+  /** The owners' query, whose rows' `key` the condition's records link to. */
+  readonly keys: QueryDescription;
+  readonly key: string;
+
+  constructor(attribute: string, keys: QueryDescription, key: string) {
+    this.attribute = attribute;
+    this.keys = keys;
+    this.key = key;
+  }
+}
 
 /** A condition from `or`: either side's conditions (each ANDed together) may match. */
 export class Either {

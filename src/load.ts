@@ -3,7 +3,7 @@ import { attributeFor, noMatch } from "./attribute.ts";
 import { compileColumns, compileSelect, type CompiledSql } from "./compiler.ts";
 import { databaseNow, type Executor } from "./executor.ts";
 import { hydrate, primaryKeyOf, type ModelBase, type ModelClass } from "./model.ts";
-import { keysForIncludes, preload } from "./preload.ts";
+import { keysForIncludes, planPreload, sendTogether } from "./preload.ts";
 import type { QueryDescription } from "./query.ts";
 import { sql } from "./sql.ts";
 
@@ -64,13 +64,14 @@ const nothing: QueryRunner<never> = {
   changes: async () => 0,
 };
 
-/** One SELECT for `query`'s records, hydrated, then its includes preloaded. */
+/** One SELECT for `query`'s records, hydrated, with its includes preloaded. */
 async function loadRecords<M extends ModelBase>(
   executor: Executor,
   model: ModelClass<M>,
   query: QueryDescription,
 ): Promise<M[]> {
-  return hydrated(executor, model, query, await executor.all(selectFor(model, query)));
+  const own = [selectFor(model, query)];
+  return (await loadWith(executor, model, { query, own, rowsOf: ([rows]) => rows })).records;
 }
 
 /** `countSql` and the SELECT for `query`'s records as one batch: one round trip. */
@@ -80,9 +81,10 @@ async function loadCounted<M extends ModelBase>(
   query: QueryDescription,
   countSql: CompiledSql,
 ): Promise<Counted<M>> {
-  const [counted, loaded] = await executor.batch([countSql, selectFor(model, query)]);
-  const records = await hydrated(executor, model, query, loaded?.results ?? []);
-  return { records, count: Number(counted?.results[0]?.["count"] ?? 0) };
+  const own = [countSql, selectFor(model, query)];
+  const loaded = await loadWith(executor, model, { query, own, rowsOf: ([, rows]) => rows });
+  const [counted] = loaded.results;
+  return { records: loaded.records, count: Number(counted?.[0]?.["count"] ?? 0) };
 }
 
 /** One SELECT for `query`'s records and one past its limit, which is read but not loaded. */
@@ -91,9 +93,39 @@ async function loadAhead<M extends ModelBase>(
   model: ModelClass<M>,
   query: QueryDescription & { limit: number },
 ): Promise<LoadedAhead<M>> {
-  const rows = await executor.all(selectFor(model, { ...query, limit: query.limit + 1 }));
-  const records = await hydrated(executor, model, query, rows.slice(0, query.limit));
-  return { records, hasMore: rows.length > query.limit };
+  const own = [selectFor(model, { ...query, limit: query.limit + 1 })];
+  const rowsOf = ([rows]: readonly Rows[]) => rows?.slice(0, query.limit);
+  const { records, results } = await loadWith(executor, model, { query, own, rowsOf });
+  return { records, hasMore: (results[0]?.length ?? 0) > query.limit };
+}
+
+/** Rows D1 returned for one statement. */
+type Rows = Record<string, unknown>[];
+
+/** What a load sends of its own (its SELECT, and a count), and which of their rows are records. */
+interface Load {
+  query: QueryDescription;
+  own: readonly CompiledSql[];
+  rowsOf: (results: readonly Rows[]) => readonly Record<string, unknown>[] | undefined;
+}
+
+/**
+ * Sends a load's own statements and those preloading its query's includes together, in one
+ * round trip, then makes its records and attaches the preloads. Resolves to the records and
+ * the own statements' rows.
+ */
+async function loadWith<M extends ModelBase>(
+  executor: Executor,
+  model: ModelClass<M>,
+  { query, own, rowsOf }: Load,
+): Promise<{ records: M[]; results: Rows[] }> {
+  const plan = query.includes === undefined ? undefined : planPreload(query, executor);
+  const results = await sendTogether(executor, [...own, ...(plan?.statements ?? [])]);
+  // Bound to the database the query used, which they keep, even past a request's withDatabase.
+  const database = await databaseNow(executor);
+  const records = (rowsOf(results) ?? []).map((row) => hydrate(model, row, database));
+  await plan?.attach([records], results.slice(own.length), database);
+  return { records, results: results.slice(0, own.length) };
 }
 
 /** The SELECT for `query`'s records. */
@@ -117,20 +149,6 @@ export function selectForToSql(model: ModelClass, query: QueryDescription): Comp
     model,
     query.none ? { ...query, conditions: [...query.conditions, never] } : query,
   );
-}
-
-/** `rows` of `query` as records, then its includes preloaded. */
-async function hydrated<M extends ModelBase>(
-  executor: Executor,
-  model: ModelClass<M>,
-  query: QueryDescription,
-  rows: readonly Record<string, unknown>[],
-): Promise<M[]> {
-  // Bound to the database the query used, which they keep, even past a request's withDatabase.
-  const database = await databaseNow(executor);
-  const records = rows.map((row) => hydrate(model, row, database));
-  if (query.includes !== undefined) await preload(records, query.includes, database);
-  return records;
 }
 
 /**
