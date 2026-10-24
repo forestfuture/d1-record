@@ -48,6 +48,7 @@
     "bench:datetime-reads": "node scripts/bench/datetime-reads.ts",
     "bench:load": "node scripts/bench/load.ts",
     "bench:ordered-reads": "node scripts/bench/ordered-reads.ts",
+    "bench:preload": "node scripts/bench/preload-trips.ts",
     "check": "vp check",
     "validate": "node scripts/validate.mjs",
     "prepack": "vp run build && vp run docs:build && node scripts/pack-docs.mjs",
