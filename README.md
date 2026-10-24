@@ -146,7 +146,7 @@ d1-record follows Rails wherever D1 allows, and says so where it can’t:
 
 - **No interactive transactions.** D1 can’t hold a transaction open across `await`s, so there’s no `transaction(async tx => …)`. Instead, `batch([...])` writes a prepared set of statements and records atomically, and a record with `dependent: "destroy"` or new associated records is written in one batch when its keys are known in advance.
 - **Keys generated in code are first-class.** A generated `TEXT` key is a UUID made at `build()` (or whatever your `generateId` makes), so records can be linked and saved together atomically before D1 has seen them.
-- **D1’s limits are handled for you.** Lists of any length bind as one value (`json_each`), so the 100-bound-parameter limit never bites; preloads take one query per association, and the whole tree goes together, in one round trip.
+- **D1’s limits are handled for you.** Lists of any length bind as one value (`json_each`), so a list never runs into the 100-bound-parameter limit. Preloads take one query per association, and the whole tree goes together in one round trip. A nested query that would bind more than 100 values takes one more.
 - **Constraint errors become typed errors** (`RecordNotUnique`, `InvalidForeignKey`, `NotNullViolation`, `CheckViolation`) naming the table, columns, and attributes.
 - **No request state on Model classes.** A query uses the Model’s binding, the same object for every request, or a database opened for its request with `withDatabase`, so concurrent requests on one isolate never share a Session or listener.
 

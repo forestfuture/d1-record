@@ -111,7 +111,7 @@ Load an association for every record at once with `includes`, with one query per
 
 Nest with an object: `includes({ articles: "comments" })` or `includes({ articles: ["comments", "tags"] })`.
 
-The whole tree goes to D1 with the authors’ own query, in one round trip. The example above sends four queries in one round trip.
+The whole tree goes to D1 with the authors’ own query, in one round trip. The example above sends four queries. A nested query that would bind more than D1’s 100 values waits for the records above it, and takes one more round trip.
 
 ::: warning TIP
 With a `limit` or `offset`, `includes` ends the order with the primary key, so the preloads find the same records the query loads.
@@ -128,7 +128,7 @@ Rails sends each association’s preload query on its own, so every association 
 CREATE INDEX index_articles_on_author_id ON articles (author_id);
 ```
 
-`includes` also runs the query’s own conditions and order again for each association it preloads. Index the columns the query filters and sorts by, too. Otherwise D1 reads those rows again for every association, and bills you each time.
+`includes` also runs the query’s own conditions again for each association it preloads. With a `limit` or `offset`, it runs the query’s order again as well. Index the columns the query filters and sorts by, too. Otherwise D1 reads those rows again for every association, and bills you each time.
 
 :::
 
