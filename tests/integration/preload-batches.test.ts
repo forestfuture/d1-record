@@ -303,6 +303,35 @@ describe("preloading sends the records' query and its associations together", ()
     expect(queries).toHaveLength(4);
   });
 
+  test("a counted page sends its count, its records and their preloads in one batch", async () => {
+    const page = await db().model(User).includes("posts").paginate({ perPage: 2 });
+
+    expect(page.records.map(titles)).toEqual([["A1", "A2"], ["B1"]]);
+    expect(page.total).toBe(3);
+    expect(recording.batches).toEqual([3]);
+  });
+
+  test("a page without a count preloads for its records, not the one read past them", async () => {
+    const page = await db().model(User).includes("posts").paginate({ perPage: 1, count: false });
+
+    expect(page.records.map(titles)).toEqual([["A1", "A2"]]);
+    expect(page.hasNext).toBe(true);
+    expect(recording.batches).toEqual([2]);
+  });
+
+  test("first, find and findBy send their preloads with them", async () => {
+    const first = await db().model(User).includes("posts").first();
+    const found = await db().model(User).includes("posts").find(2);
+    const foundBy = await db().model(User).includes("posts").findBy({ email: "a@example.com" });
+
+    expect([first, found, foundBy].map((user) => user && titles(user))).toEqual([
+      ["A1", "A2"],
+      ["B1"],
+      ["A1", "A2"],
+    ]);
+    expect(recording.batches).toEqual([2, 2, 2]);
+  });
+
   test("with a Session, the batch goes through the Session", async () => {
     const sessionDb = connect(recording.binding, { session: "first-primary" });
 
