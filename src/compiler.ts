@@ -3,7 +3,7 @@ import { type Attribute, attributeFor, noMatch, storedRows } from "./attribute.t
 import { ignoresColumns } from "./table-names.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
 import { Comparison, comparisonParts, type Operator } from "./comparisons.ts";
-import { Either, Negated, type Condition, type QueryDescription } from "./query.ts";
+import { Either, LinkedTo, Negated, type Condition, type QueryDescription } from "./query.ts";
 import { ColumnReference, ColumnValue, SafeSql } from "./sql.ts";
 import { writeUntypedValue } from "./conversion.ts";
 import { boundValue } from "./filtering.ts";
@@ -72,6 +72,7 @@ function compileCondition(
     return `(NOT ${compileCondition(condition.condition, model, params)})`;
   }
   if (condition instanceof SafeSql) return `(${compileFragment(condition, model, params)})`;
+  if (condition instanceof LinkedTo) return `(${compileLinkedTo(condition, model, params)})`;
   const parts = Object.entries(condition).map(([name, value]) => {
     const attribute = attributeFor(model, name);
     return value instanceof Comparison
@@ -79,6 +80,19 @@ function compileCondition(
       : compileEquality(attribute, value, params);
   });
   return `(${parts.join(" AND ")})`;
+}
+
+/** `attr IN (SELECT key FROM … WHERE …)`: the keys of the rows `keys` describes. */
+function compileLinkedTo(
+  { attribute, keys, key }: LinkedTo,
+  model: ModelClass<ModelBase>,
+  params: unknown[],
+): string {
+  const column = quoteIdentifier(attributeFor(model, attribute).column);
+  const selected = quoteIdentifier(attributeFor(keys.model, key).column);
+  const inner = compileSelect({ ...keys, order: [], distinct: false }, selected);
+  params.push(...inner.params);
+  return `${column} IN (${inner.sql})`;
 }
 
 /** An attribute and the value to write to it. */
