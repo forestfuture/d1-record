@@ -43,6 +43,11 @@ export class Attribute {
     this.column = this.#definition.column;
   }
 
+  /** Whether it's a `string` attribute, which D1 compares as text, not by number. */
+  get isText(): boolean {
+    return this.#definition.type === "string";
+  }
+
   /**
    * An assigned value (a setter, `build`, `update`, `insert`, `permit`) as the attribute's type:
    * only what's unambiguous for it (#81). `undefined` throws, as it would store NULL silently;

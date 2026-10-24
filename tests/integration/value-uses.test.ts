@@ -134,6 +134,80 @@ describe("values by their use", () => {
       expect(owner!.loaded("notes").map((each) => each.id)).toEqual([1]);
       expect(note!.loaded("owner")?.id).toBe(9);
     });
+
+    // A preload selects the keys with a subquery (#217), where SQLite would compare an integer
+    // with text by its number: an integer key matches only its own digits, as a condition does.
+    test("an integer key finds the text keys that are its digits, not '09'", async () => {
+      await db().model(Owner).insert({ id: 9, email: "ada@example.com" });
+      await db()
+        .model(Note)
+        .insertAll([
+          { id: 1, label: "9" },
+          { id: 2, label: "09" },
+        ]);
+      await db()
+        .model(Code)
+        .insertAll([
+          { id: "9", label: "nine" },
+          { id: "09", label: "oh nine" },
+        ]);
+      await db().model(Counted).insert({ id: 3, quantity: 9 });
+
+      const [owner] = await db().model(Owner).includes("notes", "note").toArray();
+      const [counted] = await db().model(Counted).where({ id: 3 }).includes("code").toArray();
+
+      expect(owner!.loaded("notes").map((each) => each.id)).toEqual([1]);
+      expect(owner!.loaded("note")?.id).toBe(1);
+      expect(counted!.loaded("code")?.id).toBe("9");
+    });
+
+    // Compared by number, a text column's index can't be searched: the integer key is selected
+    // as text instead, so D1 reads (and bills) the matches, not the whole table.
+    test("an integer key searches a text key's index", async () => {
+      await binding.exec("CREATE INDEX IF NOT EXISTS samples_label ON samples (label)");
+      const labels = Array.from({ length: 10 }, (_, index) => String(index + 1));
+      await db().model(Owner).insert({ id: 9, email: "ada@example.com" });
+      await db()
+        .model(Note)
+        .insertAll(labels.map((label, index) => ({ id: index + 1, label })));
+      await db()
+        .model(Code)
+        .insertAll(labels.map((id) => ({ id, label: id })));
+      await db().model(Counted).insert({ id: 20, quantity: 9 });
+      const read: Record<string, number> = {};
+      const counting = connect(binding, {
+        onQuery: ({ model, meta }) => (read[model] = meta?.rows_read ?? 0),
+      });
+
+      await counting.model(Owner).includes("notes").toArray();
+      await counting.model(Counted).where({ id: 20 }).includes("code").toArray();
+
+      expect(read["Note"]).toBeLessThan(labels.length);
+      expect(read["Code"]).toBeLessThan(labels.length);
+    });
+
+    test("a text key finds the integer keys it casts to, as a condition does", async () => {
+      await db()
+        .model(Code)
+        .insertAll([
+          { id: "09", label: "oh nine" },
+          { id: "abc", label: "letters" },
+        ]);
+      await db()
+        .model(Counted)
+        .insertAll([
+          { id: 1, quantity: 9 },
+          { id: 2, quantity: 0 },
+        ]);
+      await db().model(Note).insert({ id: 3, label: "09" });
+      await db().model(Owner).insert({ id: 9, email: "ada@example.com" });
+
+      const codes = await db().model(Code).includes("counted").order({ id: "asc" }).toArray();
+      const [note] = await db().model(Note).where({ id: 3 }).includes("owner").toArray();
+
+      expect(codes.map((code) => code.loaded("counted").map((each) => each.id))).toEqual([[1], []]);
+      expect(note!.loaded("owner")?.id).toBe(9);
+    });
   });
 
   describe("through an association's own Relation", () => {
