@@ -80,6 +80,10 @@ class Account extends Model({
   static tableName = "accounts";
 
   user = belongsTo(User, { foreignKey: "userId" });
+  namedUser = belongsTo(User, {
+    foreignKey: "userId",
+    scope: (q) => q.where(sql`email <> ${""}`),
+  });
   // A tree of accounts, user_id holding the parent's id: each preloads its own children.
   // Annotated, since the scope names the association it declares.
   children: HasMany<typeof Account> = hasMany(Account, {
@@ -310,6 +314,20 @@ describe("preloading sends the records' query and its associations together", ()
     expect(later.map((posts) => posts?.map((post) => post.title))).toEqual([["A2"], ["B1"]]);
     expect(recording.batches).toEqual([2]);
     expect(queries).toHaveLength(3);
+  });
+
+  test("such a level whose owners have no keys sends nothing more", async () => {
+    await binding.prepare("INSERT INTO accounts (id, user_id) VALUES (1, NULL)").run();
+    const conditions = Array.from({ length: 25 }, (_, index) => -4 * index);
+    const accounts = conditions.reduce(
+      (query, id) => query.where(sql`id NOT IN (${id - 1}, ${id - 2}, ${id - 3}, ${id - 4})`),
+      db().model(Account),
+    );
+
+    const [account] = await accounts.includes("namedUser").toArray();
+
+    expect(account?.loaded("namedUser")).toBeNull();
+    expect(queries).toHaveLength(1);
   });
 
   test("an association scope of none() sends nothing for it", async () => {
