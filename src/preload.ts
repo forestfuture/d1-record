@@ -20,7 +20,7 @@ export interface PreloadPlan {
   attach(
     records: readonly (readonly ModelBase[])[],
     rows: readonly Rows[],
-    database: Executor,
+    executor: Executor,
   ): Promise<void>;
 }
 
@@ -57,7 +57,7 @@ interface Afterwards extends Omit<Start, "owners"> {
 }
 
 /** D1's limit of values bound in one statement. */
-const BOUND_VALUES = 100;
+const MAX_BOUND_VALUES = 100;
 
 /**
  * Plans the preloads of `query`'s includes before the query is sent, so they go with it, every
@@ -98,7 +98,7 @@ function planFrom(starts: readonly Start[], executor: Executor): PreloadPlan {
   starts.forEach((start, ownersAt) => planSteps(planning, start, { ownersAt, path: new Set() }));
   return {
     statements: planning.steps.flatMap((step) => step.select ?? []),
-    attach: (records, rows, database) => attachSteps(planning, records, rows, database),
+    attach: (records, rows, executor) => attachSteps(planning, records, rows, executor),
   };
 }
 
@@ -126,9 +126,9 @@ interface Level {
  * records are.
  */
 function planSteps(planning: Planning, start: Start, level: Level): void {
-  const { now, later } = splitRepeated(start, level.path);
+  const { now, afterwards } = splitRepeated(start, level.path);
   const { model } = start;
-  leaveForAfterwards(planning, { ownersAt: level.ownersAt, model, tree: later, written: {} });
+  leaveForAfterwards(planning, { ownersAt: level.ownersAt, model, tree: afterwards, written: {} });
   for (const name of Object.keys(now)) planStep(planning, { ...start, tree: now }, level, name);
 }
 
@@ -146,9 +146,11 @@ function planStep(
   const association = resolveAssociation(model, name);
   const query = linkedQuery(association, owners, planning.executor);
   const targets = query && targetsOf(association, query, tree[name] ?? {});
-  if (targets !== undefined && "query" in owners && targets.select.params.length > BOUND_VALUES) {
-    const part = (from: IncludeTree) => (from[name] === undefined ? {} : { [name]: from[name] });
-    leaveForAfterwards(planning, { ownersAt, model, tree: part(tree), written: part(written) });
+  if (overBoundValues(owners, targets)) {
+    const onlyThis = (from: IncludeTree) =>
+      from[name] === undefined ? {} : { [name]: from[name] };
+    const deferred = { ownersAt, model, tree: onlyThis(tree), written: onlyThis(written) };
+    leaveForAfterwards(planning, deferred);
     return;
   }
   const step = { association, ownersAt, select: targets?.select };
@@ -164,16 +166,24 @@ function planStep(
   planSteps(planning, next, { ownersAt: position, path: new Set([...path, association]) });
 }
 
-/** Adds `left` to what's preloaded afterwards, with anything else left for the same owners. */
-function leaveForAfterwards(planning: Planning, left: Afterwards): void {
-  if (Object.keys(left.tree).length === 0) return;
-  const same = planning.afterwards.find(({ ownersAt }) => ownersAt === left.ownersAt);
-  if (same === undefined) {
-    planning.afterwards.push(left);
+/**
+ * Whether `targets`' SELECT, selecting the keys of `owners`' query with a subquery, binds more
+ * values than D1 allows in one statement.
+ */
+function overBoundValues(owners: Owners, targets: { select: CompiledSql } | undefined): boolean {
+  return "query" in owners && (targets?.select.params.length ?? 0) > MAX_BOUND_VALUES;
+}
+
+/** Adds `deferred` to what's preloaded afterwards, merged with anything left for its owners. */
+function leaveForAfterwards(planning: Planning, deferred: Afterwards): void {
+  if (Object.keys(deferred.tree).length === 0) return;
+  const existing = planning.afterwards.find(({ ownersAt }) => ownersAt === deferred.ownersAt);
+  if (existing === undefined) {
+    planning.afterwards.push(deferred);
     return;
   }
-  same.tree = mergeTrees(same.tree, left.tree);
-  same.written = mergeTrees(same.written, left.written);
+  existing.tree = mergeTrees(existing.tree, deferred.tree);
+  existing.written = mergeTrees(existing.written, deferred.written);
 }
 
 /**
@@ -214,14 +224,14 @@ function scopedQuery(
 function splitRepeated(
   { model, tree, written }: Start,
   path: ReadonlySet<ResolvedAssociation>,
-): { now: IncludeTree; later: IncludeTree } {
+): { now: IncludeTree; afterwards: IncludeTree } {
   const now: Record<string, IncludeTree> = {};
-  const later: Record<string, IncludeTree> = {};
+  const afterwards: Record<string, IncludeTree> = {};
   for (const [name, nested] of Object.entries(tree)) {
     const repeated = written[name] === undefined && path.has(resolveAssociation(model, name));
-    (repeated ? later : now)[name] = nested;
+    (repeated ? afterwards : now)[name] = nested;
   }
-  return { now, later };
+  return { now, afterwards };
 }
 
 /**
@@ -233,21 +243,21 @@ async function attachSteps(
   { steps, afterwards }: Planning,
   records: readonly (readonly ModelBase[])[],
   rows: readonly Rows[],
-  database: Executor,
+  executor: Executor,
 ): Promise<void> {
   const owners = [...records];
   const results = rows.values();
   for (const { association, ownersAt, select } of steps) {
     const found = select === undefined ? [] : (results.next().value ?? []);
-    const targets = found.map((row) => hydrate(association.target, row, database));
+    const targets = found.map((row) => hydrate(association.target, row, executor));
     attach(owners[ownersAt] ?? [], association, targets);
     owners.push(targets);
   }
-  const starts = afterwards.flatMap(({ ownersAt, ...left }): Start[] => {
+  const starts = afterwards.flatMap(({ ownersAt, ...deferred }): Start[] => {
     const loaded = owners[ownersAt] ?? [];
-    return loaded.length === 0 ? [] : [{ ...left, owners: { records: loaded } }];
+    return loaded.length === 0 ? [] : [{ ...deferred, owners: { records: loaded } }];
   });
-  if (starts.length > 0) await preloadStarts(starts, database);
+  if (starts.length > 0) await preloadStarts(starts, executor);
 }
 
 /** Preloads each start's tree from records already loaded, in one round trip. */
