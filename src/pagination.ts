@@ -2,10 +2,10 @@
 import { compileCount } from "./compiler.ts";
 import { castValue, uncastable } from "./conversion.ts";
 import { IncompatibleRelation } from "./errors.ts";
+import { stableOrder } from "./finder-order.ts";
 import type { QueryRunner } from "./load.ts";
 import type { ModelBase, ModelClass } from "./model.ts";
-import type { OrderTerm, QueryDescription } from "./query.ts";
-import { SafeSql } from "./sql.ts";
+import type { QueryDescription } from "./query.ts";
 
 /** What `paginate()` takes: which page, how many records on it, and whether to count them all. */
 export interface PageOptions {
@@ -100,20 +100,6 @@ function offsetOf(page: number, perPage: number): number {
     throw new TypeError("paginate()'s page is too far to reach");
   }
   return offset;
-}
-
-/**
- * `query`'s order, ended with what makes a row unique, so tied rows keep their pages between
- * requests: the primary key, or after `distinct()`, the selected attributes (the key isn't
- * loaded). Those already in the order aren't added again.
- */
-function stableOrder(model: ModelClass, query: QueryDescription): readonly OrderTerm[] {
-  const unique = query.distinct && query.select ? query.select : [model.primaryKey];
-  const ordered = new Set(query.order.map((term) => !(term instanceof SafeSql) && term.attribute));
-  const ties = unique
-    .filter((attribute) => !ordered.has(attribute))
-    .map((attribute) => ({ attribute, direction: "asc" as const }));
-  return [...query.order, ...ties];
 }
 
 /**
