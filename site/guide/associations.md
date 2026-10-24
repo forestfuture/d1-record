@@ -111,10 +111,14 @@ Load an association for every record at once with `includes`, with one query per
 
 Nest with an object: `includes({ articles: "comments" })` or `includes({ articles: ["comments", "tags"] })`.
 
-The associations at each level go to D1 together, in one round trip. The example above sends the authors’ query, then the profiles’ and articles’ together, then the comments’. That’s four queries in three round trips.
+The whole tree goes to D1 with the authors’ own query, in one round trip. Each association finds its records with a subquery of the query above it, so it doesn’t wait for that query’s rows. The example above sends four queries in one round trip.
+
+::: warning TIP
+With a `limit` or `offset`, `includes` ends the order with the primary key, so the preloads find the same records the query loads.
+:::
 
 ::: rails Beyond Rails
-Rails sends each association’s preload query on its own, so every association adds a round trip. Here only each level of nesting does.
+Rails sends each association’s preload query on its own, so every association adds a round trip. Here the whole tree takes one.
 :::
 
 ::: warning TIP
