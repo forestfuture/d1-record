@@ -2,6 +2,7 @@
 import { attributeFor, noMatch } from "./attribute.ts";
 import { compileColumns, compileSelect, type CompiledSql } from "./compiler.ts";
 import { databaseNow, type Executor } from "./executor.ts";
+import { stableOrder } from "./finder-order.ts";
 import { hydrate, primaryKeyOf, type ModelBase, type ModelClass } from "./model.ts";
 import { keysForIncludes, planPreload, sendTogether } from "./preload.ts";
 import type { QueryDescription } from "./query.ts";
@@ -70,7 +71,7 @@ async function loadRecords<M extends ModelBase>(
   model: ModelClass<M>,
   query: QueryDescription,
 ): Promise<M[]> {
-  const own = [selectFor(model, query)];
+  const own = (loaded: QueryDescription) => [selectFor(model, loaded)];
   return (await loadWith(executor, model, { query, own, rowsOf: ([rows]) => rows })).records;
 }
 
@@ -81,7 +82,7 @@ async function loadCounted<M extends ModelBase>(
   query: QueryDescription,
   countSql: CompiledSql,
 ): Promise<Counted<M>> {
-  const own = [countSql, selectFor(model, query)];
+  const own = (loaded: QueryDescription) => [countSql, selectFor(model, loaded)];
   const loaded = await loadWith(executor, model, { query, own, rowsOf: ([, rows]) => rows });
   const [counted] = loaded.results;
   return { records: loaded.records, count: Number(counted?.[0]?.["count"] ?? 0) };
@@ -93,7 +94,9 @@ async function loadAhead<M extends ModelBase>(
   model: ModelClass<M>,
   query: QueryDescription & { limit: number },
 ): Promise<LoadedAhead<M>> {
-  const own = [selectFor(model, { ...query, limit: query.limit + 1 })];
+  const own = (loaded: QueryDescription) => [
+    selectFor(model, { ...loaded, limit: query.limit + 1 }),
+  ];
   const rowsOf = ([rows]: readonly Rows[]) => rows?.slice(0, query.limit);
   const { records, results } = await loadWith(executor, model, { query, own, rowsOf });
   return { records, hasMore: (results[0]?.length ?? 0) > query.limit };
@@ -102,10 +105,13 @@ async function loadAhead<M extends ModelBase>(
 /** Rows D1 returned for one statement. */
 type Rows = Record<string, unknown>[];
 
-/** What a load sends of its own (its SELECT, and a count), and which of their rows are records. */
+/**
+ * What a load sends of its own (its SELECT, and a count) for the query it loads, and which of
+ * their rows are records.
+ */
 interface Load {
   query: QueryDescription;
-  own: readonly CompiledSql[];
+  own: (query: QueryDescription) => readonly CompiledSql[];
   rowsOf: (results: readonly Rows[]) => readonly Record<string, unknown>[] | undefined;
 }
 
@@ -117,15 +123,28 @@ interface Load {
 async function loadWith<M extends ModelBase>(
   executor: Executor,
   model: ModelClass<M>,
-  { query, own, rowsOf }: Load,
+  load: Load,
 ): Promise<{ records: M[]; results: Rows[] }> {
+  const query = withPreloadOrder(model, load.query);
+  const own = load.own(query);
   const plan = query.includes === undefined ? undefined : planPreload(query, executor);
   const results = await sendTogether(executor, [...own, ...(plan?.statements ?? [])]);
   // Bound to the database the query used, which they keep, even past a request's withDatabase.
   const database = await databaseNow(executor);
-  const records = (rowsOf(results) ?? []).map((row) => hydrate(model, row, database));
+  const records = (load.rowsOf(results) ?? []).map((row) => hydrate(model, row, database));
   await plan?.attach([records], results.slice(own.length), database);
   return { records, results: results.slice(0, own.length) };
+}
+
+/**
+ * `query`, with its order ended by the primary key if it has includes and a limit or offset.
+ * Its preloads select its keys with a subquery of it, so a total order makes them find the
+ * records it loads: a limit could otherwise pick tied rows, or rows in no order, differently.
+ */
+function withPreloadOrder(model: ModelClass, query: QueryDescription): QueryDescription {
+  if (query.includes === undefined) return query;
+  if (query.limit === undefined && query.offset === undefined) return query;
+  return { ...query, order: stableOrder(model, query) };
 }
 
 /** The SELECT for `query`'s records. */

@@ -82,7 +82,10 @@ function compileCondition(
   return `(${parts.join(" AND ")})`;
 }
 
-/** `attr IN (SELECT key FROM … WHERE …)`: the keys of the rows `keys` describes. */
+/**
+ * `attr IN (SELECT key FROM … WHERE …)`: the keys of the rows `keys` describes. With a limit or
+ * offset, its order picks those rows; without, it's left out, as it can't change them.
+ */
 function compileLinkedTo(
   { attribute, keys, key }: LinkedTo,
   model: ModelClass<ModelBase>,
@@ -90,7 +93,9 @@ function compileLinkedTo(
 ): string {
   const column = quoteIdentifier(attributeFor(model, attribute).column);
   const selected = quoteIdentifier(attributeFor(keys.model, key).column);
-  const inner = compileSelect({ ...keys, order: [], distinct: false }, selected);
+  const limited = keys.limit !== undefined || keys.offset !== undefined;
+  const order = limited ? keys.order : [];
+  const inner = compileSelect({ ...keys, order, distinct: false }, selected);
   params.push(...inner.params);
   return `${column} IN (${inner.sql})`;
 }
