@@ -10,6 +10,7 @@ import {
   MissingAttribute,
   Model,
   type QueryEvent,
+  sql,
 } from "../../src/index.ts";
 import { createTestDatabase, recordingBatches, type TestDatabase } from "../support/d1.ts";
 
@@ -28,6 +29,10 @@ class User extends Model({
   noPosts = hasMany(Post, { foreignKey: "userId", scope: (q) => q.none() });
   postsByTitle = hasMany(Post, { foreignKey: "userId", scope: (q) => q.order({ title: "desc" }) });
   postTitles = hasMany(Post, { foreignKey: "userId", scope: (q) => q.select("title") });
+  laterPosts = hasMany(Post, {
+    foreignKey: "userId",
+    scope: (q) => q.where(sql`title >= ${"A2"}`),
+  });
   ghosts = hasMany(Ghost, { foreignKey: "userId" });
 }
 
@@ -242,6 +247,27 @@ describe("preloading sends the records' query and its associations together", ()
     const [post] = user!.loaded("postsWithComments");
     expect(post?.loaded("comments").map((comment) => comment.body)).toEqual(["Hm"]);
     expect(post?.loaded("author")?.email).toBe("b@example.com");
+  });
+
+  test("a scope's conditions narrow its level and the level under it, values bound in order", async () => {
+    await binding
+      .prepare(
+        "INSERT INTO comments (id, post_id, body) VALUES (1, 10, 'On A1'), (2, 11, 'On A2'), (3, 12, 'On B1')",
+      )
+      .run();
+
+    const users = await db()
+      .model(User)
+      .where(sql`email <= ${"b@example.com"}`)
+      .includes({ laterPosts: "comments" })
+      .order({ id: "asc" })
+      .toArray();
+
+    const comments = users.map((user) =>
+      user.loaded("laterPosts").map((post) => post.loaded("comments").map((each) => each.body)),
+    );
+    expect(comments).toEqual([[["On A2"]], [["On B1"]]]);
+    expect(recording.batches).toEqual([3]);
   });
 
   test("an association scope of none() sends nothing for it", async () => {
