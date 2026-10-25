@@ -110,13 +110,14 @@ Each security review adds an entry here: what it covered, how, what it found, an
 
 **Findings:**
 
-| Severity | Finding                                                                   | Outcome                                                          | Link                                                         |
-| -------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------ |
-| Low      | `d1-record schema` wrote a class’s name into generated source unchecked   | Fixed before merging: a name that isn’t an identifier is refused | [#234](https://github.com/forestfuture/d1-record/pull/234)   |
-| Low      | `d1-record schema --check` wrote a placeholder schema when there was none | Fixed before merging: `--check` writes nothing                   | [#234](https://github.com/forestfuture/d1-record/pull/234)   |
-| Low      | A chain of includes named in a request nests a subquery per level         | Documented: allow only the include paths you mean                | [#235](https://github.com/forestfuture/d1-record/issues/235) |
+| Severity | Finding                                                                                  | Outcome                                                                 | Link                                                         |
+| -------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Low      | `d1-record schema` wrote a class’s name into generated source unchecked                  | Fixed before merging: a name that isn’t an identifier is refused        | [#234](https://github.com/forestfuture/d1-record/pull/234)   |
+| Low      | `d1-record schema --check` wrote a placeholder schema when there was none                | Fixed before merging: `--check` writes nothing                          | [#234](https://github.com/forestfuture/d1-record/pull/234)   |
+| Low      | A chain of includes named in a request nests a subquery per level                        | Documented: allow only the include paths you mean                       | [#235](https://github.com/forestfuture/d1-record/issues/235) |
+| Low      | A bookmark D1 can’t use, in a forged or planted cookie, failed every request carrying it | Fixed: the Session starts again from `start`, checked against a real D1 | [#237](https://github.com/forestfuture/d1-record/issues/237) |
 
-**Not covered:** how D1 handles a bookmark it can’t parse (it reaches D1 only from the request that sends it); D1 and workerd themselves; the dependencies’ code; apps’ own code.
+**Not covered:** D1 and workerd themselves; the dependencies’ code; apps’ own code.
 
 ## Reporting a vulnerability
 
