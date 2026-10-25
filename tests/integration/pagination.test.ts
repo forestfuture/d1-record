@@ -6,7 +6,6 @@ import {
   IncompatibleRelation,
   InvalidModel,
   Model,
-  modelFor,
   type QueryEvent,
   sql,
   column,
@@ -236,21 +235,16 @@ describe("paginate", () => {
     });
 
     test("set on an app's base class, every Model built on it inherits them", async () => {
-      class Base extends Model {
+      abstract class Base extends Model {
         static override perPage = 2;
         static override maxPerPage = 3;
       }
-      const ApplicationRecord = modelFor(
-        {
-          posts: {
-            attributes: { id: "integer", userId: "integer", title: "string" },
-            primaryKey: "id",
-          },
-        } as const,
-        Base,
-      );
-      class Article extends ApplicationRecord("posts") {}
-      class Brief extends ApplicationRecord("posts") {
+      const PostRecord = Base.define({ id: "integer", userId: "integer", title: "string" });
+      class Article extends PostRecord {
+        static override table = "posts";
+      }
+      class Brief extends PostRecord {
+        static override table = "posts";
         static override perPage = 9;
       }
 

@@ -1,9 +1,11 @@
-import { Model, modelFor } from "@forestfuture/d1-record";
-import { tables } from "../db/schema";
+import { Model } from "@forestfuture/d1-record";
+import { schema } from "../db/schema";
 
 // #region shared
-// What's written on Base, every Model has.
-class Base extends Model {
+// What's written on ApplicationRecord, every Model has.
+export abstract class ApplicationRecord extends Model {
+  static override schema = schema;
+
   label() {
     return `${this.constructor.name} ${JSON.stringify(this.attributes())}`;
   }
@@ -15,8 +17,8 @@ class Base extends Model {
   }
 }
 
-export const ApplicationRecord = modelFor(tables, Base);
-
-// Every Model built on it has label(), and Base's beforeSave.
-export class Account extends ApplicationRecord("billing_accounts") {}
+// Every Model built on it has label(), and ApplicationRecord's beforeSave.
+export class Account extends ApplicationRecord {
+  static override table = "billing_accounts";
+}
 // #endregion shared

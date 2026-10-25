@@ -166,7 +166,7 @@ describe("d1-record console", () => {
   describe("reloading Models", () => {
     const edited = `
       import { ApplicationRecord } from "./application-record";
-      export class User extends ApplicationRecord("users") { static edited = "yes"; }
+      export class User extends ApplicationRecord { static edited = "yes"; }
     `;
 
     /** A console line that writes `started`, then waits until `model` holds the edit. */

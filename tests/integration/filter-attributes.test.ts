@@ -4,7 +4,6 @@ import {
   type FilterAttribute,
   gte,
   Model,
-  modelFor,
   type QueryEvent,
   RecordNotFound,
   sql,
@@ -210,29 +209,17 @@ describe("filterAttributes", () => {
     });
 
     test("set on an app's base class, every Model built on it inherits it", async () => {
-      class Base extends Model {
+      abstract class Base extends Model {
         static override filterAttributes = [...Model.filterAttributes, "nickname"];
       }
-      const ApplicationRecord = modelFor(
-        {
-          accounts: {
-            attributes: {
-              id: "integer",
-              passwordDigest: "string",
-              apiKey: "string",
-              nickname: "string",
-            },
-            primaryKey: "id",
-          },
-        } as const,
-        Base,
-      );
+      class Account extends Base.define({
+        id: "integer",
+        passwordDigest: "string",
+        apiKey: "string",
+        nickname: "string",
+      }) {}
 
-      expect(await hiddenNames(class extends ApplicationRecord("accounts") {})).toEqual([
-        "passwordDigest",
-        "apiKey",
-        "nickname",
-      ]);
+      expect(await hiddenNames(Account)).toEqual(["passwordDigest", "apiKey", "nickname"]);
     });
 
     /** The attributes whose value in a condition a listener sees as "[FILTERED]". */

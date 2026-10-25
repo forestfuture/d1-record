@@ -7,7 +7,7 @@ import {
   expectTypeOf,
   test,
 } from "vite-plus/test";
-import { connect, Model, modelFor, UnknownAttribute } from "../../src/index.ts";
+import { connect, Model, UnknownAttribute } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model.define({
@@ -79,12 +79,8 @@ describe("Model.permit", () => {
 
   test("subclasses and an app's base class have it", () => {
     class Admin extends User {}
-    class Base extends Model {}
-    const ApplicationRecord = modelFor(
-      { users: { attributes: { id: "integer", role: "string" }, primaryKey: "id" } } as const,
-      Base,
-    );
-    class Member extends ApplicationRecord("users") {}
+    abstract class Base extends Model {}
+    class Member extends Base.define({ id: "integer", role: "string" }) {}
 
     expect(Admin.permit({ role: "x", age: 3 }, "role")).toEqual({ role: "x" });
     expect(Member.permit({ role: "x", id: 3 }, "role")).toEqual({ role: "x" });

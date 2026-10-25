@@ -28,11 +28,17 @@ function project(files: Record<string, string>, outsideTheRepo = false): string 
 }
 
 const applicationRecord = `
-import { modelFor } from "@forestfuture/d1-record";
-export const ApplicationRecord = modelFor({
-  users: { attributes: { id: "integer", name: "string" }, primaryKey: "id" },
-  posts: { attributes: { id: "integer", title: "string" }, primaryKey: "id" },
-} as const);
+import { Model } from "@forestfuture/d1-record";
+export abstract class ApplicationRecord extends Model {
+  static override schema = {
+    binding: "DB",
+    tables: {
+      users: { attributes: { id: "integer", name: "string" }, primaryKey: "id" },
+      posts: { attributes: { id: "integer", title: "string" }, primaryKey: "id" },
+    },
+    models: { User: "users", Post: "posts" },
+  };
+}
 `;
 
 // Each test loads a project, which takes longer than the default 5 s on a loaded machine (#182).
@@ -44,12 +50,12 @@ describe("loading a project's Models for the console", { timeout: 30_000 }, () =
         import type { Model } from "@forestfuture/d1-record";
         import { ApplicationRecord } from "./application-record";
         import { greeting } from "@/lib/greeting";
-        export class User extends ApplicationRecord("users") { static greeting = greeting; }
+        export class User extends ApplicationRecord { static greeting = greeting; }
         export type UserModel = typeof User & Model;
       `,
       "src/models/post.ts": `
         import { ApplicationRecord } from "./application-record";
-        export class Post extends ApplicationRecord("posts") {}
+        export class Post extends ApplicationRecord {}
       `,
       "src/lib/greeting.ts": `export const greeting: string = "hello";`,
     });
@@ -66,8 +72,8 @@ describe("loading a project's Models for the console", { timeout: 30_000 }, () =
       "src/models/application-record.ts": applicationRecord,
       "src/models.ts": `
         import { ApplicationRecord } from "./models/application-record";
-        export class User extends ApplicationRecord("users") {}
-        export class Post extends ApplicationRecord("posts") {}
+        export class User extends ApplicationRecord {}
+        export class Post extends ApplicationRecord {}
       `,
     });
 
@@ -137,7 +143,7 @@ describe("loading a project's Models for the console", { timeout: 30_000 }, () =
         "src/models/user.ts": `
           import { ApplicationRecord } from "./application-record";
           import { greeting } from "@/lib/greeting";
-          export class User extends ApplicationRecord("users") { static greeting = greeting; }
+          export class User extends ApplicationRecord { static greeting = greeting; }
         `,
         "src/lib/greeting.ts": `export const greeting: string = "hello";`,
       });
@@ -152,7 +158,7 @@ describe("loading a project's Models for the console", { timeout: 30_000 }, () =
         join(cwd, "src/models/user.ts"),
         `
           import { ApplicationRecord } from "./application-record";
-          export class User extends ApplicationRecord("users") { static edited = true; }
+          export class User extends ApplicationRecord { static edited = true; }
         `,
       );
 
@@ -178,7 +184,7 @@ describe("loading a project's Models for the console", { timeout: 30_000 }, () =
         join(cwd, "src/models/post.ts"),
         `
           import { ApplicationRecord } from "./application-record";
-          export class Post extends ApplicationRecord("posts") {}
+          export class Post extends ApplicationRecord {}
         `,
       );
 
@@ -194,7 +200,7 @@ describe("loading a project's Models for the console", { timeout: 30_000 }, () =
         join(cwd, "src/models/post.ts"),
         `
           import { ApplicationRecord } from "./application-record";
-          export class Post extends ApplicationRecord("posts") {}
+          export class Post extends ApplicationRecord {}
         `,
       );
       rmSync(join(cwd, "src/models/user.ts"));
@@ -217,7 +223,7 @@ describe("loading a project's Models for the console", { timeout: 30_000 }, () =
           join(cwd, "src/models/user.ts"),
           `
             import { ApplicationRecord } from "./application-record";
-            export class User extends ApplicationRecord("users") { static edited = true; }
+            export class User extends ApplicationRecord { static edited = true; }
           `,
         );
 
@@ -320,7 +326,7 @@ describe("loading a project's Models for the console", { timeout: 30_000 }, () =
         join(cwd, "src/models/user.ts"),
         `
           import { ApplicationRecord } from "./application-record";
-          export class User extends ApplicationRecord("users") { static fixed = true; }
+          export class User extends ApplicationRecord { static fixed = true; }
         `,
       );
 

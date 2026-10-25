@@ -3,9 +3,13 @@ import { connect, Model, NoDatabase, withDatabase } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 // Outside a Worker, as tests and scripts run: cloudflare:workers doesn't exist here.
-class User extends Model.define({ id: { type: "integer", null: false }, email: "string" }) {
+/** An app's base class for the DB binding: its generated schema names the binding. */
+abstract class DbRecord extends Model {
+  static override schema = { binding: "DB", tables: {}, models: {} };
+}
+
+class User extends DbRecord.define({ id: { type: "integer", null: false }, email: "string" }) {
   static table = "users";
-  static override binding = "DB";
 }
 
 let binding: TestDatabase;

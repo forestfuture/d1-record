@@ -6,7 +6,8 @@ import { ApplicationRecord } from "./application-record";
 //     scope :in_stock, -> { where(available: true) }
 //     validates :name, presence: true
 //   end
-export class Product extends ApplicationRecord("products", { available: "boolean" }) {
+export class Product extends ApplicationRecord {
+  static override attributes = { available: "boolean" } as const;
   static inStock = this.scope((q) => q.where({ available: true }));
 
   static {

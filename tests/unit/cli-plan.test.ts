@@ -182,7 +182,7 @@ describe("planGenerate: what g model and g migration write and print, from a sna
     const models = `${cwd}/src/models.ts`;
     const existing = {
       ...project(),
-      files: new Map([[models, 'export class Product extends ApplicationRecord("products") {}\n']]),
+      files: new Map([[models, "export class Product extends ApplicationRecord {}\n"]]),
     };
     const plan = planGenerate(existing, { ...product, models: "src/models.ts" });
 

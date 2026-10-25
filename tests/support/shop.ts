@@ -26,14 +26,20 @@ export async function shop(scratch: (prefix: string) => string): Promise<string>
       compilerOptions: { paths: { "@forestfuture/d1-record": [library] } },
     }),
     "src/models/application-record.ts": `
-      import { modelFor } from "@forestfuture/d1-record";
-      export const ApplicationRecord = modelFor({
-        users: { attributes: { id: "integer", name: "string", email: "string" }, primaryKey: "id" },
-      } as const);
+      import { Model } from "@forestfuture/d1-record";
+      export abstract class ApplicationRecord extends Model {
+        static override schema = {
+          binding: "DB",
+          tables: {
+            users: { attributes: { id: "integer", name: "string", email: "string" }, primaryKey: "id" },
+          },
+          models: { User: "users" },
+        };
+      }
     `,
     "src/models/user.ts": `
       import { ApplicationRecord } from "./application-record";
-      export class User extends ApplicationRecord("users") {}
+      export class User extends ApplicationRecord {}
     `,
   };
   for (const [path, text] of Object.entries(files)) {

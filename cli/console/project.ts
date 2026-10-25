@@ -2,6 +2,7 @@
 import { resolve, sep } from "node:path";
 import {
   forgetProjectFiles,
+  isBase,
   loadLibrary,
   modelFiles,
   projectJiti,
@@ -50,7 +51,12 @@ async function loadModels(
       return `Couldn't load ${shown(cwd, file)}: ${message}`;
     }
     for (const [name, value] of Object.entries(exported)) {
-      if (typeof value === "function" && value.prototype instanceof library.Model) {
+      // The classes Models are built on (ApplicationRecord) aren't Models themselves.
+      if (
+        typeof value === "function" &&
+        value.prototype instanceof library.Model &&
+        !isBase(value)
+      ) {
         found[name] = value;
       }
     }

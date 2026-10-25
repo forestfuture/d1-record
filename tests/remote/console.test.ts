@@ -18,17 +18,20 @@ function project(table: string, entry: Record<string, unknown>): string {
       compilerOptions: { paths: { "@forestfuture/d1-record": [library] } },
     }),
     "src/models/application-record.ts": `
-      import { modelFor } from "@forestfuture/d1-record";
-      export const ApplicationRecord = modelFor({
-        ${JSON.stringify(table)}: {
-          attributes: { id: "integer", email: "string" },
-          primaryKey: "id",
-        },
-      } as const);
+      import { Model } from "@forestfuture/d1-record";
+      export abstract class ApplicationRecord extends Model {
+        static override schema = {
+          binding: "DB",
+          tables: {
+            ${JSON.stringify(table)}: { attributes: { id: "integer", email: "string" }, primaryKey: "id" },
+          },
+          models: { User: ${JSON.stringify(table)} },
+        };
+      }
     `,
     "src/models/user.ts": `
       import { ApplicationRecord } from "./application-record";
-      export class User extends ApplicationRecord(${JSON.stringify(table)}) {}
+      export class User extends ApplicationRecord { static table = ${JSON.stringify(table)}; }
     `,
   };
   for (const [path, text] of Object.entries(files)) {

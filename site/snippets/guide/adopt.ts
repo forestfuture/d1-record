@@ -1,45 +1,29 @@
-import { column, gte, Model, modelFor, sql } from "@forestfuture/d1-record";
+import { column, gte, Model, sql } from "@forestfuture/d1-record";
+import { schema } from "../db/schema";
 
-// A Drizzle app's posts table, as `d1-record schema` reads it: plain TEXT and INTEGER columns.
-const ApplicationRecord = modelFor(
-  {
-    posts: {
-      attributes: {
-        id: { type: "string", null: false, generateId: true },
-        title: { type: "string", null: false },
-        metadata: "string",
-        archived: "integer",
-        legacyNotes: "string",
-        publishedAt: "integer",
-      },
-      primaryKey: "id",
-    },
-    // Columns from integer({ mode: "timestamp" }) and integer({ mode: "timestamp_ms" }).
-    articles: {
-      attributes: {
-        id: { type: "string", null: false, generateId: true },
-        publishedAt: "integer",
-        updatedAt: "integer",
-      },
-      primaryKey: "id",
-    },
-  } as const,
-  Model,
-);
+// The app's base class, holding the schema `d1-record schema` generated from a Drizzle app's
+// migrations (site/snippets/db/schema.ts).
+abstract class ApplicationRecord extends Model {
+  static override schema = schema;
+}
 
 // #region overrides
-export class Post extends ApplicationRecord("posts", {
-  metadata: "json", // text({ mode: "json" }): JSON in a plain TEXT column
-  archived: "boolean", // integer({ mode: "boolean" }): 0 or 1
-  legacyNotes: false, // a column this app no longer uses: never read or written
-}) {}
+export class Post extends ApplicationRecord {
+  static override attributes = {
+    metadata: "json", // text({ mode: "json" }): JSON in a plain TEXT column
+    archived: "boolean", // integer({ mode: "boolean" }): 0 or 1
+    legacyNotes: false, // a column this app no longer uses: never read or written
+  } as const;
+}
 // #endregion overrides
 
 // #region timestamps
-export class Article extends ApplicationRecord("articles", {
-  publishedAt: { type: "datetime", storage: "unixSeconds" }, // timestamp: seconds
-  updatedAt: { type: "datetime", storage: "unixMilliseconds" }, // timestamp_ms: milliseconds
-}) {}
+export class Article extends ApplicationRecord {
+  static override attributes = {
+    publishedAt: { type: "datetime", storage: "unixSeconds" }, // timestamp: seconds
+    updatedAt: { type: "datetime", storage: "unixMilliseconds" }, // timestamp_ms: milliseconds
+  } as const;
+}
 
 export function publishedSince(since: Date) {
   return Article.where({ publishedAt: gte(since) });

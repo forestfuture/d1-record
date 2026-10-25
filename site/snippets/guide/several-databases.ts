@@ -1,35 +1,18 @@
-import { Model, modelFor, withSession } from "@forestfuture/d1-record";
+import { Model, withSession } from "@forestfuture/d1-record";
+import { schema as logsSchema } from "../db/logs";
+import { schema as dbSchema } from "../db/schema";
 
-// What `d1-record schema` writes for two bindings: a schema and a base class for each.
-const dbTables = {
-  users: {
-    attributes: { id: { type: "integer", null: false }, email: { type: "string", null: false } },
-    primaryKey: "id",
-  },
-} as const;
-const logsTables = {
-  entries: {
-    attributes: {
-      id: { type: "integer", null: false },
-      level: { type: "string", null: false },
-      message: { type: "string", null: false },
-    },
-    primaryKey: "id",
-  },
-} as const;
-
-class DbBase extends Model {
-  static override binding = "DB";
+// Each binding's base class, holding the schema `d1-record schema` writes for it
+// (site/snippets/db/schema.ts and logs.ts).
+abstract class DbRecord extends Model {
+  static override schema = dbSchema;
 }
-class LogsBase extends Model {
-  static override binding = "LOGS";
+abstract class LogsRecord extends Model {
+  static override schema = logsSchema;
 }
 
-const DbRecord = modelFor(dbTables, DbBase);
-const LogsRecord = modelFor(logsTables, LogsBase);
-
-export class User extends DbRecord("users") {}
-export class Entry extends LogsRecord("entries") {}
+export class User extends DbRecord {}
+export class Entry extends LogsRecord {}
 
 // #region request
 // src/worker.ts: each Model queries its own database.

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { Model, modelFor, UnknownAttribute } from "../../src/index.ts";
+import { Model, UnknownAttribute, type TableAttributes } from "../../src/index.ts";
 
 // One attribute per stored form. `secret` is filtered by default.
 class Post extends Model.define({
@@ -15,19 +15,22 @@ class Post extends Model.define({
   static table = "typed_posts";
 }
 
-// A Model made from a generated schema, as an app's `ApplicationRecord` makes them.
-const ApplicationRecord = modelFor(
-  {
-    notes: {
-      attributes: { id: { type: "integer", null: false }, openedAt: "integer" },
-      primaryKey: "id",
-    },
-  } as const,
-  Model,
-);
-class Note extends ApplicationRecord("notes", {
-  openedAt: { type: "datetime", storage: "unixSeconds" },
-}) {}
+// A generated Model, with an override, on an app's base class holding its schema.
+const notes = { id: { type: "integer", null: false }, openedAt: "integer" } as const;
+abstract class ApplicationRecord extends Model {
+  static override schema = {
+    binding: "DB",
+    tables: { notes: { attributes: notes, primaryKey: "id" } },
+    models: { Note: "notes" },
+  } as const;
+}
+// The interface stands in for the declarations d1-record schema generates in another file.
+/* oxlint-disable typescript/no-unsafe-declaration-merging */
+class Note extends ApplicationRecord {
+  static override attributes = { openedAt: { type: "datetime", storage: "unixSeconds" } } as const;
+}
+interface Note extends TableAttributes<typeof notes, (typeof Note)["attributes"]> {}
+/* oxlint-enable typescript/no-unsafe-declaration-merging */
 
 const instant = new Date("2026-01-02T03:04:05.678Z");
 
@@ -143,7 +146,7 @@ describe("typeForAttribute's conversions need no database", () => {
       expect(serialize(instant)).toBe(1767323045);
     });
 
-    test("is there on a Model made by modelFor, with its overrides", () => {
+    test("is there on a generated Model, with its overrides", () => {
       const { serialize, deserialize } = Note.typeForAttribute("openedAt");
 
       expect(serialize(instant)).toBe(1767323045);
