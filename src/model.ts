@@ -129,6 +129,11 @@ export class Model extends ModelStatics {
    */
   declare static attributes?: AttributeOverrides;
   /**
+   * Marks a class between the app's base class and its Models (`static override abstract =
+   * true`): it has no table, it shares its behavior, and each class directly below it has one.
+   */
+  declare static abstract?: boolean;
+  /**
    * The D1 binding this Model queries when there's no request database (`withDatabase`), as
    * Rails' `connects_to`: `static override binding = "DB"`, usually on the app's base class.
    */
@@ -196,7 +201,7 @@ export class Model extends ModelStatics {
    * (`User.where(…).active()`), inherited like any static. Inside it, `q` has every Relation
    * method, but not the Model's other scopes (their types would refer to themselves).
    */
-  static scope<C extends ModelClass, A extends unknown[]>(
+  static scope<C extends AbstractModelClass, A extends unknown[]>(
     this: C,
     body: (q: Relation<InstanceType<C>>, ...args: A) => Relation<InstanceType<C>>,
   ): ScopeStatic<A> {
@@ -243,7 +248,7 @@ export class Model extends ModelStatics {
   }
 
   /** Declares a validation, e.g. `this.validates("email", { presence: true })` in `static {}`. */
-  static validates<C extends ModelClass>(
+  static validates<C extends AbstractModelClass>(
     this: C,
     attribute: keyof AttributesOf<InstanceType<C>> & string,
     options: ValidationOptions<InstanceType<C>>,
@@ -262,7 +267,7 @@ export class Model extends ModelStatics {
    * under `attributes` by attribute and type. A Model's own win over those of the classes it
    * extends, the app's base class's included; a later call's over an earlier one's (#88).
    */
-  static errorMessages<C extends ModelClass>(
+  static errorMessages<C extends AbstractModelClass>(
     this: C,
     messages: ErrorMessages<ErrorAttributeName<InstanceType<C>>>,
   ): void {
@@ -274,7 +279,7 @@ export class Model extends ModelStatics {
    * ("createdAt" → "Created at"): `{ createdAt: "Signed up" }`. A Model's own win over those of
    * the classes it extends (#88).
    */
-  static humanAttributeNames<C extends ModelClass>(
+  static humanAttributeNames<C extends AbstractModelClass>(
     this: C,
     names: { readonly [K in ErrorAttributeName<InstanceType<C>>]?: string },
   ): void {
@@ -552,6 +557,13 @@ export type TableAttributes<A extends AttributeSpecs, O = {}> = AttributePropert
 > & {
   readonly [attributeTypes]?: AttributeProperties<AsSpecs<OverriddenSpecs<A, O>>>;
 };
+
+/**
+ * A Model class or a class Models are built on, abstract ones included (the app's base class):
+ * what the statics that declare behavior (callbacks, validations, scopes) are called on.
+ */
+export type AbstractModelClass<M extends Model = Model> = (abstract new () => M) &
+  Omit<typeof Model, "prototype">;
 
 /** A class to build Models on: `Model`, or an app's class extending it (`ApplicationRecord`'s). */
 export type BaseClass = abstract new () => Model;

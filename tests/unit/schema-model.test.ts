@@ -263,7 +263,7 @@ describe("modelFor(tables, Base): an app's own base class, as Rails' Application
   test("the base class is abstract: it has no table, so using it is an InvalidModel, as Rails' abstract_class", () => {
     expect(() => db.model(Base)).toThrow(
       new InvalidModel(
-        'Base is an abstract base class, with no table; use a Model built on it, such as class Product extends ApplicationRecord("products") {}',
+        "Base is an abstract base class, with no table; use a Model that extends it, such as class Product extends Base {}",
       ),
     );
   });

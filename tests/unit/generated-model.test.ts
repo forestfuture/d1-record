@@ -59,3 +59,22 @@ describe("a generated Model's subclass", () => {
     );
   });
 });
+
+describe("abstract classes", () => {
+  test("the app's base class, or a class marked abstract, isn't a Model", () => {
+    abstract class Shared extends AppRecord {
+      static override abstract = true;
+    }
+
+    expect(() => db.model(AppRecord as never)).toThrow(
+      new InvalidModel(
+        "AppRecord is an abstract base class, with no table; use a Model that extends it, such as class Product extends AppRecord {}",
+      ),
+    );
+    expect(() => db.model(Shared as never)).toThrow(
+      new InvalidModel(
+        "Shared is an abstract base class, with no table; use a Model that extends it, such as class Product extends Shared {}",
+      ),
+    );
+  });
+});

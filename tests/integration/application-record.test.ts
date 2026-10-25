@@ -1,7 +1,10 @@
 import { afterAll, beforeAll, describe, expect, expectTypeOf, test, vi } from "vite-plus/test";
 import { connect, type QueryEvent } from "../../src/index.ts";
+import { audited } from "../fixtures/models/auditable.ts";
+import { Comment } from "../fixtures/models/comment.ts";
 import { Customer } from "../fixtures/models/customer.ts";
 import { Post } from "../fixtures/models/post.ts";
+import { saved } from "../fixtures/models/test-record.ts";
 import { User } from "../fixtures/models/user.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
@@ -91,5 +94,25 @@ describe("Models extending the app's base class", () => {
     expect(found).toBeInstanceOf(FeaturedPost);
     expect(found.title).toBe("Featured");
     expect(FeaturedPost.table).toBe("posts");
+  });
+
+  test("the base class's methods, scopes and callbacks are every Model's", async () => {
+    saved.length = 0;
+    const post = await Post.create({ userId: 1, title: "Newest" });
+
+    const newest = await Post.newest().first();
+
+    expect(saved).toEqual(["Post"]);
+    expect(newest?.title).toBe("Newest");
+    expect(post.label()).toBe(`Post ${post.id}`);
+  });
+
+  test("a class marked abstract shares its callbacks, and the classes below it have tables", async () => {
+    audited.length = 0;
+
+    await Comment.create({ body: "Agreed" });
+
+    expect(audited).toEqual(["Comment"]);
+    expect(Comment.table).toBe("comments");
   });
 });
