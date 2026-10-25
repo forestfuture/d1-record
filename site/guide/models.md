@@ -26,7 +26,7 @@ export class FeaturedProduct extends Product {}
 
 You can still set `static primaryKey`, as long as it names an attribute.
 
-### Where `ApplicationRecord` comes from
+### Generating `ApplicationRecord`
 
 The first time you run `d1-record schema`, it writes `src/models/application-record.ts`:
 

@@ -1,6 +1,6 @@
 # Models extend the app's `ApplicationRecord`, not a library `Model("table")`
 
-**Superseded in part by ADR-0015**: `ApplicationRecord` is a plain abstract class holding the schema, and a Model extends it with no call: `class Product extends ApplicationRecord {}`.
+**Superseded in part by ADR-0015**: `ApplicationRecord` is an abstract class holding the schema, and a Model extends it with no call: `class Product extends ApplicationRecord {}`.
 
 A Model extends the app's base class: `class Product extends ApplicationRecord("products") {}`, where `src/models/application-record.ts` declares `class Base extends Model.Base` and `export const ApplicationRecord = modelFor(tables, Base)`, built on the generated schema (ADR-0010). That matches Rails line for line (`class ApplicationRecord < ActiveRecord::Base`, then `class Product < ApplicationRecord`), apart from the table in the call, which TypeScript needs because a class's type can't come from its name (ADR-0007).
 

@@ -21,7 +21,7 @@ The file `d1-record schema` writes from a project's migrations and Model files: 
 _Avoid_: Schema dump, types file
 
 **Base class**:
-The app's abstract class extending `Model`, `ApplicationRecord` (in `application-record.ts`), that holds the **Generated schema** and that every Model is built on, so the methods, callbacks and scopes written on it are shared. It has no table. So has a class between it and some Models marked `static abstract = true`.
+The app's abstract class extending `Model`, `ApplicationRecord` (in `application-record.ts`), that holds the **Generated schema** and that every Model is built on, so the methods, callbacks and scopes written on it are shared. It has no table. Neither does a class between it and some Models marked `static abstract = true`.
 _Avoid_: Mixin, concern, parent model
 
 **Generator**:
