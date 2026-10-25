@@ -24,7 +24,7 @@ class User extends Model.define({
   role: "string",
   age: "integer",
 }) {
-  static tableName = "users";
+  static table = "users";
 
   posts = hasMany(Post, { foreignKey: "userId" });
 
@@ -43,7 +43,7 @@ class Post extends Model.define({
   createdAt: "datetime",
   updatedAt: "datetime",
 }) {
-  static tableName = "posts";
+  static table = "posts";
 
   comments = hasMany(Comment, { foreignKey: "postId" });
 }
@@ -53,7 +53,7 @@ class Comment extends Model.define({
   postId: "integer",
   body: "string",
 }) {
-  static tableName = "comments";
+  static table = "comments";
 }
 
 let counter = 0;
@@ -63,14 +63,14 @@ class ApiKey extends Model.define({
   label: { type: "string", null: false },
   scopes: "json",
 }) {
-  static tableName = "api_keys";
+  static table = "api_keys";
 }
 
 class Account extends Model.define({
   id: { type: "integer", null: false },
   externalAccountId: "string",
 }) {
-  static tableName = "accounts";
+  static table = "accounts";
 }
 
 const past = new Date(Date.UTC(2020, 0, 1));
@@ -786,7 +786,7 @@ describe("statements", () => {
         email: { type: "string", null: false },
         role: { type: "string", default: () => "member" },
       }) {
-        static tableName = "users";
+        static table = "users";
       }
       const members = connect(binding).model(Member);
       await members.insert({ id: 2, email: "b@example.com", role: "admin" });
@@ -823,7 +823,7 @@ describe("statements", () => {
 
     test("with nothing to insert, a skip, an upsert or several rows throw; insert({}) writes defaults", async () => {
       class Bare extends Model.define({ id: { type: "integer", null: false } }) {
-        static tableName = "comments";
+        static table = "comments";
       }
       const bare = connect(binding).model(Bare);
 

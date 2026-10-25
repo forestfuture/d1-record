@@ -18,7 +18,7 @@ class User extends Model.define({
   role: "string",
   isActive: "boolean",
 }) {
-  static tableName = "users";
+  static table = "users";
 }
 
 let counter = 0;
@@ -29,7 +29,7 @@ class ApiKey extends Model.define({
   scopes: "json",
   expiresAt: "datetime",
 }) {
-  static tableName = "api_keys";
+  static table = "api_keys";
 }
 
 describe("record lifecycle", () => {

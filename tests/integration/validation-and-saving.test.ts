@@ -7,7 +7,7 @@ class User extends Model.define({
   email: "string",
   role: "string",
 }) {
-  static tableName = "users";
+  static table = "users";
 
   static {
     this.validates("email", { presence: true });
@@ -18,7 +18,7 @@ class Signup extends Model.define({
   id: { type: "integer", null: false },
   email: "string",
 }) {
-  static tableName = "users";
+  static table = "users";
 
   static {
     this.errorMessages({ attributes: { email: { taken: "is already registered" } } });

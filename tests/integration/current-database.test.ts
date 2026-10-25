@@ -21,19 +21,19 @@ class User extends Model.define({
   email: { type: "string", null: false },
   role: "string",
 }) {
-  static tableName = "users";
+  static table = "users";
   static override binding = "DB";
   static withRole = this.scope((q, role: string) => q.where({ role }));
 }
 
 // A Model naming no binding: only a request's database (or an explicit one) can serve it.
 class Unbound extends Model.define({ id: { type: "integer", null: false }, email: "string" }) {
-  static tableName = "users";
+  static table = "users";
 }
 
 // A Model on a binding this Worker doesn't have.
 class Elsewhere extends Model.define({ id: { type: "integer", null: false } }) {
-  static tableName = "users";
+  static table = "users";
   static override binding = "LOGS";
 }
 

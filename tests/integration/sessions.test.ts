@@ -7,7 +7,7 @@ class User extends Model.define({
   email: { type: "string", null: false },
   role: "string",
 }) {
-  static tableName = "users";
+  static table = "users";
 
   posts = hasMany(Post, { foreignKey: "userId" });
 
@@ -21,7 +21,7 @@ class Post extends Model.define({
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
 }) {
-  static tableName = "posts";
+  static table = "posts";
 
   author = belongsTo(User, { foreignKey: "userId" });
 }

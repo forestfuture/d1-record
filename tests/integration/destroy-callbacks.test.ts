@@ -15,7 +15,7 @@ class User extends Model.define({
   id: { type: "integer", null: false },
   email: "string",
 }) {
-  static tableName = "users";
+  static table = "users";
 
   static {
     this.beforeDestroy(() => {

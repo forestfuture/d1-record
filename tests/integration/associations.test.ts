@@ -14,7 +14,7 @@ class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
 }) {
-  static tableName = "users";
+  static table = "users";
 
   posts = hasMany(Post, { foreignKey: "userId" });
   profile = hasOne(Profile, { foreignKey: "userId" });
@@ -25,7 +25,7 @@ class Profile extends Model.define({
   userId: { type: "integer", null: false },
   bio: "string",
 }) {
-  static tableName = "profiles";
+  static table = "profiles";
 }
 
 class Comment extends Model.define({
@@ -33,7 +33,7 @@ class Comment extends Model.define({
   postId: "integer",
   body: "string",
 }) {
-  static tableName = "comments";
+  static table = "comments";
 
   post = belongsTo(Post, { foreignKey: "postId" });
 }
@@ -44,7 +44,7 @@ class Post extends Model.define({
   title: { type: "string", null: false },
   published: "boolean",
 }) {
-  static tableName = "posts";
+  static table = "posts";
 
   author = belongsTo(User, { foreignKey: "userId" });
 
@@ -148,7 +148,7 @@ describe("associations", () => {
 
   test("a saved owner whose key is null reads nothing, and create says why", async () => {
     class Member extends Model.define({ id: { type: "integer", null: false }, age: "integer" }) {
-      static tableName = "users";
+      static table = "users";
       posts = hasMany(Post, { foreignKey: "userId", primaryKey: "age" });
     }
     const member = await connect(binding).model(Member).find(1); // age is NULL

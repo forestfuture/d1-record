@@ -16,7 +16,7 @@ class Post extends Model.define({
   meta: "json",
   secret: "json",
 }) {
-  static tableName = "typed_posts";
+  static table = "typed_posts";
 }
 
 describe("typeForAttribute against D1: a raw statement and a save agree (#148)", () => {

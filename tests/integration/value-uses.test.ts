@@ -11,12 +11,12 @@ class Sample extends Model.define({
   stamp: "datetime",
   settings: "json",
 }) {
-  static tableName = "samples";
+  static table = "samples";
 }
 
 // A text foreign key (label) pointing at an integer key: the two keys' types differ.
 class Note extends Model.define({ id: { type: "integer", null: false }, label: "string" }) {
-  static tableName = "samples";
+  static table = "samples";
 
   owner = belongsTo(Owner, { foreignKey: "label" });
 }
@@ -25,7 +25,7 @@ class Owner extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
 }) {
-  static tableName = "users";
+  static table = "users";
 
   notes = hasMany(Note, { foreignKey: "label" });
   note = hasOne(Note, { foreignKey: "label" });
@@ -33,13 +33,13 @@ class Owner extends Model.define({
 
 // An integer foreign key (quantity) pointing at a text key.
 class Code extends Model.define({ id: { type: "string", null: false }, label: "string" }) {
-  static tableName = "api_keys";
+  static table = "api_keys";
 
   counted = hasMany(Counted, { foreignKey: "quantity" });
 }
 
 class Counted extends Model.define({ id: { type: "integer", null: false }, quantity: "integer" }) {
-  static tableName = "samples";
+  static table = "samples";
 
   code = belongsTo(Code, { foreignKey: "quantity" });
 }

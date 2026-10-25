@@ -15,7 +15,7 @@ export const declared = {
 } as const;
 
 export class Sample extends Model.define({ id: { type: "integer", null: false }, ...declared }) {
-  static tableName = "samples";
+  static table = "samples";
 }
 
 export type SampleAttribute = keyof typeof declared;

@@ -14,17 +14,17 @@ import {
 const db = connect({} as never);
 
 class Post extends Model.define({ id: "integer", userId: "integer", title: "string" }) {
-  static tableName = "posts";
+  static table = "posts";
 }
 
 describe("association declarations", () => {
   test("an association named like an attribute or a record method is rejected", () => {
     class Shadow extends Model.define({ id: "integer", posts: "json" }) {
-      static tableName = "users";
+      static table = "users";
       posts = hasMany(Post, { foreignKey: "userId" });
     }
     class Clash extends Model.define({ id: "integer" }) {
-      static tableName = "users";
+      static table = "users";
       // A type error too (save is a record method); cast to reach the runtime check.
       save = hasMany(Post, { foreignKey: "userId" }) as never;
     }
@@ -37,11 +37,11 @@ describe("association declarations", () => {
 
   test("a foreignKey that isn't a declared attribute is rejected", () => {
     class Typo extends Model.define({ id: "integer" }) {
-      static tableName = "users";
+      static table = "users";
       posts = hasMany(Post, { foreignKey: "user_id" });
     }
     class Owner extends Model.define({ id: "integer" }) {
-      static tableName = "posts";
+      static table = "posts";
       author = belongsTo(Post, { foreignKey: "authorId" });
     }
 
@@ -51,7 +51,7 @@ describe("association declarations", () => {
 
   test("a target that isn't a Model is rejected", () => {
     class Lost extends Model.define({ id: "integer" }) {
-      static tableName = "users";
+      static table = "users";
       posts = hasMany("Post" as never, { foreignKey: "userId" }); // a type error too
     }
 
@@ -68,15 +68,15 @@ describe("association declarations", () => {
 
   test("an inferred key that isn't declared is rejected, saying where it came from", () => {
     class APIKey extends Model.define({ id: "integer" }) {
-      static tableName = "api_keys";
+      static table = "api_keys";
       posts = hasMany(Post); // APIKey → apiKeyId, which Post doesn't declare
     }
     class Draft extends Model.define({ id: "integer" }) {
-      static tableName = "posts";
+      static table = "posts";
       writer = belongsTo(Post); // writer → writerId, which Draft doesn't declare
     }
     class BlogPost extends Model.define({ id: "integer" }) {
-      static tableName = "users";
+      static table = "users";
       comments = hasMany(Post); // BlogPost → blogPostId, through underscore
     }
 
@@ -92,7 +92,7 @@ describe("association declarations", () => {
   test("a class renamed by a bundler fails loudly, suggesting foreignKey", () => {
     // What a minifier without keep_names does: the class is now called e.
     const e = class extends Model.define({ id: "integer" }) {
-      static tableName = "users";
+      static table = "users";
       posts = hasMany(Post);
     };
 
@@ -186,7 +186,7 @@ describe("association declarations", () => {
   test("a class with no name must give a hasMany its foreignKey", () => {
     const anonymous = [
       class extends Model.define({ id: "integer" }) {
-        static tableName = "users";
+        static table = "users";
         posts = hasMany(Post);
       },
     ][0]!;

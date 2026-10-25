@@ -136,7 +136,7 @@ describe("a schema generated from migrations", () => {
 
     const visit = await db.model(Visit).createOrThrow({ path: "/" });
 
-    expect(Visit.tableName).toBe("visits");
+    expect(Visit.table).toBe("visits");
     expect((await db.model(Visit).find(visit.id)).path).toBe("/");
   });
 

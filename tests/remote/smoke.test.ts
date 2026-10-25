@@ -22,7 +22,7 @@ function modelsFor(prefix: string) {
     createdAt: "datetime",
     updatedAt: "datetime",
   }) {
-    static tableName = `${prefix}users`;
+    static table = `${prefix}users`;
 
     posts = hasMany(Post, { foreignKey: "userId" });
     firstPost = hasOne(Post, { foreignKey: "userId" });
@@ -35,7 +35,7 @@ function modelsFor(prefix: string) {
     published: { type: "boolean", null: false },
     views: { type: "integer", null: false },
   }) {
-    static tableName = `${prefix}posts`;
+    static table = `${prefix}posts`;
   }
 
   return { User, Post };

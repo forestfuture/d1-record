@@ -16,7 +16,7 @@ class User extends Model.define({
   email: "string",
   role: "string",
 }) {
-  static tableName = "users";
+  static table = "users";
 
   static {
     this.beforeValidation(() => void log.push("beforeValidation"));

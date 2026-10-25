@@ -18,7 +18,7 @@ class Sample extends Model.define({
   stamp: "datetime",
   secret: "string",
 }) {
-  static tableName = "typed_samples";
+  static table = "typed_samples";
   static override filterAttributes = ["secret"];
 }
 
@@ -29,7 +29,7 @@ class Stamp extends Model.define({
   seconds: { type: "datetime", storage: "unixSeconds" },
   milliseconds: { type: "datetime", storage: "unixMilliseconds" },
 }) {
-  static tableName = "stamps";
+  static table = "stamps";
 }
 
 describe("a typed value in an sql fragment (#142)", () => {

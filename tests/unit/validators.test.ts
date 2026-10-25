@@ -11,7 +11,7 @@ class Account extends Model.define({
   nickname: "string",
   isStaff: "boolean",
 }) {
-  static tableName = "accounts";
+  static table = "accounts";
 
   static {
     this.validates("handle", { length: { minimum: 3, maximum: 8 } });
@@ -109,7 +109,7 @@ describe("validators", () => {
 
   test("format gives the same answer every time, even with a /g or /y pattern", async () => {
     class Tag extends Model.define({ id: "integer", name: "string" }) {
-      static tableName = "tags";
+      static table = "tags";
       static {
         this.validates("name", { format: /^[a-z]+$/g });
       }
@@ -126,7 +126,7 @@ describe("validators", () => {
   test("uniqueness scope names are checked when the validation is declared", () => {
     const declare = () => {
       class Membership extends Model.define({ id: "integer", email: "string", teamId: "integer" }) {
-        static tableName = "memberships";
+        static table = "memberships";
         static {
           // @ts-expect-error "team" isn't an attribute; "teamId" is
           this.validates("email", { uniqueness: { scope: ["team"] } });
@@ -140,7 +140,7 @@ describe("validators", () => {
 
   test("length messages say 'character' for a count of one", async () => {
     class Pin extends Model.define({ id: "integer", a: "string", b: "string", c: "string" }) {
-      static tableName = "pins";
+      static table = "pins";
       static {
         this.validates("a", { length: { minimum: 1 } });
         this.validates("b", { length: { maximum: 1 } });
@@ -163,7 +163,7 @@ describe("validators", () => {
   test("length counts the items of an array, and inclusion matches dates by their time", async () => {
     const launch = new Date(Date.UTC(2026, 0, 1));
     class Post extends Model.define({ id: "integer", tags: "json", publishOn: "datetime" }) {
-      static tableName = "posts";
+      static table = "posts";
       static {
         this.validates("tags", { length: { minimum: 1 } });
         this.validates("publishOn", { inclusion: [launch] });

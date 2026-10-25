@@ -7,7 +7,7 @@ class Sample extends Model.define({
   label: "string",
   stamp: { type: "datetime", storage: "unixSeconds" },
 }) {
-  static tableName = "samples";
+  static table = "samples";
 }
 
 // No D1 needed: assigning casts and never queries (#163).

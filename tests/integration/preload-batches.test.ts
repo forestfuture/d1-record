@@ -18,7 +18,7 @@ class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
 }) {
-  static tableName = "users";
+  static table = "users";
 
   posts = hasMany(Post, { foreignKey: "userId" });
   profile = hasOne(Profile, { foreignKey: "userId" });
@@ -42,7 +42,7 @@ class Post extends Model.define({
   title: { type: "string", null: false },
   published: "boolean",
 }) {
-  static tableName = "posts";
+  static table = "posts";
 
   author = belongsTo(User, { foreignKey: "userId" });
   comments = hasMany(Comment, { foreignKey: "postId" });
@@ -54,7 +54,7 @@ class Comment extends Model.define({
   postId: "integer",
   body: "string",
 }) {
-  static tableName = "comments";
+  static table = "comments";
 }
 
 class Profile extends Model.define({
@@ -62,7 +62,7 @@ class Profile extends Model.define({
   userId: { type: "integer", null: false },
   bio: "string",
 }) {
-  static tableName = "profiles";
+  static table = "profiles";
 
   user = belongsTo(User, { foreignKey: "userId" });
 }
@@ -77,7 +77,7 @@ class Account extends Model.define({
   id: { type: "integer", null: false },
   userId: "integer",
 }) {
-  static tableName = "accounts";
+  static table = "accounts";
 
   user = belongsTo(User, { foreignKey: "userId" });
   namedUser = belongsTo(User, {

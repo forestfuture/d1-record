@@ -12,7 +12,7 @@ class Post extends Model.define({
   meta: "json",
   secret: "json",
 }) {
-  static tableName = "typed_posts";
+  static table = "typed_posts";
 }
 
 // A Model made from a generated schema, as an app's `ApplicationRecord` makes them.

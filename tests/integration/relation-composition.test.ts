@@ -15,11 +15,11 @@ class User extends Model.define({
   role: "string",
   suspended: { type: "boolean", null: false },
 }) {
-  static tableName = "users";
+  static table = "users";
 }
 
 class Post extends Model.define({ id: "integer", title: "string" }) {
-  static tableName = "posts";
+  static table = "posts";
 }
 
 const ids = async (relation: Relation<User>) => (await relation.toArray()).map((user) => user.id);

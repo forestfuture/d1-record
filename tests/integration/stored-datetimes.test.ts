@@ -8,7 +8,7 @@ class Event extends Model.define({
   name: "string",
   happenedAt: { type: "datetime", column: "happened_at" },
 }) {
-  static tableName = "events";
+  static table = "events";
 }
 
 // Drizzle's integer({ mode: "timestamp" }) and integer({ mode: "timestamp_ms" }).
@@ -18,7 +18,7 @@ class Stamp extends Model.define({
   seconds: { type: "datetime", storage: "unixSeconds" },
   milliseconds: { type: "datetime", storage: "unixMilliseconds" },
 }) {
-  static tableName = "stamps";
+  static table = "stamps";
 }
 
 // created_at and updated_at as integer milliseconds, as Drizzle's timestamp_ms mode writes them.
@@ -28,7 +28,7 @@ class Entry extends Model.define({
   createdAt: { type: "datetime", storage: "unixMilliseconds" },
   updatedAt: { type: "datetime", storage: "unixMilliseconds" },
 }) {
-  static tableName = "entries";
+  static table = "entries";
 }
 
 describe("datetimes stored by other tools (#73)", () => {
@@ -212,7 +212,7 @@ describe("datetimes stored by other tools (#73)", () => {
         default: () => new Date(1_800_000_000_500),
       },
     }) {
-      static tableName = "stamps";
+      static table = "stamps";
     }
 
     await connect(binding).model(Dated).create({});

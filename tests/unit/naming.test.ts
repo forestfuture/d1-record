@@ -4,7 +4,7 @@ import { underscore } from "../../src/naming.ts";
 import { originalUnderscore } from "../support/naming-oracle.ts";
 
 class User extends Model.define({ id: { type: "integer", null: false } }) {
-  static tableName = "users";
+  static table = "users";
 }
 
 // No D1 needed: building a record and reading its errors never queries.

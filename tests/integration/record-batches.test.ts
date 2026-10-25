@@ -20,7 +20,7 @@ class User extends Model.define({
   email: { type: "string", null: false },
   role: "string",
 }) {
-  static tableName = "users";
+  static table = "users";
 
   posts = hasMany(Post, { foreignKey: "userId", dependent: "deleteAll" });
 
@@ -42,7 +42,7 @@ class Post extends Model.define({
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
 }) {
-  static tableName = "posts";
+  static table = "posts";
 
   static {
     this.beforeSave((post) => void log.push(`before save ${post.title}`));
@@ -57,14 +57,14 @@ class ApiKey extends Model.define({
   id: { type: "string", null: false, default: () => `key-${++counter}` },
   label: { type: "string", null: false },
 }) {
-  static tableName = "api_keys";
+  static table = "api_keys";
 }
 
 class Account extends Model.define({
   id: { type: "integer", null: false },
   externalAccountId: "string",
 }) {
-  static tableName = "accounts";
+  static table = "accounts";
 }
 
 describe("saving and destroying records in a batch", () => {

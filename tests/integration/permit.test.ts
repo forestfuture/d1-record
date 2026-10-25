@@ -17,7 +17,7 @@ class User extends Model.define({
   isActive: "boolean",
   age: "integer",
 }) {
-  static tableName = "users";
+  static table = "users";
 }
 
 // Untrusted input, as a request gives it: only the named attributes reach a record (#82).

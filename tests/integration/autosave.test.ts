@@ -16,7 +16,7 @@ class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
 }) {
-  static tableName = "users";
+  static table = "users";
 
   posts = hasMany(Post, { foreignKey: "userId" });
 
@@ -31,7 +31,7 @@ class Post extends Model.define({
   userId: "integer",
   title: { type: "string", null: false },
 }) {
-  static tableName = "posts";
+  static table = "posts";
 
   comments = hasMany(Comment, { foreignKey: "postId" });
 
@@ -47,7 +47,7 @@ class Comment extends Model.define({
   postId: "integer",
   body: "string",
 }) {
-  static tableName = "comments";
+  static table = "comments";
 
   static {
     this.beforeValidation((comment) => void log.push(`validating ${comment.body}`));
@@ -61,7 +61,7 @@ class ApiKey extends Model.define({
   id: { type: "string", null: false, default: () => `key-${++counter}` },
   label: { type: "string", null: false },
 }) {
-  static tableName = "api_keys";
+  static table = "api_keys";
 
   accounts = hasMany(Account, { foreignKey: "externalAccountId" });
 }
@@ -70,7 +70,7 @@ class Account extends Model.define({
   id: { type: "integer", null: false },
   externalAccountId: "string",
 }) {
-  static tableName = "accounts";
+  static table = "accounts";
 }
 
 describe("autosave: records built through a hasMany are saved with their owner", () => {

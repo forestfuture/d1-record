@@ -6,7 +6,7 @@ class User extends Model.define({
   email: { type: "string", null: false },
   age: "integer",
 }) {
-  static tableName = "users";
+  static table = "users";
   static adults = this.scope((q) => q.where({ age: 18 }));
 }
 

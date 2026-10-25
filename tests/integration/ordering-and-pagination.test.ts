@@ -8,7 +8,7 @@ class User extends Model.define({
   role: "string",
   createdAt: "datetime",
 }) {
-  static tableName = "users";
+  static table = "users";
 }
 
 const ids = (users: User[]) => users.map((user) => user.id);

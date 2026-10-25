@@ -9,7 +9,7 @@ class Sample extends Model.define({
   label: "string",
   quantity: "integer",
 }) {
-  static tableName = "samples";
+  static table = "samples";
 }
 
 // `d1-record console`: a REPL with the project's Models in scope (#104).
@@ -35,7 +35,7 @@ describe("the console session", () => {
   test("a Model is in scope", async () => {
     const console = await session();
 
-    expect(await console.send("Sample.tableName")).toBe("#=> 'samples'");
+    expect(await console.send("Sample.table")).toBe("#=> 'samples'");
     await console.close();
   });
 

@@ -29,7 +29,7 @@ class NumberedNote extends Model.define({
   id: { type: "string", null: false, generateId: true },
   body: "string",
 }) {
-  static override tableName = "notes";
+  static override table = "notes";
 
   static override generateId = () => 42 as unknown as string;
 }
@@ -66,7 +66,7 @@ class PrefixedNote extends Model.define({
   id: { type: "string", null: false, generateId: true },
   body: "string",
 }) {
-  static override tableName = "notes";
+  static override table = "notes";
 
   static override generateId(attribute: string) {
     return `${attribute}_${super.generateId(attribute)}`;
@@ -156,7 +156,7 @@ describe("generated ids", () => {
         // @ts-expect-error a compile error too; this checks plain JavaScript
         id: { type: "string", null: false, generateId: true, default: () => "x" },
       }) {
-        static override tableName = "notes";
+        static override table = "notes";
       }
 
       expect(() => connect(binding).model(Both)).toThrow(
@@ -169,7 +169,7 @@ describe("generated ids", () => {
         // @ts-expect-error a compile error too; this checks plain JavaScript
         id: { type: "integer", null: false, generateId: true },
       }) {
-        static override tableName = "notes";
+        static override table = "notes";
       }
 
       expect(() => connect(binding).model(Counted)).toThrow(

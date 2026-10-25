@@ -22,7 +22,7 @@ class Post extends Model.define({
   title: { type: "string", null: false },
   published: "boolean",
 }) {
-  static tableName = "posts";
+  static table = "posts";
   static override binding = "DB";
   static isPublished = this.scope((q) => q.where({ published: true }));
   // A scope that starts again from the Model's statics: on the current database.
@@ -35,7 +35,7 @@ class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
 }) {
-  static tableName = "users";
+  static table = "users";
   static override binding = "DB";
 
   posts = hasMany(Post, { foreignKey: "userId", dependent: "destroy" });

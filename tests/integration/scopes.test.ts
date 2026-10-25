@@ -9,7 +9,7 @@ class User extends Model.define({
   isActive: "boolean",
   createdAt: "datetime",
 }) {
-  static tableName = "users";
+  static table = "users";
 
   static active = this.scope((q) => q.where({ isActive: true }));
   static recent = this.scope((q) => q.order({ createdAt: "desc" }));

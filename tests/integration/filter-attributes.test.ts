@@ -16,7 +16,7 @@ class User extends Model.define({
   email: { type: "string", null: false }, // filtered by default: "email"
   role: "string",
 }) {
-  static tableName = "users";
+  static table = "users";
 }
 
 // A secret as the primary key: sessions or API keys looked up by their token.
@@ -24,7 +24,7 @@ class Session extends Model.define({
   token: { type: "string", null: false, column: "id" },
   label: { type: "string", null: false },
 }) {
-  static tableName = "api_keys";
+  static table = "api_keys";
   static primaryKey = "token";
 }
 
@@ -188,7 +188,7 @@ describe("filterAttributes", () => {
         apiKey: "string",
         nickname: "string",
       }) {
-        static override tableName = "accounts";
+        static override table = "accounts";
         static override filterAttributes = filterAttributes;
       };
 

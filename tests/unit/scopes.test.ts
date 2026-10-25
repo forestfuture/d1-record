@@ -13,7 +13,7 @@ class User extends Model.define({
   role: "string",
   isActive: "boolean",
 }) {
-  static tableName = "users";
+  static table = "users";
 
   static active = this.scope((q) => q.where({ isActive: true }));
   static admins = this.scope((q) => q.where({ role: "admin" }));
@@ -57,16 +57,16 @@ describe("scopes as statics", () => {
 describe("scope rules", () => {
   test("a scope named like a Relation method, a Model static, or then, is rejected on first use", () => {
     class Clash extends Model.define({ id: "integer" }) {
-      static tableName = "users";
+      static table = "users";
       // A compile error too (count is a static); reached through a cast to test the runtime check.
       static override count = this.scope((q) => q.limit(1)) as never;
     }
     class Static extends Model.define({ id: "integer" }) {
-      static tableName = "users";
+      static table = "users";
       static override validates = this.scope((q) => q) as never;
     }
     class Thenable extends Model.define({ id: "integer" }) {
-      static tableName = "users";
+      static table = "users";
       // oxlint-disable-next-line unicorn/no-thenable -- the point of the test: a "then" scope is rejected
       static then = this.scope((q) => q);
     }
@@ -79,7 +79,7 @@ describe("scope rules", () => {
 
   test("a scope must return a Relation of its own Model", () => {
     class Sloppy extends Model.define({ id: "integer", role: "string" }) {
-      static tableName = "users";
+      static table = "users";
       // @ts-expect-error forgot to return the Relation
       static forgetful = this.scope((q) => {
         q.where({ role: "admin" });
@@ -98,7 +98,7 @@ describe("relations stay on their Database", () => {
   test("a scope that returns a Relation on another Database is rejected when it runs", async () => {
     const otherDb = connect({} as never);
     class Wanderer extends Model.define({ id: "integer" }) {
-      static tableName = "users";
+      static table = "users";
       // Naming its own class, the scope needs its type written out, as any self-reference does.
       static elsewhere: ScopeStatic<[]> = this.scope(
         () => otherDb.model(Wanderer) as unknown as Relation<Wanderer>,
@@ -126,7 +126,7 @@ describe("relations stay on their Database", () => {
 describe("scope timing", () => {
   test("replacing a scope after the Model's first use throws, rather than being ignored", () => {
     class Late extends Model.define({ id: "integer", role: "string" }) {
-      static tableName = "users";
+      static table = "users";
       static admins = this.scope((q) => q.where({ role: "admin" }));
     }
     db.model(Late);

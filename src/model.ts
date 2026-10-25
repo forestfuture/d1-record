@@ -107,7 +107,7 @@ export type AttributesOf<M> = M extends { readonly [attributeTypes]?: infer A } 
  */
 export class Model extends ModelStatics {
   /** The table's name: inferred from the class name (`BlogPost` → `blog_posts`) unless set. */
-  static tableName: string;
+  static table: string;
   static primaryKey = "id";
   static attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map();
   /**

@@ -5,7 +5,7 @@ import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 import { SLOW_RUNS, SLOW_TIMEOUT } from "../support/properties.ts";
 
 class Sample extends Model.define({ id: { type: "integer", null: false }, label: "string" }) {
-  static tableName = "samples";
+  static table = "samples";
   // These tests read bound values, so nothing is filtered (#83).
   static override filterAttributes = [];
 }

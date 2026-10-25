@@ -18,7 +18,7 @@ const declared = {
 } as const;
 
 class Sample extends Model.define({ id: { type: "integer", null: false }, ...declared }) {
-  static tableName = "samples";
+  static table = "samples";
 }
 
 // No D1 needed: compiling a Relation never queries.

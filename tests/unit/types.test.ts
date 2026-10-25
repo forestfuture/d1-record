@@ -26,7 +26,7 @@ class User extends Model.define({
   ratio: "real",
   settings: "json",
 }) {
-  static tableName = "users";
+  static table = "users";
 
   get label(): string {
     return this.email.toUpperCase();
@@ -200,7 +200,7 @@ describe("types", () => {
         id: "integer",
         email: { type: "string", null: false },
       }) {
-        static tableName = "accounts";
+        static table = "accounts";
         static {
           this.validates("email", { presence: true, if: (account) => account.email.length > 0 });
           this.beforeSave((account) => {
@@ -224,7 +224,7 @@ describe("types", () => {
       published: "boolean",
       createdAt: "datetime",
     }) {
-      static tableName = "posts";
+      static table = "posts";
       static published = this.scope((q) => q.where({ published: true }));
       static since = this.scope((q, date: Date) => q.where({ createdAt: date }));
       // Q6: sibling scopes aren't typed inside a scope body.
@@ -248,7 +248,7 @@ describe("types", () => {
 
   test("Relations and record statements can't be mixed up or made by hand", () => {
     class Other extends Model.define({ id: "integer", title: "string" }) {
-      static tableName = "posts";
+      static table = "posts";
     }
     // Checked by the type checker only; never called.
     const typeOnly = (user: User) => {
@@ -293,7 +293,7 @@ describe("types", () => {
     // Checked by the type checker only; never called.
     const typeOnly = () => {
       class Owner extends Model.define({ id: "integer" }) {
-        static tableName = "users";
+        static table = "users";
         posts = hasMany(Owner, { foreignKey: "id", dependent: "deleteAll" });
         profile = hasOne(Owner, { foreignKey: "id", dependent: "delete" });
         // @ts-expect-error a hasOne deletes its one record with "delete", not "deleteAll"
@@ -340,17 +340,17 @@ describe("types", () => {
 
   test("associations are typed from their fields, including includes() names", () => {
     class Author extends Model.define({ id: "integer" }) {
-      static tableName = "users";
+      static table = "users";
       articles = hasMany(Article, { foreignKey: "authorId" });
       bio = hasOne(Bio, { foreignKey: "authorId" });
     }
     class Article extends Model.define({ id: "integer", authorId: "integer", live: "boolean" }) {
-      static tableName = "posts";
+      static table = "posts";
       author = belongsTo(Author, { foreignKey: "authorId" });
       static live = this.scope((q) => q.where({ live: true }));
     }
     class Bio extends Model.define({ id: "integer", authorId: "integer" }) {
-      static tableName = "profiles";
+      static table = "profiles";
     }
 
     // Checked by the type checker only; never called.

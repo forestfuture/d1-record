@@ -13,7 +13,7 @@ class Sample extends Model.define({
   enabled: "boolean",
   stamp: "datetime",
 }) {
-  static tableName = "samples";
+  static table = "samples";
 }
 
 const attributes = ["label", "quantity", "ratio", "enabled", "stamp"] as const;

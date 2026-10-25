@@ -25,14 +25,14 @@ class Base extends Model {
 const ApplicationRecord = modelFor({}, Base);
 
 class User extends ApplicationRecord({ id: { type: "integer", null: false }, email: "string" }) {
-  static tableName = "users";
+  static table = "users";
 }
 class Post extends ApplicationRecord({
   id: { type: "integer", null: false },
   userId: "integer",
   title: "string",
 }) {
-  static tableName = "posts";
+  static table = "posts";
 }
 
 // A Model that replaces the inherited listener with its own.

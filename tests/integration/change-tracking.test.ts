@@ -7,7 +7,7 @@ class User extends Model.define({
   email: { type: "string", null: false },
   role: "string",
 }) {
-  static tableName = "users";
+  static table = "users";
 }
 
 class Draft extends Model.define({
@@ -15,7 +15,7 @@ class Draft extends Model.define({
   email: { type: "string", null: false },
   role: { type: "string", default: () => "member" },
 }) {
-  static tableName = "users";
+  static table = "users";
 }
 
 class ApiKey extends Model.define({
@@ -24,7 +24,7 @@ class ApiKey extends Model.define({
   scopes: "json",
   expiresAt: "datetime",
 }) {
-  static tableName = "api_keys";
+  static table = "api_keys";
 }
 
 describe("change tracking", () => {

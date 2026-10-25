@@ -8,14 +8,14 @@ class Sample extends Model.define({
   label: "string",
   quantity: "integer",
 }) {
-  static tableName = "samples";
+  static table = "samples";
 }
 
 class Setting extends Model.define({
   id: { type: "integer", null: false },
   settings: "json",
 }) {
-  static tableName = "samples";
+  static table = "samples";
 }
 
 // A filtered attribute that can be null: its label.
@@ -23,7 +23,7 @@ class Secret extends Model.define({
   id: { type: "integer", null: false },
   label: "string",
 }) {
-  static tableName = "samples";
+  static table = "samples";
   static override filterAttributes = ["label"];
 }
 
@@ -32,7 +32,7 @@ class User extends Model.define({
   email: { type: "string", null: false }, // filtered by default: "email"
   role: "string",
 }) {
-  static tableName = "users";
+  static table = "users";
 
   posts = hasMany(Post);
 }
@@ -42,7 +42,7 @@ class Post extends Model.define({
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
 }) {
-  static tableName = "posts";
+  static table = "posts";
 }
 
 // Validations that fail without a value: a presence check on its label.
@@ -50,7 +50,7 @@ class Checked extends Model.define({
   id: { type: "integer", null: false },
   label: "string",
 }) {
-  static tableName = "samples";
+  static table = "samples";
 
   static {
     this.validates("label", { presence: true });
@@ -62,7 +62,7 @@ class Hider extends Model.define({
   email: { type: "string", null: false },
   role: "string",
 }) {
-  static tableName = "users";
+  static table = "users";
   static override filterAttributes = [];
   static hiddenAttributes = ["email"];
 }

@@ -12,7 +12,7 @@ class Stamp extends Model.define({
   seconds: { type: "datetime", storage: "unixSeconds" },
   iso: "datetime",
 }) {
-  static tableName = "stamps";
+  static table = "stamps";
 }
 
 // No D1 needed: building a Relation never queries.

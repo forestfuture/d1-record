@@ -7,7 +7,7 @@ class User extends Model.define({
   email: { type: "string", null: false },
   createdAt: "datetime",
 }) {
-  static tableName = "users";
+  static table = "users";
   // These tests read bound values, so nothing is filtered (#83).
   static override filterAttributes = [];
 }
