@@ -1,17 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, hasMany, Model, type QueryEvent } from "../../src/index.ts";
+import { connect, Model, type QueryEvent } from "../../src/index.ts";
+import { Post } from "../fixtures/models/post.ts";
+import { User } from "../fixtures/models/user.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
-
-class User extends Model.define({
-  id: { type: "integer", null: false },
-  email: { type: "string", null: false },
-  role: "string",
-  age: "integer",
-}) {
-  static table = "users";
-
-  posts = hasMany(Post, { foreignKey: "userId" });
-}
 
 // A secret as the primary key: sessions looked up by their token (filtered by default).
 class Session extends Model.define({
@@ -20,14 +11,6 @@ class Session extends Model.define({
 }) {
   static table = "api_keys";
   static primaryKey = "token";
-}
-
-class Post extends Model.define({
-  id: { type: "integer", null: false },
-  userId: { type: "integer", null: false },
-  title: { type: "string", null: false },
-}) {
-  static table = "posts";
 }
 
 describe("toSql", () => {
