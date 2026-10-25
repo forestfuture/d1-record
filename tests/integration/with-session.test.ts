@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { Model, withSession } from "../../src/index.ts";
+import { connect, Model, withSession, type QueryEvent } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model.define({
@@ -34,6 +34,37 @@ function recordingStarts(database: TestDatabase, into: (string | undefined)[]): 
           into.push(constraint);
           return object.withSession(constraint);
         };
+      }
+      const value: unknown = Reflect.get(object, key);
+      return typeof value === "function" ? value.bind(object) : value;
+    },
+  });
+}
+
+/** A bookmark D1 can't use: real D1 rejects its Session's first statement (tests/remote). */
+const rejected = "not-a-bookmark";
+
+/**
+ * `database`, rejecting a bookmark that starts with `rejected` as real D1 does: a Session started
+ * from it fails its first statement, a single one or a batch, with D1's error, which repeats the
+ * bookmark. Miniflare accepts any bookmark.
+ */
+function rejectingBookmarks(database: TestDatabase): TestDatabase {
+  const sessionFrom = (bookmark: string) => {
+    const error = () => new Error(`D1_ERROR: invalid commitToken bookmark provided: ${bookmark}`);
+    return {
+      prepare: () => ({ bind: () => ({ all: () => Promise.reject(error()) }) }),
+      batch: () => Promise.reject(error()),
+      getBookmark: () => null,
+    };
+  };
+  return new Proxy(database, {
+    get(object, key) {
+      if (key === "withSession") {
+        return (constraint?: string) =>
+          constraint?.startsWith(rejected)
+            ? sessionFrom(constraint)
+            : object.withSession(constraint);
       }
       const value: unknown = Reflect.get(object, key);
       return typeof value === "function" ? value.bind(object) : value;
@@ -152,6 +183,56 @@ describe("withSession(request, env.DB, fn)", () => {
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("https://example.com/posts/1");
     expect(bookmarkFrom(response)).toEqual(expect.any(String));
+  });
+
+  test("a bookmark D1 rejects starts the Session again from start, with a fresh bookmark", async () => {
+    const binding = recordingStarts(rejectingBookmarks(database), starts);
+    const request = getRequest({ cookie: `d1-bookmark=${rejected}` });
+
+    const response = await withSession(request, binding, count);
+
+    expect(await response.json()).toBe(0);
+    expect(starts).toEqual([rejected, "first-unconstrained"]);
+    expect(response.headers.get("set-cookie")).toMatch(/^d1-bookmark=[0-9a-f]{8}-/);
+  });
+
+  test("a batch as the Session's first statement starts it again too", async () => {
+    const binding = recordingStarts(rejectingBookmarks(database), starts);
+    const request = getRequest({ cookie: `d1-bookmark=${rejected}` });
+
+    const response = await withSession(request, binding, async (db) => {
+      await db.batch([db.model(User).toInsert({ id: 2, email: "bob@example.com" })]);
+      return Response.json(await db.model(User).count());
+    });
+
+    expect(await response.json()).toBe(1);
+    expect(starts).toEqual([rejected, "first-unconstrained"]);
+  });
+
+  test("onQuery hears the rejected statement, then its retry", async () => {
+    const events: QueryEvent[] = [];
+    const request = getRequest({ cookie: `d1-bookmark=${rejected}` });
+
+    await withSession(
+      request,
+      rejectingBookmarks(database),
+      { onQuery: (e) => events.push(e) },
+      count,
+    );
+
+    expect(events.map((event) => event.error === undefined)).toEqual([false, true]);
+  });
+
+  test("connect with a bookmark D1 rejects still throws, its message holding a short bookmark", async () => {
+    const long = `${rejected}${"x".repeat(10_000)}`;
+
+    const thrown = await connect(rejectingBookmarks(database), { session: long })
+      .model(User)
+      .count()
+      .catch((caught: unknown) => caught as Error);
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message.length).toBeLessThan(200);
   });
 
   test("an error fn throws reaches the caller unchanged", async () => {

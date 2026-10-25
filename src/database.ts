@@ -30,13 +30,14 @@ export const databaseParts = Symbol("databaseParts");
 export class Database {
   readonly #binding: D1Database;
   readonly #executor: D1Executor;
-  readonly #session: D1DatabaseSession | undefined;
+  readonly #hasSession: boolean;
 
   constructor(binding: D1Database, options: ConnectOptions = {}) {
     const { session, onQuery } = options;
-    this.#session = session === undefined ? undefined : binding.withSession(session);
+    this.#hasSession = session !== undefined;
     this.#binding = binding;
-    this.#executor = new D1Executor(this.#session ?? binding, onQuery);
+    const source = session === undefined ? binding : binding.withSession(session);
+    this.#executor = new D1Executor(source, onQuery);
   }
 
   /** @internal Its D1 binding (not its Session), to match Models' bindings, and its Executor. */
@@ -49,12 +50,13 @@ export class Database {
    * `connect(env.DB, { session: bookmark })` to read at least as new as this request wrote.
    */
   bookmark(): D1SessionBookmark | null {
-    if (this.#session === undefined) {
+    if (!this.#hasSession) {
       throw new NoSession(
         "bookmark() needs a Database opened with a session: connect(env.DB, { session })",
       );
     }
-    return this.#session.getBookmark();
+    // Its Session now, which may have started again (#237).
+    return (this.#executor.source as D1DatabaseSession).getBookmark();
   }
 
   /** A request-bound Relation over the Model's records, with its scopes as methods. */

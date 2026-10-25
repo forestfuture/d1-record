@@ -87,7 +87,9 @@ function nameOf(origin: Origin): string {
  * constraint failure becomes the matching `ConstraintViolation` for the statement's Model.
  */
 export class D1Executor implements Executor {
-  readonly #binding: D1Database | D1DatabaseSession;
+  #binding: D1Database | D1DatabaseSession;
+  /** Starts the Session again when D1 rejects the bookmark it started from (#237); once only. */
+  #startAgain: (() => D1DatabaseSession) | undefined;
   readonly #onQuery: QueryListener | undefined;
   #origin: Origin = "connect";
 
@@ -99,6 +101,20 @@ export class D1Executor implements Executor {
 
   async [resolve](): Promise<D1Executor> {
     return this;
+  }
+
+  /** @internal The D1 binding or Session its statements go through now. */
+  get source(): D1Database | D1DatabaseSession {
+    return this.#binding;
+  }
+
+  /**
+   * @internal When D1 rejects the bookmark this executor's Session started from (a request's,
+   * which may be forged), `start` opens another, and the rejected statement is sent again: it
+   * never ran. `withSession` sets it; a bookmark given to `connect` is the caller's to fix.
+   */
+  startAgainIfRejected(start: () => D1DatabaseSession): void {
+    this.#startAgain = start;
   }
 
   /** Where this database came from; errors name it by this. */
@@ -133,6 +149,12 @@ export class D1Executor implements Executor {
    */
   async batch(statements: readonly CompiledSql[]): Promise<D1Result<Record<string, unknown>>[]> {
     if (statements.length === 0) return [];
+    return this.#startingAgainIfRejected(() => this.#batchOnce(statements));
+  }
+
+  async #batchOnce(
+    statements: readonly CompiledSql[],
+  ): Promise<D1Result<Record<string, unknown>>[]> {
     const started = performance.now();
     let results: D1Result<Record<string, unknown>>[];
     try {
@@ -140,6 +162,7 @@ export class D1Executor implements Executor {
         statements.map((statement) => this.#prepare(statement)),
       );
     } catch (error) {
+      shortenBookmark(error);
       const durationMs = performance.now() - started;
       for (const statement of statements) this.#report(statement, { durationMs, error });
       const models = statements.map(({ model }) => model);
@@ -164,12 +187,36 @@ export class D1Executor implements Executor {
   }
 
   async #one(query: CompiledSql): Promise<D1Result<Record<string, unknown>>> {
+    return this.#startingAgainIfRejected(() => this.#oneOnce(query));
+  }
+
+  /**
+   * Sends statements with `send`, and again on a Session started anew when D1 rejects the bookmark
+   * the first one started from. Statements sent at once all fail; each is sent again.
+   */
+  async #startingAgainIfRejected<T>(send: () => Promise<T>): Promise<T> {
+    const source = this.#binding;
+    try {
+      return await send();
+    } catch (error) {
+      if (!isRejectedBookmark(error)) throw error;
+      if (this.#binding === source) {
+        if (this.#startAgain === undefined) throw error;
+        this.#binding = this.#startAgain();
+        this.#startAgain = undefined;
+      }
+      return send();
+    }
+  }
+
+  async #oneOnce(query: CompiledSql): Promise<D1Result<Record<string, unknown>>> {
     const { model } = query;
     const started = performance.now();
     let result: D1Result<Record<string, unknown>>;
     try {
       result = await this.#prepare(query).all<Record<string, unknown>>();
     } catch (error) {
+      shortenBookmark(error);
       this.#report(query, { durationMs: performance.now() - started, error });
       throw (
         outsideRequest(error) ??
@@ -199,6 +246,22 @@ export class D1Executor implements Executor {
   #prepare({ sql, params }: CompiledSql): D1PreparedStatement {
     return this.#binding.prepare(sql).bind(...params.map(boundValue));
   }
+}
+
+/** D1's error for a Session's bookmark it can't use, and the bookmark it repeats (#237). */
+const rejectedBookmark = /invalid commitToken bookmark provided: (.*)$/s;
+
+/** Whether `error` is D1 rejecting the bookmark a Session started from. */
+function isRejectedBookmark(error: unknown): boolean {
+  return error instanceof Error && rejectedBookmark.test(error.message);
+}
+
+/** `error`'s message with a long rejected bookmark cut short, since a request may have sent it. */
+function shortenBookmark(error: unknown): void {
+  if (!(error instanceof Error)) return;
+  const bookmark = rejectedBookmark.exec(error.message)?.[1];
+  if (bookmark === undefined || bookmark.length <= 64) return;
+  error.message = error.message.replace(bookmark, `${bookmark.slice(0, 64)}…`);
 }
 
 /** An Executor that finds its D1Executor when a statement runs, and sends the statement there. */
