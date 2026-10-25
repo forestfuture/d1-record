@@ -1,8 +1,15 @@
-// The fixture's Post, a generated Model with an override, a method and a scope (#232).
+// The fixture's Post, a generated Model with an override, associations, a method and a scope
+// (#232).
+import { belongsTo, hasMany } from "../../../src/index.ts";
+import { Comment } from "./comment.ts";
 import { TestRecord } from "./test-record.ts";
+import { User } from "./user.ts";
 
 export class Post extends TestRecord {
   static override attributes = { published: "boolean" } as const;
+
+  user = belongsTo(User);
+  comments = hasMany(Comment);
 
   static titled = this.scope((q, title: string) => q.where({ title }));
 
