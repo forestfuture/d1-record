@@ -44,27 +44,52 @@ function recordingStarts(database: TestDatabase, into: (string | undefined)[]): 
 /** A bookmark D1 can't use: real D1 rejects its Session's first statement (tests/remote). */
 const rejected = "not-a-bookmark";
 
+/** A bookmark whose Session D1 rejects after its first statement, which real D1 doesn't do. */
+const rejectedLater = "rejected-later";
+
+/** D1's error for a bookmark it can't use, with the `cause` workerd gives it. */
+function rejection(bookmark: string): Error {
+  const message = `invalid commitToken bookmark provided: ${bookmark}`;
+  return new Error(`D1_ERROR: ${message}`, { cause: new Error(message) });
+}
+
 /**
  * `database`, rejecting a bookmark that starts with `rejected` as real D1 does: a Session started
  * from it fails its first statement, a single one or a batch, with D1's error, which repeats the
- * bookmark. Miniflare accepts any bookmark.
+ * bookmark. One that starts with `rejectedLater` fails every statement after its first. Miniflare
+ * accepts any bookmark.
  */
 function rejectingBookmarks(database: TestDatabase): TestDatabase {
   const sessionFrom = (bookmark: string) => {
-    const error = () => new Error(`D1_ERROR: invalid commitToken bookmark provided: ${bookmark}`);
+    const real = database.withSession("first-unconstrained");
+    let sent = 0;
+    const answer = <T>(send: () => Promise<T>) =>
+      bookmark.startsWith(rejectedLater) && sent++ === 0
+        ? send()
+        : Promise.reject(rejection(bookmark));
     return {
-      prepare: () => ({ bind: () => ({ all: () => Promise.reject(error()) }) }),
-      batch: () => Promise.reject(error()),
+      prepare: (sql: string) => ({
+        bind: (...values: unknown[]) => ({
+          all: () =>
+            answer(() =>
+              real
+                .prepare(sql)
+                .bind(...values)
+                .all(),
+            ),
+        }),
+      }),
+      batch: () => answer(() => Promise.reject(new Error("not used"))),
       getBookmark: () => null,
     };
   };
+  const rejects = (constraint?: string) =>
+    constraint?.startsWith(rejected) === true || constraint?.startsWith(rejectedLater) === true;
   return new Proxy(database, {
     get(object, key) {
       if (key === "withSession") {
         return (constraint?: string) =>
-          constraint?.startsWith(rejected)
-            ? sessionFrom(constraint)
-            : object.withSession(constraint);
+          rejects(constraint) ? sessionFrom(constraint!) : object.withSession(constraint);
       }
       const value: unknown = Reflect.get(object, key);
       return typeof value === "function" ? value.bind(object) : value;
@@ -185,7 +210,7 @@ describe("withSession(request, env.DB, fn)", () => {
     expect(bookmarkFrom(response)).toEqual(expect.any(String));
   });
 
-  test("a bookmark D1 rejects starts the Session again from start, with a fresh bookmark", async () => {
+  test("a bookmark D1 rejects starts the Session again from start", async () => {
     const binding = recordingStarts(rejectingBookmarks(database), starts);
     const request = getRequest({ cookie: `d1-bookmark=${rejected}` });
 
@@ -193,10 +218,17 @@ describe("withSession(request, env.DB, fn)", () => {
 
     expect(await response.json()).toBe(0);
     expect(starts).toEqual([rejected, "first-unconstrained"]);
-    expect(response.headers.get("set-cookie")).toMatch(/^d1-bookmark=[0-9a-f]{8}-/);
   });
 
-  test("a batch as the Session's first statement starts it again too", async () => {
+  test("a bookmark D1 rejects is replaced on the response by the new Session's", async () => {
+    const request = getRequest({ cookie: `d1-bookmark=${rejected}` });
+
+    const response = await withSession(request, rejectingBookmarks(database), count);
+
+    expect(bookmarkFrom(response)).toMatch(/^[0-9a-f]{8}-/);
+  });
+
+  test("a batch as the Session's first statement is sent again on the new Session", async () => {
     const binding = recordingStarts(rejectingBookmarks(database), starts);
     const request = getRequest({ cookie: `d1-bookmark=${rejected}` });
 
@@ -209,30 +241,39 @@ describe("withSession(request, env.DB, fn)", () => {
     expect(starts).toEqual([rejected, "first-unconstrained"]);
   });
 
+  test("first statements sent at once start the Session again once, and are each sent again", async () => {
+    const binding = recordingStarts(rejectingBookmarks(database), starts);
+    const request = getRequest({ cookie: `d1-bookmark=${rejected}` });
+
+    const response = await withSession(request, binding, async () =>
+      Response.json(await Promise.all([User.count(), User.count()])),
+    );
+
+    expect(await response.json()).toEqual([0, 0]);
+    expect(starts).toEqual([rejected, "first-unconstrained"]);
+  });
+
+  test("a rejection after the Session's first statement reaches fn, with no new Session", async () => {
+    const binding = recordingStarts(rejectingBookmarks(database), starts);
+    const request = getRequest({ cookie: `d1-bookmark=${rejectedLater}` });
+
+    const answered = withSession(request, binding, async () => {
+      await User.count();
+      return Response.json(await User.count());
+    });
+
+    await expect(answered).rejects.toThrow("invalid commitToken bookmark");
+    expect(starts).toEqual([rejectedLater]);
+  });
+
   test("onQuery hears the rejected statement, then its retry", async () => {
     const events: QueryEvent[] = [];
     const request = getRequest({ cookie: `d1-bookmark=${rejected}` });
+    const onQuery = (event: QueryEvent) => events.push(event);
 
-    await withSession(
-      request,
-      rejectingBookmarks(database),
-      { onQuery: (e) => events.push(e) },
-      count,
-    );
+    await withSession(request, rejectingBookmarks(database), { onQuery }, count);
 
     expect(events.map((event) => event.error === undefined)).toEqual([false, true]);
-  });
-
-  test("connect with a bookmark D1 rejects still throws, its message holding a short bookmark", async () => {
-    const long = `${rejected}${"x".repeat(10_000)}`;
-
-    const thrown = await connect(rejectingBookmarks(database), { session: long })
-      .model(User)
-      .count()
-      .catch((caught: unknown) => caught as Error);
-
-    expect(thrown).toBeInstanceOf(Error);
-    expect((thrown as Error).message.length).toBeLessThan(200);
   });
 
   test("an error fn throws reaches the caller unchanged", async () => {
@@ -351,6 +392,31 @@ describe("nested withSession calls, one per binding", () => {
       expect.stringMatching(/^logs-bookmark=[^;]+;/),
       expect.stringMatching(/^d1-bookmark=[^;]+;/),
     ]);
+  });
+});
+
+describe("connect(env.DB, { session: bookmark })", () => {
+  test("a bookmark D1 rejects throws D1's error, with no new Session", async () => {
+    const binding = recordingStarts(rejectingBookmarks(database), starts);
+
+    const counted = connect(binding, { session: rejected }).model(User).count();
+
+    await expect(counted).rejects.toThrow("invalid commitToken bookmark");
+    expect(starts).toEqual([rejected]);
+  });
+
+  test("D1's error for a long bookmark holds it cut short, in its message and its cause", async () => {
+    const long = `${rejected}${"x".repeat(10_000)}`;
+
+    const counted = connect(rejectingBookmarks(database), { session: long }).model(User).count();
+
+    const thrown = (await counted.then(
+      () => undefined,
+      (caught: unknown) => caught,
+    )) as Error;
+
+    expect(thrown.message.length).toBeLessThan(200);
+    expect((thrown.cause as Error).message.length).toBeLessThan(200);
   });
 });
 
