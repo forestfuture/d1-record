@@ -14,7 +14,7 @@ export const declared = {
   settings: "json",
 } as const;
 
-export class Sample extends Model({ id: { type: "integer", null: false }, ...declared }) {
+export class Sample extends Model.define({ id: { type: "integer", null: false }, ...declared }) {
   static tableName = "samples";
 }
 

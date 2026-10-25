@@ -11,7 +11,7 @@ import { RecordStatement, recordStatementParts } from "./record-statement.ts";
 import { linksOf, state } from "./record-state.ts";
 import { runAfter, writeAll, type PreparedWrite } from "./unit-of-work.ts";
 import { pinBefore, pinClaimed, type Executor } from "./executor.ts";
-import type { ModelBase } from "./model.ts";
+import type { Model } from "./model.ts";
 import { statementParts, type Statement } from "./statement.ts";
 
 /** The Executor an entry was built on: its Relation's, or its record's. */
@@ -22,7 +22,7 @@ function executorOf(entry: BatchEntry): Executor {
 }
 
 /** The records a batch entry writes: a save's whole autosave graph, or a destroy's record. */
-function recordsOf(entry: BatchEntry): ModelBase[] {
+function recordsOf(entry: BatchEntry): Model[] {
   if (!(entry instanceof RecordStatement)) return [];
   const { record, kind } = entry[recordStatementParts];
   return kind === "save" ? recordsSaving(record) : [record];

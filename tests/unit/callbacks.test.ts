@@ -10,7 +10,7 @@ import {
 
 const log: string[] = [];
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: "string",
 }) {
@@ -83,7 +83,7 @@ describe("validation callbacks", () => {
 
   test("abort() creates a CallbackAbort; any other error from a callback propagates unchanged", async () => {
     const failure = new Error("callback bug");
-    class Broken extends Model({ id: "integer" }) {
+    class Broken extends Model.define({ id: "integer" }) {
       static tableName = "users";
       static {
         this.beforeValidation(() => {
@@ -102,7 +102,7 @@ describe("validation callbacks", () => {
   });
 });
 
-class Account extends Model({
+class Account extends Model.define({
   id: { type: "integer", null: false },
   email: "string",
   suspended: "boolean",
@@ -140,7 +140,7 @@ describe("callback inheritance", () => {
 
 describe("declaration timing", () => {
   test("declaring on a Model after its first use throws, so requests can't add callbacks", () => {
-    class Note extends Model({ id: "integer", body: "string" }) {
+    class Note extends Model.define({ id: "integer", body: "string" }) {
       static tableName = "notes";
     }
     connect({} as never).model(Note);
@@ -152,7 +152,7 @@ describe("declaration timing", () => {
 
 describe("abort in afterValidation", () => {
   test("refuses too: isValid is false with the reason", async () => {
-    class Gate extends Model({ id: "integer", email: "string" }) {
+    class Gate extends Model.define({ id: "integer", email: "string" }) {
       static tableName = "users";
       static {
         this.afterValidation((gate) => {

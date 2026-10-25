@@ -3,7 +3,7 @@ import { belongsTo, connect, hasMany, InvalidModel, Model } from "../../src/inde
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 // Reached only through Post's association: never queried or modelled directly.
-class Comment extends Model({
+class Comment extends Model.define({
   id: { type: "integer", null: false },
   postId: "integer",
   body: "string",
@@ -13,7 +13,7 @@ class Comment extends Model({
   post = belongsTo(Post, { foreignKey: "postId" });
 }
 
-class Post extends Model({
+class Post extends Model.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
@@ -24,12 +24,12 @@ class Post extends Model({
 }
 
 // Its target names a primary key that isn't an attribute: invalid, found at first use.
-class Broken extends Model({ id: { type: "integer", null: false } }) {
+class Broken extends Model.define({ id: { type: "integer", null: false } }) {
   static tableName = "comments";
   static override primaryKey = "missing";
 }
 
-class Pointing extends Model({ id: { type: "integer", null: false }, postId: "integer" }) {
+class Pointing extends Model.define({ id: { type: "integer", null: false }, postId: "integer" }) {
   static tableName = "comments";
 
   broken = belongsTo(Broken, { foreignKey: "postId" });

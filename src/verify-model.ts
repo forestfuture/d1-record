@@ -5,7 +5,7 @@ import { associationsOf, declarationIn, probeOf } from "./association-fields.ts"
 import { attributesNamedInMessages } from "./error-messages.ts";
 import { seal } from "./declarations.ts";
 import { InvalidModel } from "./errors.ts";
-import { ModelBase, type ModelClass } from "./model.ts";
+import { Model, type ModelClass } from "./model.ts";
 import { specProblem } from "./spec-keys.ts";
 import { rejectAbstract, requireTableName } from "./table-names.ts";
 
@@ -27,7 +27,7 @@ export function verifyModel(model: ModelClass): void {
   rejectBadPageSizes(model);
   // The classes it inherits declarations from too (an app's Base), so none can change later.
   for (const each of ancestors(model)) {
-    if (each === ModelBase) break;
+    if (each === Model) break;
     seal(each);
   }
   verified.add(model);
@@ -37,14 +37,14 @@ function requirePrimaryKeyAttribute(model: ModelClass): void {
   if (!model.attributeDefinitions.has(model.primaryKey)) {
     throw new InvalidModel(
       `${model.name}'s primaryKey "${model.primaryKey}" isn't a declared attribute; ` +
-        "declare it in Model({...}) or set `static primaryKey`",
+        "declare it in Model.define({...}) or set `static primaryKey`",
     );
   }
 }
 
 function rejectReservedAttributeNames(model: ModelClass): void {
   for (const name of model.attributeDefinitions.keys()) {
-    if (name in ModelBase.prototype) {
+    if (name in Model.prototype) {
       throw new InvalidModel(
         `${model.name} declares an attribute "${name}", which is the name of a record method or property; ` +
           "rename the attribute and map it with { column }",
@@ -138,7 +138,7 @@ function rejectShadowingFields(model: ModelClass): void {
     if (Object.hasOwn(probe, name) && declarationIn(probe[name]) === undefined) {
       throw new InvalidModel(
         `${model.name} declares a class field "${name}" that hides the attribute's accessor; ` +
-          "remove it (attributes are declared in Model({...}))",
+          "remove it (attributes are declared in Model.define({...}))",
       );
     }
   }

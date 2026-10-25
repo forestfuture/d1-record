@@ -1,5 +1,5 @@
 // Every error class the library throws on purpose, all extending `D1RecordError`.
-import type { ModelBase } from "./model.ts";
+import type { Model } from "./model.ts";
 
 /** Base class for every error the library throws on purpose. */
 export class D1RecordError extends Error {
@@ -109,9 +109,9 @@ export class CheckViolation extends ConstraintViolation {
 /** A `…OrThrow` save was refused because the record is invalid; `record.errors` says why. */
 export class RecordInvalid extends D1RecordError {
   override name = "RecordInvalid";
-  readonly record: ModelBase;
+  readonly record: Model;
 
-  constructor(record: ModelBase) {
+  constructor(record: Model) {
     super(`Validation failed: ${record.errors.fullMessages().join(", ")}`);
     this.record = record;
   }

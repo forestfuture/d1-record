@@ -18,7 +18,7 @@ export async function countless(): Promise<unknown> {
 }
 
 // #region per-page
-export class Base extends Model.Base {
+export class Base extends Model {
   static override perPage = 20; // when paginate() isn't given a perPage
   static override maxPerPage = 50; // a larger perPage is capped at this
 }

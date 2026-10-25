@@ -13,7 +13,7 @@ import type { StatementEvent } from "./verbose.ts";
 interface Library {
   connect: (binding: unknown, options?: { onQuery?: (event: StatementEvent) => void }) => unknown;
   withDatabase: (database: unknown, run: () => unknown) => Promise<unknown>;
-  Model: { Base: abstract new (...args: never[]) => unknown };
+  Model: abstract new (...args: never[]) => unknown;
 }
 
 export interface ConsoleProject {
@@ -89,7 +89,7 @@ async function loadModels(
       return `Couldn't load ${shown(cwd, file)}: ${message}`;
     }
     for (const [name, value] of Object.entries(exported)) {
-      if (typeof value === "function" && value.prototype instanceof library.Model.Base) {
+      if (typeof value === "function" && value.prototype instanceof library.Model) {
         found[name] = value;
       }
     }

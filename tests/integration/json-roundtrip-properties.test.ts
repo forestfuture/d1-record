@@ -5,7 +5,7 @@ import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 import { jsonValues } from "../support/json-values.ts";
 import { SLOW_RUNS, SLOW_TIMEOUT } from "../support/properties.ts";
 
-class Sample extends Model({ id: { type: "integer", null: false }, settings: "json" }) {
+class Sample extends Model.define({ id: { type: "integer", null: false }, settings: "json" }) {
   static tableName = "samples";
 }
 

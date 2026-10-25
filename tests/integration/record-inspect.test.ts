@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-pl
 import { connect, hasMany, Model, type QueryEvent } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class Sample extends Model({
+class Sample extends Model.define({
   id: { type: "integer", null: false },
   label: "string",
   quantity: "integer",
@@ -11,7 +11,7 @@ class Sample extends Model({
   static tableName = "samples";
 }
 
-class Setting extends Model({
+class Setting extends Model.define({
   id: { type: "integer", null: false },
   settings: "json",
 }) {
@@ -19,7 +19,7 @@ class Setting extends Model({
 }
 
 // A filtered attribute that can be null: its label.
-class Secret extends Model({
+class Secret extends Model.define({
   id: { type: "integer", null: false },
   label: "string",
 }) {
@@ -27,7 +27,7 @@ class Secret extends Model({
   static override filterAttributes = ["label"];
 }
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false }, // filtered by default: "email"
   role: "string",
@@ -37,7 +37,7 @@ class User extends Model({
   posts = hasMany(Post);
 }
 
-class Post extends Model({
+class Post extends Model.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
@@ -46,7 +46,7 @@ class Post extends Model({
 }
 
 // Validations that fail without a value: a presence check on its label.
-class Checked extends Model({
+class Checked extends Model.define({
   id: { type: "integer", null: false },
   label: "string",
 }) {
@@ -57,7 +57,7 @@ class Checked extends Model({
   }
 }
 
-class Hider extends Model({
+class Hider extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   role: "string",

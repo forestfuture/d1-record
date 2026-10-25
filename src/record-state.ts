@@ -7,13 +7,13 @@ import type { Executor } from "./executor.ts";
 import { LoadedAssociations } from "./loaded-associations.ts";
 import { PendingAutosaves } from "./pending-autosaves.ts";
 import { attributeOf, initialValues, type AttributeDefinition } from "./metadata.ts";
-import type { ChangeOptions, ModelBase, ModelClass } from "./model.ts";
+import type { ChangeOptions, Model, ModelClass } from "./model.ts";
 
 /** @internal The hidden slot where a Record keeps its `RecordState`. */
 export const state = Symbol("state");
 
 /** Each record's link to its database (its `RecordState`), for pinning it to one (#93). */
-export function linksOf(records: Iterable<ModelBase>): RecordState[] {
+export function linksOf(records: Iterable<Model>): RecordState[] {
   return [...records].map((record) => record[state]);
 }
 

@@ -10,7 +10,7 @@ import {
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class Sample extends Model({
+class Sample extends Model.define({
   id: { type: "integer", null: false },
   label: "string",
   quantity: "integer",
@@ -22,12 +22,15 @@ class Sample extends Model({
   static tableName = "samples";
 }
 
-class ApiKey extends Model({ id: { type: "string", null: false }, label: "string" }) {
+class ApiKey extends Model.define({ id: { type: "string", null: false }, label: "string" }) {
   static tableName = "api_keys";
 }
 
 // A foreign key whose type differs from the key it points at: an integer holding a text key.
-class KeyedSample extends Model({ id: { type: "integer", null: false }, quantity: "integer" }) {
+class KeyedSample extends Model.define({
+  id: { type: "integer", null: false },
+  quantity: "integer",
+}) {
   static tableName = "samples";
 
   apiKey = belongsTo(ApiKey, { foreignKey: "quantity" });

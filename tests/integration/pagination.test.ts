@@ -14,7 +14,7 @@ import {
 } from "../../src/index.ts";
 import { createTestDatabase, recordingBatches, type TestDatabase } from "../support/d1.ts";
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
 }) {
@@ -23,7 +23,7 @@ class User extends Model({
   posts = hasMany(Post, { foreignKey: "userId" });
 }
 
-class Post extends Model({
+class Post extends Model.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
@@ -213,7 +213,7 @@ describe("paginate", () => {
 
   describe("perPage and maxPerPage", () => {
     test("default to 25 and 100", () => {
-      expect([Model.Base.perPage, Model.Base.maxPerPage]).toEqual([25, 100]);
+      expect([Model.perPage, Model.maxPerPage]).toEqual([25, 100]);
     });
 
     test.each([
@@ -236,7 +236,7 @@ describe("paginate", () => {
     });
 
     test("set on an app's base class, every Model built on it inherits them", async () => {
-      class Base extends Model.Base {
+      class Base extends Model {
         static override perPage = 2;
         static override maxPerPage = 3;
       }

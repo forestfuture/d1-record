@@ -102,7 +102,7 @@ export const tables = {
     expect(source).toMatch(
       /^import \{ Model, modelFor \} from "@forestfuture\/d1-record";\nimport \{ tables \} from "\.\.\/db\/LOGS";\n/,
     );
-    expect(source).toContain("class Base extends Model.Base {");
+    expect(source).toContain("class Base extends Model {");
     expect(source).toContain('  static override binding = "LOGS";');
     expect(source).toContain("export const LogsRecord = modelFor(tables, Base);");
   });

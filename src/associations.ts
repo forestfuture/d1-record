@@ -3,7 +3,7 @@ import { InvalidModel } from "./errors.ts";
 import { associationsOf } from "./association-fields.ts";
 import { belongsToAccessor, hasOneAccessor } from "./association-writers.ts";
 import { inferenceHint, type Inference } from "./foreign-keys.ts";
-import { ModelBase, modelOf, type AttributesOf, type ModelClass, type ScopesOf } from "./model.ts";
+import { Model, modelOf, type AttributesOf, type ModelClass, type ScopesOf } from "./model.ts";
 import { verifyModel } from "./verify-model.ts";
 import { state } from "./record-state.ts";
 import { ownedCollection } from "./owned-collection.ts";
@@ -136,7 +136,7 @@ function checkName(label: string, model: ModelClass, name: string): void {
   if (model.attributeDefinitions.has(name)) {
     throw new InvalidModel(`${label} has the same name as an attribute; rename one of them`);
   }
-  if (name in ModelBase.prototype) {
+  if (name in Model.prototype) {
     throw new InvalidModel(`${label} is the name of a record method or property; rename it`);
   }
 }
@@ -144,7 +144,7 @@ function checkName(label: string, model: ModelClass, name: string): void {
 /** Its target must be a Model class. */
 function checkTarget(label: string, definition: AssociationDefinition): ModelClass {
   const target: unknown = definition.target();
-  if (typeof target !== "function" || !(target.prototype instanceof ModelBase)) {
+  if (typeof target !== "function" || !(target.prototype instanceof Model)) {
     throw new InvalidModel(`${label} must point at a Model class: hasMany(Post, …)`);
   }
   return target as ModelClass;
@@ -192,7 +192,7 @@ function requireAttribute(label: string, model: ModelClass, name: string, hint: 
 }
 
 /** Each record's belongsTo and hasOne accessors, made on first use. Not request state. */
-const accessors = new WeakMap<ModelBase, Map<string, unknown>>();
+const accessors = new WeakMap<Model, Map<string, unknown>>();
 
 /**
  * The property an association adds to its Model's records. A hasMany is a method returning a
@@ -201,7 +201,7 @@ const accessors = new WeakMap<ModelBase, Map<string, unknown>>();
  */
 function accessorProperty(name: string, definition: AssociationDefinition): PropertyDescriptor {
   if (definition.kind === "hasMany") {
-    const method = function hasMany(this: ModelBase) {
+    const method = function hasMany(this: Model) {
       return hasManyRelation(this, resolveAssociation(modelOf(this), name));
     };
     return { configurable: true, get: () => method, set: keepAssignedField(name) };
@@ -210,7 +210,7 @@ function accessorProperty(name: string, definition: AssociationDefinition): Prop
   return {
     configurable: true,
     set: keepAssignedField(name),
-    get(this: ModelBase) {
+    get(this: Model) {
       const perRecord = accessors.get(this) ?? new Map<string, unknown>();
       accessors.set(this, perRecord);
       if (!perRecord.has(name)) {
@@ -226,7 +226,7 @@ function accessorProperty(name: string, definition: AssociationDefinition): Prop
  * compiled without useDefineForClassFields, or below ES2022): it keeps the declaration on the
  * record, as a defined field would be, for `newRecord` to remove.
  */
-function keepAssignedField(name: string): (this: ModelBase, value: unknown) => void {
+function keepAssignedField(name: string): (this: Model, value: unknown) => void {
   return function (value) {
     Object.defineProperty(this, name, {
       value,
@@ -241,7 +241,7 @@ function keepAssignedField(name: string): (this: ModelBase, value: unknown) => v
  * A hasMany's Relation for `owner`: its target's records linked to the owner, answering from
  * what the owner holds (its owned collection) where it can.
  */
-function hasManyRelation(owner: ModelBase, association: ResolvedAssociation) {
+function hasManyRelation(owner: Model, association: ResolvedAssociation) {
   const relation = association.linkedTo(owner[state].executor, association.keyOf(owner));
   return relation[ofOwner](ownedCollection(owner, association));
 }
@@ -252,13 +252,13 @@ function hasManyRelation(owner: ModelBase, association: ResolvedAssociation) {
  * association meanwhile (#189).
  */
 export async function cachedRead(
-  owner: ModelBase,
+  owner: Model,
   association: ResolvedAssociation,
-  load: (key: unknown) => Promise<ModelBase | null>,
-): Promise<ModelBase | null> {
+  load: (key: unknown) => Promise<Model | null>,
+): Promise<Model | null> {
   const { name, ownerAttribute } = association;
   const cached = owner[state].associations.get(name);
-  if (cached !== undefined) return cached.value as ModelBase | null;
+  if (cached !== undefined) return cached.value as Model | null;
   const key = association.keyOf(owner);
   const keep = owner[state].associations.startLoad(name, ownerAttribute, key);
   // No key: nothing to find, and nothing to query; that null is loaded like any result.

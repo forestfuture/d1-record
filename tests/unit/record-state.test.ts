@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { connect, Model, RecordDestroyed } from "../../src/index.ts";
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   role: "string",
@@ -47,7 +47,7 @@ describe("record state without D1", () => {
   });
 
   test("a default that returns undefined is rejected when the record is built", () => {
-    class Token extends Model({
+    class Token extends Model.define({
       id: { type: "string", null: false, default: () => undefined },
     }) {
       static tableName = "tokens";

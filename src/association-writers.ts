@@ -1,7 +1,7 @@
 // The belongsTo and hasOne accessors: `post.author()` and its `set`, `build`, and `create`.
 import { cachedRead } from "./associations.ts";
 import { RecordNotSaved } from "./errors.ts";
-import { buildRecord, type ModelBase } from "./model.ts";
+import { buildRecord, type Model } from "./model.ts";
 import { state } from "./record-state.ts";
 import type { ResolvedAssociation } from "./resolved-association.ts";
 
@@ -9,17 +9,17 @@ import type { ResolvedAssociation } from "./resolved-association.ts";
  * A belongsTo's accessor for `owner`: `await post.author()`, plus `set`, `build`, `create` and
  * `createOrThrow`, as Rails' `post.author =`, `build_author` and `create_author`.
  */
-export function belongsToAccessor(owner: ModelBase, association: ResolvedAssociation): unknown {
+export function belongsToAccessor(owner: Model, association: ResolvedAssociation): unknown {
   const read = () =>
     cachedRead(owner, association, (key) =>
       association.all(owner[state].executor).findBy({ [association.targetAttribute]: key }),
     );
-  const set = (record: ModelBase | null) => pointOwnerAt(owner, association, record);
+  const set = (record: Model | null) => pointOwnerAt(owner, association, record);
   const make = (attributes: Record<string, unknown>) =>
     buildRecord(association.target, attributes, owner[state].executor);
   // Saved first, so the owner points at its new key (the owner itself isn't saved).
   const create =
-    (save: (record: ModelBase) => Promise<unknown>) =>
+    (save: (record: Model) => Promise<unknown>) =>
     async (attributes: Record<string, unknown> = {}) => {
       const record = make(attributes);
       await save(record);
@@ -43,11 +43,7 @@ export function belongsToAccessor(owner: ModelBase, association: ResolvedAssocia
  * record becomes the loaded association. A new record is saved first when the owner is
  * (autosave), and the key filled in then if D1 generates it.
  */
-function pointOwnerAt(
-  owner: ModelBase,
-  association: ResolvedAssociation,
-  record: ModelBase | null,
-): void {
+function pointOwnerAt(owner: Model, association: ResolvedAssociation, record: Model | null): void {
   const { name, target, ownerAttribute, targetAttribute } = association;
   if (record !== null && !(record instanceof target)) {
     throw new TypeError(`${association.label}.set() takes a ${target.name} record or null`);
@@ -65,7 +61,7 @@ function pointOwnerAt(
  * `createOrThrow`, as Rails' `build_profile` and `create_profile`. An existing record is left
  * as it is (Rails' replacement rules are #40).
  */
-export function hasOneAccessor(owner: ModelBase, association: ResolvedAssociation): unknown {
+export function hasOneAccessor(owner: Model, association: ResolvedAssociation): unknown {
   const read = () =>
     cachedRead(owner, association, (key) =>
       association.inOrder(association.linkedTo(owner[state].executor, key)).first(),
@@ -86,9 +82,9 @@ export function hasOneAccessor(owner: ModelBase, association: ResolvedAssociatio
  * record that doesn't save is kept as built, so saving the owner tries again, as Rails does.
  */
 function createOne(
-  owner: ModelBase,
+  owner: Model,
   association: ResolvedAssociation,
-  save: (record: ModelBase) => Promise<unknown>,
+  save: (record: Model) => Promise<unknown>,
 ) {
   return async (attributes: Record<string, unknown> = {}) => {
     requireSavedOwner(owner, association);
@@ -103,7 +99,7 @@ function createOne(
 }
 
 /** As in Rails, records can't be created through an owner that hasn't been saved. */
-function requireSavedOwner(owner: ModelBase, association: ResolvedAssociation): void {
+function requireSavedOwner(owner: Model, association: ResolvedAssociation): void {
   if (!owner[state].isNew) return;
   throw new RecordNotSaved(
     `You cannot create a ${association.target.name} here: ${association.refusalFor(owner)}`,
@@ -112,10 +108,10 @@ function requireSavedOwner(owner: ModelBase, association: ResolvedAssociation): 
 
 /** A new record of a hasOne, pointing at its owner and loaded as the association. */
 function buildOne(
-  owner: ModelBase,
+  owner: Model,
   association: ResolvedAssociation,
   attributes: Record<string, unknown>,
-): ModelBase {
+): Model {
   const { name, target, ownerAttribute, definition } = association;
   const key = owner[state].read(ownerAttribute);
   // The foreign key is the owner's, written as a key (#94): one given with the attributes is

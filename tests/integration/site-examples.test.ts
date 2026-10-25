@@ -467,7 +467,7 @@ describe("Handle untrusted input", () => {
 describe("Log queries: keep secrets out of the logs", () => {
   test("the base class adds to Rails' defaults", () => {
     expect(filtering.Base.filterAttributes).toEqual([
-      ...Model.Base.filterAttributes,
+      ...Model.filterAttributes,
       "iban",
       /^dateOfBirth$/,
     ]);

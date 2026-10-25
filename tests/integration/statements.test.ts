@@ -18,7 +18,7 @@ import { holdStatements, reads } from "../support/hold-statements.ts";
 
 const log: string[] = [];
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   role: "string",
@@ -35,7 +35,7 @@ class User extends Model({
   }
 }
 
-class Post extends Model({
+class Post extends Model.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
@@ -48,7 +48,7 @@ class Post extends Model({
   comments = hasMany(Comment, { foreignKey: "postId" });
 }
 
-class Comment extends Model({
+class Comment extends Model.define({
   id: { type: "integer", null: false },
   postId: "integer",
   body: "string",
@@ -58,7 +58,7 @@ class Comment extends Model({
 
 let counter = 0;
 
-class ApiKey extends Model({
+class ApiKey extends Model.define({
   id: { type: "string", null: false, default: () => `key-${++counter}` },
   label: { type: "string", null: false },
   scopes: "json",
@@ -66,7 +66,7 @@ class ApiKey extends Model({
   static tableName = "api_keys";
 }
 
-class Account extends Model({
+class Account extends Model.define({
   id: { type: "integer", null: false },
   externalAccountId: "string",
 }) {
@@ -781,7 +781,7 @@ describe("statements", () => {
     });
 
     test("upsert only updates the attributes it was given, never filled-in defaults or the key", async () => {
-      class Member extends Model({
+      class Member extends Model.define({
         id: { type: "integer", null: false, default: () => 999 },
         email: { type: "string", null: false },
         role: { type: "string", default: () => "member" },
@@ -822,7 +822,7 @@ describe("statements", () => {
     });
 
     test("with nothing to insert, a skip, an upsert or several rows throw; insert({}) writes defaults", async () => {
-      class Bare extends Model({ id: { type: "integer", null: false } }) {
+      class Bare extends Model.define({ id: { type: "integer", null: false } }) {
         static tableName = "comments";
       }
       const bare = connect(binding).model(Bare);

@@ -1,7 +1,7 @@
 // Turns a QueryDescription or a write into SQL text and bound values. No other module writes SQL.
 import { type Attribute, attributeFor, noMatch, storedRows } from "./attribute.ts";
 import { ignoresColumns } from "./table-names.ts";
-import type { ModelBase, ModelClass } from "./model.ts";
+import type { Model, ModelClass } from "./model.ts";
 import { Comparison, comparisonParts, type Operator } from "./comparisons.ts";
 import { Either, LinkedTo, Negated, type Condition, type QueryDescription } from "./query.ts";
 import { ColumnReference, ColumnValue, SafeSql } from "./sql.ts";
@@ -12,7 +12,7 @@ import { boundValue } from "./filtering.ts";
 export interface CompiledSql {
   sql: string;
   params: unknown[];
-  model: ModelClass<ModelBase>;
+  model: ModelClass<Model>;
 }
 
 /** What `toSql()` shows: a query's SQL, with its values bound apart from it (ADR-0006). */
@@ -50,7 +50,7 @@ function compileWhere({ model, conditions }: QueryDescription, params: unknown[]
 /** Conditions ANDed together as one predicate; no conditions matches everything. */
 function compileAll(
   conditions: readonly Condition[],
-  model: ModelClass<ModelBase>,
+  model: ModelClass<Model>,
   params: unknown[],
 ): string {
   if (conditions.length === 0) return "(1 = 1)";
@@ -60,7 +60,7 @@ function compileAll(
 /** One condition as a single parenthesized predicate. */
 function compileCondition(
   condition: Condition,
-  model: ModelClass<ModelBase>,
+  model: ModelClass<Model>,
   params: unknown[],
 ): string {
   if (condition instanceof Either) {
@@ -90,7 +90,7 @@ function compileCondition(
  */
 function compileLinkedTo(
   { attribute, owners, ownerKey }: LinkedTo,
-  model: ModelClass<ModelBase>,
+  model: ModelClass<Model>,
   params: unknown[],
 ): string {
   const linked = attributeFor(model, attribute);
@@ -112,7 +112,7 @@ export type Assignment = readonly [attribute: string, value: unknown];
 
 /** `INSERT … RETURNING` the row (`*`, or the declared columns) for the given attribute values, or `DEFAULT VALUES` for none. */
 export function compileInsert(
-  model: ModelClass<ModelBase>,
+  model: ModelClass<Model>,
   assignments: readonly Assignment[],
 ): CompiledSql {
   const table = quoteIdentifier(model.tableName);
@@ -147,7 +147,7 @@ export type Conflict =
  * whatever the number of rows, within D1's limit of 100 bound parameters per statement.
  */
 export function compileInsertRows(
-  model: ModelClass<ModelBase>,
+  model: ModelClass<Model>,
   names: readonly string[],
   rows: readonly (readonly unknown[])[],
   conflict?: Conflict,
@@ -167,7 +167,7 @@ export function compileInsertRows(
  * inserted one by default) except the `uniqueBy` ones and `createdAt`, as Rails' upsert does.
  */
 function compileConflict(
-  model: ModelClass<ModelBase>,
+  model: ModelClass<Model>,
   names: readonly string[],
   conflict: Conflict | undefined,
 ): string {
@@ -188,7 +188,7 @@ function compileConflict(
  * the key as stored in D1 (the row's key before any change to it), so it's bound as-is.
  */
 export function compileUpdate(
-  model: ModelClass<ModelBase>,
+  model: ModelClass<Model>,
   assignments: readonly Assignment[],
   storedKey: unknown,
 ): CompiledSql {
@@ -205,7 +205,7 @@ export function compileUpdate(
 
 /** `"col" = ?, …` for attribute values, or an `sql` fragment's own text. */
 function compileSets(
-  model: ModelClass<ModelBase>,
+  model: ModelClass<Model>,
   changes: readonly Assignment[] | SafeSql,
   params: unknown[],
 ): string {
@@ -254,7 +254,7 @@ export function compileDeleteAll(query: QueryDescription): CompiledSql {
 }
 
 /** `DELETE … WHERE <primary key> = ?`, with the key as stored in D1. */
-export function compileDelete(model: ModelClass<ModelBase>, storedKey: unknown): CompiledSql {
+export function compileDelete(model: ModelClass<Model>, storedKey: unknown): CompiledSql {
   const { column } = attributeFor(model, model.primaryKey);
   const params: unknown[] = [];
   attributeFor(model, model.primaryKey).bindCells(params, storedKey);
@@ -266,7 +266,7 @@ export function compileDelete(model: ModelClass<ModelBase>, storedKey: unknown):
 }
 
 /** A whole row: `*`, or the declared columns when the Model ignores some of its table's. */
-function allColumns(model: ModelClass<ModelBase>): string {
+function allColumns(model: ModelClass<Model>): string {
   return ignoresColumns(model)
     ? compileColumns(model, [...model.attributeDefinitions.keys()])
     : "*";
@@ -274,7 +274,7 @@ function allColumns(model: ModelClass<ModelBase>): string {
 
 /** The quoted columns for `attributes`, or the whole row. */
 export function compileColumns(
-  model: ModelClass<ModelBase>,
+  model: ModelClass<Model>,
   attributes: readonly string[] | undefined,
 ): string {
   if (attributes === undefined) return allColumns(model);
@@ -389,11 +389,7 @@ function compilePagination({ limit, offset }: QueryDescription, params: unknown[
 }
 
 /** Appends the fragment's values to `params` and returns its SQL text. */
-function compileFragment(
-  fragment: SafeSql,
-  model: ModelClass<ModelBase>,
-  params: unknown[],
-): string {
+function compileFragment(fragment: SafeSql, model: ModelClass<Model>, params: unknown[]): string {
   let text = fragment.strings[0] ?? "";
   fragment.values.forEach((value, index) => {
     if (value instanceof ColumnReference) {

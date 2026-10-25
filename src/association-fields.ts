@@ -12,7 +12,7 @@ import type {
 } from "./associations.ts";
 import { NoDatabase, UnknownAssociation } from "./errors.ts";
 import { withForeignKeys } from "./foreign-keys.ts";
-import type { ModelBase, ModelClass } from "./model.ts";
+import type { Model, ModelClass } from "./model.ts";
 import { modelClassName } from "./table-names.ts";
 
 /**
@@ -89,10 +89,10 @@ export function hasOne<C extends ModelClass>(
 const definitions = new WeakMap<object, ReadonlyMap<string, AssociationDefinition>>();
 
 /** One record of each Model, made once, to read its fields. Not request state (ADR-0003). */
-const probes = new WeakMap<object, ModelBase>();
+const probes = new WeakMap<object, Model>();
 
 /** A Model's probe record: its fields as declared, before any are removed. */
-export function probeOf(model: ModelClass): ModelBase {
+export function probeOf(model: ModelClass): Model {
   let probe = probes.get(model);
   if (probe === undefined) {
     // Its fields are read, so they're real declarations, even inside a newRecord (#91).
@@ -139,7 +139,7 @@ export function associationsOf(model: ModelClass): ReadonlyMap<string, Associati
  * prototype answer instead. Removed newest first: when they're a record's last fields, as
  * they usually are, that undoes their additions and keeps the object's shape fast.
  */
-export function newRecord<M extends ModelBase>(model: ModelClass<M>): M {
+export function newRecord<M extends Model>(model: ModelClass<M>): M {
   const record = constructWithoutAssociations(model);
   const names = [...associationsOf(model).keys()];
   for (let index = names.length - 1; index >= 0; index--) {
@@ -149,7 +149,7 @@ export function newRecord<M extends ModelBase>(model: ModelClass<M>): M {
 }
 
 /** A record of `model` from its constructor, its association fields left as `placeholderField`. */
-function constructWithoutAssociations<M extends ModelBase>(model: ModelClass<M>): M {
+function constructWithoutAssociations<M extends Model>(model: ModelClass<M>): M {
   makingRecords++;
   try {
     return new model();

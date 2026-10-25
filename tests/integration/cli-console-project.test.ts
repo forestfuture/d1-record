@@ -242,14 +242,13 @@ describe("loading a project's Models for the console", { timeout: 30_000 }, () =
           // A stand-in with what the console needs of the library, for a library that is a
           // workspace link or a copy under the project's own folder.
           "vendor/library.ts": `
-            export class Base {}
-            export const Model = { Base };
+            export class Model {}
             export const connect = () => ({});
             export const withDatabase = async (_db: unknown, run: () => unknown) => run();
           `,
           "src/models/user.ts": `
             import { Model } from "@forestfuture/d1-record";
-            export class User extends Model.Base {}
+            export class User extends Model {}
           `,
         },
         true,
@@ -261,7 +260,7 @@ describe("loading a project's Models for the console", { timeout: 30_000 }, () =
 
       if (typeof again === "string") throw new Error(again);
       const User = again.User as { prototype: object };
-      expect(User.prototype instanceof first.library.Model.Base).toBe(true);
+      expect(User.prototype instanceof first.library.Model).toBe(true);
     });
 
     test("keeps the library: a reloaded Model is still a Model of the same library", async () => {
@@ -271,7 +270,7 @@ describe("loading a project's Models for the console", { timeout: 30_000 }, () =
 
       if (typeof again === "string") throw new Error(again);
       const User = again.User as { prototype: object };
-      expect(User.prototype instanceof first.library.Model.Base).toBe(true);
+      expect(User.prototype instanceof first.library.Model).toBe(true);
     });
 
     test("a syntax error is reported with the file's place in the project, not its full path", async () => {

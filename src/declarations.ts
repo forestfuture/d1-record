@@ -1,7 +1,7 @@
 // A Model's declared callbacks, validations and error messages, inherited, and sealed on its first use.
 import { ancestors } from "./ancestors.ts";
 import { InvalidModel } from "./errors.ts";
-import type { Callback, ModelBase } from "./model.ts";
+import type { Callback, Model } from "./model.ts";
 import type { ErrorMessages } from "./error-messages.ts";
 import type { Validation } from "./validations.ts";
 
@@ -53,7 +53,7 @@ export type Declarations = {
   errorMessages: ErrorMessages;
   humanAttributeNames: Readonly<Record<string, string>>;
 } & {
-  [K in CallbackKind]: Callback<ModelBase>;
+  [K in CallbackKind]: Callback<Model>;
 };
 
 /** The declarations of `kind` for `model`: its own, or else its nearest ancestor's. */

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-pl
 import { connect, D1RecordError, Model, RecordInvalid, type QueryEvent } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: "string",
   role: "string",
@@ -14,7 +14,7 @@ class User extends Model({
   }
 }
 
-class Signup extends Model({
+class Signup extends Model.define({
   id: { type: "integer", null: false },
   email: "string",
 }) {

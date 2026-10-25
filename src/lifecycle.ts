@@ -28,7 +28,7 @@ import {
   type BeforeCallbackKind,
   type CallbackKind,
 } from "./declarations.ts";
-import { modelOf, type ModelBase } from "./model.ts";
+import { modelOf, type Model } from "./model.ts";
 import { Negated, type Condition } from "./query.ts";
 import { linksOf, state } from "./record-state.ts";
 import { column, sql } from "./sql.ts";
@@ -58,7 +58,7 @@ type Validity = "valid" | "invalid" | "aborted";
  * record's own Database (so its Session), within the scope, leaving out the record's own row.
  */
 async function isTaken(
-  record: ModelBase,
+  record: Model,
   attribute: string,
   value: unknown,
   { scope = [], caseSensitive = true }: UniquenessOptions,
@@ -78,17 +78,14 @@ async function isTaken(
 }
 
 /** Runs the Model's callbacks of `kind` in declaration order, awaiting each. */
-async function runCallbacks(record: ModelBase, kind: CallbackKind): Promise<void> {
+async function runCallbacks(record: Model, kind: CallbackKind): Promise<void> {
   for (const callback of declared(modelOf(record), kind)) {
     await callback(record);
   }
 }
 
 /** Runs callbacks of `kind`; an `abort()` from one sets `abortReason` and returns `false`. */
-async function runAbortableCallbacks(
-  record: ModelBase,
-  kind: BeforeCallbackKind,
-): Promise<boolean> {
+async function runAbortableCallbacks(record: Model, kind: BeforeCallbackKind): Promise<boolean> {
   try {
     await runCallbacks(record, kind);
     return true;
@@ -100,7 +97,7 @@ async function runAbortableCallbacks(
 }
 
 /** Whether the record is valid: `isValid()`'s answer. */
-export async function validateRecord(record: ModelBase): Promise<boolean> {
+export async function validateRecord(record: Model): Promise<boolean> {
   return (await validation(record, new Set())) === "valid";
 }
 
@@ -108,7 +105,7 @@ export async function validateRecord(record: ModelBase): Promise<boolean> {
  * Clears `errors` and `abortReason`, then beforeValidation → validators → afterValidation.
  * An `abort()` in either callback makes the record "aborted" (not valid).
  */
-async function validation(record: ModelBase, claimed: Claimed): Promise<Validity> {
+async function validation(record: Model, claimed: Claimed): Promise<Validity> {
   const recordState = record[state];
   recordState.errors[clearErrors]();
   recordState.abortReason = undefined;
@@ -150,11 +147,11 @@ export type DestroyPlan =
  * Records already part of the write being prepared, so a batch writes each record once: one
  * saved through its owner's autosave isn't saved again, nor is a record listed twice.
  */
-export type Claimed = Set<ModelBase>;
+export type Claimed = Set<Model>;
 
 /** The error a refused save or destroy throws where there's no `false` to return. */
 export function refusalError(
-  record: ModelBase,
+  record: Model,
   plan: Exclude<SavePlan | DestroyPlan, Ready>,
   kind: "save" | "destroy",
 ): Error {
@@ -162,7 +159,7 @@ export function refusalError(
   return kind === "save" ? new RecordNotSaved(plan.reason) : new RecordNotDestroyed(plan.reason);
 }
 
-function aborted(record: ModelBase): { status: "aborted"; reason: string } {
+function aborted(record: Model): { status: "aborted"; reason: string } {
   return { status: "aborted", reason: record[state].abortReason ?? "" };
 }
 
@@ -171,7 +168,7 @@ function aborted(record: ModelBase): { status: "aborted"; reason: string } {
  * after another, as Rails' `validate: true` does: an invalid one adds "is invalid" to the
  * association's name.
  */
-async function validateAutosaves(record: ModelBase, claimed: Claimed): Promise<void> {
+async function validateAutosaves(record: Model, claimed: Claimed): Promise<void> {
   for (const { association, record: pointedAt } of belongsToAutosavesOf(record)) {
     const { name } = association;
     if (!pointedAt[state].isNew || claimed.has(pointedAt)) continue;
@@ -195,7 +192,7 @@ async function validateAutosaves(record: ModelBase, claimed: Claimed): Promise<v
  * → beforeSave → beforeCreate | beforeUpdate → write (skipped when clean) → commit state
  * → afterCreate | afterUpdate → afterSave.
  */
-export async function saveLifecycle(record: ModelBase): Promise<Outcome> {
+export async function saveLifecycle(record: Model): Promise<Outcome> {
   const database = await pinBefore(linksOf(recordsSaving(record)), "save() needs its records");
   const claimed: Claimed = new Set();
   const plan = await prepareSave(record, claimed);
@@ -210,9 +207,9 @@ export async function saveLifecycle(record: ModelBase): Promise<Outcome> {
  * and the new records built through its associations, at every level. Found without running
  * any validation or callback, so a save can be checked before anything runs (#93).
  */
-export function recordsSaving(record: ModelBase): ModelBase[] {
-  const found = new Set<ModelBase>();
-  const visit = (each: ModelBase): void => {
+export function recordsSaving(record: Model): Model[] {
+  const found = new Set<Model>();
+  const visit = (each: Model): void => {
     if (found.has(each)) return;
     found.add(each);
     for (const { record: target } of belongsToAutosavesOf(each)) {
@@ -225,7 +222,7 @@ export function recordsSaving(record: ModelBase): ModelBase[] {
 }
 
 /** Everything a save does before writing: validation and the before-callbacks. */
-export async function prepareSave(record: ModelBase, claimed: Claimed): Promise<SavePlan> {
+export async function prepareSave(record: Model, claimed: Claimed): Promise<SavePlan> {
   if (claimed.has(record)) return { status: "ready", stages: [] };
   const recordState = record[state];
   recordState.requireLive("be saved");
@@ -240,7 +237,7 @@ export async function prepareSave(record: ModelBase, claimed: Claimed): Promise<
  * at every level). If the owner's key is known, its records join its batch; if D1 generates
  * it, they follow in the next one, once the owner is written.
  */
-async function prepareWrites(record: ModelBase, claimed: Claimed): Promise<SavePlan> {
+async function prepareWrites(record: Model, claimed: Claimed): Promise<SavePlan> {
   claimed.add(record);
   // New belongsTo records first: the record needs their keys (Rails' belongs_to autosave).
   const pointedAt = belongsToAutosavesOf(record);
@@ -269,7 +266,7 @@ async function prepareWrites(record: ModelBase, claimed: Claimed): Promise<SaveP
 
 /** Each record's prepared writes, in order; the first refusal stops them. */
 async function prepareEach(
-  records: readonly ModelBase[],
+  records: readonly Model[],
   claimed: Claimed,
 ): Promise<Ready[] | Exclude<SavePlan, Ready>> {
   const plans: Ready[] = [];
@@ -287,7 +284,7 @@ async function prepareEach(
  * stage builds its statements.
  */
 function withChildren(
-  owner: ModelBase,
+  owner: Model,
   own: Stage,
   autosaves: readonly Autosave[],
   plans: readonly Ready[],
@@ -333,7 +330,7 @@ async function runPlan(executor: Executor, plan: Ready): Promise<void> {
  * anything: it becomes `AbortAfterPersistence`. Any other error propagates unchanged.
  */
 async function runAfterCallbacks(
-  record: ModelBase,
+  record: Model,
   kind: AfterCallbackKind,
   lifecycle: "save" | "destroy",
 ): Promise<void> {
@@ -346,7 +343,7 @@ async function runAfterCallbacks(
 }
 
 /** beforeSave, then beforeCreate or beforeUpdate; `false` if one aborted. */
-async function beforeWrite(record: ModelBase, isInsert: boolean): Promise<boolean> {
+async function beforeWrite(record: Model, isInsert: boolean): Promise<boolean> {
   return (
     (await runAbortableCallbacks(record, "beforeSave")) &&
     (await runAbortableCallbacks(record, isInsert ? "beforeCreate" : "beforeUpdate"))
@@ -358,7 +355,7 @@ async function beforeWrite(record: ModelBase, isInsert: boolean): Promise<boolea
  * UPDATE the changed ones, plus timestamps; a clean record sends nothing. Its after-callbacks
  * are afterCreate or afterUpdate, then afterSave.
  */
-function saveWrite(record: ModelBase, isInsert: boolean): PreparedWrite {
+function saveWrite(record: Model, isInsert: boolean): PreparedWrite {
   const recordState = record[state];
   const model = modelOf(record);
   const after = async () => {
@@ -389,7 +386,7 @@ function saveWrite(record: ModelBase, isInsert: boolean): PreparedWrite {
  * → DELETE by the stored key (skipped for a never-saved record: there's no row, as in Rails)
  * → mark destroyed → afterDestroy. Every write, dependents' included, is one atomic batch.
  */
-export async function destroyLifecycle(record: ModelBase): Promise<DestroyOutcome> {
+export async function destroyLifecycle(record: Model): Promise<DestroyOutcome> {
   const database = await pinBefore(linksOf([record]), "destroy() needs its records");
   const claimed: Claimed = new Set();
   const plan = await prepareDestroy(record, claimed);
@@ -400,7 +397,7 @@ export async function destroyLifecycle(record: ModelBase): Promise<DestroyOutcom
 }
 
 /** Everything a destroy does before writing: beforeDestroy, then its dependents' plans. */
-export async function prepareDestroy(record: ModelBase, claimed: Claimed): Promise<DestroyPlan> {
+export async function prepareDestroy(record: Model, claimed: Claimed): Promise<DestroyPlan> {
   if (claimed.has(record)) return { status: "ready", stages: [] };
   claimed.add(record);
   const recordState = record[state];
@@ -425,7 +422,7 @@ export async function prepareDestroy(record: ModelBase, claimed: Claimed): Promi
 }
 
 /** Loads the record's row again by its stored primary key, discarding unsaved changes. */
-export async function reloadRecord(record: ModelBase): Promise<void> {
+export async function reloadRecord(record: Model): Promise<void> {
   const recordState = record[state];
   recordState.requireLive("be reloaded");
   const { executor } = recordState;

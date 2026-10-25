@@ -2,10 +2,10 @@
 import { InvalidModel } from "./errors.ts";
 import type { Executor } from "./executor.ts";
 import { ancestors } from "./ancestors.ts";
-import type { ModelBase, ModelClass, ScopesOf } from "./model.ts";
+import type { Model, ModelClass, ScopesOf } from "./model.ts";
 import { applyScope, Relation, type RelationArgs, type Scope, type Scoped } from "./relation.ts";
 
-type RelationClass = new (...args: RelationArgs<ModelBase>) => Relation<ModelBase>;
+type RelationClass = new (...args: RelationArgs<Model>) => Relation<Model>;
 
 // Module-level, but not request state (ADR-0003): derived only from a Model's scope statics.
 const relationClasses = new WeakMap<
@@ -14,7 +14,7 @@ const relationClasses = new WeakMap<
 >();
 
 /** Each scope static, to its body: what `Product.newest()` and `relation.newest()` run. */
-export const scopeBodies = new WeakMap<object, Scope<ModelBase>>();
+export const scopeBodies = new WeakMap<object, Scope<Model>>();
 
 // Module-level, but not request state (ADR-0003): what this module needs from model.ts,
 // handed over once it has loaded, so this module imports neither it nor associations.ts.
@@ -25,7 +25,7 @@ let base: { root: object; statics: ReadonlySet<string> } | undefined;
 /** Makes a Model ready on first use (verified, its accessors installed, its declarations sealed). */
 let ready: ((model: ModelClass) => void) | undefined;
 
-/** @internal Called once by model.ts, after ModelBase and its statics are defined. */
+/** @internal Called once by model.ts, after Model and its statics are defined. */
 export function useModelBase(root: object, readyModel: (model: ModelClass) => void): void {
   base = { root, statics: new Set(Object.getOwnPropertyNames(root)) };
   ready = readyModel;
@@ -95,7 +95,7 @@ function relationClassFor(model: ModelClass): RelationClass {
     return cached.Class;
   }
   // The library's own Relations: constructible here, though Relation's constructor is protected.
-  const ScopedRelation = class extends Relation<ModelBase> {
+  const ScopedRelation = class extends Relation<Model> {
     constructor(parts: unknown) {
       super(parts);
     }
@@ -104,7 +104,7 @@ function relationClassFor(model: ModelClass): RelationClass {
     requireScopeName(model, name);
     const body = scopeBodies.get(scoped)!;
     Object.defineProperty(ScopedRelation.prototype, name, {
-      value(this: Relation<ModelBase>, ...args: unknown[]) {
+      value(this: Relation<Model>, ...args: unknown[]) {
         return this[applyScope](name, body, args);
       },
     });

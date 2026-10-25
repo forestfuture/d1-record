@@ -1,7 +1,7 @@
 import { Model } from "@forestfuture/d1-record";
 
 // #region validates
-export class Account extends Model({
+export class Account extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   handle: { type: "string", null: false },
@@ -27,7 +27,7 @@ export class Account extends Model({
 // #endregion validates
 
 // #region custom
-export class Booking extends Model({
+export class Booking extends Model.define({
   id: { type: "integer", null: false },
   startsAt: { type: "datetime", null: false },
   endsAt: { type: "datetime", null: false },

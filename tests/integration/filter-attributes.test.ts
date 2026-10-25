@@ -11,7 +11,7 @@ import {
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false }, // filtered by default: "email"
   role: "string",
@@ -20,7 +20,7 @@ class User extends Model({
 }
 
 // A secret as the primary key: sessions or API keys looked up by their token.
-class Session extends Model({
+class Session extends Model.define({
   token: { type: "string", null: false, column: "id" },
   label: { type: "string", null: false },
 }) {
@@ -182,7 +182,7 @@ describe("filterAttributes", () => {
 
   describe("which attributes are filtered", () => {
     const named = (filterAttributes: readonly FilterAttribute[]) =>
-      class extends Model({
+      class extends Model.define({
         id: { type: "integer", null: false },
         passwordDigest: "string",
         apiKey: "string",
@@ -193,7 +193,7 @@ describe("filterAttributes", () => {
       };
 
     test("Rails' defaults match a camelCase attribute's snake_case name, in any case", async () => {
-      expect(await hiddenNames(named(Model.Base.filterAttributes))).toEqual([
+      expect(await hiddenNames(named(Model.filterAttributes))).toEqual([
         "passwordDigest", // passw
         "apiKey", // _key, as api_key
       ]);
@@ -210,8 +210,8 @@ describe("filterAttributes", () => {
     });
 
     test("set on an app's base class, every Model built on it inherits it", async () => {
-      class Base extends Model.Base {
-        static override filterAttributes = [...Model.Base.filterAttributes, "nickname"];
+      class Base extends Model {
+        static override filterAttributes = [...Model.filterAttributes, "nickname"];
       }
       const ApplicationRecord = modelFor(
         {

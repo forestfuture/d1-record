@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-pl
 import { connect, hasMany, Model } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class Doc extends Model({
+class Doc extends Model.define({
   id: { type: "integer", null: false },
   folderId: "integer",
   settings: "json",
@@ -12,7 +12,7 @@ class Doc extends Model({
   static override filterAttributes = ["secret"];
 }
 
-class Folder extends Model({ id: { type: "integer", null: false } }) {
+class Folder extends Model.define({ id: { type: "integer", null: false } }) {
   static tableName = "json_folders";
 
   docs = hasMany(Doc, { foreignKey: "folderId" });

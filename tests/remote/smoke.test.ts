@@ -14,7 +14,7 @@ import { configured, remoteDatabase, type RemoteDatabase } from "./support.ts";
 
 /** The fixture Models, on this run's prefixed tables. */
 function modelsFor(prefix: string) {
-  class User extends Model({
+  class User extends Model.define({
     id: { type: "integer", null: false },
     email: { type: "string", null: false },
     role: "string",
@@ -28,7 +28,7 @@ function modelsFor(prefix: string) {
     firstPost = hasOne(Post, { foreignKey: "userId" });
   }
 
-  class Post extends Model({
+  class Post extends Model.define({
     id: { type: "integer", null: false },
     userId: { type: "integer", null: false },
     title: { type: "string", null: false },

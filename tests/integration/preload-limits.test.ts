@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { belongsTo, connect, hasMany, Model, sql } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class Note extends Model({
+class Note extends Model.define({
   id: { type: "string", null: false },
   notebookId: "string",
   body: "string",
@@ -12,7 +12,7 @@ class Note extends Model({
   notebook = belongsTo(Notebook);
 }
 
-class Notebook extends Model({
+class Notebook extends Model.define({
   id: { type: "string", null: false },
   title: "string",
   color: "string",

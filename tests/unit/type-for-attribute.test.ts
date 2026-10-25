@@ -2,7 +2,7 @@ import { describe, expect, test } from "vite-plus/test";
 import { Model, modelFor, UnknownAttribute } from "../../src/index.ts";
 
 // One attribute per stored form. `secret` is filtered by default.
-class Post extends Model({
+class Post extends Model.define({
   id: { type: "integer", null: false },
   publishedAt: { type: "datetime", column: "published_at" },
   seconds: { type: "datetime", storage: "unixSeconds" },
@@ -23,7 +23,7 @@ const ApplicationRecord = modelFor(
       primaryKey: "id",
     },
   } as const,
-  Model.Base,
+  Model,
 );
 class Note extends ApplicationRecord("notes", {
   openedAt: { type: "datetime", storage: "unixSeconds" },

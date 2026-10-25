@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-pl
 import { connect, InvalidModel, Model, modelFor } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   role: "string",
@@ -11,7 +11,7 @@ class User extends Model({
   static hiddenAttributes = ["email"];
 }
 
-class Member extends Model({
+class Member extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   role: "string",
@@ -19,7 +19,7 @@ class Member extends Model({
   static tableName = "users";
 }
 
-class Base extends Model.Base {
+class Base extends Model {
   static override hiddenAttributes = ["email"];
 }
 const ApplicationRecord = modelFor(
@@ -101,7 +101,7 @@ describe("hiddenAttributes", () => {
 
   describe("naming one the Model doesn't have", () => {
     test("in its own list is an InvalidModel", () => {
-      class Typo extends Model({ id: "integer", role: "string" }) {
+      class Typo extends Model.define({ id: "integer", role: "string" }) {
         static override tableName = "users";
         static override hiddenAttributes = ["rol"];
       }
@@ -128,17 +128,17 @@ describe("hiddenAttributes", () => {
       expect(() => db.model(Extended)).not.toThrow();
     });
 
-    test("is ignored when Model.Base's list does", () => {
-      const before = Model.Base.hiddenAttributes;
-      Model.Base.hiddenAttributes = ["nickname"];
+    test("is ignored when Model's list does", () => {
+      const before = Model.hiddenAttributes;
+      Model.hiddenAttributes = ["nickname"];
       try {
-        class Plain extends Model({ id: "integer", role: "string" }) {
+        class Plain extends Model.define({ id: "integer", role: "string" }) {
           static override tableName = "users";
         }
 
         expect(() => connect(binding).model(Plain)).not.toThrow();
       } finally {
-        Model.Base.hiddenAttributes = before;
+        Model.hiddenAttributes = before;
       }
     });
 
@@ -161,7 +161,7 @@ describe("hiddenAttributes", () => {
   });
 
   test("the list is read each time, so a change after first use applies", async () => {
-    class Live extends Model({ id: "integer", email: "string", role: "string" }) {
+    class Live extends Model.define({ id: "integer", email: "string", role: "string" }) {
       static override tableName = "users";
     }
     const live = await connect(binding)

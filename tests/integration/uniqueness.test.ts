@@ -3,7 +3,7 @@ import { connect, MissingAttribute, Model, type QueryEvent } from "../../src/ind
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 // The accounts table has no UNIQUE constraints, so only the validation can reject duplicates.
-class Account extends Model({
+class Account extends Model.define({
   id: { type: "integer", null: false },
   externalAccountId: "string",
   userID: "integer",

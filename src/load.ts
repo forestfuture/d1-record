@@ -3,7 +3,7 @@ import { attributeFor, noMatch } from "./attribute.ts";
 import { compileColumns, compileSelect, type CompiledSql } from "./compiler.ts";
 import { databaseNow, type Executor } from "./executor.ts";
 import { stableOrder } from "./finder-order.ts";
-import { hydrate, primaryKeyOf, type ModelBase, type ModelClass } from "./model.ts";
+import { hydrate, primaryKeyOf, type Model, type ModelClass } from "./model.ts";
 import { keysForIncludes, planPreload } from "./preload.ts";
 import type { QueryDescription } from "./query.ts";
 import { sql } from "./sql.ts";
@@ -12,7 +12,7 @@ import { sql } from "./sql.ts";
  * How a Relation's query runs. The one place that knows a `none()` query never reaches D1: its
  * Relation's reads find nothing and its bulk writes change nothing, without a database.
  */
-export interface QueryRunner<M extends ModelBase> {
+export interface QueryRunner<M extends Model> {
   /** The records `description` matches (one SELECT), hydrated, with its includes preloaded. */
   load(description: QueryDescription): Promise<M[]>;
   /** The records `description` matches and the count `countSql` gives, sent as one batch. */
@@ -29,19 +29,19 @@ export interface QueryRunner<M extends ModelBase> {
 }
 
 /** Records, and a count sent with them. */
-interface Counted<M extends ModelBase> {
+interface Counted<M extends Model> {
   records: M[];
   count: number;
 }
 
 /** Records, and whether more follow them. */
-interface LoadedAhead<M extends ModelBase> {
+interface LoadedAhead<M extends Model> {
   records: M[];
   hasMore: boolean;
 }
 
 /** How `query`, a Relation's, runs: on `executor`, unless it's a `none()` query. */
-export function runnerFor<M extends ModelBase>(
+export function runnerFor<M extends Model>(
   executor: Executor,
   model: ModelClass<M>,
   query: QueryDescription,
@@ -66,7 +66,7 @@ const nothing: QueryRunner<never> = {
 };
 
 /** One SELECT for `query`'s records, hydrated, with its includes preloaded. */
-async function loadRecords<M extends ModelBase>(
+async function loadRecords<M extends Model>(
   executor: Executor,
   model: ModelClass<M>,
   query: QueryDescription,
@@ -76,7 +76,7 @@ async function loadRecords<M extends ModelBase>(
 }
 
 /** `countSql` and the SELECT for `query`'s records as one batch: one round trip. */
-async function loadCounted<M extends ModelBase>(
+async function loadCounted<M extends Model>(
   executor: Executor,
   model: ModelClass<M>,
   query: QueryDescription,
@@ -89,7 +89,7 @@ async function loadCounted<M extends ModelBase>(
 }
 
 /** One SELECT for `query`'s records and one past its limit, which is read but not loaded. */
-async function loadAhead<M extends ModelBase>(
+async function loadAhead<M extends Model>(
   executor: Executor,
   model: ModelClass<M>,
   query: QueryDescription & { limit: number },
@@ -117,7 +117,7 @@ interface Load {
  * round trip, then makes its records and attaches the preloads. Resolves to the records and
  * the own statements' rows.
  */
-async function loadWith<M extends ModelBase>(
+async function loadWith<M extends Model>(
   executor: Executor,
   model: ModelClass<M>,
   load: Load,
@@ -195,10 +195,7 @@ export function keysToFind(model: ModelClass, ids: readonly unknown[]): (string 
 }
 
 /** Found `records` in the order of their primary keys in `keys`. */
-export function inKeyOrder<M extends ModelBase>(
-  records: readonly M[],
-  keys: readonly unknown[],
-): M[] {
+export function inKeyOrder<M extends Model>(records: readonly M[], keys: readonly unknown[]): M[] {
   const byKey = new Map(records.map((record) => [primaryKeyOf(record), record]));
   return keys.map((key) => byKey.get(key) as M);
 }

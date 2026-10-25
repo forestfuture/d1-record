@@ -4,7 +4,7 @@ import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 import { startSession } from "../../cli/console/session.ts";
 import { drive, terminalStreams, waitFor } from "../support/console.ts";
 
-class Sample extends Model({
+class Sample extends Model.define({
   id: { type: "integer", null: false },
   label: "string",
   quantity: "integer",

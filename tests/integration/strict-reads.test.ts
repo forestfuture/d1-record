@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-pl
 import { connect, hasMany, Model } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class Reading extends Model({
+class Reading extends Model.define({
   id: { type: "integer", null: false },
   ownerId: "integer",
   label: "string",
@@ -19,7 +19,7 @@ class Reading extends Model({
   static override filterAttributes = ["secret"];
 }
 
-class Owner extends Model({ id: { type: "integer", null: false } }) {
+class Owner extends Model.define({ id: { type: "integer", null: false } }) {
   static tableName = "strict_owners";
 
   readings = hasMany(Reading, { foreignKey: "ownerId" });

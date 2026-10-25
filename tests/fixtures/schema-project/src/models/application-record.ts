@@ -5,7 +5,7 @@ import { tables } from "../../schema";
  * Methods, callbacks and scopes written here are shared by every Model, as in Rails'
  * ApplicationRecord. It's abstract: it has no table of its own.
  */
-class Base extends Model.Base {
+class Base extends Model {
   // The D1 binding Models query (Product.find(id)), from your Wrangler config's d1_databases.
   static override binding = "DB";
 

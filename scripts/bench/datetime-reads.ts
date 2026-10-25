@@ -8,19 +8,19 @@ import { hydrate, type ModelClass } from "../../src/model.ts";
 const ROWS = 10_000;
 const RUNS = 40;
 
-class NoDates extends Model({
+class NoDates extends Model.define({
   id: { type: "string", null: false },
   name: "string",
   a: "string",
   b: "string",
 }) {}
-class OneDate extends Model({
+class OneDate extends Model.define({
   id: { type: "string", null: false },
   name: "string",
   a: "string",
   createdAt: "datetime",
 }) {}
-class TwoDates extends Model({
+class TwoDates extends Model.define({
   id: { type: "string", null: false },
   name: "string",
   createdAt: "datetime",

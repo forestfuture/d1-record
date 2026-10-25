@@ -11,7 +11,7 @@ import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 const log: string[] = [];
 const hooks: { beforeDestroy?: () => void; afterDestroy?: () => void } = {};
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: "string",
 }) {

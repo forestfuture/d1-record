@@ -4,7 +4,7 @@ import { castValue, uncastable } from "./conversion.ts";
 import { IncompatibleRelation } from "./errors.ts";
 import { stableOrder } from "./finder-order.ts";
 import type { QueryRunner } from "./load.ts";
-import type { ModelBase, ModelClass } from "./model.ts";
+import type { Model, ModelClass } from "./model.ts";
 import type { QueryDescription } from "./query.ts";
 
 /** What `paginate()` takes: which page, how many records on it, and whether to count them all. */
@@ -18,7 +18,7 @@ export interface PageOptions {
 }
 
 /** A page of records, from `paginate({ count: false })`: where it is, but no total. */
-export interface CountlessPage<M extends ModelBase> {
+export interface CountlessPage<M extends Model> {
   records: M[];
   page: number;
   perPage: number;
@@ -27,7 +27,7 @@ export interface CountlessPage<M extends ModelBase> {
 }
 
 /** A page of records, from `paginate()`, with the total it's a page of. */
-export interface Page<M extends ModelBase> extends CountlessPage<M> {
+export interface Page<M extends Model> extends CountlessPage<M> {
   total: number;
   totalPages: number;
 }
@@ -49,7 +49,7 @@ export interface PaginateStatic {
 }
 
 /** A Relation's query and how it runs: what `paginate` pages. */
-export interface Paged<M extends ModelBase> {
+export interface Paged<M extends Model> {
   model: ModelClass<M>;
   query: QueryDescription;
   runner: QueryRunner<M>;
@@ -59,7 +59,7 @@ export interface Paged<M extends ModelBase> {
  * One page of `paged`'s records. Counted, the `COUNT` and the page's SELECT go as one batch;
  * with `count: false`, one SELECT fetches a record past the page to learn whether there's a next.
  */
-export async function paginate<M extends ModelBase>(
+export async function paginate<M extends Model>(
   { model, query, runner }: Paged<M>,
   options: PageOptions,
 ): Promise<Page<M> | CountlessPage<M>> {

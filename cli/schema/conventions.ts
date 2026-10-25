@@ -8,7 +8,7 @@ type AttributeType = "string" | "integer" | "real" | "boolean" | "datetime" | "j
 /** A default the generated spec carries: a literal value, or a date. */
 export type Default = { literal: unknown } | { date: string };
 
-/** One attribute as the generated schema declares it, the shape `Model({...})` takes. */
+/** One attribute as the generated schema declares it, the shape `Model.define({...})` takes. */
 export interface Spec {
   type: AttributeType;
   null?: false;

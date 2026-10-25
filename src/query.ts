@@ -1,7 +1,7 @@
 // QueryDescription, the immutable value a Relation describes, and combining (`or`, `merge`).
 import { Comparison } from "./comparisons.ts";
 import { IncompatibleRelation } from "./errors.ts";
-import type { ModelBase, ModelClass } from "./model.ts";
+import type { Model, ModelClass } from "./model.ts";
 import { ColumnReference, ColumnValue, SafeSql } from "./sql.ts";
 
 export type OrderDirection = "asc" | "desc";
@@ -28,7 +28,7 @@ export interface IncludeTree {
  * Relations copy it, never mutate it. The compiler turns it into SQL.
  */
 export interface QueryDescription {
-  model: ModelClass<ModelBase>;
+  model: ModelClass<Model>;
   conditions: readonly Condition[];
   order: readonly OrderTerm[];
   /** From `reorder()`: the order replaces any other when merged, even an empty one. */
@@ -85,7 +85,7 @@ export class Negated {
 }
 
 /** All of `model`'s rows, in no particular order. */
-export function allOf(model: ModelClass<ModelBase>): QueryDescription {
+export function allOf(model: ModelClass<Model>): QueryDescription {
   return { model, conditions: [], order: [] };
 }
 

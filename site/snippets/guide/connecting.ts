@@ -45,7 +45,7 @@ export const api = {
 
 // #region app-wide
 // src/models/application-record.ts: every query, from every Model, whichever database runs it.
-class Base extends Model.Base {
+class Base extends Model {
   static override binding = "DB";
 
   static override onQuery: QueryListener = ({ model, sql, durationMs, error }) => {
@@ -87,7 +87,7 @@ export const logged = {
 
 // #region app-wide-development
 // Logs only when LOG_SQL is set (in .dev.vars), read from the Worker's env when a query runs.
-class QuietInProduction extends Model.Base {
+class QuietInProduction extends Model {
   static override onQuery: QueryListener = ({ model, sql, durationMs }) => {
     if ((workerEnv as { LOG_SQL?: string }).LOG_SQL) {
       console.log(`${model} ${durationMs.toFixed(1)}ms ${sql}`);

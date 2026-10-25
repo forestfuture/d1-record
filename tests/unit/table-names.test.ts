@@ -5,9 +5,9 @@ import { underscore } from "../../src/naming.ts";
 
 const db = connect({} as never);
 
-/** A Model class with this exact class name, as `class <name> extends Model(…)` makes. */
+/** A Model class with this exact class name, as `class <name> extends Model.define(…)` makes. */
 function modelNamed(name: string) {
-  return { [name]: class extends Model({ id: "integer" }) {} }[name]!;
+  return { [name]: class extends Model.define({ id: "integer" }) {} }[name]!;
 }
 
 // Rails' tableize cases (from Rails' inflector tests): a class name, and its table.
@@ -77,7 +77,7 @@ describe("inferred table names", () => {
   });
 
   test("an explicit tableName wins", () => {
-    class Person extends Model({ id: "integer" }) {
+    class Person extends Model.define({ id: "integer" }) {
       static tableName = "humans";
     }
 
@@ -85,12 +85,12 @@ describe("inferred table names", () => {
   });
 
   test("a subclass shares its parent's table, inferred or explicit, unless it declares its own", () => {
-    class User extends Model({ id: "integer" }) {}
+    class User extends Model.define({ id: "integer" }) {}
     class Admin extends User {}
     class Archived extends User {
       static tableName = "archived_users";
     }
-    class Account extends Model({ id: "integer" }) {
+    class Account extends Model.define({ id: "integer" }) {
       static tableName = "billing_accounts";
     }
     class Business extends Account {}
@@ -104,15 +104,15 @@ describe("inferred table names", () => {
 
   test("a class renamed by a bundler infers from the name it has", () => {
     // What a minifier without keep_names does: the class is now called e.
-    const e = class extends Model({ id: "integer" }) {};
+    const e = class extends Model.define({ id: "integer" }) {};
 
     expect(e.tableName).toBe("es");
   });
 
   test("assigning tableName sets it for that class, as compiled class fields and static blocks do", () => {
-    class User extends Model({ id: "integer" }) {}
+    class User extends Model.define({ id: "integer" }) {}
     class Admin extends User {}
-    class Member extends Model({ id: "integer" }) {
+    class Member extends Model.define({ id: "integer" }) {
       static {
         this.tableName = "people";
       }
@@ -130,9 +130,9 @@ describe("inferred table names", () => {
   });
 
   test("a class with no name to infer from must declare its tableName", () => {
-    const anonymous = [class extends Model({ id: "integer" }) {}][0]!;
-    const defaultExport = { default: class extends Model({ id: "integer" }) {} }.default;
-    const direct = Model({ id: "integer" });
+    const anonymous = [class extends Model.define({ id: "integer" }) {}][0]!;
+    const defaultExport = { default: class extends Model.define({ id: "integer" }) {} }.default;
+    const direct = Model.define({ id: "integer" });
 
     for (const model of [anonymous, defaultExport, direct]) {
       expect(() => db.model(model)).toThrow(InvalidModel);

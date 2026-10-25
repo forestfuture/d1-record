@@ -3,7 +3,7 @@ import { between, connect, gte, Model } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 // Columns as other tools leave them: text from a SQLite default, and integer epochs.
-class Event extends Model({
+class Event extends Model.define({
   id: { type: "integer", null: false },
   name: "string",
   happenedAt: { type: "datetime", column: "happened_at" },
@@ -12,7 +12,7 @@ class Event extends Model({
 }
 
 // Drizzle's integer({ mode: "timestamp" }) and integer({ mode: "timestamp_ms" }).
-class Stamp extends Model({
+class Stamp extends Model.define({
   id: { type: "integer", null: false },
   name: "string",
   seconds: { type: "datetime", storage: "unixSeconds" },
@@ -22,7 +22,7 @@ class Stamp extends Model({
 }
 
 // created_at and updated_at as integer milliseconds, as Drizzle's timestamp_ms mode writes them.
-class Entry extends Model({
+class Entry extends Model.define({
   id: { type: "integer", null: false },
   title: "string",
   createdAt: { type: "datetime", storage: "unixMilliseconds" },
@@ -204,7 +204,7 @@ describe("datetimes stored by other tools (#73)", () => {
   });
 
   test("a datetime's default is written as an integer", async () => {
-    class Dated extends Model({
+    class Dated extends Model.define({
       id: { type: "integer", null: false },
       seconds: {
         type: "datetime",

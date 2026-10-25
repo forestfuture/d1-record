@@ -11,13 +11,13 @@ import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-class Note extends Model({
+class Note extends Model.define({
   id: { type: "string", null: false, generateId: true },
   notebookId: "string",
   body: "string",
 }) {}
 
-class Notebook extends Model({
+class Notebook extends Model.define({
   id: { type: "string", null: false, generateId: true },
   title: "string",
   slug: "string",
@@ -25,7 +25,7 @@ class Notebook extends Model({
   notes = hasMany(Note);
 }
 
-class NumberedNote extends Model({
+class NumberedNote extends Model.define({
   id: { type: "string", null: false, generateId: true },
   body: "string",
 }) {
@@ -37,7 +37,7 @@ class NumberedNote extends Model({
 let issued = 0;
 const sequential = () => `id-${++issued}`;
 
-class SequentialBase extends Model.Base {
+class SequentialBase extends Model {
   static override generateId = sequential;
 }
 
@@ -62,7 +62,7 @@ const generatedTables = {
 } as const;
 const ApplicationRecord = modelFor(generatedTables);
 
-class PrefixedNote extends Model({
+class PrefixedNote extends Model.define({
   id: { type: "string", null: false, generateId: true },
   body: "string",
 }) {
@@ -152,7 +152,7 @@ describe("generated ids", () => {
 
   describe("declaring one", () => {
     test("with a default too is an InvalidModel", () => {
-      class Both extends Model({
+      class Both extends Model.define({
         // @ts-expect-error a compile error too; this checks plain JavaScript
         id: { type: "string", null: false, generateId: true, default: () => "x" },
       }) {
@@ -165,7 +165,7 @@ describe("generated ids", () => {
     });
 
     test("on an attribute that isn't a string is an InvalidModel", () => {
-      class Counted extends Model({
+      class Counted extends Model.define({
         // @ts-expect-error a compile error too; this checks plain JavaScript
         id: { type: "integer", null: false, generateId: true },
       }) {

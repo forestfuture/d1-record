@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-pl
 import { belongsTo, connect, hasMany, hasOne, Model } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class Sample extends Model({
+class Sample extends Model.define({
   id: { type: "integer", null: false },
   label: "string",
   quantity: "integer",
@@ -15,13 +15,13 @@ class Sample extends Model({
 }
 
 // A text foreign key (label) pointing at an integer key: the two keys' types differ.
-class Note extends Model({ id: { type: "integer", null: false }, label: "string" }) {
+class Note extends Model.define({ id: { type: "integer", null: false }, label: "string" }) {
   static tableName = "samples";
 
   owner = belongsTo(Owner, { foreignKey: "label" });
 }
 
-class Owner extends Model({
+class Owner extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
 }) {
@@ -32,13 +32,13 @@ class Owner extends Model({
 }
 
 // An integer foreign key (quantity) pointing at a text key.
-class Code extends Model({ id: { type: "string", null: false }, label: "string" }) {
+class Code extends Model.define({ id: { type: "string", null: false }, label: "string" }) {
   static tableName = "api_keys";
 
   counted = hasMany(Counted, { foreignKey: "quantity" });
 }
 
-class Counted extends Model({ id: { type: "integer", null: false }, quantity: "integer" }) {
+class Counted extends Model.define({ id: { type: "integer", null: false }, quantity: "integer" }) {
   static tableName = "samples";
 
   code = belongsTo(Code, { foreignKey: "quantity" });

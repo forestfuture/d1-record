@@ -3,7 +3,7 @@ import { connect, Model, withDatabase } from "../../src/index.ts";
 import { runScript } from "../../cli/console/script.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class Sample extends Model({
+class Sample extends Model.define({
   id: { type: "integer", null: false },
   label: "string",
   quantity: "integer",

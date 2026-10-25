@@ -1,6 +1,6 @@
-// The statics every Model gets from ModelBase: its Relation methods (`Product.where(…)`) and callbacks (`this.beforeSave(…)`), typed and defined from their lists.
+// The statics every Model gets from Model: its Relation methods (`Product.where(…)`) and callbacks (`this.beforeSave(…)`), typed and defined from their lists.
 import { declare, type CallbackKind } from "./declarations.ts";
-import type { AttributesOf, Callback, ModelBase, ModelClass, ScopesOf } from "./model.ts";
+import type { AttributesOf, Callback, Model, ModelClass, ScopesOf } from "./model.ts";
 import type { PaginateStatic } from "./pagination.ts";
 import type { Relation, Scoped } from "./relation.ts";
 
@@ -64,7 +64,7 @@ type RelationStatic<K extends RelationMethod> = <C extends ModelClass>(
 
 /** Every Relation method in the list as a static, mapped over Relation's so each keeps its doc comment. */
 type RelationStatics = {
-  [K in keyof Pick<Relation<ModelBase>, RelationMethod>]: RelationStatic<K>;
+  [K in keyof Pick<Relation<Model>, RelationMethod>]: RelationStatic<K>;
 };
 
 /** The Relation methods with overloads, typed by hand. */
@@ -147,8 +147,8 @@ const callbackKinds = Object.keys({
 >) as CallbackKind[];
 
 /**
- * The class ModelBase extends, for its statics' types only: at runtime it's empty, and
- * `defineStatics` puts the statics on ModelBase itself, where scopes look for the names they
+ * The class Model extends, for its statics' types only: at runtime it's empty, and
+ * `defineStatics` puts the statics on Model itself, where scopes look for the names they
  * can't take.
  */
 export const ModelStatics = class {} as unknown as (abstract new () => object) &
@@ -160,9 +160,9 @@ export const ModelStatics = class {} as unknown as (abstract new () => object) &
  * Defines the statics on `base`: every Relation method, as Rails delegates them to `all`, and
  * a static for each callback kind, which declares a callback of that kind.
  */
-export function defineStatics(base: typeof ModelBase): void {
+export function defineStatics(base: typeof Model): void {
   for (const kind of callbackKinds) {
-    defineStatic(base, kind, function (this: object, callback: Callback<ModelBase>): void {
+    defineStatic(base, kind, function (this: object, callback: Callback<Model>): void {
       declare(this, kind, callback);
     });
   }

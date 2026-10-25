@@ -1,6 +1,6 @@
 import { column, Model, sql } from "@forestfuture/d1-record";
 
-export class Reminder extends Model({
+export class Reminder extends Model.define({
   id: { type: "integer", null: false },
   name: { type: "string", null: false },
   createdAt: { type: "datetime", null: false },

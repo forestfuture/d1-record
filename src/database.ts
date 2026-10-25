@@ -2,12 +2,12 @@
 import { NoSession } from "./errors.ts";
 import { runBatch, type BatchEntry, type BatchResults } from "./batch.ts";
 import { D1Executor, type QueryListener } from "./executor.ts";
-import type { ModelBase, ModelClass, ScopesOf } from "./model.ts";
+import type { Model, ModelClass, ScopesOf } from "./model.ts";
 import type { Scoped } from "./relation.ts";
 import { relationFor } from "./scoped-relation.ts";
 
 /** One request-bound Relation per Model, keyed like the object passed to `db.models()`. */
-export type RelationsFor<T extends Record<string, ModelClass<ModelBase>>> = {
+export type RelationsFor<T extends Record<string, ModelClass<Model>>> = {
   [K in keyof T]: Scoped<InstanceType<T[K]>, ScopesOf<T[K]>>;
 };
 
@@ -58,12 +58,12 @@ export class Database {
   }
 
   /** A request-bound Relation over the Model's records, with its scopes as methods. */
-  model<C extends ModelClass<ModelBase>>(model: C): Scoped<InstanceType<C>, ScopesOf<C>> {
+  model<C extends ModelClass<Model>>(model: C): Scoped<InstanceType<C>, ScopesOf<C>> {
     return relationFor(this.#executor, model);
   }
 
   /** Request-bound relations for several models at once: `db.models({ User }).User`. */
-  models<const T extends Record<string, ModelClass<ModelBase>>>(models: T): RelationsFor<T> {
+  models<const T extends Record<string, ModelClass<Model>>>(models: T): RelationsFor<T> {
     // Each entry is exactly db.model(thatModel), so it has that Model's Relation type.
     return Object.fromEntries(
       Object.entries(models).map(([name, model]) => [name, this.model(model)]),

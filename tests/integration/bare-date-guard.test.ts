@@ -4,7 +4,7 @@ import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 import { fragment } from "../support/fragments.ts";
 
 // An integer-stored attribute, one mapped to another column, and an ISO one (#149).
-class Stamp extends Model({
+class Stamp extends Model.define({
   id: { type: "integer", null: false },
   seconds: { type: "datetime", storage: "unixSeconds" },
   milliseconds: { type: "datetime", storage: "unixMilliseconds" },

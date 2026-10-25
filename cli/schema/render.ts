@@ -105,7 +105,7 @@ import { tables } from ${stringLiteral(schemaImport)};
  * Methods, callbacks and scopes written here are shared by every Model, as in Rails'
  * ApplicationRecord. It's abstract: it has no table of its own.
  */
-class Base extends Model.Base {
+class Base extends Model {
   // The D1 binding Models query (Product.find(id)), from your Wrangler config's d1_databases.
   static override binding = ${stringLiteral(binding)};
 
@@ -124,7 +124,7 @@ class Base extends Model.Base {
 
   // Values of attributes named like these show as "[FILTERED]" to onQuery and in errors. These
   // are Rails' defaults (passwords, tokens, keys, emails…); add yours, or leave one out:
-  // static override filterAttributes = [...Model.Base.filterAttributes, "iban"];
+  // static override filterAttributes = [...Model.filterAttributes, "iban"];
 
   // Attributes toJSON() leaves out, so Response.json(record) never sends them (exact names;
   // attributes() still has them):

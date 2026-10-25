@@ -15,7 +15,7 @@ import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 const log: string[] = [];
 
-class Post extends Model({
+class Post extends Model.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
@@ -32,7 +32,7 @@ class Post extends Model({
   }
 }
 
-class Comment extends Model({
+class Comment extends Model.define({
   id: { type: "integer", null: false },
   postId: "integer",
   body: "string",
@@ -40,7 +40,7 @@ class Comment extends Model({
   static tableName = "comments";
 }
 
-class Profile extends Model({
+class Profile extends Model.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
 }) {
@@ -52,11 +52,11 @@ const userAttributes = {
   email: { type: "string", null: false },
 } as const;
 
-class User extends Model(userAttributes) {
+class User extends Model.define(userAttributes) {
   static tableName = "users";
 }
 
-class Destroying extends Model(userAttributes) {
+class Destroying extends Model.define(userAttributes) {
   static tableName = "users";
   posts = hasMany(Post, { foreignKey: "userId", dependent: "destroy" });
   static {
@@ -64,22 +64,22 @@ class Destroying extends Model(userAttributes) {
   }
 }
 
-class DeletingAll extends Model(userAttributes) {
+class DeletingAll extends Model.define(userAttributes) {
   static tableName = "users";
   posts = hasMany(Post, { foreignKey: "userId", dependent: "deleteAll" });
 }
 
-class DeletingProfile extends Model(userAttributes) {
+class DeletingProfile extends Model.define(userAttributes) {
   static tableName = "users";
   profile = hasOne(Profile, { foreignKey: "userId", dependent: "delete" });
 }
 
-class Restricting extends Model(userAttributes) {
+class Restricting extends Model.define(userAttributes) {
   static tableName = "users";
   posts = hasMany(Post, { foreignKey: "userId", dependent: "restrictWithException" });
 }
 
-class RestrictingWithError extends Model(userAttributes) {
+class RestrictingWithError extends Model.define(userAttributes) {
   static tableName = "users";
   posts = hasMany(Post, { foreignKey: "userId", dependent: "restrictWithError" });
   profile = hasOne(Profile, { foreignKey: "userId", dependent: "restrictWithError" });
@@ -102,7 +102,7 @@ class RestrictingRenamed extends RestrictingWithError {
   }
 }
 
-class Aborting extends Model(userAttributes) {
+class Aborting extends Model.define(userAttributes) {
   static tableName = "users";
   posts = hasMany(Post, { foreignKey: "userId", dependent: "deleteAll" });
 
@@ -113,7 +113,7 @@ class Aborting extends Model(userAttributes) {
   }
 }
 
-class PostWithReplies extends Model({
+class PostWithReplies extends Model.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
@@ -128,7 +128,7 @@ class PostWithReplies extends Model({
   quiet = hasMany(Comment, { foreignKey: "postId", dependent: "deleteAll" });
 }
 
-class Account extends Model({
+class Account extends Model.define({
   id: { type: "integer", null: false },
   userId: "integer",
 }) {
@@ -138,22 +138,22 @@ class Account extends Model({
   }
 }
 
-class DeletingAccount extends Model(userAttributes) {
+class DeletingAccount extends Model.define(userAttributes) {
   static tableName = "users";
   account = hasOne(Account, { foreignKey: "userId", dependent: "delete" });
 }
 
-class NullifyingAccount extends Model(userAttributes) {
+class NullifyingAccount extends Model.define(userAttributes) {
   static tableName = "users";
   account = hasOne(Account, { foreignKey: "userId", dependent: "nullify" });
 }
 
-class DestroyingAccount extends Model(userAttributes) {
+class DestroyingAccount extends Model.define(userAttributes) {
   static tableName = "users";
   account = hasOne(Account, { foreignKey: "userId", dependent: "destroy" });
 }
 
-class RestrictingFirst extends Model(userAttributes) {
+class RestrictingFirst extends Model.define(userAttributes) {
   static tableName = "users";
   posts = hasMany(Post, { foreignKey: "userId", dependent: "destroy" });
   profile = hasOne(Profile, {
@@ -162,7 +162,7 @@ class RestrictingFirst extends Model(userAttributes) {
   });
 }
 
-class Misdeclared extends Model(userAttributes) {
+class Misdeclared extends Model.define(userAttributes) {
   static tableName = "users";
   profile = hasOne(Profile, { foreignKey: "userId", dependent: "deleteAll" as never });
 }

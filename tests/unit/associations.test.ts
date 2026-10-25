@@ -13,17 +13,17 @@ import {
 // No D1 needed: these checks happen when a Model is first used.
 const db = connect({} as never);
 
-class Post extends Model({ id: "integer", userId: "integer", title: "string" }) {
+class Post extends Model.define({ id: "integer", userId: "integer", title: "string" }) {
   static tableName = "posts";
 }
 
 describe("association declarations", () => {
   test("an association named like an attribute or a record method is rejected", () => {
-    class Shadow extends Model({ id: "integer", posts: "json" }) {
+    class Shadow extends Model.define({ id: "integer", posts: "json" }) {
       static tableName = "users";
       posts = hasMany(Post, { foreignKey: "userId" });
     }
-    class Clash extends Model({ id: "integer" }) {
+    class Clash extends Model.define({ id: "integer" }) {
       static tableName = "users";
       // A type error too (save is a record method); cast to reach the runtime check.
       save = hasMany(Post, { foreignKey: "userId" }) as never;
@@ -36,11 +36,11 @@ describe("association declarations", () => {
   });
 
   test("a foreignKey that isn't a declared attribute is rejected", () => {
-    class Typo extends Model({ id: "integer" }) {
+    class Typo extends Model.define({ id: "integer" }) {
       static tableName = "users";
       posts = hasMany(Post, { foreignKey: "user_id" });
     }
-    class Owner extends Model({ id: "integer" }) {
+    class Owner extends Model.define({ id: "integer" }) {
       static tableName = "posts";
       author = belongsTo(Post, { foreignKey: "authorId" });
     }
@@ -50,7 +50,7 @@ describe("association declarations", () => {
   });
 
   test("a target that isn't a Model is rejected", () => {
-    class Lost extends Model({ id: "integer" }) {
+    class Lost extends Model.define({ id: "integer" }) {
       static tableName = "users";
       posts = hasMany("Post" as never, { foreignKey: "userId" }); // a type error too
     }
@@ -59,7 +59,7 @@ describe("association declarations", () => {
   });
 
   test("a record constructed directly has no Database, so its associations throw NoDatabase", () => {
-    class User extends Model({ id: "integer" }) {
+    class User extends Model.define({ id: "integer" }) {
       posts = hasMany(Post);
     }
 
@@ -67,15 +67,15 @@ describe("association declarations", () => {
   });
 
   test("an inferred key that isn't declared is rejected, saying where it came from", () => {
-    class APIKey extends Model({ id: "integer" }) {
+    class APIKey extends Model.define({ id: "integer" }) {
       static tableName = "api_keys";
       posts = hasMany(Post); // APIKey → apiKeyId, which Post doesn't declare
     }
-    class Draft extends Model({ id: "integer" }) {
+    class Draft extends Model.define({ id: "integer" }) {
       static tableName = "posts";
       writer = belongsTo(Post); // writer → writerId, which Draft doesn't declare
     }
-    class BlogPost extends Model({ id: "integer" }) {
+    class BlogPost extends Model.define({ id: "integer" }) {
       static tableName = "users";
       comments = hasMany(Post); // BlogPost → blogPostId, through underscore
     }
@@ -91,7 +91,7 @@ describe("association declarations", () => {
 
   test("a class renamed by a bundler fails loudly, suggesting foreignKey", () => {
     // What a minifier without keep_names does: the class is now called e.
-    const e = class extends Model({ id: "integer" }) {
+    const e = class extends Model.define({ id: "integer" }) {
       static tableName = "users";
       posts = hasMany(Post);
     };
@@ -102,11 +102,11 @@ describe("association declarations", () => {
   });
 
   test("a record constructed directly throws NoDatabase from every association method", () => {
-    class Profile extends Model({ id: "integer", userId: "integer" }) {}
-    class User extends Model({ id: "integer" }) {
+    class Profile extends Model.define({ id: "integer", userId: "integer" }) {}
+    class User extends Model.define({ id: "integer" }) {
       profile = hasOne(Profile);
     }
-    class Note extends Model({ id: "integer", userId: "integer" }) {
+    class Note extends Model.define({ id: "integer", userId: "integer" }) {
       user = belongsTo(User);
     }
     const note = new Note();
@@ -123,13 +123,13 @@ describe("association declarations", () => {
   });
 
   test("a record made in another's field initializer keeps its associations", () => {
-    class Comment extends Model({ id: "integer", noteId: "integer" }) {}
-    class Note extends Model({ id: "integer" }) {
+    class Comment extends Model.define({ id: "integer", noteId: "integer" }) {}
+    class Note extends Model.define({ id: "integer" }) {
       comments = hasMany(Comment);
     }
     // Note is first used while a Board is being made, after Board's own first use.
     let pinning = false;
-    class Board extends Model({ id: "integer" }) {
+    class Board extends Model.define({ id: "integer" }) {
       pinned = pinning ? db.model(Note).build() : null;
     }
     db.model(Board).build();
@@ -142,11 +142,11 @@ describe("association declarations", () => {
   });
 
   test("a record constructed directly in another's field initializer throws NoDatabase", () => {
-    class Comment extends Model({ id: "integer", noteId: "integer" }) {}
-    class Note extends Model({ id: "integer" }) {
+    class Comment extends Model.define({ id: "integer", noteId: "integer" }) {}
+    class Note extends Model.define({ id: "integer" }) {
       comments = hasMany(Comment);
     }
-    class Board extends Model({ id: "integer" }) {
+    class Board extends Model.define({ id: "integer" }) {
       draft = new Note();
     }
 
@@ -156,7 +156,7 @@ describe("association declarations", () => {
   });
 
   test("plain class fields stay on records, beside associations", () => {
-    class User extends Model({ id: "integer" }) {
+    class User extends Model.define({ id: "integer" }) {
       greeting = "hello";
       posts = hasMany(Post);
     }
@@ -169,7 +169,7 @@ describe("association declarations", () => {
 
   test("an association assigned rather than defined (useDefineForClassFields: false) works", () => {
     // How a class field compiles without useDefineForClassFields, or below ES2022.
-    class Writer extends Model({ id: "integer" }) {
+    class Writer extends Model.define({ id: "integer" }) {
       declare posts: HasMany<typeof Post>;
       constructor() {
         super();
@@ -185,7 +185,7 @@ describe("association declarations", () => {
 
   test("a class with no name must give a hasMany its foreignKey", () => {
     const anonymous = [
-      class extends Model({ id: "integer" }) {
+      class extends Model.define({ id: "integer" }) {
         static tableName = "users";
         posts = hasMany(Post);
       },

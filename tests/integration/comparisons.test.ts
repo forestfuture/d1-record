@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { between, connect, gt, gte, lt, lte, Model } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   age: "integer",
@@ -11,7 +11,7 @@ class User extends Model({
   static tableName = "users";
 }
 
-class Sample extends Model({
+class Sample extends Model.define({
   id: { type: "integer", null: false },
   settings: "json",
 }) {

@@ -1,6 +1,6 @@
 import { Model } from "@forestfuture/d1-record";
 
-export class Account extends Model({
+export class Account extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   handle: { type: "string", null: false },
@@ -8,7 +8,7 @@ export class Account extends Model({
   seats: "integer",
 }) {}
 
-export class Invitation extends Model({
+export class Invitation extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   token: "string", // NULL once the invitation is accepted

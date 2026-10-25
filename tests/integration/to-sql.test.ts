@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-pl
 import { connect, hasMany, Model, type QueryEvent } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   role: "string",
@@ -14,7 +14,7 @@ class User extends Model({
 }
 
 // A secret as the primary key: sessions looked up by their token (filtered by default).
-class Session extends Model({
+class Session extends Model.define({
   token: { type: "string", null: false, column: "id" },
   label: { type: "string", null: false },
 }) {
@@ -22,7 +22,7 @@ class Session extends Model({
   static primaryKey = "token";
 }
 
-class Post extends Model({
+class Post extends Model.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },

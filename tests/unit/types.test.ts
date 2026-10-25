@@ -18,7 +18,7 @@ import {
   withSession,
 } from "../../src/index.ts";
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   isActive: "boolean",
@@ -37,7 +37,7 @@ class User extends Model({
 const db = connect({} as never);
 
 describe("types", () => {
-  test("record properties are inferred from Model({...}), nullable unless null: false", () => {
+  test("record properties are inferred from Model.define({...}), nullable unless null: false", () => {
     expectTypeOf<User["id"]>().toEqualTypeOf<number>();
     expectTypeOf<User["email"]>().toEqualTypeOf<string>();
     expectTypeOf<User["isActive"]>().toEqualTypeOf<boolean | null>();
@@ -196,7 +196,10 @@ describe("types", () => {
   test("validations and callbacks are typed against the Model", () => {
     // Checked by the type checker only; never called.
     const typeOnly = () => {
-      class Account extends Model({ id: "integer", email: { type: "string", null: false } }) {
+      class Account extends Model.define({
+        id: "integer",
+        email: { type: "string", null: false },
+      }) {
         static tableName = "accounts";
         static {
           this.validates("email", { presence: true, if: (account) => account.email.length > 0 });
@@ -216,7 +219,11 @@ describe("types", () => {
   });
 
   test("scope calls are typed through chaining", () => {
-    class Post extends Model({ id: "integer", published: "boolean", createdAt: "datetime" }) {
+    class Post extends Model.define({
+      id: "integer",
+      published: "boolean",
+      createdAt: "datetime",
+    }) {
       static tableName = "posts";
       static published = this.scope((q) => q.where({ published: true }));
       static since = this.scope((q, date: Date) => q.where({ createdAt: date }));
@@ -240,7 +247,7 @@ describe("types", () => {
   });
 
   test("Relations and record statements can't be mixed up or made by hand", () => {
-    class Other extends Model({ id: "integer", title: "string" }) {
+    class Other extends Model.define({ id: "integer", title: "string" }) {
       static tableName = "posts";
     }
     // Checked by the type checker only; never called.
@@ -285,7 +292,7 @@ describe("types", () => {
   test("dependent: takes the strategies of the association's kind", () => {
     // Checked by the type checker only; never called.
     const typeOnly = () => {
-      class Owner extends Model({ id: "integer" }) {
+      class Owner extends Model.define({ id: "integer" }) {
         static tableName = "users";
         posts = hasMany(Owner, { foreignKey: "id", dependent: "deleteAll" });
         profile = hasOne(Owner, { foreignKey: "id", dependent: "delete" });
@@ -300,11 +307,11 @@ describe("types", () => {
   });
 
   test("an association scope's q is typed from the target, its scopes included", () => {
-    class Article extends Model({ id: "integer", authorId: "integer", live: "boolean" }) {
+    class Article extends Model.define({ id: "integer", authorId: "integer", live: "boolean" }) {
       static live = this.scope((q) => q.where({ live: true }));
     }
     // Checked by the type checker only; never used.
-    class Author extends Model({ id: "integer" }) {
+    class Author extends Model.define({ id: "integer" }) {
       liveArticles = hasMany(Article, { scope: (q) => q.live().order({ id: "desc" }) });
       // @ts-expect-error Article has no "draft" scope
       drafts = hasMany(Article, { scope: (q) => q.draft() });
@@ -316,7 +323,7 @@ describe("types", () => {
 
   test("a self-referencing association whose scope uses the Model's own scopes annotates its field", () => {
     // TypeScript can't infer this one field's type from itself, so it's written out (ADR-0008).
-    class Category extends Model({ id: "integer", parentId: "integer" }) {
+    class Category extends Model.define({ id: "integer", parentId: "integer" }) {
       static top = this.scope((q) => q.where({ parentId: null }));
       children: HasMany<typeof Category> = hasMany(Category, {
         foreignKey: "parentId",
@@ -332,17 +339,17 @@ describe("types", () => {
   });
 
   test("associations are typed from their fields, including includes() names", () => {
-    class Author extends Model({ id: "integer" }) {
+    class Author extends Model.define({ id: "integer" }) {
       static tableName = "users";
       articles = hasMany(Article, { foreignKey: "authorId" });
       bio = hasOne(Bio, { foreignKey: "authorId" });
     }
-    class Article extends Model({ id: "integer", authorId: "integer", live: "boolean" }) {
+    class Article extends Model.define({ id: "integer", authorId: "integer", live: "boolean" }) {
       static tableName = "posts";
       author = belongsTo(Author, { foreignKey: "authorId" });
       static live = this.scope((q) => q.where({ live: true }));
     }
-    class Bio extends Model({ id: "integer", authorId: "integer" }) {
+    class Bio extends Model.define({ id: "integer", authorId: "integer" }) {
       static tableName = "profiles";
     }
 
@@ -378,38 +385,38 @@ describe("types", () => {
   });
 
   test("generateId is for string attributes, and generateId overrides keep a string", () => {
-    class Note extends Model({ id: { type: "string", null: false, generateId: true } }) {}
+    class Note extends Model.define({ id: { type: "string", null: false, generateId: true } }) {}
     expectTypeOf<Note["id"]>().toEqualTypeOf<string>();
 
     // @ts-expect-error generated ids are strings
-    Model({ id: { type: "integer", null: false, generateId: true } });
+    Model.define({ id: { type: "integer", null: false, generateId: true } });
     // @ts-expect-error a generated id has no default
-    Model({ id: { type: "string", generateId: true, default: () => "x" } });
-    Model({ id: { type: "string", generateId: false, default: () => "x" } });
+    Model.define({ id: { type: "string", generateId: true, default: () => "x" } });
+    Model.define({ id: { type: "string", generateId: false, default: () => "x" } });
 
     const uuidv7 = () => "0190…";
-    class Uuidv7Base extends Model.Base {
+    class Uuidv7Base extends Model {
       static override generateId = uuidv7;
     }
-    class OwnIds extends Model({ id: { type: "string", null: false, generateId: true } }) {
+    class OwnIds extends Model.define({ id: { type: "string", null: false, generateId: true } }) {
       static override generateId(attribute: string) {
         return `${attribute}_${super.generateId(attribute)}`;
       }
     }
-    class PrefixBase extends Model.Base {
+    class PrefixBase extends Model {
       static override generateId(attribute: string) {
         return `${attribute}_1`;
       }
     }
     // @ts-expect-error generateId returns a string
-    class NumberBase extends Model.Base {
+    class NumberBase extends Model {
       static override generateId = () => 42;
     }
     expectTypeOf([Uuidv7Base, PrefixBase, NumberBase, OwnIds]).toBeArray();
   });
 
   test("storage is for datetime attributes, as seconds or milliseconds (#73)", () => {
-    class Entry extends Model({
+    class Entry extends Model.define({
       at: { type: "datetime", storage: "unixSeconds" },
       until: { type: "datetime", storage: "unixMilliseconds", null: false },
     }) {}
@@ -417,9 +424,9 @@ describe("types", () => {
     expectTypeOf<Entry["until"]>().toEqualTypeOf<Date>();
 
     // @ts-expect-error only a datetime is stored as an epoch
-    Model({ at: { type: "integer", storage: "unixSeconds" } });
+    Model.define({ at: { type: "integer", storage: "unixSeconds" } });
     // @ts-expect-error a storage is seconds or milliseconds
-    Model({ at: { type: "datetime", storage: "minutes" } });
+    Model.define({ at: { type: "datetime", storage: "minutes" } });
   });
 
   test("a misspelled key in a spec or override is a compile error", () => {
@@ -433,12 +440,12 @@ describe("types", () => {
     // Compile-time checks only: the misspelled override also throws at runtime.
     const typeOnly = () => {
       // @ts-expect-error nul isn't a spec key
-      Model({ id: { type: "string", nul: false } });
+      Model.define({ id: { type: "string", nul: false } });
       // @ts-expect-error nul isn't a spec key
       ApplicationRecord({ id: { type: "string", nul: false } });
       // @ts-expect-error nul isn't an override key
       ApplicationRecord("notes", { body: { nul: false } });
-      Model({ id: { type: "string", null: false, column: "note_id", default: () => "x" } });
+      Model.define({ id: { type: "string", null: false, column: "note_id", default: () => "x" } });
       ApplicationRecord("notes", { body: { type: "string", null: false, default: () => "" } });
     };
     expectTypeOf(typeOnly).toBeFunction();

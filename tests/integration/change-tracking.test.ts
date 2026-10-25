@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-pl
 import { connect, MissingAttribute, Model, RecordDestroyed } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   role: "string",
@@ -10,7 +10,7 @@ class User extends Model({
   static tableName = "users";
 }
 
-class Draft extends Model({
+class Draft extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   role: { type: "string", default: () => "member" },
@@ -18,7 +18,7 @@ class Draft extends Model({
   static tableName = "users";
 }
 
-class ApiKey extends Model({
+class ApiKey extends Model.define({
   id: { type: "string", null: false },
   label: { type: "string", null: false },
   scopes: "json",

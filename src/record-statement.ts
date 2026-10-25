@@ -1,5 +1,5 @@
 // RecordStatement: a record's save or destroy, prepared for `db.batch`.
-import type { ModelBase } from "./model.ts";
+import type { Model } from "./model.ts";
 
 declare const recordType: unique symbol;
 
@@ -12,7 +12,7 @@ export const recordStatementParts = Symbol("recordStatementParts");
  * validations and callbacks run when the batch runs. It has no `then`, so it's never run by
  * being awaited.
  */
-export class RecordStatement<R extends ModelBase = ModelBase> {
+export class RecordStatement<R extends Model = Model> {
   /** Type-only: the record's type, so a statement of one Model isn't taken for another's. */
   declare readonly [recordType]?: R;
 

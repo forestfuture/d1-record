@@ -10,7 +10,7 @@ import {
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 // Attributes of every type, to show the value is written as each stores it.
-class Sample extends Model({
+class Sample extends Model.define({
   id: { type: "integer", null: false },
   label: "string",
   enabled: "boolean",
@@ -23,7 +23,7 @@ class Sample extends Model({
 }
 
 // An attribute stored as a Unix time: a plain Date interpolated into a fragment is ISO text.
-class Stamp extends Model({
+class Stamp extends Model.define({
   id: { type: "integer", null: false },
   name: "string",
   seconds: { type: "datetime", storage: "unixSeconds" },

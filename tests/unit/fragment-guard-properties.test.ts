@@ -7,7 +7,7 @@ import { values } from "../support/values.ts";
 
 // What a fragment is given comes from outside, so the guard (#149) must judge any value: refuse
 // exactly a Date or an ISO datetime string beside an integer-stored column, and nothing else.
-class Stamp extends Model({
+class Stamp extends Model.define({
   id: { type: "integer", null: false },
   seconds: { type: "datetime", storage: "unixSeconds" },
   iso: "datetime",
