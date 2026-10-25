@@ -9,13 +9,10 @@ import {
   NoDatabase,
   type HasMany,
 } from "../../src/index.ts";
+import { Post } from "../fixtures/models/post.ts";
 
 // No D1 needed: these checks happen when a Model is first used.
 const db = connect({} as never);
-
-class Post extends Model.define({ id: "integer", userId: "integer", title: "string" }) {
-  static table = "posts";
-}
 
 describe("association declarations", () => {
   test("an association named like an attribute or a record method is rejected", () => {
