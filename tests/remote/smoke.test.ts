@@ -9,6 +9,7 @@ import {
   NotNullViolation,
   type QueryEvent,
   RecordNotUnique,
+  withSession,
 } from "../../src/index.ts";
 import { configured, remoteDatabase, type RemoteDatabase } from "./support.ts";
 
@@ -153,6 +154,48 @@ describe.skipIf(!configured)("remote D1 smoke", () => {
     // Starting from the bookmark, a replica read waits until it has caught up with the write.
     expect((await next.model(User).find(user.id)).role).toBe("admin");
   });
+
+  // A bookmark arrives in a cookie or a header, so a request can carry one D1 can't use: garbage,
+  // a far-future one shaped like D1's, an empty or a very long value. Whatever D1 does with it,
+  // the request should still be answered, and get back a bookmark D1 made (#235, Security page).
+  test.each([
+    ["garbage", () => "not-a-bookmark"],
+    [
+      "a far-future one shaped like D1's",
+      (real: string) => real.replace(/^[^-]+-[^-]+-[^-]+/, "7fffffff-7fffffff-7fffffff"),
+    ],
+    ["a very long value", () => "x".repeat(10_000)],
+  ])(
+    "a request with %s as its bookmark is answered, with a bookmark from D1",
+    async (_, bookmarkFrom) => {
+      const real = connect(remote.binding, { session: "first-unconstrained" });
+      await real.model(User).count();
+      const bookmark = bookmarkFrom(real.bookmark()!);
+      const request = new Request("https://example.com/", {
+        headers: { cookie: `d1-bookmark=${bookmark}` },
+      });
+
+      const answered = withSession(request, remote.binding, async (db) =>
+        Response.json({ users: await db.model(User).count() }),
+      );
+      // A replica waiting for a commit that never comes would hang: report that, not a timeout.
+      const outcome = await Promise.race([
+        answered.then(
+          (response) => ({ answered: response.status, cookie: response.headers.get("set-cookie") }),
+          (error: unknown) => ({ threw: String(error) }),
+        ),
+        new Promise((resolve) =>
+          setTimeout(() => resolve({ hung: "no answer after 20 s" }), 20_000),
+        ),
+      ]);
+
+      expect(outcome).toEqual({
+        answered: 200,
+        cookie: expect.not.stringContaining(bookmark.slice(0, 40)),
+      });
+    },
+    60_000,
+  );
 
   // A preload's associations go as one batch (#92), which must go through the Session too.
   test("a session's preload batch reads its own writes", async () => {
