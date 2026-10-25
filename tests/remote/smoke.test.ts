@@ -156,8 +156,8 @@ describe.skipIf(!configured)("remote D1 smoke", () => {
   });
 
   // A bookmark arrives in a cookie or a header, so a request can carry one D1 can't use: garbage,
-  // a far-future one shaped like D1's, an empty or a very long value. Whatever D1 does with it,
-  // the request should still be answered, and get back a bookmark D1 made (#235, Security page).
+  // a far-future one shaped like D1's, or a very long value. D1 rejects each on the Session's
+  // first statement, and the request should still be answered, with a bookmark D1 made (#237).
   test.each([
     ["garbage", () => "not-a-bookmark"],
     [

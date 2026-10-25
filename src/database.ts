@@ -30,11 +30,8 @@ export const databaseParts = Symbol("databaseParts");
 export class Database {
   readonly #binding: D1Database;
   readonly #executor: D1Executor;
-  readonly #hasSession: boolean;
-
   constructor(binding: D1Database, options: ConnectOptions = {}) {
     const { session, onQuery } = options;
-    this.#hasSession = session !== undefined;
     this.#binding = binding;
     const source = session === undefined ? binding : binding.withSession(session);
     this.#executor = new D1Executor(source, onQuery);
@@ -50,13 +47,14 @@ export class Database {
    * `connect(env.DB, { session: bookmark })` to read at least as new as this request wrote.
    */
   bookmark(): D1SessionBookmark | null {
-    if (!this.#hasSession) {
+    // Its Session now, which may have started again (#237).
+    const { session } = this.#executor;
+    if (session === undefined) {
       throw new NoSession(
         "bookmark() needs a Database opened with a session: connect(env.DB, { session })",
       );
     }
-    // Its Session now, which may have started again (#237).
-    return (this.#executor.source as D1DatabaseSession).getBookmark();
+    return session.getBookmark();
   }
 
   /** A request-bound Relation over the Model's records, with its scopes as methods. */
@@ -90,4 +88,22 @@ export class Database {
 
 export function connect(binding: D1Database, options?: ConnectOptions): Database {
   return new Database(binding, options);
+}
+
+/**
+ * @internal A request's Database, for `withSession`: its Session starts from the bookmark the
+ * request carries, or `start` when it has none. A request's bookmark may be forged, so one D1
+ * rejects starts the Session again from `start` (#237); a bookmark given to `connect` throws.
+ */
+export function connectForRequest(
+  binding: D1Database,
+  bookmark: string | undefined,
+  start: D1SessionConstraint,
+  options: Omit<ConnectOptions, "session">,
+): Database {
+  const db = new Database(binding, { ...options, session: bookmark ?? start });
+  if (bookmark !== undefined) {
+    db[databaseParts].executor.whenBookmarkRejected(() => binding.withSession(start));
+  }
+  return db;
 }

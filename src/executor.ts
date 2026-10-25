@@ -1,4 +1,4 @@
-// The one place the library calls D1 (reporting each statement to `onQuery`), where a database is from, and the pinning of records to it.
+// The one place the library calls D1 (reporting each statement to `onQuery`, and starting a Session again when D1 rejects a request's bookmark), where a database is from, and the pinning of records to it.
 import { boundValue, shownValue } from "./filtering.ts";
 import type { CompiledSql } from "./compiler.ts";
 import { translateConstraintError } from "./constraints.ts";
@@ -87,7 +87,7 @@ function nameOf(origin: Origin): string {
  * constraint failure becomes the matching `ConstraintViolation` for the statement's Model.
  */
 export class D1Executor implements Executor {
-  #binding: D1Database | D1DatabaseSession;
+  #source: D1Database | D1DatabaseSession;
   /** Starts the Session again when D1 rejects the bookmark it started from (#237); once only. */
   #startAgain: (() => D1DatabaseSession) | undefined;
   readonly #onQuery: QueryListener | undefined;
@@ -95,7 +95,7 @@ export class D1Executor implements Executor {
 
   /** `binding` is the D1 binding itself, or one D1 Session every query goes through. */
   constructor(binding: D1Database | D1DatabaseSession, onQuery?: QueryListener) {
-    this.#binding = binding;
+    this.#source = binding;
     this.#onQuery = onQuery;
   }
 
@@ -103,18 +103,18 @@ export class D1Executor implements Executor {
     return this;
   }
 
-  /** @internal The D1 binding or Session its statements go through now. */
-  get source(): D1Database | D1DatabaseSession {
-    return this.#binding;
+  /** @internal The D1 Session its statements go through now, if it has one. */
+  get session(): D1DatabaseSession | undefined {
+    return "getBookmark" in this.#source ? this.#source : undefined;
   }
 
   /**
-   * @internal When D1 rejects the bookmark this executor's Session started from (a request's,
-   * which may be forged), `start` opens another, and the rejected statement is sent again: it
-   * never ran. `withSession` sets it; a bookmark given to `connect` is the caller's to fix.
+   * @internal Arms a new Session for when D1 rejects the bookmark this one started from (a
+   * request's, which may be forged): `startAgain` opens it, and the rejected statement is sent
+   * again on it, since it never ran. Disarmed once a statement succeeds.
    */
-  startAgainIfRejected(start: () => D1DatabaseSession): void {
-    this.#startAgain = start;
+  whenBookmarkRejected(startAgain: () => D1DatabaseSession): void {
+    this.#startAgain = startAgain;
   }
 
   /** Where this database came from; errors name it by this. */
@@ -158,11 +158,11 @@ export class D1Executor implements Executor {
     const started = performance.now();
     let results: D1Result<Record<string, unknown>>[];
     try {
-      results = await this.#binding.batch<Record<string, unknown>>(
+      results = await this.#source.batch<Record<string, unknown>>(
         statements.map((statement) => this.#prepare(statement)),
       );
     } catch (error) {
-      shortenBookmark(error);
+      shortenBookmarkIn(error);
       const durationMs = performance.now() - started;
       for (const statement of statements) this.#report(statement, { durationMs, error });
       const models = statements.map(({ model }) => model);
@@ -195,14 +195,17 @@ export class D1Executor implements Executor {
    * the first one started from. Statements sent at once all fail; each is sent again.
    */
   async #startingAgainIfRejected<T>(send: () => Promise<T>): Promise<T> {
-    const source = this.#binding;
+    const source = this.#source;
     try {
-      return await send();
+      const sent = await send();
+      // The bookmark was good: D1 rejects one on the Session's first statement only.
+      this.#startAgain = undefined;
+      return sent;
     } catch (error) {
       if (!isRejectedBookmark(error)) throw error;
-      if (this.#binding === source) {
+      if (this.#source === source) {
         if (this.#startAgain === undefined) throw error;
-        this.#binding = this.#startAgain();
+        this.#source = this.#startAgain();
         this.#startAgain = undefined;
       }
       return send();
@@ -216,7 +219,7 @@ export class D1Executor implements Executor {
     try {
       result = await this.#prepare(query).all<Record<string, unknown>>();
     } catch (error) {
-      shortenBookmark(error);
+      shortenBookmarkIn(error);
       this.#report(query, { durationMs: performance.now() - started, error });
       throw (
         outsideRequest(error) ??
@@ -244,7 +247,7 @@ export class D1Executor implements Executor {
   }
 
   #prepare({ sql, params }: CompiledSql): D1PreparedStatement {
-    return this.#binding.prepare(sql).bind(...params.map(boundValue));
+    return this.#source.prepare(sql).bind(...params.map(boundValue));
   }
 }
 
@@ -256,12 +259,18 @@ function isRejectedBookmark(error: unknown): boolean {
   return error instanceof Error && rejectedBookmark.test(error.message);
 }
 
-/** `error`'s message with a long rejected bookmark cut short, since a request may have sent it. */
-function shortenBookmark(error: unknown): void {
+/** How much of a rejected bookmark D1's error keeps, since a request may have sent any length. */
+const shownBookmarkLength = 64;
+
+/** Cuts a long rejected bookmark short in `error`'s message, and its cause's (workerd's). */
+function shortenBookmarkIn(error: unknown): void {
   if (!(error instanceof Error)) return;
   const bookmark = rejectedBookmark.exec(error.message)?.[1];
-  if (bookmark === undefined || bookmark.length <= 64) return;
-  error.message = error.message.replace(bookmark, `${bookmark.slice(0, 64)}…`);
+  if (bookmark === undefined || bookmark.length <= shownBookmarkLength) return;
+  const short = `${bookmark.slice(0, shownBookmarkLength)}…`;
+  error.message = error.message.replace(bookmark, short);
+  if (error.cause instanceof Error)
+    error.cause.message = error.cause.message.replace(bookmark, short);
 }
 
 /** An Executor that finds its D1Executor when a statement runs, and sends the statement there. */

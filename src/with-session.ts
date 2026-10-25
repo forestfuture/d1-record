@@ -1,6 +1,6 @@
 // `withSession`: one request's D1 Session, started from the bookmark it carries, and the bookmark sent back (#220).
 import { withDatabase } from "./current-database.ts";
-import { connect, databaseParts, type ConnectOptions, type Database } from "./database.ts";
+import { connectForRequest, type ConnectOptions, type Database } from "./database.ts";
 
 /** How `withSession` opens the request's Database, and where its bookmark travels. */
 export type SessionOptions = Omit<ConnectOptions, "session"> & {
@@ -48,9 +48,7 @@ export async function withSession(
   const { start = "first-unconstrained", cookie, header, ...connectOptions } = options;
   const carrier = carrierFor(cookie, header);
   const bookmark = carrier.read(request);
-  const db = connect(binding, { ...connectOptions, session: bookmark ?? start });
-  // A request's bookmark may be forged: one D1 rejects starts the Session again from `start`.
-  db[databaseParts].executor.startAgainIfRejected(() => binding.withSession(start));
+  const db = connectForRequest(binding, bookmark, start, connectOptions);
   const response = await withDatabase(db, () => fn(db));
   // Before its first query, a Session may have no bookmark of its own: the request's still holds.
   const latest = db.bookmark() ?? bookmark;

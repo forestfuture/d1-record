@@ -42,7 +42,7 @@ A browser app on another origin can only read the header if your CORS response l
 
 ## Choosing where a Session starts
 
-A request without a bookmark starts at the nearest instance. To start it at the primary instead, pass `{ start: "first-primary" }`. A request with a bookmark always starts from its bookmark. If D1 can’t use it, such as a cookie someone changed, the Session starts from `start` instead.
+A request without a bookmark starts at the nearest instance. To start it at the primary instead, pass `{ start: "first-primary" }`. A request with a bookmark always starts from its bookmark. If D1 can’t use the bookmark, the Session starts from `start` instead. This happens when someone changes the cookie.
 
 `connect(env.DB, { session })` takes D1’s own values:
 
