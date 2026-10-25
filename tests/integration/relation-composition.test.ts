@@ -7,6 +7,7 @@ import {
   type QueryEvent,
   type Relation,
 } from "../../src/index.ts";
+import { Post } from "../fixtures/models/post.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model.define({
@@ -16,10 +17,6 @@ class User extends Model.define({
   suspended: { type: "boolean", null: false },
 }) {
   static table = "users";
-}
-
-class Post extends Model.define({ id: "integer", title: "string" }) {
-  static table = "posts";
 }
 
 const ids = async (relation: Relation<User>) => (await relation.toArray()).map((user) => user.id);

@@ -1,15 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { column, connect, Model, sql, type QueryEvent } from "../../src/index.ts";
+import { column, connect, sql, type QueryEvent } from "../../src/index.ts";
+import { Post } from "../fixtures/models/post.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
-
-class Post extends Model.define({
-  id: { type: "integer", null: false },
-  userId: { type: "integer", null: false },
-  title: { type: "string", null: false },
-  createdAt: "datetime",
-}) {
-  static table = "posts";
-}
 
 /**
  * 50 posts, titled so that ordering by title reverses their ids; `title` has no index. Only
