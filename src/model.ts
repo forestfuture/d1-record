@@ -24,6 +24,7 @@ import { destroyLifecycle, reloadRecord, saveLifecycle, validateRecord } from ".
 import { associationOf, newRecord } from "./association-fields.ts";
 import { RecordStatement } from "./record-statement.ts";
 import { inferTableNames } from "./table-names.ts";
+import { defineGeneratedStatics, type DatabaseSchema } from "./generated-model.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
 import { inspectCustom, type Inspect, type InspectOptions } from "./inspect-support.ts";
 import { inspectRecord } from "./record-inspect.ts";
@@ -107,9 +108,15 @@ export type AttributesOf<M> = M extends { readonly [attributeTypes]?: infer A } 
  */
 export class Model extends ModelStatics {
   /** The table's name: inferred from the class name (`BlogPost` → `blog_posts`) unless set. */
-  static table: string;
-  static primaryKey = "id";
-  static attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map();
+  declare static table: string;
+  /** The primary key attribute: the generated table's, or `"id"` unless set. */
+  declare static primaryKey: string;
+  declare static attributeDefinitions: ReadonlyMap<string, AttributeDefinition>;
+  /**
+   * The generated schema, on an app's base class (`static override schema = schema`): the
+   * Models built on it have its tables' attributes, and query its binding.
+   */
+  declare static schema?: DatabaseSchema;
   /**
    * The D1 binding this Model queries when there's no request database (`withDatabase`), as
    * Rails' `connects_to`: `static override binding = "DB"`, usually on the app's base class.
@@ -519,10 +526,16 @@ export class Model extends ModelStatics {
 export type ModelClass<M extends Model = Model> = (new () => M) & Omit<typeof Model, "prototype">;
 
 defineStatics(Model);
+defineGeneratedStatics(Model);
 
 // Model and its statics are all defined now: scopes stop at it, and can't take its names;
 // and relationFor makes each Model ready with readyModel (hoisted, so it exists already).
 useModelBase(Model, readyModel);
+
+/** What a generated declaration adds to a Model's records: its table's attributes, typed. */
+export type TableAttributes<A extends AttributeSpecs> = AttributeProperties<A> & {
+  readonly [attributeTypes]?: AttributeProperties<A>;
+};
 
 /** A class to build Models on: `Model`, or an app's class extending it (`ApplicationRecord`'s). */
 export type BaseClass = abstract new () => Model;
