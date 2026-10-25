@@ -109,14 +109,16 @@ export function ignoresColumns(model: object): boolean {
 }
 
 /**
- * An abstract base class (one extending `Model` directly, like `ApplicationRecord`'s) has no
- * table, as Rails' `abstract_class`: it's only inherited from, so using it is an `InvalidModel`.
+ * An abstract base class (the app's `ApplicationRecord`, or one marked `static abstract = true`)
+ * has no table, as Rails' `abstract_class`: it's only inherited from, so using it is an
+ * `InvalidModel`.
  */
 export function rejectAbstract(model: ModelClass): void {
   if (ancestors(model).some((each) => bases.has(each))) return;
+  const example = model.name ? `, such as class Product extends ${model.name} {}` : "";
   throw new InvalidModel(
-    `${model.name || "This class"} is an abstract base class, with no table; use a Model built on it, ` +
-      'such as class Product extends ApplicationRecord("products") {}',
+    `${model.name || "This class"} is an abstract base class, with no table; use a Model that ` +
+      `extends it${example}`,
   );
 }
 

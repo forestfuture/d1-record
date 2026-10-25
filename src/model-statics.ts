@@ -1,6 +1,13 @@
 // The statics every Model gets from Model: its Relation methods (`Product.where(…)`) and callbacks (`this.beforeSave(…)`), typed and defined from their lists.
 import { declare, type CallbackKind } from "./declarations.ts";
-import type { AttributesOf, Callback, Model, ModelClass, ScopesOf } from "./model.ts";
+import type {
+  AbstractModelClass,
+  AttributesOf,
+  Callback,
+  Model,
+  ModelClass,
+  ScopesOf,
+} from "./model.ts";
 import type { PaginateStatic } from "./pagination.ts";
 import type { Relation, Scoped } from "./relation.ts";
 
@@ -100,7 +107,10 @@ interface OverloadedStatics {
 }
 
 /** A callback static, typed for the class it's declared on: `this.beforeSave((record) => …)`. */
-type CallbackStatic = <C extends ModelClass>(this: C, callback: Callback<InstanceType<C>>) => void;
+type CallbackStatic = <C extends AbstractModelClass>(
+  this: C,
+  callback: Callback<InstanceType<C>>,
+) => void;
 
 /** Every callback kind as a static, each documented here, so its doc comment shows on hover. */
 interface CallbackStatics {

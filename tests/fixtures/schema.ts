@@ -35,6 +35,13 @@ export const accounts = {
   personIdentifier: "string",
 } as const;
 
+/** comments */
+export const comments = {
+  id: { type: "integer", null: false },
+  postId: "integer",
+  body: "string",
+} as const;
+
 /** This database's binding, tables, and the Models the schema was generated for. */
 export const schema = {
   binding: "DB",
@@ -42,8 +49,9 @@ export const schema = {
     users: { attributes: users, primaryKey: "id" },
     posts: { attributes: posts, primaryKey: "id" },
     accounts: { attributes: accounts, primaryKey: "id" },
+    comments: { attributes: comments, primaryKey: "id" },
   },
-  models: { User: "users", Post: "posts", Customer: "accounts" },
+  models: { User: "users", Post: "posts", Customer: "accounts", Comment: "comments" },
 } as const;
 
 declare module "./models/user.ts" {
@@ -56,4 +64,8 @@ declare module "./models/post.ts" {
 
 declare module "./models/customer.ts" {
   interface Customer extends TableAttributes<typeof accounts, (typeof Customer)["attributes"]> {}
+}
+
+declare module "./models/comment.ts" {
+  interface Comment extends TableAttributes<typeof comments, (typeof Comment)["attributes"]> {}
 }

@@ -92,7 +92,13 @@ export function define(name: string, spec: AttributeSpec): AttributeDefinition {
 }
 
 /** Looks up a declared attribute; throws `UnknownAttribute` for any other name. */
-export function attributeOf(model: ModelClass, name: string): AttributeDefinition {
+export function attributeOf(
+  model: {
+    readonly name: string;
+    readonly attributeDefinitions: ModelClass["attributeDefinitions"];
+  },
+  name: string,
+): AttributeDefinition {
   const attribute = model.attributeDefinitions.get(name);
   if (attribute === undefined) {
     throw new UnknownAttribute(`${model.name} has no attribute "${name}"`);
