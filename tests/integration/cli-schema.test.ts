@@ -496,6 +496,22 @@ export class Visit extends ApplicationRecord.define({ id: "integer" }) {}
     );
   });
 
+  test("an override of an attribute the table doesn't have is reported by its file", async () => {
+    const cwd = await withModels({
+      "user.ts": `${base}export class User extends ApplicationRecord {
+  static override attributes = { emial: "string" } as const;
+}
+`,
+    });
+
+    const { code, output } = await run(cwd);
+
+    expect([code, output]).toEqual([
+      1,
+      "src/models/user.ts: User has no attribute emial to override\nKept src/db/schema.ts as it was",
+    ]);
+  });
+
   test("a Model exported as the default is refused, asking for a named export", async () => {
     const cwd = await withModels({
       "user.ts": `${base}export default class User extends ApplicationRecord {}\n`,
@@ -520,6 +536,37 @@ export class Visit extends ApplicationRecord.define({ id: "integer" }) {}
 
     expect(code).toBe(0);
     expect(generatedSchema(cwd)).toContain('  models: { User: "users" },');
+  });
+
+  test("a Model whose name isn't an identifier is refused, since its name is written as code", async () => {
+    const cwd = await withModels({
+      "user.ts": `${base}export class User extends ApplicationRecord {
+  static override table = "users";
+  static { Object.defineProperty(this, "name", { value: "User Account" }); }
+}
+`,
+    });
+
+    const { code, output } = await run(cwd);
+
+    expect(code).toBe(1);
+    expect(output).toBe(
+      'src/models/user.ts exports a Model named "User Account", which isn\'t a name ' +
+        "d1-record schema can write as code; name the class with letters, digits, _ and $\n" +
+        "Kept src/db/schema.ts as it was",
+    );
+  });
+
+  test("--check with no schema file writes nothing, and says it's out of date", async () => {
+    const cwd = await withModels({
+      "user.ts": `${base}export class User extends ApplicationRecord {}\n`,
+    });
+    rmSync(join(cwd, "src/db"), { recursive: true });
+
+    const { code, output } = await run(cwd, { check: true });
+
+    expect([code, output]).toEqual([1, "src/db/schema.ts is out of date: run `d1-record schema`"]);
+    expect(existsSync(join(cwd, "src/db"))).toBe(false);
   });
 
   test("--check fails when a Model was added since the schema was generated", async () => {

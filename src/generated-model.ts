@@ -1,5 +1,6 @@
-// A generated Model (`class Post extends ApplicationRecord {}`): its table, primary key and
-// attributes, found in the schema its base class holds the first time one is read (#232).
+// A generated Model (`class Post extends ApplicationRecord {}`): the generated schema's types, its
+// table, primary key and attributes from the schema its base class holds (overrides checked),
+// settled on first use, and its binding (#232).
 import { ancestors } from "./ancestors.ts";
 import { InvalidModel } from "./errors.ts";
 import {
@@ -304,7 +305,6 @@ function specsFor(
   table: TableSchema,
   overrides: Readonly<Record<string, unknown>>,
 ): { specs: AttributeSpecs; ignoresColumns: boolean } {
-  const where = name;
   const changes = new Map<string, ReturnType<typeof checked>>();
   for (const [attribute, override] of Object.entries(overrides)) {
     if (override === undefined) continue;
@@ -314,7 +314,7 @@ function specsFor(
     if (override === false && attribute === table.primaryKey) {
       throw new InvalidModel(`${name}.${attribute} is the primary key, so it can't be ignored`);
     }
-    changes.set(attribute, checked(where, attribute, override));
+    changes.set(attribute, checked(name, attribute, override));
   }
   const specs: AttributeSpecs = {};
   for (const [attribute, spec] of Object.entries(table.attributes)) {

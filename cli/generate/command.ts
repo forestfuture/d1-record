@@ -293,6 +293,6 @@ export async function runGenerate(options: GenerateOptions, print: Print): Promi
     print(read);
     return 1;
   }
-  const project = await withModels(read, models);
+  const project = await withModels(read, { models });
   return apply(planGenerate(project, options), cwd, print);
 }

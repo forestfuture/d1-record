@@ -2,12 +2,12 @@
 import { resolve, sep } from "node:path";
 import {
   forgetProjectFiles,
-  isBase,
   loadLibrary,
   modelFiles,
   projectJiti,
   type Jiti,
 } from "../project/load.ts";
+import { isBase } from "../../src/generated-model.ts";
 import { shown } from "../project/paths.ts";
 import { defaultModels } from "../project/targets.ts";
 import type { StatementEvent } from "./verbose.ts";
