@@ -43,3 +43,19 @@ describe("a generated Model's static attributes", () => {
     expect([Post, Draft]).toHaveLength(2);
   });
 });
+
+describe("a generated Model's subclass", () => {
+  test("naming another table is an InvalidModel: its attributes are its parent's table's", () => {
+    class Post extends AppRecord {}
+    class Renamed extends Post {
+      static override table = "drafts";
+    }
+
+    expect(() => db.model(Renamed).build()).toThrow(
+      new InvalidModel(
+        "Renamed sets table \"drafts\", but its attributes are the posts table's, as Post's are; " +
+          "a subclass shares its parent's table",
+      ),
+    );
+  });
+});

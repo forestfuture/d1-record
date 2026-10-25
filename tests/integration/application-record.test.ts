@@ -81,4 +81,15 @@ describe("Models extending the app's base class", () => {
     expect(Customer.build({})).not.toHaveProperty("personIdentifier");
     expectTypeOf<Customer>().not.toHaveProperty("personIdentifier");
   });
+
+  test("a subclass shares its parent's table, and its records are the subclass's", async () => {
+    class FeaturedPost extends Post {}
+    await Post.create({ userId: 1, title: "Featured" });
+
+    const found = await FeaturedPost.findByOrThrow({ title: "Featured" });
+
+    expect(found).toBeInstanceOf(FeaturedPost);
+    expect(found.title).toBe("Featured");
+    expect(FeaturedPost.table).toBe("posts");
+  });
 });
