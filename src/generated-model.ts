@@ -158,9 +158,26 @@ function defineAccessors(owner: GeneratedClass, names: Iterable<string>): void {
   }
 }
 
+/**
+ * A Model the schema wasn't generated for, or whose table has changed since, as an
+ * `InvalidModel`: what stops a dev server, which doesn't type-check.
+ */
+function rejectUngenerated(name: string, table: string, schema: DatabaseSchema): void {
+  const generatedTable = Object.hasOwn(schema.models, name) ? schema.models[name] : undefined;
+  if (generatedTable === undefined) {
+    throw new InvalidModel(`${name} isn't in the generated schema; run d1-record schema`);
+  }
+  if (generatedTable !== table) {
+    throw new InvalidModel(
+      `${name}'s table is ${table}, but the generated schema has ${generatedTable}; run d1-record schema`,
+    );
+  }
+}
+
 /** Finds a generated Model's table in its schema, and gives the class its attributes. */
 function resolve(owner: GeneratedClass, schema: DatabaseSchema): Generated {
   const table = Object.hasOwn(owner, "table") ? owner.table! : pluralize(underscore(owner.name));
+  rejectUngenerated(owner.name, table, schema);
   const tableSchema = Object.hasOwn(schema.tables, table) ? schema.tables[table] : undefined;
   if (tableSchema === undefined) {
     throw new InvalidModel(`${owner.name}'s table, ${table}, isn't in the generated schema`);

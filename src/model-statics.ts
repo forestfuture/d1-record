@@ -6,6 +6,7 @@ import type {
   Callback,
   Model,
   ModelClass,
+  QueryableClass,
   ScopesOf,
 } from "./model.ts";
 import type { PaginateStatic } from "./pagination.ts";
@@ -64,7 +65,7 @@ type RelationMethod = (typeof relationMethods)[number];
  * A Relation method as a static of every Model, typed for the class it's called on: `Product.where`
  * returns a Relation of `Product`, and on a subclass, of the subclass.
  */
-type RelationStatic<K extends RelationMethod> = <C extends ModelClass>(
+type RelationStatic<K extends RelationMethod> = <C extends QueryableClass>(
   this: C,
   ...args: RelationOf<C>[K] extends (...args: infer A) => unknown ? A : never
 ) => RelationOf<C>[K] extends (...args: never) => infer R ? R : never;
@@ -78,9 +79,12 @@ type RelationStatics = {
 interface OverloadedStatics {
   paginate: PaginateStatic;
   find: {
-    <C extends ModelClass>(this: C, id: string | number): Promise<InstanceType<C>>;
-    <C extends ModelClass>(this: C, ids: readonly (string | number)[]): Promise<InstanceType<C>[]>;
-    <C extends ModelClass>(
+    <C extends QueryableClass>(this: C, id: string | number): Promise<InstanceType<C>>;
+    <C extends QueryableClass>(
+      this: C,
+      ids: readonly (string | number)[],
+    ): Promise<InstanceType<C>[]>;
+    <C extends QueryableClass>(
       this: C,
       first: string | number,
       second: string | number,
@@ -88,12 +92,12 @@ interface OverloadedStatics {
     ): Promise<InstanceType<C>[]>;
   };
   pluck: {
-    <C extends ModelClass, K extends keyof AttributesOf<InstanceType<C>> & string>(
+    <C extends QueryableClass, K extends keyof AttributesOf<InstanceType<C>> & string>(
       this: C,
       attribute: K,
     ): Promise<AttributesOf<InstanceType<C>>[K][]>;
     <
-      C extends ModelClass,
+      C extends QueryableClass,
       const K extends readonly [
         keyof AttributesOf<InstanceType<C>> & string,
         keyof AttributesOf<InstanceType<C>> & string,
@@ -177,7 +181,7 @@ export function defineStatics(base: typeof Model): void {
     });
   }
   for (const name of [...relationMethods, "find", "pluck", "paginate"]) {
-    defineStatic(base, name, function (this: ModelClass, ...args: unknown[]): unknown {
+    defineStatic(base, name, function (this: QueryableClass, ...args: unknown[]): unknown {
       const relation = this.all() as unknown as Record<string, (...args: unknown[]) => unknown>;
       return relation[name]!(...args);
     });
