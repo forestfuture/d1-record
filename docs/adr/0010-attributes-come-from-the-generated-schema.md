@@ -1,5 +1,7 @@
 # A Model's attributes come from the generated schema
 
+**Superseded in part by ADR-0015**: a Model's table comes from its class name or `static table`, not an argument, and `modelFor` is gone.
+
 Migrations are the source of truth for columns, as in Rails. `d1-record schema` reads them and writes `src/db/schema.ts`, a document of every table, and, once, the app's base class `ApplicationRecord` (`src/models/application-record.ts`, `modelFor(tables)`), as Rails apps have one. A Model names its table and declares only behaviour: `class Product extends ApplicationRecord("products") {}`. A Model can override an attribute's type, nullability or default, or ignore a column, but it can't add attributes or change columns. The generated file is committed, like Rails' `schema.rb`, so each schema change shows up as a readable diff next to its migration.
 
 ADR-0007 made `Model({...})` the single declaration of a Model's attributes, which stopped attributes drifting from their TypeScript types. But the migration still said everything a second time (`price_cents INTEGER NOT NULL`, then `priceCents: { type: "integer", null: false }`), and the two could drift. Rails reads columns from the database when the app runs, which d1-record can't: TypeScript needs the types before anything runs, and a Worker shouldn't query its schema on every request. Generating them is the TypeScript way to get the same result: the types come from the migrations, at build time.

@@ -2,7 +2,7 @@
 
 Supersedes ADR-0003. A query finds its database one of three ways, and nothing about a request is ever stored on a Model class:
 
-1. **The Model's binding,** with no setup, as Rails' `Product.find(id)`: `static binding = "DB"` (written on the app's base class by `d1-record schema`) names a D1 binding, read from `import { env } from "cloudflare:workers"` when a query runs. Each binding gets one Database with no Session or listener, shared by every request: the binding is the same object for all of them, so sharing it leaks nothing.
+1. **The Model's binding,** with no setup, as Rails' `Product.find(id)`: the generated schema its base class holds (ADR-0015; `static binding = "DB"` before it) names a D1 binding, read from `import { env } from "cloudflare:workers"` when a query runs. Each binding gets one Database with no Session or listener, shared by every request: the binding is the same object for all of them, so sharing it leaks nothing.
 2. **The request's database:** `withDatabase(connect(env.DB, { session, onQuery }), fn)` keeps a request's Database in Workers' `AsyncLocalStorage`, which belongs to the request, and Models on its binding use it for everything `fn` awaits. This is where a D1 Session (read your own writes with replicas) and per-request `onQuery` go, and how tests and scripts outside a Worker give Models a database.
 3. **An explicit database:** `db.model(X)`, `db.models({...})` and `db.batch([...])`, always on `db`.
 

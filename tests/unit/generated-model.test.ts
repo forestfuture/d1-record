@@ -38,6 +38,7 @@ const schema = {
     Keyed: "products",
     Unknown: "products",
     Unset: "products",
+    Narrowed: "products",
   },
 } as const;
 
@@ -63,6 +64,13 @@ interface Product extends TableAttributes<typeof products, (typeof Product)["att
 
 class Event extends AppRecord {}
 interface Event extends TableAttributes<typeof events, (typeof Event)["attributes"]> {}
+
+/** A Model narrowing an attribute's type with `declare`. */
+class Narrowed extends AppRecord {
+  static override table = "products";
+  declare name: "Lamp" | "Desk";
+}
+interface Narrowed extends TableAttributes<typeof products, (typeof Narrowed)["attributes"]> {}
 
 class Retyped extends AppRecord {
   static override table = "products";
@@ -102,6 +110,15 @@ describe("a generated Model", () => {
     expect(db.model(Product).build().id).toBe("key");
     // @ts-expect-error only the table's attributes are typed
     expectTypeOf<Product["nope"]>();
+  });
+
+  test("declare narrows an attribute's type, and the value is still read from its column", () => {
+    const lamp = db.model(Narrowed).build({ name: "Lamp" });
+
+    expectTypeOf(lamp.name).toEqualTypeOf<"Lamp" | "Desk">();
+    expect(lamp.name).toBe("Lamp");
+    // @ts-expect-error not one of the narrowed values
+    lamp.name = "Chair";
   });
 
   test("a subclass, or an anonymous one, shares its parent's table", () => {
