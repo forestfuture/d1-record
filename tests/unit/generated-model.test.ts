@@ -78,3 +78,39 @@ describe("abstract classes", () => {
     );
   });
 });
+
+describe("a Model the schema wasn't generated for", () => {
+  test("is an InvalidModel when used, saying to run d1-record schema", () => {
+    class Ungenerated extends AppRecord {}
+
+    expect(() => db.model(Ungenerated).build()).toThrow(
+      new InvalidModel("Ungenerated isn't in the generated schema; run d1-record schema"),
+    );
+  });
+
+  test("whose table changed since is an InvalidModel, saying to run d1-record schema", () => {
+    class Post extends AppRecord {
+      static override table = "drafts";
+    }
+
+    expect(() => db.model(Post).build()).toThrow(
+      new InvalidModel(
+        "Post's table is drafts, but the generated schema has posts; run d1-record schema",
+      ),
+    );
+  });
+
+  test("has statics that are a compile error, as an abstract base class's are", () => {
+    class Ungenerated extends AppRecord {}
+    const use = () => {
+      // @ts-expect-error Its records have no attributes until d1-record schema runs.
+      void Ungenerated.find(1);
+      // @ts-expect-error Its records have no attributes until d1-record schema runs.
+      void Ungenerated.where({});
+      // @ts-expect-error An abstract class has no table to query.
+      void AppRecord.all();
+    };
+
+    expect(use).toBeTypeOf("function");
+  });
+});

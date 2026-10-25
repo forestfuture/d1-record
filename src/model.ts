@@ -48,7 +48,7 @@ declare const scopeBrand: unique symbol;
  * A scope, as a static on its Model: called on that Model or any class extending it
  * (`Product.newest()`), it returns a Relation of that class, with all its scopes.
  */
-export type ScopeStatic<A extends unknown[]> = (<C extends ModelClass>(
+export type ScopeStatic<A extends unknown[]> = (<C extends QueryableClass>(
   this: C,
   ...args: A
 ) => Scoped<InstanceType<C>, ScopesOf<C>>) & { readonly [scopeBrand]: true };
@@ -205,7 +205,7 @@ export class Model extends ModelStatics {
     this: C,
     body: (q: Relation<InstanceType<C>>, ...args: A) => Relation<InstanceType<C>>,
   ): ScopeStatic<A> {
-    function scoped(this: ModelClass, ...args: unknown[]): unknown {
+    function scoped(this: QueryableClass, ...args: unknown[]): unknown {
       const relation = this.all() as unknown as Record<string, (...args: unknown[]) => unknown>;
       return relation[scopeName(this, scoped)]!(...args);
     }
@@ -217,7 +217,7 @@ export class Model extends ModelStatics {
    * All of this Model's records, as Rails' `Product.all`: a Relation on the current database
    * (the request's, set with `withDatabase`, or else the Model's `binding`).
    */
-  static all<C extends ModelClass>(this: C): Scoped<InstanceType<C>, ScopesOf<C>> {
+  static all<C extends QueryableClass>(this: C): Scoped<InstanceType<C>, ScopesOf<C>> {
     return currentRelation(this);
   }
 
@@ -227,7 +227,7 @@ export class Model extends ModelStatics {
    * `User.create(User.permit(await request.json(), "email", "name"))`. Every other key is
    * dropped, and each value is cast as assigning it would be.
    */
-  static permit<C extends ModelClass, K extends AttributeKey<InstanceType<C>>>(
+  static permit<C extends QueryableClass, K extends AttributeKey<InstanceType<C>>>(
     this: C,
     input: unknown,
     ...names: K[]
@@ -240,7 +240,7 @@ export class Model extends ModelStatics {
    * `Post.typeForAttribute("publishedAt").serialize(date)` is what `publishedAt` stores a `Date`
    * as, whatever its `storage`; `cast` and `deserialize` go the other way.
    */
-  static typeForAttribute<C extends ModelClass, K extends AttributeKey<InstanceType<C>>>(
+  static typeForAttribute<C extends QueryableClass, K extends AttributeKey<InstanceType<C>>>(
     this: C,
     name: K,
   ): AttributeConversions<AttributesOf<InstanceType<C>>[K]> {
@@ -541,6 +541,15 @@ export class Model extends ModelStatics {
 /** Constructor type for any Model class, used wherever the library accepts one. */
 export type ModelClass<M extends Model = Model> = (new () => M) & Omit<typeof Model, "prototype">;
 
+/**
+ * A Model class whose records have attributes, generated or declared with `define`: what the
+ * statics that query are called on, so an ungenerated Model's, or an abstract class's, are a
+ * compile error.
+ */
+export type QueryableClass<M extends Model = Model> = ModelClass<
+  M & { readonly [attributeTypes]: unknown }
+>;
+
 defineStatics(Model);
 defineGeneratedStatics(Model);
 
@@ -555,7 +564,7 @@ useModelBase(Model, readyModel);
 export type TableAttributes<A extends AttributeSpecs, O = {}> = AttributeProperties<
   AsSpecs<OverriddenSpecs<A, O>>
 > & {
-  readonly [attributeTypes]?: AttributeProperties<AsSpecs<OverriddenSpecs<A, O>>>;
+  readonly [attributeTypes]: AttributeProperties<AsSpecs<OverriddenSpecs<A, O>>>;
 };
 
 /**
@@ -576,7 +585,7 @@ export type ModelBaseFor<
   A extends AttributeSpecs,
   B extends BaseClass = typeof Model,
 > = (new () => InstanceType<B> &
-  AttributeProperties<A> & { readonly [attributeTypes]?: AttributeProperties<A> }) &
+  AttributeProperties<A> & { readonly [attributeTypes]: AttributeProperties<A> }) &
   Omit<B, "prototype">;
 
 /** `Model.define({...})` on `base`: a class with the attributes' accessors, extending `base`. */

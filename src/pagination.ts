@@ -4,7 +4,7 @@ import { castValue, uncastable } from "./conversion.ts";
 import { IncompatibleRelation } from "./errors.ts";
 import { stableOrder } from "./finder-order.ts";
 import type { QueryRunner } from "./load.ts";
-import type { Model, ModelClass } from "./model.ts";
+import type { Model, ModelClass, QueryableClass } from "./model.ts";
 import type { QueryDescription } from "./query.ts";
 
 /** What `paginate()` takes: which page, how many records on it, and whether to count them all. */
@@ -34,15 +34,15 @@ export interface Page<M extends Model> extends CountlessPage<M> {
 
 /** `paginate` as a static of every Model, typed for the class it's called on. */
 export interface PaginateStatic {
-  <C extends ModelClass>(
+  <C extends QueryableClass>(
     this: C,
     options: PageOptions & { count: false },
   ): Promise<CountlessPage<InstanceType<C>>>;
-  <C extends ModelClass>(
+  <C extends QueryableClass>(
     this: C,
     options?: PageOptions & { count?: true },
   ): Promise<Page<InstanceType<C>>>;
-  <C extends ModelClass>(
+  <C extends QueryableClass>(
     this: C,
     options: PageOptions,
   ): Promise<Page<InstanceType<C>> | CountlessPage<InstanceType<C>>>;
