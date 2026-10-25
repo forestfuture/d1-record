@@ -47,13 +47,13 @@ export const schema = {
 } as const;
 
 declare module "./models/user.ts" {
-  interface User extends TableAttributes<typeof users> {}
+  interface User extends TableAttributes<typeof users, (typeof User)["attributes"]> {}
 }
 
 declare module "./models/post.ts" {
-  interface Post extends TableAttributes<typeof posts> {}
+  interface Post extends TableAttributes<typeof posts, (typeof Post)["attributes"]> {}
 }
 
 declare module "./models/customer.ts" {
-  interface Customer extends TableAttributes<typeof accounts> {}
+  interface Customer extends TableAttributes<typeof accounts, (typeof Customer)["attributes"]> {}
 }

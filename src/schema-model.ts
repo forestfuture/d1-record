@@ -1,32 +1,16 @@
 // `modelFor` and `ApplicationRecord`: Model base classes built on the generated schema (ADR-0010).
 import { InvalidModel } from "./errors.ts";
-import {
-  type AttributeSpecs,
-  type AttributeType,
-  type ExactSpecs,
-  type ValueSource,
-} from "./metadata.ts";
+import { type AttributeSpecs, type ExactSpecs } from "./metadata.ts";
 import { defineModel, Model, type BaseClass, type ModelBaseFor, type ModelClass } from "./model.ts";
-import { specsFor, type TableSchema, type TableSchemas } from "./generated-model.ts";
-import type { SpecOverride } from "./spec-keys.ts";
+import {
+  specsFor,
+  type AsSpecs,
+  type AttributeOverride,
+  type OverriddenSpecs,
+  type TableSchema,
+  type TableSchemas,
+} from "./generated-model.ts";
 import { bindTable } from "./table-names.ts";
-
-/**
- * A change to a generated attribute: its type alone, or its type, nullability, default and
- * `generateId`, typed so `generateId` goes only with a string, and never with a default (#99).
- */
-type AttributeOverride =
-  | AttributeType
-  | (Pick<SpecOverride, "null"> & { type?: "string"; storage?: never } & ValueSource)
-  | (Pick<SpecOverride, "null" | "default"> & {
-      type: Exclude<AttributeType, "string" | "datetime">;
-      generateId?: false;
-      storage?: never;
-    })
-  | (Pick<SpecOverride, "null" | "default" | "storage"> & {
-      type: "datetime";
-      generateId?: false;
-    });
 
 /** What `ApplicationRecord("products", {...})` may change: any attribute, and ignore any but the key. */
 type Overrides<T extends TableSchema> = {
@@ -34,31 +18,6 @@ type Overrides<T extends TableSchema> = {
     ? AttributeOverride
     : AttributeOverride | false;
 };
-
-/** The type a spec declares, written either way. */
-type TypeOf<S> = S extends AttributeType ? S : S extends { type: infer T } ? T : never;
-/** Whether a spec's attribute can be `null`. */
-type NullOf<S> = S extends { null: false } ? false : true;
-
-/** An attribute's spec with its override applied. */
-type Overridden<S, O> = O extends AttributeType
-  ? { type: O; null: NullOf<S> }
-  : O extends object
-    ? {
-        type: O extends { type: infer T extends AttributeType } ? T : TypeOf<S>;
-        null: O extends { null: infer N extends boolean } ? N : NullOf<S>;
-      }
-    : S;
-
-/** A table's attributes after its overrides: changed ones merged, ignored ones gone. */
-type OverriddenSpecs<A, O> = {
-  -readonly [
-    K in keyof A as K extends keyof O ? (O[K] extends false ? never : K) : K
-  ]: K extends keyof O ? Overridden<A[K], O[K]> : A[K];
-};
-
-/** `S` as attribute specs, without widening it to an index signature (which would type any name). */
-type AsSpecs<S> = S extends AttributeSpecs ? S : never;
 
 /** Rejects keys that aren't the table's attributes (a generic parameter skips that check). */
 type Exactly<O, T extends TableSchema> = O & Record<Exclude<keyof O, keyof T["attributes"]>, never>;

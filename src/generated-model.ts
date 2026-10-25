@@ -3,7 +3,13 @@
 import { ancestors } from "./ancestors.ts";
 import { InvalidModel } from "./errors.ts";
 import { pluralize } from "./inflections.ts";
-import { define, type AttributeDefinition, type AttributeSpecs } from "./metadata.ts";
+import {
+  define,
+  type AttributeDefinition,
+  type AttributeSpecs,
+  type AttributeType,
+  type ValueSource,
+} from "./metadata.ts";
 import { underscore } from "./naming.ts";
 import { state } from "./record-state.ts";
 import {
@@ -24,6 +30,54 @@ export interface TableSchema {
 
 /** A generated schema's tables, by name (`tables` in `src/db/schema.ts`). */
 export type TableSchemas = Readonly<Record<string, TableSchema>>;
+
+/**
+ * A change to a generated attribute: its type alone, or its type, nullability, default and
+ * `generateId`, typed so `generateId` goes only with a string, and never with a default (#99).
+ */
+export type AttributeOverride =
+  | AttributeType
+  | (Pick<SpecOverride, "null"> & { type?: "string"; storage?: never } & ValueSource)
+  | (Pick<SpecOverride, "null" | "default"> & {
+      type: Exclude<AttributeType, "string" | "datetime">;
+      generateId?: false;
+      storage?: never;
+    })
+  | (Pick<SpecOverride, "null" | "default" | "storage"> & {
+      type: "datetime";
+      generateId?: false;
+    });
+
+/** The type a spec declares, written either way. */
+type TypeOf<S> = S extends AttributeType ? S : S extends { type: infer T } ? T : never;
+/** Whether a spec's attribute can be `null`. */
+type NullOf<S> = S extends { null: false } ? false : true;
+
+/** An attribute's spec with its override applied. */
+type Overridden<S, O> = O extends AttributeType
+  ? { type: O; null: NullOf<S> }
+  : O extends object
+    ? {
+        type: O extends { type: infer T extends AttributeType } ? T : TypeOf<S>;
+        null: O extends { null: infer N extends boolean } ? N : NullOf<S>;
+      }
+    : S;
+
+/** A table's attributes after its overrides: changed ones merged, ignored ones gone. */
+export type OverriddenSpecs<A, O> = {
+  -readonly [
+    K in keyof A as K extends keyof O ? (O[K] extends false ? never : K) : K
+  ]: K extends keyof O ? Overridden<A[K], O[K]> : A[K];
+};
+
+/** `S` as attribute specs, without widening it to an index signature (which would type any name). */
+export type AsSpecs<S> = S extends AttributeSpecs ? S : never;
+
+/**
+ * A generated Model's changes to its table's attributes (`static override attributes = {...} as
+ * const`): a type name, a spec's changes, or `false` to ignore the column.
+ */
+export type AttributeOverrides = Readonly<Record<string, AttributeOverride | false>>;
 
 /** What `d1-record schema` generates for one database: its binding, its tables, and its Models. */
 export interface DatabaseSchema {
@@ -111,7 +165,7 @@ function resolve(owner: GeneratedClass, schema: DatabaseSchema): Generated {
   if (tableSchema === undefined) {
     throw new InvalidModel(`${owner.name}'s table, ${table}, isn't in the generated schema`);
   }
-  const { specs, ignoresColumns } = specsFor(table, tableSchema, owner.attributes ?? {});
+  const { specs, ignoresColumns } = specsFor(owner.name, tableSchema, owner.attributes ?? {});
   const definitions = new Map(
     Object.entries(specs).map(([name, spec]) => [name, define(name, spec)]),
   );

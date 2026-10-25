@@ -1,0 +1,45 @@
+import { describe, expect, test } from "vite-plus/test";
+import { connect, InvalidModel, Model } from "../../src/index.ts";
+
+const db = connect({} as never);
+
+// A generated schema of one table, and an app's base class holding it.
+const schema = {
+  binding: "DB",
+  tables: {
+    posts: {
+      attributes: { id: { type: "integer", null: false }, title: "string", notes: "string" },
+      primaryKey: "id",
+    },
+  },
+  models: { Post: "posts" },
+} as const;
+
+abstract class AppRecord extends Model {
+  static override schema = schema;
+}
+
+describe("a generated Model's static attributes", () => {
+  test("an override of an attribute its table doesn't have is an InvalidModel", () => {
+    class Post extends AppRecord {
+      static override attributes = { titel: "string" } as const;
+    }
+
+    expect(() => db.model(Post).build()).toThrow(
+      new InvalidModel("Post has no attribute titel to override"),
+    );
+  });
+
+  test("overrides without as const are a compile error, not a widened type", () => {
+    // @ts-expect-error `"boolean"` widens to string, which isn't an attribute type.
+    class Post extends AppRecord {
+      static override attributes = { notes: "boolean" };
+    }
+    // @ts-expect-error `false` widens to boolean.
+    class Draft extends AppRecord {
+      static override attributes = { notes: false };
+    }
+
+    expect([Post, Draft]).toHaveLength(2);
+  });
+});
