@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, test, vi } from "vite-plus/test";
 import { connect, Model, NoDatabase, Relation } from "../../src/index.ts";
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   age: "integer",

@@ -16,7 +16,7 @@ import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 const workers: { env: Record<string, unknown> } = { env: {} };
 vi.mock("cloudflare:workers", () => workers);
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   role: "string",
@@ -27,12 +27,12 @@ class User extends Model({
 }
 
 // A Model naming no binding: only a request's database (or an explicit one) can serve it.
-class Unbound extends Model({ id: { type: "integer", null: false }, email: "string" }) {
+class Unbound extends Model.define({ id: { type: "integer", null: false }, email: "string" }) {
   static tableName = "users";
 }
 
 // A Model on a binding this Worker doesn't have.
-class Elsewhere extends Model({ id: { type: "integer", null: false } }) {
+class Elsewhere extends Model.define({ id: { type: "integer", null: false } }) {
   static tableName = "users";
   static override binding = "LOGS";
 }

@@ -17,7 +17,7 @@ import { ApplicationRecord } from "./application-record";
 import { column } from "./columns";
 
 // #region declare
-export class Post extends Model({ id: "integer" }) {
+export class Post extends Model.define({ id: "integer" }) {
   author = belongsTo(User);
   tags = hasMany(Tag);
 }
@@ -56,7 +56,7 @@ export const shown = tables;`);
       .toBe(`import { belongsTo, hasMany, Model } from "@forestfuture/d1-record";
 import { User, Tag } from "./models";
 
-export class Post extends Model({ id: "integer" }) {
+export class Post extends Model.define({ id: "integer" }) {
   author = belongsTo(User);
   tags = hasMany(Tag);
 }`);

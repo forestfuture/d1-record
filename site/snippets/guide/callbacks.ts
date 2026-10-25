@@ -1,7 +1,7 @@
 import { abort, Model } from "@forestfuture/d1-record";
 
 // #region callbacks
-export class Order extends Model({
+export class Order extends Model.define({
   id: { type: "integer", null: false },
   status: { type: "string", null: false, default: () => "pending" },
   email: { type: "string", null: false },

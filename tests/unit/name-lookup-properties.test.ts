@@ -3,7 +3,7 @@ import { describe, expect, test } from "vite-plus/test";
 import { connect, hasMany, Model, UnknownAssociation, UnknownAttribute } from "../../src/index.ts";
 import { PURE_RUNS } from "../support/properties.ts";
 
-class Post extends Model({
+class Post extends Model.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
@@ -11,7 +11,7 @@ class Post extends Model({
   static tableName = "posts";
 }
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
 }) {

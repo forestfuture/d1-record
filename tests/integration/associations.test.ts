@@ -10,7 +10,7 @@ import {
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
 }) {
@@ -20,7 +20,7 @@ class User extends Model({
   profile = hasOne(Profile, { foreignKey: "userId" });
 }
 
-class Profile extends Model({
+class Profile extends Model.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   bio: "string",
@@ -28,7 +28,7 @@ class Profile extends Model({
   static tableName = "profiles";
 }
 
-class Comment extends Model({
+class Comment extends Model.define({
   id: { type: "integer", null: false },
   postId: "integer",
   body: "string",
@@ -38,7 +38,7 @@ class Comment extends Model({
   post = belongsTo(Post, { foreignKey: "postId" });
 }
 
-class Post extends Model({
+class Post extends Model.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
@@ -147,7 +147,7 @@ describe("associations", () => {
   });
 
   test("a saved owner whose key is null reads nothing, and create says why", async () => {
-    class Member extends Model({ id: { type: "integer", null: false }, age: "integer" }) {
+    class Member extends Model.define({ id: { type: "integer", null: false }, age: "integer" }) {
       static tableName = "users";
       posts = hasMany(Post, { foreignKey: "userId", primaryKey: "age" });
     }

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { connect, Model, UnknownAttribute } from "../../src/index.ts";
 
-class Account extends Model({
+class Account extends Model.define({
   id: { type: "integer", null: false },
   handle: "string",
   code: "string",
@@ -108,7 +108,7 @@ describe("validators", () => {
   });
 
   test("format gives the same answer every time, even with a /g or /y pattern", async () => {
-    class Tag extends Model({ id: "integer", name: "string" }) {
+    class Tag extends Model.define({ id: "integer", name: "string" }) {
       static tableName = "tags";
       static {
         this.validates("name", { format: /^[a-z]+$/g });
@@ -125,7 +125,7 @@ describe("validators", () => {
 
   test("uniqueness scope names are checked when the validation is declared", () => {
     const declare = () => {
-      class Membership extends Model({ id: "integer", email: "string", teamId: "integer" }) {
+      class Membership extends Model.define({ id: "integer", email: "string", teamId: "integer" }) {
         static tableName = "memberships";
         static {
           // @ts-expect-error "team" isn't an attribute; "teamId" is
@@ -139,7 +139,7 @@ describe("validators", () => {
   });
 
   test("length messages say 'character' for a count of one", async () => {
-    class Pin extends Model({ id: "integer", a: "string", b: "string", c: "string" }) {
+    class Pin extends Model.define({ id: "integer", a: "string", b: "string", c: "string" }) {
       static tableName = "pins";
       static {
         this.validates("a", { length: { minimum: 1 } });
@@ -162,7 +162,7 @@ describe("validators", () => {
 
   test("length counts the items of an array, and inclusion matches dates by their time", async () => {
     const launch = new Date(Date.UTC(2026, 0, 1));
-    class Post extends Model({ id: "integer", tags: "json", publishOn: "datetime" }) {
+    class Post extends Model.define({ id: "integer", tags: "json", publishOn: "datetime" }) {
       static tableName = "posts";
       static {
         this.validates("tags", { length: { minimum: 1 } });

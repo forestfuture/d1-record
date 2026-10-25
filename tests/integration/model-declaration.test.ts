@@ -20,7 +20,7 @@ describe("model declaration", () => {
   afterAll(() => dispose());
 
   test("a model without a tableName uses the one inferred from its class name", async () => {
-    class User extends Model({ id: "integer", email: "string" }) {}
+    class User extends Model.define({ id: "integer", email: "string" }) {}
     const users = connect(binding).model(User);
 
     await users.insert({ id: 7, email: "inferred@example.com" });
@@ -30,7 +30,7 @@ describe("model declaration", () => {
   });
 
   test("an empty tableName is rejected when first used", () => {
-    class Nameless extends Model({ id: "integer" }) {
+    class Nameless extends Model.define({ id: "integer" }) {
       static tableName = "";
     }
 
@@ -43,7 +43,7 @@ describe("model declaration", () => {
 
   test("a missing table whose name was inferred says where the name came from", async () => {
     // What a minifier without keep_names does: the class is now called e, so its table "es".
-    const e = class extends Model({ id: "integer" }) {};
+    const e = class extends Model.define({ id: "integer" }) {};
     const db = connect(binding);
 
     // Both start now, so each gets its handler now: one left unhandled while the other is
@@ -71,7 +71,7 @@ describe("model declaration", () => {
   });
 
   test("a missing table that was declared is D1's own error, as before", async () => {
-    class Missing extends Model({ id: "integer" }) {
+    class Missing extends Model.define({ id: "integer" }) {
       static tableName = "nowhere";
     }
 
@@ -82,16 +82,16 @@ describe("model declaration", () => {
   });
 
   test("a class field that would hide an attribute's accessor is rejected when first used", () => {
-    class Shadowed extends Model({ id: "integer", email: "string" }) {
+    class Shadowed extends Model.define({ id: "integer", email: "string" }) {
       static tableName = "users";
-      email!: string | null; // should have been left to Model({...})
+      email!: string | null; // should have been left to Model.define({...})
     }
 
     expect(() => connect(binding).model(Shadowed)).toThrow(/Shadowed.*"email"/);
   });
 
   test("where rejects a key that isn't a declared attribute", () => {
-    class User extends Model({ id: "integer", email: "string" }) {
+    class User extends Model.define({ id: "integer", email: "string" }) {
       static tableName = "users";
     }
     const users = connect(binding).model(User);
@@ -103,7 +103,7 @@ describe("model declaration", () => {
   });
 
   test("an attribute named like a record method is rejected when first used", () => {
-    class Clashing extends Model({ id: "integer", attributes: "json" }) {
+    class Clashing extends Model.define({ id: "integer", attributes: "json" }) {
       static tableName = "users";
     }
 
@@ -111,7 +111,7 @@ describe("model declaration", () => {
   });
 
   test("column() naming an unknown attribute is rejected as soon as where is called", () => {
-    class User extends Model({ id: "integer", createdAt: "datetime" }) {
+    class User extends Model.define({ id: "integer", createdAt: "datetime" }) {
       static tableName = "users";
     }
     const users = connect(binding).model(User);
@@ -122,10 +122,10 @@ describe("model declaration", () => {
   });
 
   test("a primaryKey that isn't a declared attribute is rejected when first used", () => {
-    class Keyless extends Model({ email: "string" }) {
+    class Keyless extends Model.define({ email: "string" }) {
       static tableName = "users";
     }
-    class WrongKey extends Model({ uuid: "string" }) {
+    class WrongKey extends Model.define({ uuid: "string" }) {
       static tableName = "users";
       static primaryKey = "id";
     }
@@ -135,10 +135,10 @@ describe("model declaration", () => {
   });
 
   test("errors and abortReason are reserved: they're record properties", () => {
-    class WithErrors extends Model({ id: "integer", errors: "json" }) {
+    class WithErrors extends Model.define({ id: "integer", errors: "json" }) {
       static tableName = "users";
     }
-    class WithReason extends Model({ id: "integer", abortReason: "string" }) {
+    class WithReason extends Model.define({ id: "integer", abortReason: "string" }) {
       static tableName = "users";
     }
 

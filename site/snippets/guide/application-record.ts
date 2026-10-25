@@ -3,7 +3,7 @@ import { tables } from "../db/schema";
 
 // #region shared
 // What's written on Base, every Model has.
-class Base extends Model.Base {
+class Base extends Model {
   label() {
     return `${this.constructor.name} ${JSON.stringify(this.attributes())}`;
   }

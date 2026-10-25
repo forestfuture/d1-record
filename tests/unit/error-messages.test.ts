@@ -19,7 +19,7 @@ const tables = {
   posts: { attributes: { id: "integer", title: "string" }, primaryKey: "id" },
 } as const;
 
-class Base extends Model.Base {
+class Base extends Model {
   static {
     this.humanAttributeNames({ createdAt: "Signed up", email: "Email" });
     this.errorMessages({

@@ -3,7 +3,7 @@ import { connect, Model } from "../../src/index.ts";
 import { underscore } from "../../src/naming.ts";
 import { originalUnderscore } from "../support/naming-oracle.ts";
 
-class User extends Model({ id: { type: "integer", null: false } }) {
+class User extends Model.define({ id: { type: "integer", null: false } }) {
   static tableName = "users";
 }
 

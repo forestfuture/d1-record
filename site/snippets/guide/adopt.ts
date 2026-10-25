@@ -24,7 +24,7 @@ const ApplicationRecord = modelFor(
       primaryKey: "id",
     },
   } as const,
-  Model.Base,
+  Model,
 );
 
 // #region overrides

@@ -3,7 +3,7 @@ import { tables } from "../db/schema";
 
 // #region base
 // src/models/application-record.ts
-class Base extends Model.Base {
+class Base extends Model {
   static {
     this.errorMessages({
       blank: "is required",

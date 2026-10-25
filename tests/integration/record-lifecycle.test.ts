@@ -12,7 +12,7 @@ import {
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   role: "string",
@@ -23,7 +23,7 @@ class User extends Model({
 
 let counter = 0;
 
-class ApiKey extends Model({
+class ApiKey extends Model.define({
   id: { type: "string", null: false, default: () => `key-${++counter}` },
   label: { type: "string", null: false },
   scopes: "json",

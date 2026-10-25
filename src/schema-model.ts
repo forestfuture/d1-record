@@ -6,13 +6,7 @@ import {
   type ExactSpecs,
   type ValueSource,
 } from "./metadata.ts";
-import {
-  defineModel,
-  ModelBase,
-  type BaseClass,
-  type ModelBaseFor,
-  type ModelClass,
-} from "./model.ts";
+import { defineModel, Model, type BaseClass, type ModelBaseFor, type ModelClass } from "./model.ts";
 import {
   applyOverride,
   isAttributeType,
@@ -84,8 +78,8 @@ type AsSpecs<S> = S extends AttributeSpecs ? S : never;
 /** Rejects keys that aren't the table's attributes (a generic parameter skips that check). */
 type Exactly<O, T extends TableSchema> = O & Record<Exclude<keyof O, keyof T["attributes"]>, never>;
 
-/** The base class `modelFor` makes: `ApplicationRecord("products")`, or the library's `Model({...})`. */
-export interface SchemaModel<T extends TableSchemas, B extends BaseClass = typeof ModelBase> {
+/** The base class `modelFor` makes: `ApplicationRecord("products")`, or the library's `Model.define({...})`. */
+export interface SchemaModel<T extends TableSchemas, B extends BaseClass = typeof Model> {
   <const N extends keyof T & string, const O extends Overrides<T[N]> = {}>(
     table: N,
     overrides?: Exactly<O, T[N]>,
@@ -155,11 +149,11 @@ function specsFor(
  * The app's base class for a generated schema's Models: `export const ApplicationRecord =
  * modelFor(tables)`, in the `src/models/application-record.ts` that `d1-record schema` writes.
  * `ApplicationRecord("products")` is a base class bound to that table, with its attributes and
- * primary key; `ApplicationRecord({...})` is the library's `Model({...})`, for anything else.
+ * primary key; `ApplicationRecord({...})` is the library's `Model.define({...})`, for anything else.
  */
-export function modelFor<const T extends TableSchemas, B extends BaseClass = typeof ModelBase>(
+export function modelFor<const T extends TableSchemas, B extends BaseClass = typeof Model>(
   tables: T,
-  base: B = ModelBase as unknown as B,
+  base: B = Model as unknown as B,
 ): SchemaModel<T, B> {
   function SchemaModel(
     table: string | AttributeSpecs,

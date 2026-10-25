@@ -14,7 +14,7 @@ import {
 } from "../../src/index.ts";
 import { createTestDatabase, recordingBatches, type TestDatabase } from "../support/d1.ts";
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
 }) {
@@ -36,7 +36,7 @@ class User extends Model({
   ghosts = hasMany(Ghost, { foreignKey: "userId" });
 }
 
-class Post extends Model({
+class Post extends Model.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
@@ -49,7 +49,7 @@ class Post extends Model({
   firstComment = hasMany(Comment, { foreignKey: "postId", scope: (q) => q.limit(1) });
 }
 
-class Comment extends Model({
+class Comment extends Model.define({
   id: { type: "integer", null: false },
   postId: "integer",
   body: "string",
@@ -57,7 +57,7 @@ class Comment extends Model({
   static tableName = "comments";
 }
 
-class Profile extends Model({
+class Profile extends Model.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   bio: "string",
@@ -68,12 +68,12 @@ class Profile extends Model({
 }
 
 // Its table, inferred as "ghosts", doesn't exist.
-class Ghost extends Model({
+class Ghost extends Model.define({
   id: { type: "integer", null: false },
   userId: "integer",
 }) {}
 
-class Account extends Model({
+class Account extends Model.define({
   id: { type: "integer", null: false },
   userId: "integer",
 }) {

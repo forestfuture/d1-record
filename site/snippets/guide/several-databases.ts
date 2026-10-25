@@ -18,10 +18,10 @@ const logsTables = {
   },
 } as const;
 
-class DbBase extends Model.Base {
+class DbBase extends Model {
   static override binding = "DB";
 }
-class LogsBase extends Model.Base {
+class LogsBase extends Model {
   static override binding = "LOGS";
 }
 

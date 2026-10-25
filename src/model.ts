@@ -1,4 +1,4 @@
-// `Model({...})` and `ModelBase`: the record class, its attribute accessors and its declarations (validations, error messages); its shared statics are in model-statics.ts.
+// `Model.define({...})` and `Model`: the record class, its attribute accessors and its declarations (validations, error messages); its shared statics are in model-statics.ts.
 import type { Executor, QueryListener } from "./executor.ts";
 import {
   attributeOf,
@@ -100,7 +100,12 @@ export type ErrorAttributeName<R> = [AttributesOf<R>] extends [never]
 /** The declared attributes of a record type, excluding methods and getters. */
 export type AttributesOf<M> = M extends { readonly [attributeTypes]?: infer A } ? A : never;
 
-export class ModelBase extends ModelStatics {
+/**
+ * The library's base class, as Rails' `ActiveRecord::Base`: an app's base class extends it, and
+ * methods, statics, callbacks and scopes declared there are shared by every Model built on it.
+ * It has no table, so it's never used as a Model itself.
+ */
+export class Model extends ModelStatics {
   /** The table's name: inferred from the class name (`BlogPost` → `blog_posts`) unless set. */
   static tableName: string;
   static primaryKey = "id";
@@ -156,6 +161,18 @@ export class ModelBase extends ModelStatics {
   }
 
   /**
+   * A Model whose attributes are declared here, the single source of truth for them (ADR-0007):
+   * `class Visit extends Model.define({ path: "string" }) {}`. It's built on the class it's
+   * called on, so a Model made with `ApplicationRecord.define({...})` shares the app's base.
+   */
+  static define<B extends BaseClass, const A extends AttributeSpecs>(
+    this: B,
+    specs: A & ExactSpecs<A>,
+  ): ModelBaseFor<A, B> {
+    return defineModel(specs, this);
+  }
+
+  /**
    * Declares a scope, as Rails' `scope :active, -> { … }`: `static active = this.scope((q) =>
    * q.where({ isActive: true }))`. It's a static (`User.active()`) and a Relation method
    * (`User.where(…).active()`), inherited like any static. Inside it, `q` has every Relation
@@ -169,7 +186,7 @@ export class ModelBase extends ModelStatics {
       const relation = this.all() as unknown as Record<string, (...args: unknown[]) => unknown>;
       return relation[scopeName(this, scoped)]!(...args);
     }
-    scopeBodies.set(scoped, body as unknown as Scope<ModelBase>);
+    scopeBodies.set(scoped, body as unknown as Scope<Model>);
     return scoped as unknown as ScopeStatic<A>;
   }
 
@@ -287,9 +304,9 @@ export class ModelBase extends ModelStatics {
     const { kind } = associationOf(this.constructor as ModelClass, name);
     this[state].resetAssociation(name);
     // The accessor installed for this association: a Relation for a hasMany, else a promise.
-    const accessor = this[name] as () => Relation<ModelBase> | Promise<ModelBase | null>;
+    const accessor = this[name] as () => Relation<Model> | Promise<Model | null>;
     const read = accessor.call(this);
-    const value = kind === "hasMany" ? await (read as Relation<ModelBase>).toArray() : await read;
+    const value = kind === "hasMany" ? await (read as Relation<Model>).toArray() : await read;
     return value as LoadedValue<this[K]>;
   }
 
@@ -331,10 +348,7 @@ export class ModelBase extends ModelStatics {
   }
 
   /** The attribute's value before its unsaved change, as stored (Rails' `attribute_was`). */
-  attributeWas<R extends ModelBase, K extends AttributeKey<R>>(
-    this: R,
-    name: K,
-  ): AttributesOf<R>[K] {
+  attributeWas<R extends Model, K extends AttributeKey<R>>(this: R, name: K): AttributesOf<R>[K] {
     return this[state].valueInDatabase(name) as AttributesOf<R>[K];
   }
 
@@ -342,7 +356,7 @@ export class ModelBase extends ModelStatics {
    * Whether the attribute has an unsaved change, optionally `from` and/or `to` given values
    * (Rails' `attribute_changed?(name, from:, to:)`).
    */
-  isAttributeChanged<R extends ModelBase, K extends AttributeKey<R>>(
+  isAttributeChanged<R extends Model, K extends AttributeKey<R>>(
     this: R,
     name: K,
     options: ChangeOptions<AttributesOf<R>[K]> = {},
@@ -351,7 +365,7 @@ export class ModelBase extends ModelStatics {
   }
 
   /** Whether saving now would write a change to the attribute (for before-callbacks). */
-  willSaveChangeTo<R extends ModelBase, K extends AttributeKey<R>>(
+  willSaveChangeTo<R extends Model, K extends AttributeKey<R>>(
     this: R,
     name: K,
     options: ChangeOptions<AttributesOf<R>[K]> = {},
@@ -360,7 +374,7 @@ export class ModelBase extends ModelStatics {
   }
 
   /** The last save's change to the attribute, `[before, after]`, if it changed (for after-callbacks). */
-  savedChangeTo<R extends ModelBase, K extends AttributeKey<R>>(
+  savedChangeTo<R extends Model, K extends AttributeKey<R>>(
     this: R,
     name: K,
   ): [before: AttributesOf<R>[K], after: AttributesOf<R>[K]] | undefined {
@@ -372,7 +386,7 @@ export class ModelBase extends ModelStatics {
   }
 
   /** Whether the last save changed the attribute, optionally `from` and/or `to` given values. */
-  hasSavedChangeTo<R extends ModelBase, K extends AttributeKey<R>>(
+  hasSavedChangeTo<R extends Model, K extends AttributeKey<R>>(
     this: R,
     name: K,
     options: ChangeOptions<AttributesOf<R>[K]> = {},
@@ -381,7 +395,7 @@ export class ModelBase extends ModelStatics {
   }
 
   /** The attribute's value before the last save (its current stored value, if that didn't change it). */
-  attributeBeforeLastSave<R extends ModelBase, K extends AttributeKey<R>>(
+  attributeBeforeLastSave<R extends Model, K extends AttributeKey<R>>(
     this: R,
     name: K,
   ): AttributesOf<R>[K] {
@@ -393,7 +407,7 @@ export class ModelBase extends ModelStatics {
   }
 
   /** Undoes unsaved changes to these attributes (all of them by default), as Rails' `restore_attributes`. */
-  restoreAttributes<R extends ModelBase>(this: R, names?: readonly AttributeKey<R>[]): void {
+  restoreAttributes<R extends Model>(this: R, names?: readonly AttributeKey<R>[]): void {
     this[state].restore(names);
   }
 
@@ -502,50 +516,34 @@ export class ModelBase extends ModelStatics {
 }
 
 /** Constructor type for any Model class, used wherever the library accepts one. */
-export type ModelClass<M extends ModelBase = ModelBase> = (new () => M) &
-  Omit<typeof ModelBase, "prototype">;
+export type ModelClass<M extends Model = Model> = (new () => M) & Omit<typeof Model, "prototype">;
 
-defineStatics(ModelBase);
+defineStatics(Model);
 
-// ModelBase and its statics are all defined now: scopes stop at it, and can't take its names;
+// Model and its statics are all defined now: scopes stop at it, and can't take its names;
 // and relationFor makes each Model ready with readyModel (hoisted, so it exists already).
-useModelBase(ModelBase, readyModel);
+useModelBase(Model, readyModel);
 
-/** A class to build Models on: `Model.Base`, or an app's class extending it (`ApplicationRecord`'s). */
-export type BaseClass = abstract new () => ModelBase;
+/** A class to build Models on: `Model`, or an app's class extending it (`ApplicationRecord`'s). */
+export type BaseClass = abstract new () => Model;
 
 /**
- * The base class `Model({...})` makes: records with the attributes `A`, built on `B` (the
+ * The base class `Model.define({...})` makes: records with the attributes `A`, built on `B` (the
  * library's base, or an app's), so they have its methods and statics too.
  */
 export type ModelBaseFor<
   A extends AttributeSpecs,
-  B extends BaseClass = typeof ModelBase,
+  B extends BaseClass = typeof Model,
 > = (new () => InstanceType<B> &
   AttributeProperties<A> & { readonly [attributeTypes]?: AttributeProperties<A> }) &
   Omit<B, "prototype">;
 
-/**
- * Creates a Model base class whose records have the given attributes.
- * The attribute object is the single source of truth (ADR-0007).
- */
-export function Model<const A extends AttributeSpecs>(specs: A & ExactSpecs<A>): ModelBaseFor<A> {
-  return defineModel(specs, ModelBase);
-}
-
-/**
- * The library's base class, for an app's own (Rails' `ActiveRecord::Base`): methods, statics,
- * callbacks and scopes declared on a class extending it are shared by every Model built on it
- * with `modelFor(tables, Base)`. It's abstract: it has no table, so it's never used directly.
- */
-Model.Base = ModelBase;
-
-/** `Model({...})` on `base`: a class with the attributes' accessors, extending `base`. */
+/** `Model.define({...})` on `base`: a class with the attributes' accessors, extending `base`. */
 export function defineModel<const A extends AttributeSpecs, B extends BaseClass>(
   specs: A,
   base: B,
 ): ModelBaseFor<A, B> {
-  const Parent = base as unknown as typeof ModelBase;
+  const Parent = base as unknown as typeof Model;
   class DefinedModel extends Parent {
     static override attributeDefinitions: ReadonlyMap<string, AttributeDefinition> = new Map(
       Object.entries(specs).map(([name, spec]) => [name, define(name, spec)]),
@@ -554,10 +552,10 @@ export function defineModel<const A extends AttributeSpecs, B extends BaseClass>
   inferTableNames(DefinedModel);
   for (const name of Object.keys(specs)) {
     Object.defineProperty(DefinedModel.prototype, name, {
-      get(this: ModelBase) {
+      get(this: Model) {
         return this[state].read(name);
       },
-      set(this: ModelBase, value: unknown) {
+      set(this: Model, value: unknown) {
         this[state].write(name, value);
       },
     });
@@ -566,17 +564,17 @@ export function defineModel<const A extends AttributeSpecs, B extends BaseClass>
 }
 
 /** A record's Model: its class. */
-export function modelOf(record: ModelBase): ModelClass {
+export function modelOf(record: Model): ModelClass {
   return record.constructor as ModelClass;
 }
 
 /** The record's primary key value. */
-export function primaryKeyOf(record: ModelBase): unknown {
+export function primaryKeyOf(record: Model): unknown {
   return record[state].read(modelOf(record).primaryKey);
 }
 
 /** Builds a persisted record of `model` from a D1 row. */
-export function hydrate<M extends ModelBase>(
+export function hydrate<M extends Model>(
   model: ModelClass<M>,
   row: Record<string, unknown>,
   executor: Executor,
@@ -591,7 +589,7 @@ export function hydrate<M extends ModelBase>(
  * A new, unsaved record. Every attribute reads as null until assigned; defaults are
  * evaluated now and count as assigned, and so are the given attributes.
  */
-export function buildRecord<M extends ModelBase>(
+export function buildRecord<M extends Model>(
   model: ModelClass<M>,
   attributes: Record<string, unknown>,
   executor: Executor,

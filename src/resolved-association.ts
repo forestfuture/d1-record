@@ -3,7 +3,7 @@
 import { readyModel, type AssociationDefinition } from "./associations.ts";
 import type { Executor } from "./executor.ts";
 import { associationOf } from "./association-fields.ts";
-import type { ModelBase, ModelClass } from "./model.ts";
+import type { Model, ModelClass } from "./model.ts";
 import { state } from "./record-state.ts";
 import { applyScope, type Scope, type Scoped } from "./relation.ts";
 import { relationFor } from "./scoped-relation.ts";
@@ -65,20 +65,20 @@ export class ResolvedAssociation {
   }
 
   /** The target's records, with the association's scope applied. */
-  all(executor: Executor): Scoped<ModelBase> {
-    const relation = relationFor(executor, this.target) as Scoped<ModelBase>;
+  all(executor: Executor): Scoped<Model> {
+    const relation = relationFor(executor, this.target) as Scoped<Model>;
     const { scope } = this.definition;
     if (scope === undefined) return relation;
-    return relation[applyScope](this.label, scope as Scope<ModelBase>, []) as Scoped<ModelBase>;
+    return relation[applyScope](this.label, scope as Scope<Model>, []) as Scoped<Model>;
   }
 
   /** The target's records linked to `key` (one value, or a list), with the scope applied. */
-  linkedTo(executor: Executor, key: unknown): Scoped<ModelBase> {
+  linkedTo(executor: Executor, key: unknown): Scoped<Model> {
     return this.all(executor).where({ [this.targetAttribute]: key });
   }
 
   /** Why records can't be created through the association for `owner`, which has no key. */
-  refusalFor(owner: ModelBase): string {
+  refusalFor(owner: Model): string {
     const { name } = this.owner;
     return owner[state].isNew
       ? `the ${name} hasn't been saved; save the ${name} first`
@@ -98,7 +98,7 @@ export class ResolvedAssociation {
    * `relation` in the association's order: its scope's, then the target's primary key, so
    * lazy reads, preloads and dependents agree, and a hasOne on its one record.
    */
-  inOrder(relation: Scoped<ModelBase>): Scoped<ModelBase> {
+  inOrder(relation: Scoped<Model>): Scoped<Model> {
     return relation.order({ [this.target.primaryKey]: "asc" });
   }
 
@@ -106,7 +106,7 @@ export class ResolvedAssociation {
    * The owner's value its targets are linked by: a belongsTo's foreign key, or for a
    * hasMany/hasOne the owner's key, null while the owner is new (it has no stored records).
    */
-  keyOf(owner: ModelBase): unknown {
+  keyOf(owner: Model): unknown {
     if (this.definition.kind !== "belongsTo" && owner[state].isNew) return null;
     return owner[state].read(this.ownerAttribute);
   }

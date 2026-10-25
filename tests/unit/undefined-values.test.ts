@@ -2,7 +2,7 @@ import { describe, expect, test } from "vite-plus/test";
 import { column, connect, Model, sql } from "../../src/index.ts";
 import { attributeFor } from "../../src/attribute.ts";
 
-class Sample extends Model({
+class Sample extends Model.define({
   id: { type: "integer", null: false },
   label: "string",
   stamp: { type: "datetime", storage: "unixSeconds" },

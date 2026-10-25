@@ -1,7 +1,7 @@
 import { belongsTo, hasMany, hasOne, Model, type HasMany } from "@forestfuture/d1-record";
 
 // #region declare
-export class Author extends Model({
+export class Author extends Model.define({
   id: { type: "string", null: false, generateId: true },
   name: { type: "string", null: false },
 }) {
@@ -9,7 +9,7 @@ export class Author extends Model({
   profile = hasOne(Profile, { dependent: "delete" }); // Profile's authorId
 }
 
-export class Article extends Model({
+export class Article extends Model.define({
   id: { type: "string", null: false, generateId: true },
   authorId: { type: "string", null: false },
   title: { type: "string", null: false },
@@ -18,13 +18,13 @@ export class Article extends Model({
   comments = hasMany(Comment, { dependent: "deleteAll" }); // Comment's articleId
 }
 
-export class Profile extends Model({
+export class Profile extends Model.define({
   id: { type: "integer", null: false },
   authorId: { type: "string", null: false },
   bio: "string",
 }) {}
 
-export class Comment extends Model({
+export class Comment extends Model.define({
   id: { type: "integer", null: false },
   articleId: { type: "string", null: false },
   body: { type: "string", null: false },
@@ -32,7 +32,7 @@ export class Comment extends Model({
 // #endregion declare
 
 // #region scoped
-export class Blog extends Model({ id: { type: "integer", null: false } }) {
+export class Blog extends Model.define({ id: { type: "integer", null: false } }) {
   // A scope for the association, as Rails' `has_many :posts, -> { … }`.
   recentPosts = hasMany(BlogPost, {
     scope: (q) => q.order({ createdAt: "desc" }).where({ draft: false }),
@@ -40,7 +40,7 @@ export class Blog extends Model({ id: { type: "integer", null: false } }) {
 }
 // #endregion scoped
 
-export class BlogPost extends Model({
+export class BlogPost extends Model.define({
   id: { type: "integer", null: false },
   blogId: { type: "integer", null: false },
   draft: { type: "boolean", null: false },
@@ -110,7 +110,7 @@ export async function statementsExample(article: Article) {
 }
 
 // #region self-referencing
-export class Category extends Model({
+export class Category extends Model.define({
   id: { type: "integer", null: false },
   parentId: "integer",
 }) {

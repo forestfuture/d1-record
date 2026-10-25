@@ -3,12 +3,12 @@ import { belongsTo, connect, hasMany, InvalidModel, Model } from "../../src/inde
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 // Fresh Models used by no other test: Entry and Remark are only ever reached through includes.
-class Owner extends Model({ id: { type: "integer", null: false }, email: "string" }) {
+class Owner extends Model.define({ id: { type: "integer", null: false }, email: "string" }) {
   static tableName = "users";
   entries = hasMany(Entry, { foreignKey: "userId" });
 }
 
-class Entry extends Model({
+class Entry extends Model.define({
   id: { type: "integer", null: false },
   userId: "integer",
   title: "string",
@@ -18,7 +18,7 @@ class Entry extends Model({
   remarks = hasMany(Remark, { foreignKey: "postId" });
 }
 
-class Remark extends Model({
+class Remark extends Model.define({
   id: { type: "integer", null: false },
   postId: "integer",
   body: "string",
@@ -49,11 +49,11 @@ describe("Models reached only through includes", () => {
   });
 
   test("have their declarations checked", () => {
-    class Broken extends Model({ id: "integer", userId: "integer" }) {
+    class Broken extends Model.define({ id: "integer", userId: "integer" }) {
       static tableName = "posts";
       owner = belongsTo(Owner, { foreignKey: "ownerId" });
     }
-    class Root extends Model({ id: "integer" }) {
+    class Root extends Model.define({ id: "integer" }) {
       static tableName = "users";
       broken = hasMany(Broken, { foreignKey: "userId" });
     }

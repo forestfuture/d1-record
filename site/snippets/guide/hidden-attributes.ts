@@ -2,13 +2,13 @@ import { Model } from "@forestfuture/d1-record";
 
 // #region base
 // src/models/application-record.ts
-export class Base extends Model.Base {
+export class Base extends Model {
   static override hiddenAttributes = ["passwordDigest"];
 }
 // #endregion base
 
 // #region extend
-export class Account extends Model({
+export class Account extends Model.define({
   id: "integer",
   passwordDigest: "string",
   apiKey: "string",

@@ -3,7 +3,7 @@ import { belongsTo, connect, hasMany, hasOne, Model } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 // Foreign keys inferred by Rails' convention: no foreignKey anywhere below.
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
 }) {
@@ -13,7 +13,7 @@ class User extends Model({
   profile = hasOne(Profile); // User → userId
 }
 
-class Post extends Model({
+class Post extends Model.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
@@ -24,7 +24,7 @@ class Post extends Model({
 }
 
 // Named so their inferred keys (writerId, authorId) don't exist: the explicit ones must be used.
-class Writer extends Model({
+class Writer extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
 }) {
@@ -33,7 +33,7 @@ class Writer extends Model({
   posts = hasMany(Article, { foreignKey: "userId" });
 }
 
-class Article extends Model({
+class Article extends Model.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
@@ -43,7 +43,7 @@ class Article extends Model({
   author = belongsTo(Writer, { foreignKey: "userId" });
 }
 
-class Profile extends Model({
+class Profile extends Model.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   bio: "string",

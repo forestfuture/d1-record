@@ -178,8 +178,8 @@ describe("modelFor: the generated Model", () => {
       ),
     );
     expect(flags({ type: "datetime", storage: "minutes" })).toThrow(InvalidModel);
-    const Plain = LibraryModel({ at: { type: "string", storage: "unixSeconds" } } as never);
-    class Note extends (Plain as never as typeof LibraryModel.Base) {}
+    const Plain = LibraryModel.define({ at: { type: "string", storage: "unixSeconds" } } as never);
+    class Note extends (Plain as never as typeof LibraryModel) {}
     expect(() => db.model(Note)).toThrow(InvalidModel);
   });
 
@@ -210,7 +210,7 @@ describe("modelFor: the generated Model", () => {
 });
 
 describe("modelFor(tables, Base): an app's own base class, as Rails' ApplicationRecord", () => {
-  class Base extends LibraryModel.Base {
+  class Base extends LibraryModel {
     label() {
       return `${this.constructor.name} ${JSON.stringify(this.attributes())}`;
     }
@@ -251,7 +251,7 @@ describe("modelFor(tables, Base): an app's own base class, as Rails' Application
   });
 
   test("once a Model is used, its base class's declarations are fixed too, as its own are", () => {
-    class Sealed extends LibraryModel.Base {}
+    class Sealed extends LibraryModel {}
     class Product extends modelFor(tables, Sealed)("products") {}
     db.model(Product);
 

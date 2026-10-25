@@ -36,7 +36,7 @@ import {
   type AssociationName,
   type AttributesOf,
   type LoadedValue,
-  type ModelBase,
+  type Model,
   type ModelClass,
 } from "./model.ts";
 import { SafeSql } from "./sql.ts";
@@ -86,22 +86,22 @@ export const applyScope = Symbol("applyScope");
 
 /** A scope: receives the current Relation and its arguments, and returns a changed Relation. */
 // oxlint-disable-next-line typescript/no-explicit-any -- scope arguments are the scope's own business
-export type Scope<M extends ModelBase> = (relation: Relation<M>, ...args: any[]) => Relation<M>;
+export type Scope<M extends Model> = (relation: Relation<M>, ...args: any[]) => Relation<M>;
 
 /** The scope methods a Model's scopes `S` add to its Relations: `active()`, `createdAfter(date)`. */
-export type ScopeMethods<M extends ModelBase, S> = {
+export type ScopeMethods<M extends Model, S> = {
   [K in keyof S]: S[K] extends (this: never, ...args: infer A) => unknown
     ? (...args: A) => Scoped<M, S>
     : never;
 };
 
 /** A Relation of Model records `M` with the Model's scope methods `S`. */
-export type Scoped<M extends ModelBase, S = {}> = [keyof S] extends [never]
+export type Scoped<M extends Model, S = {}> = [keyof S] extends [never]
   ? Relation<M, S>
   : Relation<M, S> & ScopeMethods<M, S>;
 
 /** A lazy, immutable description of a query against one Model. */
-export class Relation<M extends ModelBase, S = {}> {
+export class Relation<M extends Model, S = {}> {
   /** Type-only: the Model's scopes, so chained calls keep their scope methods. */
   declare readonly [scopeTypes]?: S;
 
@@ -703,7 +703,7 @@ export class Relation<M extends ModelBase, S = {}> {
 }
 
 /** What a Relation is made from; opaque outside the library. */
-interface RelationParts<M extends ModelBase> {
+interface RelationParts<M extends Model> {
   executor: Executor;
   model: ModelClass<M>;
   query?: QueryDescription;
@@ -711,4 +711,4 @@ interface RelationParts<M extends ModelBase> {
 }
 
 /** The Relation constructor's arguments, for the library's own `new`. */
-export type RelationArgs<M extends ModelBase> = [parts: RelationParts<M>];
+export type RelationArgs<M extends Model> = [parts: RelationParts<M>];

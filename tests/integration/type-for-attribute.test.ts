@@ -4,7 +4,7 @@ import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 // One attribute per stored form: ISO text, an integer in seconds and in milliseconds, and the
 // other types. The conversions alone are tested without a database, in tests/unit.
-class Post extends Model({
+class Post extends Model.define({
   id: { type: "integer", null: false },
   title: "string",
   publishedAt: { type: "datetime", column: "published_at" },

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-pl
 import { connect, Model } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class Account extends Model({
+class Account extends Model.define({
   id: { type: "integer", null: false },
   isActive: "boolean",
   externalAccountId: "string",

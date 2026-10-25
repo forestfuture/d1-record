@@ -4,7 +4,7 @@ import { connect, Model } from "../../src/index.ts";
 import { objectKeys } from "../support/json-values.ts";
 import { PURE_RUNS } from "../support/properties.ts";
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   role: "string",

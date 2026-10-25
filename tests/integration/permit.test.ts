@@ -10,7 +10,7 @@ import {
 import { connect, Model, modelFor, UnknownAttribute } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   role: "string",
@@ -79,7 +79,7 @@ describe("Model.permit", () => {
 
   test("subclasses and an app's base class have it", () => {
     class Admin extends User {}
-    class Base extends Model.Base {}
+    class Base extends Model {}
     const ApplicationRecord = modelFor(
       { users: { attributes: { id: "integer", role: "string" }, primaryKey: "id" } } as const,
       Base,

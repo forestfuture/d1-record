@@ -11,7 +11,7 @@ const hooks: Partial<
   >
 > = {};
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: "string",
   role: "string",

@@ -17,7 +17,7 @@ const declared = {
   settings: "json",
 } as const;
 
-class Sample extends Model({ id: { type: "integer", null: false }, ...declared }) {
+class Sample extends Model.define({ id: { type: "integer", null: false }, ...declared }) {
   static tableName = "samples";
 }
 

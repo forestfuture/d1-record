@@ -3,7 +3,7 @@ import { attributeFor } from "./attribute.ts";
 import type { CompiledSql } from "./compiler.ts";
 import type { Executor } from "./executor.ts";
 import { selectFor, sendTogether, type Rows } from "./load.ts";
-import { hydrate, type ModelBase, type ModelClass } from "./model.ts";
+import { hydrate, type Model, type ModelClass } from "./model.ts";
 import { LinkedTo, mergeTrees, type IncludeTree, type QueryDescription } from "./query.ts";
 import { state } from "./record-state.ts";
 import { preloadQuery, type Scoped } from "./relation.ts";
@@ -18,7 +18,7 @@ export interface PreloadPlan {
    * made from), then preloads in another round trip what couldn't be planned.
    */
   attach(
-    records: readonly (readonly ModelBase[])[],
+    records: readonly (readonly Model[])[],
     rows: readonly Rows[],
     executor: Executor,
   ): Promise<void>;
@@ -28,7 +28,7 @@ export interface PreloadPlan {
  * Whose records a plan starts from: a query's, not yet sent, whose keys each association's
  * query selects with a subquery; or records already loaded, whose keys it binds.
  */
-type Owners = { query: QueryDescription } | { records: readonly ModelBase[] };
+type Owners = { query: QueryDescription } | { records: readonly Model[] };
 
 /**
  * Records of one Model, and the associations to preload for them. `written` is the part of
@@ -211,7 +211,7 @@ function linkedQuery(
 /** `relation`, of `association`'s targets, in its order, as a preload: none for a `none()`. */
 function scopedQuery(
   association: ResolvedAssociation,
-  relation: Scoped<ModelBase>,
+  relation: Scoped<Model>,
 ): QueryDescription | undefined {
   const query = association.inOrder(relation)[preloadQuery](association.label);
   return query.none ? undefined : query;
@@ -241,7 +241,7 @@ function splitRepeated(
  */
 async function attachSteps(
   { steps, afterwards }: Planning,
-  records: readonly (readonly ModelBase[])[],
+  records: readonly (readonly Model[])[],
   rows: readonly Rows[],
   executor: Executor,
 ): Promise<void> {
@@ -288,9 +288,9 @@ function targetsOf(
  * first, or null).
  */
 function attach(
-  records: readonly ModelBase[],
+  records: readonly Model[],
   association: ResolvedAssociation,
-  targets: readonly ModelBase[],
+  targets: readonly Model[],
 ): void {
   const { name, definition, ownerAttribute, target, targetAttribute } = association;
   const byKey = groupBy(targets, targetAttribute);
@@ -307,8 +307,8 @@ function attach(
 }
 
 /** Records grouped by one attribute's value, keeping their order. */
-function groupBy(records: readonly ModelBase[], attribute: string): Map<unknown, ModelBase[]> {
-  const groups = new Map<unknown, ModelBase[]>();
+function groupBy(records: readonly Model[], attribute: string): Map<unknown, Model[]> {
+  const groups = new Map<unknown, Model[]>();
   for (const record of records) {
     const key = record[state].read(attribute);
     const group = groups.get(key);

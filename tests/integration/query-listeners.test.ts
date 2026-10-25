@@ -16,7 +16,7 @@ vi.mock("cloudflare:workers", () => workers);
 
 // An app's base class with an app-wide listener (#78), as application-record.ts would declare it.
 const logged: QueryEvent[] = [];
-class Base extends Model.Base {
+class Base extends Model {
   static override binding = "DB";
   static override onQuery = (event: QueryEvent) => {
     logged.push(event);

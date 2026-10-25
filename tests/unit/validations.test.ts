@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { connect, Model } from "../../src/index.ts";
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: "string",
   role: "string",

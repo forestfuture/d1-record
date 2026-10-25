@@ -12,7 +12,7 @@ import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 const log: string[] = [];
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
 }) {
@@ -26,7 +26,7 @@ class User extends Model({
   }
 }
 
-class Post extends Model({
+class Post extends Model.define({
   id: { type: "integer", null: false },
   userId: "integer",
   title: { type: "string", null: false },
@@ -42,7 +42,7 @@ class Post extends Model({
   }
 }
 
-class Comment extends Model({
+class Comment extends Model.define({
   id: { type: "integer", null: false },
   postId: "integer",
   body: "string",
@@ -57,7 +57,7 @@ class Comment extends Model({
 
 let counter = 0;
 
-class ApiKey extends Model({
+class ApiKey extends Model.define({
   id: { type: "string", null: false, default: () => `key-${++counter}` },
   label: { type: "string", null: false },
 }) {
@@ -66,7 +66,7 @@ class ApiKey extends Model({
   accounts = hasMany(Account, { foreignKey: "externalAccountId" });
 }
 
-class Account extends Model({
+class Account extends Model.define({
   id: { type: "integer", null: false },
   externalAccountId: "string",
 }) {

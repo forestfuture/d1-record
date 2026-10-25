@@ -6,7 +6,7 @@ import type { ModelClass } from "./model.ts";
 import { underscore } from "./naming.ts";
 
 /**
- * The classes `Model({...})` makes; their `tableName` is inferred unless a subclass sets one.
+ * The classes `Model.define({...})` makes; their `tableName` is inferred unless a subclass sets one.
  * Module-level, but not request state (ADR-0003): derived only from the classes.
  */
 const bases = new WeakSet<object>();
@@ -28,7 +28,7 @@ const ignoring = new WeakMap<object, boolean>();
 
 /**
  * The name of the class that extends `base` directly, the one a table is named after, as in
- * Rails; empty when it has none (anonymous, `export default`, or `Model({...})` itself).
+ * Rails; empty when it has none (anonymous, `export default`, or `Model.define({...})` itself).
  */
 function className(base: object, model: object): string {
   let current = model;
@@ -109,7 +109,7 @@ export function ignoresColumns(model: object): boolean {
 }
 
 /**
- * An abstract base class (one extending `Model.Base` directly, like `ApplicationRecord`'s) has no
+ * An abstract base class (one extending `Model` directly, like `ApplicationRecord`'s) has no
  * table, as Rails' `abstract_class`: it's only inherited from, so using it is an `InvalidModel`.
  */
 export function rejectAbstract(model: ModelClass): void {

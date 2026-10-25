@@ -10,19 +10,19 @@ const AUTHORS = 200,
   COMMENTS = 5,
   RUNS = 30;
 
-class Comment extends Model({
+class Comment extends Model.define({
   id: { type: "string", null: false },
   postId: { type: "string", null: false },
   body: { type: "string", null: false },
 }) {}
-class Post extends Model({
+class Post extends Model.define({
   id: { type: "string", null: false },
   authorId: { type: "string", null: false },
   title: { type: "string", null: false },
 }) {
   comments = hasMany(Comment);
 }
-class Author extends Model({
+class Author extends Model.define({
   id: { type: "string", null: false },
   name: { type: "string", null: false },
 }) {

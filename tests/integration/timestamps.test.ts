@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-pl
 import { connect, ConstraintViolation, Model, type QueryEvent } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class ApiKey extends Model({
+class ApiKey extends Model.define({
   id: { type: "string", null: false },
   label: { type: "string", null: false },
   createdAt: "datetime",

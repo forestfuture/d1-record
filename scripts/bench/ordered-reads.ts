@@ -3,7 +3,7 @@
 import { Miniflare } from "miniflare";
 import { connect, Model, type QueryEvent } from "../../src/index.ts";
 
-class Post extends Model({
+class Post extends Model.define({
   id: { type: "string", null: false },
   authorId: { type: "string", null: false },
   title: { type: "string", null: false },

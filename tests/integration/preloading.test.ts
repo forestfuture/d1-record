@@ -11,7 +11,7 @@ import {
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
 }) {
@@ -21,7 +21,7 @@ class User extends Model({
   profile = hasOne(Profile, { foreignKey: "userId" });
 }
 
-class Post extends Model({
+class Post extends Model.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
@@ -34,7 +34,7 @@ class Post extends Model({
   static titled = this.scope((q, title: string) => q.where({ title }));
 }
 
-class Comment extends Model({
+class Comment extends Model.define({
   id: { type: "integer", null: false },
   postId: "integer",
   body: "string",
@@ -42,7 +42,7 @@ class Comment extends Model({
   static tableName = "comments";
 }
 
-class Profile extends Model({
+class Profile extends Model.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   bio: "string",

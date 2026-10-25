@@ -10,7 +10,7 @@ import {
 } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class User extends Model({
+class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   role: "string",
@@ -18,7 +18,7 @@ class User extends Model({
   static tableName = "users";
 }
 
-class Post extends Model({
+class Post extends Model.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
@@ -26,7 +26,7 @@ class Post extends Model({
   static tableName = "posts";
 }
 
-class Product extends Model({
+class Product extends Model.define({
   id: { type: "integer", null: false },
   name: { type: "string", null: false },
   priceCents: { type: "integer", null: false },

@@ -1,6 +1,6 @@
 import { Model } from "@forestfuture/d1-record";
 
-export class Invoice extends Model({
+export class Invoice extends Model.define({
   id: { type: "integer", null: false },
   total: { type: "integer", null: false },
   paidAt: { type: "datetime", storage: "unixSeconds" },

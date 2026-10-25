@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-pl
 import { connect, Model, sql } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-class Sample extends Model({
+class Sample extends Model.define({
   id: { type: "integer", null: false },
   label: "string",
   quantity: "integer",
@@ -14,7 +14,7 @@ class Sample extends Model({
   static tableName = "samples";
 }
 
-class JsonValue extends Model({
+class JsonValue extends Model.define({
   id: { type: "integer", null: false },
   checked: "json", // TEXT CHECK (json_valid(checked)), as D1 recommends
   value: "json", // declared JSON
