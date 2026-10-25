@@ -88,9 +88,9 @@ export function bindTable(
 }
 
 /** The table the nearest generated base class `model` extends (or is) is bound to, if any. */
-function boundTableOf(model: object): BoundTable | undefined {
+function boundTableOf(model: object): (BoundTable & { owner: object }) | undefined {
   const owner = ancestors(model).find((each) => boundTables.has(each));
-  return owner && boundTables.get(owner);
+  return owner && { ...boundTables.get(owner)!, owner };
 }
 
 /**
@@ -123,11 +123,11 @@ export function rejectAbstract(model: ModelClass): void {
 /** A Model must have a table name: its own, or one inferred from its class name. */
 export function requireTableName(model: ModelClass): void {
   const { table } = model;
-  const bound = boundTableOf(model)?.table;
-  if (bound !== undefined && table !== bound) {
+  const bound = boundTableOf(model);
+  if (bound !== undefined && table !== bound.table) {
     throw new InvalidModel(
-      `${model.name} sets table "${String(table)}", but its attributes are the ${bound} ` +
-        "table's; name the table in its base class's call instead (ApplicationRecord(\"…\"))",
+      `${model.name} sets table "${String(table)}", but its attributes are the ${bound.table} ` +
+        `table's, as ${(bound.owner as { name: string }).name}'s are; a subclass shares its parent's table`,
     );
   }
   if (typeof table === "string" && table !== "") return;

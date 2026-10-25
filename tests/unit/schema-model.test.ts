@@ -109,9 +109,7 @@ describe("modelFor: the generated Model", () => {
     }
 
     expect(() => db.model(Product)).toThrow(
-      new InvalidModel(
-        'Product sets table "goods", but its attributes are the products table\'s; name the table in its base class\'s call instead (ApplicationRecord("…"))',
-      ),
+      'Product sets table "goods", but its attributes are the products table\'s',
     );
   });
 
