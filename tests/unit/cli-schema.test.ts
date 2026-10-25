@@ -110,7 +110,8 @@ describe("schemaOf: from migrations to table schemas", () => {
     );
 
     expect(defaulted.tables).toEqual(plain.tables);
-    expect(fingerprintOf(defaulted.tables)).toBe(fingerprintOf(plain.tables));
+    const schema = (tables: typeof plain.tables) => ({ tables, binding: "DB", models: [] });
+    expect(fingerprintOf(schema(defaulted.tables))).toBe(fingerprintOf(schema(plain.tables)));
   });
 
   test("NOT NULL columns and the primary key are null: false", () => {

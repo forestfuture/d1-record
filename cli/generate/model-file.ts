@@ -18,9 +18,12 @@ export function modelFileName(className: string): string {
   return `${moduleName(className)}.ts`;
 }
 
-/** The class itself: `export class LineItem extends ApplicationRecord("line_items") { … }`. */
-function classSource({ className, table, associations, base }: ModelToWrite): string {
-  const head = `export class ${className} extends ${base.className}(${JSON.stringify(table)})`;
+/**
+ * The class itself: `export class LineItem extends ApplicationRecord { … }`. Its table,
+ * `line_items`, comes from its class name, as `g model` named the table.
+ */
+function classSource({ className, associations, base }: ModelToWrite): string {
+  const head = `export class ${className} extends ${base.className}`;
   if (associations.length === 0) return `${head} {}\n`;
   const fields = associations.map(
     ({ name, className: target }) => `  ${name} = belongsTo(${target});\n`,

@@ -1,5 +1,6 @@
 // Where each D1 database's migrations, schema and base class are, from the config and the options.
 // Shared by `d1-record schema`, the generators and the console.
+import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { classify, moduleName } from "./names.ts";
 import { readWranglerConfig, type DatabaseConfig } from "./wrangler.ts";
@@ -51,6 +52,12 @@ export function oneModelsFile(models: string): boolean {
 function modelsDirOf(cwd: string, models = defaultModels): string {
   const path = resolve(cwd, models);
   return oneModelsFile(models) ? dirname(path) : path;
+}
+
+/** The Model folder to watch, when it exists: `--models`'s, or the one holding its one file. */
+export function modelsFolders(cwd: string, models = defaultModels): string[] {
+  const folder = modelsDirOf(cwd, models);
+  return existsSync(folder) ? [folder] : [];
 }
 
 /** Bindings whose base classes would be the same (`DB` and `db` → `DbRecord`), as an error. */

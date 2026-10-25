@@ -2,27 +2,13 @@ import { readdirSync, readFileSync } from "node:fs";
 import { Miniflare } from "miniflare";
 import { afterAll, beforeAll, describe, expect, expectTypeOf, test, vi } from "vite-plus/test";
 import { runSchema } from "../../cli/schema/command.ts";
-import { belongsTo, connect, type QueryEvent } from "../../src/index.ts";
-import { ApplicationRecord } from "../fixtures/schema-project/src/models/application-record.ts";
+import { connect, type QueryEvent } from "../../src/index.ts";
+import { Listing } from "../fixtures/schema-project/src/models/listing.ts";
+import { Product } from "../fixtures/schema-project/src/models/product.ts";
+import { User } from "../fixtures/schema-project/src/models/user.ts";
+import { Visit } from "../fixtures/schema-project/src/models/visit.ts";
 
 const projectDir = new URL("../fixtures/schema-project/", import.meta.url).pathname;
-
-// Models declared from the generated schema, as a project's are.
-class User extends ApplicationRecord("users") {}
-class Product extends ApplicationRecord("products") {
-  user = belongsTo(User);
-}
-// The same table, with overrides and an ignored column.
-class Listing extends ApplicationRecord("products", {
-  available: "integer",
-  tagline: { null: false, default: () => "Listed" },
-  settings: false,
-}) {}
-// A table outside the migrations, declared in full through the same base class.
-class Visit extends ApplicationRecord({
-  id: { type: "integer", null: false },
-  path: { type: "string", null: false },
-}) {}
 
 describe("a schema generated from migrations", () => {
   let mf: Miniflare;
@@ -40,11 +26,13 @@ describe("a schema generated from migrations", () => {
   });
   afterAll(() => mf.dispose());
 
-  test("is current: the committed schema.ts is what its migrations generate", () => {
+  test("is current: the committed schema.ts is what its migrations and Models generate", async () => {
     const output: string[] = [];
 
     expect(
-      runSchema({ cwd: projectDir, out: "schema.ts", check: true }, (line) => output.push(line)),
+      await runSchema({ cwd: projectDir, out: "schema.ts", check: true }, (line) =>
+        output.push(line),
+      ),
     ).toBe(0);
   });
 
@@ -110,9 +98,8 @@ describe("a schema generated from migrations", () => {
     expect(events.map((event) => event.sql).join()).not.toContain("settings");
   });
 
-  test("an ignored column is never read through a Model extending a class that extends the bound base", async () => {
-    class ListingBase extends ApplicationRecord("products", { settings: false }) {}
-    class Featured extends ListingBase {}
+  test("an ignored column is never read through a subclass of the Model that ignores it", async () => {
+    class Featured extends Listing {}
     const events: QueryEvent[] = [];
     const db = connect(binding, { onQuery: (event) => events.push(event) });
     const user = await db.model(User).createOrThrow({ email: "edsger@example.com" });
@@ -140,8 +127,8 @@ describe("a schema generated from migrations", () => {
     expect((await db.model(Visit).find(visit.id)).path).toBe("/");
   });
 
-  test("what ApplicationRecord's Base declares, every Model has: a method, a scope, and a callback that runs first", async () => {
-    class Note extends ApplicationRecord("products") {
+  test("what ApplicationRecord declares, every Model has: a method, a scope, and a callback that runs first", async () => {
+    class Note extends Product {
       static {
         this.beforeSave(() => console.log("Note's own"));
       }

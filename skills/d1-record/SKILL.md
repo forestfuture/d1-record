@@ -39,7 +39,7 @@ Generated Models extend `ApplicationRecord`, with their attributes from the sche
 import { belongsTo, hasMany } from "@forestfuture/d1-record";
 import { ApplicationRecord } from "./application-record";
 
-export class User extends ApplicationRecord("users") {
+export class User extends ApplicationRecord {
   posts = hasMany(Post, { dependent: "destroy" }); // foreign key inferred: Post's userId
 
   static active = this.scope((q) => q.where({ isActive: true }));
@@ -49,7 +49,7 @@ export class User extends ApplicationRecord("users") {
   }
 }
 
-export class Post extends ApplicationRecord("posts") {
+export class Post extends ApplicationRecord {
   user = belongsTo(User); // foreign key inferred: userId
 }
 ```

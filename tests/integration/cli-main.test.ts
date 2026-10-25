@@ -1,12 +1,15 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, onTestFinished, test, vi } from "vite-plus/test";
 import { main } from "../../cli/main.ts";
+import { scratchDirs } from "../support/scratch.ts";
+
+// In the repo, so the Models the generators write find this repo's library, as an app's do.
+const scratch = scratchDirs();
 
 describe("the d1-record command line", () => {
-  test("schema runs with its options, and --help explains them", () => {
-    const cwd = mkdtempSync(join(tmpdir(), "d1-record-main-"));
+  test("schema runs with its options, and --help explains them", async () => {
+    const cwd = scratch("main-");
     mkdirSync(join(cwd, "migrations"));
     writeFileSync(join(cwd, "wrangler.jsonc"), '{ "d1_databases": [{ "binding": "DB" }] }');
     writeFileSync(join(cwd, "migrations/0001.sql"), "CREATE TABLE users (id INTEGER PRIMARY KEY);");
@@ -16,7 +19,7 @@ describe("the d1-record command line", () => {
     onTestFinished(() => inProject.mockRestore());
 
     const help = main(["--help"], (line) => output.push(line));
-    const generated = main(
+    const generated = await main(
       ["schema", "--config", join(cwd, "wrangler.jsonc"), "--out", join(cwd, "out.ts")],
       (line) => output.push(line),
     );
@@ -55,8 +58,8 @@ describe("the d1-record command line", () => {
     ]);
   });
 
-  test("g model and g migration run the generators, with their own options", () => {
-    const cwd = mkdtempSync(join(tmpdir(), "d1-record-main-"));
+  test("g model and g migration run the generators, with their own options", async () => {
+    const cwd = scratch("main-");
     writeFileSync(join(cwd, "wrangler.jsonc"), '{ "d1_databases": [{ "binding": "DB" }] }');
     const output: string[] = [];
     const print = (line: string) => output.push(line);
@@ -66,15 +69,17 @@ describe("the d1-record command line", () => {
     onTestFinished(() => inProject.mockRestore());
 
     expect(
-      main(
+      await main(
         ["g", "model", "Product", "name:string!", "--id", "integer", "--no-timestamps", ...config],
         print,
       ),
     ).toBe(0);
-    expect(main(["generate", "migration", "AddSkuToProducts", "sku", ...config], print)).toBe(0);
-    expect(main(["schema", "--models", "src/app/models", ...config], print)).toBe(0);
-    expect(main(["g", "model", "Tag", "--id", "uuid", ...config], print)).toBe(1);
-    expect(main(["g", "widget", "Tag", ...config], print)).toBe(1);
+    expect(await main(["generate", "migration", "AddSkuToProducts", "sku", ...config], print)).toBe(
+      0,
+    );
+    expect(await main(["schema", "--models", "src/app/models", ...config], print)).toBe(0);
+    expect(await main(["g", "model", "Tag", "--id", "uuid", ...config], print)).toBe(1);
+    expect(await main(["g", "widget", "Tag", ...config], print)).toBe(1);
 
     expect(output).toContain("Wrote src/app/models/application-record.ts");
     expect(output.filter((line) => line.startsWith("Wrote migrations"))).toEqual([

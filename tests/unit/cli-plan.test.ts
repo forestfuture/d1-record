@@ -35,6 +35,8 @@ function project(database: Partial<DatabaseSnapshot> = {}): ProjectSnapshot {
         hasBase: false,
         nestedMigrations: false,
         toolsFound: [],
+        models: [],
+        modelErrors: [],
         ...database,
       },
     ],
@@ -83,6 +85,43 @@ describe("planSchema: what d1-record schema writes and prints, from a snapshot",
     const plan = planSchema(project({ schema: written, hasBase: true }), true);
 
     expect(shown(plan)).toEqual({ files: [], lines: ["src/db/schema.ts is up to date"], code: 0 });
+  });
+
+  test("lists the Models found, adding each one's attributes to its class", () => {
+    const user = { className: "User", table: "users", file: `${cwd}/src/models/user.ts` };
+
+    const source = filesOf(planSchema(project({ models: [user] }), false))[0]!.source;
+
+    expect(source).toContain('  models: { User: "users" },');
+    expect(source).toContain('declare module "../models/user" {\n  interface User extends');
+  });
+
+  test("a Model file that can't be read writes nothing, and keeps the last good file", () => {
+    const error = "Couldn't load src/models/user.ts: Unexpected token";
+
+    const plan = planSchema(
+      project({ schema: "// schema: 0123456789ab\n", modelErrors: [error] }),
+      false,
+    );
+
+    expect(shown(plan)).toEqual({
+      files: [],
+      lines: [error, "Kept src/db/schema.ts as it was"],
+      code: 1,
+    });
+  });
+
+  test("with check, a Model the schema doesn't list makes it out of date", () => {
+    const written = filesOf(planSchema(project(), false))[0]!.source;
+    const user = { className: "User", table: "users", file: `${cwd}/src/models/user.ts` };
+
+    const plan = planSchema(project({ schema: written, hasBase: true, models: [user] }), true);
+
+    expect(shown(plan)).toEqual({
+      files: [],
+      lines: ["src/db/schema.ts is out of date: run `d1-record schema`"],
+      code: 1,
+    });
   });
 
   test("Drizzle's config files earn its notes with a new schema", () => {
