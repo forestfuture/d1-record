@@ -1,13 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, Model, Relation, type QueryEvent } from "../../src/index.ts";
+import { connect, Relation, type QueryEvent } from "../../src/index.ts";
+import { User } from "../fixtures/models/user.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
-
-class User extends Model.define({
-  id: { type: "integer", null: false },
-  email: { type: "string", null: false },
-}) {
-  static table = "users";
-}
 
 describe("reading records", () => {
   let binding: TestDatabase;
