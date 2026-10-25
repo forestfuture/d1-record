@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { Miniflare } from "miniflare";
 
-const fixtureSchema = new URL("../fixtures/schema.sql", import.meta.url);
+const fixtureSchema = new URL("../fixtures/migrations/db/0001_schema.sql", import.meta.url);
 
 export type TestDatabase = Awaited<ReturnType<Miniflare["getD1Database"]>>;
 

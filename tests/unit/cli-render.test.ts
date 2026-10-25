@@ -114,6 +114,21 @@ export const schema = {
     expect(fingerprintOf(modeled)).not.toBe(fingerprintOf(first));
   });
 
+  test("a list of Models too long for a line has one a line, as the formatter writes it", () => {
+    const tables = tablesOf("CREATE TABLE line_items (id INTEGER PRIMARY KEY);");
+    const models = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf"].map(
+      (name) => ({
+        className: `${name}LineItem`,
+        table: "line_items",
+        module: "./models",
+      }),
+    );
+
+    expect(renderSchema(schemaFor(tables, models), "migrations/")).toContain(
+      '  models: {\n    AlphaLineItem: "line_items",\n    BravoLineItem: "line_items",\n',
+    );
+  });
+
   test("the fingerprint is the same whichever order the Models were found in", () => {
     const tables = tablesOf(
       "CREATE TABLE a (id INTEGER PRIMARY KEY); CREATE TABLE b (id INTEGER PRIMARY KEY);",

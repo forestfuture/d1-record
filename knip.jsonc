@@ -8,8 +8,8 @@
       // exported as d1-record schema writes it.
       "ignore": [
         "tests/fixtures/schema-project/schema.ts",
-        "tests/fixtures/schema.ts",
-        "tests/fixtures/logs-schema.ts",
+        "tests/fixtures/DB.ts",
+        "tests/fixtures/LOGS.ts",
       ],
       "typescript": {
         "config": [
