@@ -13,7 +13,7 @@ Models, validations, callbacks, associations, scopes, and dirty tracking all fol
 const users = await User.where({ isActive: true }).toArray();
 ```
 
-A Model queries by itself. Its binding, `static override binding = "DB"` on your app’s base class, plays the part of `connects_to`.
+A Model queries by itself. The binding in the generated schema its base class holds plays the part of `connects_to`.
 
 A Worker serves many requests at once from one isolate, so nothing about a request is stored on the class. For a D1 Session or per-request logging, run the request in [`withDatabase`](./connecting#using-the-request-s-database). A record keeps the database it came from.
 
@@ -31,7 +31,7 @@ Most names are Rails’ own, in camelCase:
 | `changed?`, `saved_change_to_email?`     | `isChanged()`, `hasSavedChangeTo("email")`        |
 | `rails generate model Post title:string` | `npx d1-record g model Post title:string`         |
 | `db/schema.rb`, `rails db:schema:dump`   | `src/db/schema.ts`, `npx d1-record schema`        |
-| `class Post < ApplicationRecord`         | `class Post extends ApplicationRecord("posts")`   |
+| `class Post < ApplicationRecord`         | `class Post extends ApplicationRecord`            |
 | `scope :active, -> { … }`                | `static active = this.scope((q) => …)`            |
 | `has_many :posts, dependent: :destroy`   | `posts = hasMany(Post, { dependent: "destroy" })` |
 | `post.author = user`                     | `post.author.set(user)`                           |

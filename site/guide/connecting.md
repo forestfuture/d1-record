@@ -20,7 +20,7 @@ Each Model names the D1 binding it queries, so a Model queries by itself during 
 
 <<< @/snippets/guide/connecting.ts#binding{ts}
 
-`d1-record schema` sets the binding on your app’s base class from your Wrangler config’s `d1_databases`, as `static override binding = "DB"`.
+`d1-record schema` writes the binding into the generated schema your app’s base class holds, from your Wrangler config’s `d1_databases`.
 
 Records remember their database, so `user.save()` and `user.posts()` use the same one later. Build records with `User.build(…)`: a record made with `new User()` has no database, and throws `NoDatabase` when it needs one.
 

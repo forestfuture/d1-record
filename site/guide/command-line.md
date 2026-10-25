@@ -25,18 +25,18 @@ It applies your migrations, in order, to an in-memory SQLite database, and write
 | Option               |                                                                                                    |
 | -------------------- | -------------------------------------------------------------------------------------------------- |
 | `--check`            | Write nothing: fail (exit 1) if the schema file is out of date. For CI.                            |
-| `--watch`            | Regenerate whenever a migration changes.                                                           |
+| `--watch`            | Regenerate whenever a migration or a Model file changes.                                           |
 | `--out <file>`       | Write the schema here instead. With several databases, a folder for one file each.                 |
 | `--migrations <dir>` | Read migrations from here instead of the Wrangler config’s folder (one database only).             |
-| `--models <dir>`     | Where `application-record.ts` goes (`src/models/` by default).                                     |
+| `--models <dir>`     | Where your Models and `application-record.ts` are (`src/models/` by default).                      |
 | `--config <file>`    | Use this Wrangler config instead of finding `wrangler.jsonc`, `wrangler.json`, or `wrangler.toml`. |
 
-**What it reads:** each entry of the Wrangler config’s `d1_databases`, with its `binding`, `migrations_dir` (default `migrations/`), `migrations_pattern` (for migrations in folders), and `migrations_table` (left out of the schema). Migrations apply in file-name order, as Wrangler applies them.
+**What it reads:** each entry of the Wrangler config’s `d1_databases`, with its `binding`, `migrations_dir` (default `migrations/`), `migrations_pattern` (for migrations in folders), and `migrations_table` (left out of the schema). Migrations apply in file-name order, as Wrangler applies them. It also loads the Model files in `--models`, using your project’s own `@forestfuture/d1-record`, to find each Model and its table.
 
 **What it writes:**
 
-- **The schema file:** each table’s attributes, as a document, with a header naming the migrations and a fingerprint of the schema. `--check` compares fingerprints, so formatting the file doesn’t make it stale.
-- **The base class**, `application-record.ts`, when it’s missing: `ApplicationRecord = modelFor(tables, Base)`, with the binding set on `Base`. It’s never written over, so it’s yours to edit.
+- **The schema file:** each table’s attributes, as a document, with a header naming the migrations and a fingerprint. Then `schema`, with the binding, every table, and your Models, and type declarations adding each table’s attributes to its Model. `--check` compares fingerprints, so formatting the file doesn’t make it stale, but adding or renaming a Model does.
+- **The base class**, `application-record.ts`, when it’s missing: `abstract class ApplicationRecord extends Model`, holding the schema. It’s never written over, so it’s yours to edit.
 - **With several databases:** one schema file per binding (`src/db/DB.ts`, `src/db/LOGS.ts`), and one base class each, named after it (`DB` → `DbRecord`, `LOGS` → `LogsRecord`).
 
 ::: rails Compared with Rails
@@ -49,9 +49,10 @@ The schema file plays the part of Rails’ `schema.rb`, and each base class is n
 - A file beside a folder of the same name (`src/db/schema.ts` next to `src/db/schema/`), which would take over that folder’s imports.
 - Two bindings whose names would give the same base class (`DB` and `db`).
 - A migration SQLite rejects: the error names the file, and the last good schema is kept.
+- A Model whose table the migrations don’t make, a Model file that fails to load, or a Model exported as `default`. The error names the file, and the last good schema is kept.
 
 ::: warning Coming from Drizzle or Prisma?
-Their schemas often live at `src/db/schema.ts` or `src/db/schema/`. Write d1-record’s somewhere else, with `--out src/db/d1-record.ts`, and, if `application-record.ts` already exists, point its `import { tables }` at it (a new one is written importing the right file).
+Their schemas often live at `src/db/schema.ts` or `src/db/schema/`. Write d1-record’s somewhere else, with `--out src/db/d1-record.ts`, and, if `application-record.ts` already exists, point its `import { schema }` at it (a new one is written importing the right file).
 :::
 
 ## `d1-record console`
@@ -80,7 +81,7 @@ It reads TypeScript Models and uses your project’s own `wrangler` and `@forest
 
 Each column becomes an attribute by the first of these that applies:
 
-1. **An override in the Model:** `ApplicationRecord("products", { available: "boolean" })`.
+1. **An override in the Model:** `static override attributes = { available: "boolean" } as const`.
 2. **The column’s declared type:**
 
    | Declared as                                         | Attribute                                                      |

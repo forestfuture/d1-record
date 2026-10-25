@@ -1,5 +1,5 @@
 ---
-description: 'Reference for Models: ApplicationRecord("table") and overrides, declaring attributes yourself with Model({...}), table names, attributes and types, casting assigned values, building records, permit, timestamps, change tracking, SQL fragments, serialization, and filtered attributes.'
+description: "Reference for Models: extending ApplicationRecord, overriding and narrowing attributes, declaring attributes yourself with define, table names, attributes and types, casting assigned values, building records, permit, timestamps, change tracking, SQL fragments, serialization, and filtered attributes."
 ---
 
 # Models
@@ -8,25 +8,50 @@ A Model describes one table. Its attributes come from your migrations, through t
 
 ## Defining Models
 
-Extend your app’s `ApplicationRecord`, naming the table:
+Extend your app’s `ApplicationRecord`:
 
 <<< @/snippets/guide/models.ts#generated{ts}
 
-The table’s attributes, primary key, and types come from `src/db/schema.ts`, which [`d1-record schema`](./command-line#d1-record-schema) generates. A table that isn’t in the schema is a compile error.
+The class name names the table, so `Product` reads and writes `products`. The table’s attributes, primary key, and types come from `src/db/schema.ts`.
 
-::: warning TIP
-The table is an argument, rather than inferred from the class name, so a Model keeps working when a bundler renames its class.
-:::
+[`d1-record schema`](./command-line#d1-record-schema) writes that file from your migrations and your Models. Run it after you add a Model or a migration. [`d1-record g model`](./generators) runs it for you.
 
-Subclasses share the table: setting another `tableName` throws `InvalidModel`. You can still set `static primaryKey`, as long as it names an attribute.
+A subclass shares its parent’s table:
+
+```ts
+import { Product } from "./models";
+
+export class FeaturedProduct extends Product {}
+```
+
+You can still set `static primaryKey`, as long as it names an attribute.
+
+### Where `ApplicationRecord` comes from
+
+The first time you run `d1-record schema`, it writes `src/models/application-record.ts`:
+
+```ts
+import { Model } from "@forestfuture/d1-record";
+import { schema } from "../db/schema";
+
+export abstract class ApplicationRecord extends Model {
+  static override schema = schema;
+}
+```
+
+It’s an ordinary class, and yours to edit. The schema it holds gives each Model its attributes and the D1 binding its queries use. Methods, callbacks, and scopes you write on it are every Model’s. See [Shared behavior](./shared-behavior).
+
+`ApplicationRecord` has no table of its own, so you can’t query it.
 
 ### Overriding attributes
 
-Generated attributes are usually all you need. When a column holds something its type doesn’t say, such as a boolean in a plain `INTEGER`, override the attribute with a second argument:
+Generated attributes are usually all you need. When a column holds something its type doesn’t say, such as a boolean in a plain `INTEGER`, override the attribute in `static attributes`:
 
 <<< @/snippets/guide/overrides.ts#overrides{ts}
 
-Overrides are keyed by attribute name, so an unknown name is a compile error:
+Write the object `as const`, so TypeScript keeps each type name. Without it, the class is a compile error.
+
+An override is one of these:
 
 | Override                                  | Does                                                                                                  |
 | ----------------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -34,24 +59,38 @@ Overrides are keyed by attribute name, so an unknown name is a compile error:
 | `{ type?, null?, default?, generateId? }` | Replaces those parts of the generated attribute; `null: false` makes it non-null in TypeScript        |
 | `false`                                   | Ignores the column: it’s never typed, read, or written, and queries name their columns instead of `*` |
 
-An override can’t change a column, add an attribute, or ignore the primary key: each throws `InvalidModel`.
+An override of an attribute the table doesn’t have throws `InvalidModel`, and `d1-record schema` reports it. So does an override that changes a column or ignores the primary key.
 
 - **Changing a `type`** drops the generated default or `generateId`, so the column’s own default applies unless you give one.
 - **A `default` and `generateId`** replace each other, so an attribute has one or the other. `generateId` is only for strings.
 - **A `default`** isn’t type-checked yet ([#74](https://github.com/forestfuture/d1-record/issues/74)). One that returns a value the type can’t cast throws `TypeError` when a record is built.
 - **Ignoring a `NOT NULL` column** without a default makes inserts fail, so give it a default in a migration first.
 
+### Narrowing types
+
+To give an attribute a narrower type than its column’s, declare it in the class:
+
+```ts
+import { ApplicationRecord } from "./application-record";
+
+export class Post extends ApplicationRecord {
+  declare status: "draft" | "published";
+}
+```
+
+`post.status` is now typed `"draft" | "published"`, when you read it and when you assign it. `where` and `build` still take any string, and nothing checks the value read from D1. To check what’s saved, add a [validation](./validations): `this.validates("status", { inclusion: ["draft", "published"] })`.
+
 ## Declaring attributes yourself
 
-For a view, or a table your migrations don’t make, declare the attributes with `Model({...})`. TypeScript infers the record’s properties from the object:
+For a view, or a table your migrations don’t make, declare the attributes with `define`. TypeScript infers the record’s properties from the object:
 
 <<< @/snippets/guide/models.ts#declare{ts}
 
-An attribute is a type name, or `{ type, column?, null?, default? }`. `ApplicationRecord({...})` does the same, with your base class’s shared behavior.
+An attribute is a type name, or `{ type, column?, null?, default? }`. To share your base class’s behavior and binding, call `define` on it: `ApplicationRecord.define({...})`.
 
 ## Naming tables
 
-A Model declared with `Model({...})` takes its table name from its class: snake_case, pluralized.
+A Model takes its table name from its class: snake_case, pluralized.
 
 | Class      | Table        |
 | ---------- | ------------ |
@@ -61,24 +100,24 @@ A Model declared with `Model({...})` takes its table name from its class: snake_
 | `Person`   | `people`     |
 | `Sheep`    | `sheep`      |
 
-To use another name, set `static tableName`:
+To use another name, set `static table`:
 
 ```ts
-import { Model } from "@forestfuture/d1-record";
+import { ApplicationRecord } from "./application-record";
 
-export class Account extends Model({ id: "string" }) {
-  static tableName = "billing_accounts";
+export class Account extends ApplicationRecord {
+  static override table = "billing_accounts";
 }
 ```
 
-A subclass shares its parent’s table. An anonymous class, such as `export default class extends Model(...)`, must set `static tableName`.
+A subclass shares its parent’s table. A class with no name to take one from must set `static table`.
 
 ::: warning TIP
-Pluralization follows English rules, quirks included: `Human` becomes `humen` and `Leaf` becomes `leafs`. There’s no way to add your own rules, so set `tableName` instead.
+Pluralization follows English rules, quirks included: `Human` becomes `humen` and `Leaf` becomes `leafs`. There’s no way to add your own rules, so set `table` instead.
 :::
 
 ::: details Bundlers and class names
-Wrangler keeps class names by default, even when minifying. If a bundler renames `User` to `e`, the first query throws `InvalidModel`, saying the table `es` doesn’t exist and that its name was inferred from the class name. Set `static tableName`, or keep class names in your bundler’s settings.
+Wrangler keeps class names by default, even when minifying. If a bundler renames `User` to `e`, the first query throws `InvalidModel`, because no Model named `e` is in the generated schema. Keep class names in your bundler’s settings.
 :::
 
 ## Mapping columns
@@ -229,8 +268,10 @@ To use another kind of id across your app, override `generateId` on your app’s
 ```ts
 import { Model } from "@forestfuture/d1-record";
 import { uuidv7 } from "uuidv7";
+import { schema } from "../db/schema";
 
-class Base extends Model.Base {
+export abstract class ApplicationRecord extends Model {
+  static override schema = schema;
   static override generateId = () => uuidv7();
 }
 ```
@@ -240,10 +281,14 @@ class Base extends Model.Base {
 To generate another string attribute the same way, turn it on with an override:
 
 ```ts
-export class Post extends ApplicationRecord("posts", { publicId: { generateId: true } }) {}
+import { ApplicationRecord } from "./application-record";
+
+export class Post extends ApplicationRecord {
+  static override attributes = { publicId: { generateId: true } } as const;
+}
 ```
 
-In a Model you declare yourself, write it on the attribute: `id: { type: "string", null: false, generateId: true }`.
+In a Model declared with `define`, write it on the attribute: `id: { type: "string", null: false, generateId: true }`.
 
 ::: warning TIP
 For one attribute with its own format, use a `default`: ``shareToken: { default: () => `share_${uuidv7()}` }``. A value made from other attributes, such as a slug, belongs in a [callback](./callbacks), since `generateId` never sees the record.
@@ -384,7 +429,9 @@ To share methods, callbacks, and scopes across every Model, write them on your a
 
 The first time a Model is used, by its first query or `db.model(X)`, its declaration is checked. It throws `InvalidModel` for:
 
-- No table name: an empty `tableName`, or a class with no name to infer one from.
+- A Model `d1-record schema` hasn’t seen, or whose table has changed since. Run it again.
+- No table name: an empty `table`, or a class with no name to infer one from.
+- An override of an attribute the table doesn’t have.
 - A `primaryKey` that isn’t an attribute.
 - An attribute named like a record method, such as `save` or `attributes`.
 - A class field that hides an attribute, such as `email!: string` in the class body.

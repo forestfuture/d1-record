@@ -20,7 +20,7 @@ Rails doesn’t keep its connection on the class either: each thread checks one 
 A query finds its database in one of three ways, in this order:
 
 1. **The request’s database.** Inside `withDatabase(connect(env.DB, { session, onQuery }), fn)`, everything `fn` awaits uses that database, kept in the request’s `AsyncLocalStorage`, never on a class. It’s matched to Models by binding, so a request can open several.
-2. **The Model’s binding.** Outside `withDatabase`, a Model uses the D1 binding its base class names (`static binding = "DB"`), read from `cloudflare:workers`. The binding is the same object for every request, and the database made for it holds nothing per request (no Session, no listener), so sharing it is safe. This is what makes `Product.find(id)` work with no setup.
+2. **The Model’s binding.** Outside `withDatabase`, a Model uses the D1 binding named in the generated schema its base class holds, read from `cloudflare:workers`. The binding is the same object for every request, and the database made for it holds nothing per request (no Session, no listener), so sharing it is safe. This is what makes `Product.find(id)` work with no setup.
 3. **An explicit database.** `connect(env.DB).model(Product)` always uses that database, whatever `withDatabase` says. It suits code that passes its database around, or uses two at once.
 
 Most apps only ever use the second. The first exists for what belongs to a request: Sessions, per-request logging, and tests, which run outside a Worker and have no binding to find.

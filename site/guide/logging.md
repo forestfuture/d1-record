@@ -79,11 +79,11 @@ To see one while debugging, leave it out of the list in development:
 
 ```ts
 import { Model } from "@forestfuture/d1-record";
+import { schema } from "../db/schema";
 
-class Base extends Model.Base {
-  static override filterAttributes = Model.Base.filterAttributes.filter(
-    (entry) => entry !== "email",
-  );
+export abstract class ApplicationRecord extends Model {
+  static override schema = schema;
+  static override filterAttributes = Model.filterAttributes.filter((entry) => entry !== "email");
 }
 ```
 

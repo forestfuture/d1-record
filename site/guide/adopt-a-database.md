@@ -39,7 +39,7 @@ Without `--out`, d1-record refuses to write over a file it didn’t write, or be
 
 With D1, Prisma’s migrations are usually Wrangler’s own: files in `migrations/`, written by `prisma migrate diff`. `npx d1-record schema` reads them as they are.
 
-Prisma names tables after its models, such as `User`, and columns in camelCase, such as `createdAt`. d1-record keeps both names, so the Model is `ApplicationRecord("User")`, with attributes such as `createdAt`.
+Prisma names tables after its models, such as `User`, and columns in camelCase, such as `createdAt`. d1-record keeps both names, so the Model sets its table, `static override table = "User"`, and has attributes such as `createdAt`.
 
 ::: warning Two date formats in one column
 Prisma writes a `DateTime` as `2026-10-12T06:38:30.325+00:00`, and a `DEFAULT CURRENT_TIMESTAMP` fills `2026-10-12 06:38:30`. d1-record reads both as UTC, but SQLite compares dates as text, so a column with both needs the steps in [Comparing dates in two forms](#comparing-dates-in-two-forms).

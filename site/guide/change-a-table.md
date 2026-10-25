@@ -48,7 +48,11 @@ Remove a column in the opposite order to adding one, so the code stops using it 
 1. Ignore the column in the Model, remove the code that uses it, and deploy:
 
    ```ts
-   export class User extends ApplicationRecord("users", { bio: false }) {}
+   import { ApplicationRecord } from "./application-record";
+
+   export class User extends ApplicationRecord {
+     static override attributes = { bio: false } as const;
+   }
    ```
 
 2. Generate the migration, and apply it with `--remote`:

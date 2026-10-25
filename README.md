@@ -51,7 +51,7 @@ Along with the migrations, it writes `src/db/schema.ts` (every table’s columns
 
 ### 3. Add behavior
 
-A Model’s attributes come from the schema, so it declares only behavior: associations, scopes, validations, and callbacks.
+A Model’s table comes from its class name, and its attributes from the schema, so it declares only behavior: associations, scopes, validations, and callbacks.
 
 ```ts
 // src/models/user.ts
@@ -59,7 +59,7 @@ import { hasMany } from "@forestfuture/d1-record";
 import { ApplicationRecord } from "./application-record";
 import { Post } from "./post";
 
-export class User extends ApplicationRecord("users") {
+export class User extends ApplicationRecord {
   posts = hasMany(Post, { dependent: "destroy" }); // posts.user_id points here
 
   static active = this.scope((q) => q.where({ isActive: true }));
@@ -79,7 +79,7 @@ import { belongsTo } from "@forestfuture/d1-record";
 import { ApplicationRecord } from "./application-record";
 import { User } from "./user";
 
-export class Post extends ApplicationRecord("posts") {
+export class Post extends ApplicationRecord {
   user = belongsTo(User);
 }
 ```
@@ -131,7 +131,7 @@ await batch([
 
 ## What’s in it
 
-- **Models** whose attributes come from your migrations (`class Post extends ApplicationRecord("posts")`), typed, with Rails-style generators; or declared with `Model({...})`: camelCase attributes over snake_case columns, defaults (including app-generated keys), timestamps, JSON, and dates converted both ways.
+- **Models** whose attributes come from your migrations (`class Post extends ApplicationRecord {}`), typed, with Rails-style generators; or declared with `Model.define({...})`: camelCase attributes over snake_case columns, defaults (including app-generated keys), timestamps, JSON, and dates converted both ways.
 - **Queries**: `where`/`whereNot`/`or`/`merge`, comparisons (`gte`, `between`, …), ordering (`nulls: "last"`, `reorder`), pagination (`paginate()`: a page and its total in one round trip), `select`, `distinct`, `pluck`, `count`, `size`, `exists`, named scopes, and hand-written conditions only through the `sql` tagged template, so values are always bound.
 - **Persistence**: `save`/`create`/`update`/`destroy` with `…OrThrow` variants, validations (`presence`, `length`, `format`, `inclusion`, `numericality`, `uniqueness`) with error messages you can change, the full Rails callback lifecycle with `abort()`, dirty tracking (`changes`, `attributeWas`, `savedChangeTo`, …).
 - **Associations**: `belongsTo`, `hasMany`, `hasOne` with scopes, `dependent:` strategies, preloading with `includes` (one query per association, never N+1, and the whole tree in one round trip), caching until reload, autosave, and `build`/`create`/`set` through the association.
