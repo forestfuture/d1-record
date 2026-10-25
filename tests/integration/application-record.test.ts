@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 import { connect } from "../../src/index.ts";
+import { Customer } from "../fixtures/models/customer.ts";
 import { Post } from "../fixtures/models/post.ts";
 import { User } from "../fixtures/models/user.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
@@ -49,5 +50,14 @@ describe("Models extending the app's base class", () => {
 
     expect(post.attributes()).toMatchObject({ title: "Draft", published: 0 });
     expect(post).not.toHaveProperty("admin");
+  });
+
+  test("static table names a table the class name doesn't give", async () => {
+    const customer = await Customer.create({ htmlUrl: "https://example.com" });
+
+    const found = await Customer.find(customer.id);
+
+    expect(found.htmlUrl).toBe("https://example.com");
+    expect(Customer.table).toBe("accounts");
   });
 });

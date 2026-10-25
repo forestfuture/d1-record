@@ -24,14 +24,26 @@ export const posts = {
   updatedAt: "datetime",
 } as const;
 
+/** accounts */
+export const accounts = {
+  id: { type: "integer", null: false },
+  isActive: "boolean",
+  externalAccountId: "string",
+  htmlUrl: "string",
+  userId: "integer",
+  sha256Hash: "string",
+  personIdentifier: "string",
+} as const;
+
 /** This database's binding, tables, and the Models the schema was generated for. */
 export const schema = {
   binding: "DB",
   tables: {
     users: { attributes: users, primaryKey: "id" },
     posts: { attributes: posts, primaryKey: "id" },
+    accounts: { attributes: accounts, primaryKey: "id" },
   },
-  models: { User: "users", Post: "posts" },
+  models: { User: "users", Post: "posts", Customer: "accounts" },
 } as const;
 
 declare module "./models/user.ts" {
@@ -40,4 +52,8 @@ declare module "./models/user.ts" {
 
 declare module "./models/post.ts" {
   interface Post extends TableAttributes<typeof posts> {}
+}
+
+declare module "./models/customer.ts" {
+  interface Customer extends TableAttributes<typeof accounts> {}
 }
