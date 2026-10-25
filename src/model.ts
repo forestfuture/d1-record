@@ -24,7 +24,13 @@ import { destroyLifecycle, reloadRecord, saveLifecycle, validateRecord } from ".
 import { associationOf, newRecord } from "./association-fields.ts";
 import { RecordStatement } from "./record-statement.ts";
 import { inferTableNames } from "./table-names.ts";
-import { defineGeneratedStatics, type DatabaseSchema } from "./generated-model.ts";
+import {
+  defineGeneratedStatics,
+  type AsSpecs,
+  type AttributeOverrides,
+  type DatabaseSchema,
+  type OverriddenSpecs,
+} from "./generated-model.ts";
 import { RecordState, state, type Changes } from "./record-state.ts";
 import { inspectCustom, type Inspect, type InspectOptions } from "./inspect-support.ts";
 import { inspectRecord } from "./record-inspect.ts";
@@ -117,6 +123,11 @@ export class Model extends ModelStatics {
    * Models built on it have its tables' attributes, and query its binding.
    */
   declare static schema?: DatabaseSchema;
+  /**
+   * A generated Model's changes to its table's attributes, as in the schema: `static override
+   * attributes = { available: "boolean", internalNotes: false } as const`.
+   */
+  declare static attributes?: AttributeOverrides;
   /**
    * The D1 binding this Model queries when there's no request database (`withDatabase`), as
    * Rails' `connects_to`: `static override binding = "DB"`, usually on the app's base class.
@@ -532,9 +543,14 @@ defineGeneratedStatics(Model);
 // and relationFor makes each Model ready with readyModel (hoisted, so it exists already).
 useModelBase(Model, readyModel);
 
-/** What a generated declaration adds to a Model's records: its table's attributes, typed. */
-export type TableAttributes<A extends AttributeSpecs> = AttributeProperties<A> & {
-  readonly [attributeTypes]?: AttributeProperties<A>;
+/**
+ * What a generated declaration adds to a Model's records: its table's attributes `A`, with the
+ * Model's `static attributes` overrides `O` applied, typed.
+ */
+export type TableAttributes<A extends AttributeSpecs, O = {}> = AttributeProperties<
+  AsSpecs<OverriddenSpecs<A, O>>
+> & {
+  readonly [attributeTypes]?: AttributeProperties<AsSpecs<OverriddenSpecs<A, O>>>;
 };
 
 /** A class to build Models on: `Model`, or an app's class extending it (`ApplicationRecord`'s). */
