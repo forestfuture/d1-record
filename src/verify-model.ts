@@ -3,11 +3,12 @@
 import { ancestors } from "./ancestors.ts";
 import { associationsOf, declarationIn, probeOf } from "./association-fields.ts";
 import { attributesNamedInMessages } from "./error-messages.ts";
-import { seal } from "./declarations.ts";
+import { declared, seal } from "./declarations.ts";
 import { InvalidModel } from "./errors.ts";
 import { Model, type ModelClass } from "./model.ts";
 import { specProblem } from "./spec-keys.ts";
-import { isGenerated } from "./generated-model.ts";
+import { isGenerated, settleGenerated } from "./generated-model.ts";
+import { checkValidatedNames } from "./validations.ts";
 import { rejectAbstract, requireTableName } from "./table-names.ts";
 
 // Module-level, but not request state (ADR-0003): it only remembers which Model
@@ -17,11 +18,13 @@ const verified = new WeakSet<object>();
 /** Checks a Model's declaration the first time it's used; throws `InvalidModel`. */
 export function verifyModel(model: ModelClass): void {
   if (verified.has(model)) return;
+  settleGenerated(model);
   if (!isGenerated(model)) rejectAbstract(model);
   requireTableName(model);
   requirePrimaryKeyAttribute(model);
   rejectReservedAttributeNames(model);
   rejectBadSpecs(model);
+  for (const validation of declared(model, "validations")) checkValidatedNames(model, validation);
   rejectUnknownHiddenAttributes(model);
   rejectUnknownMessageNames(model);
   rejectShadowingFields(model);

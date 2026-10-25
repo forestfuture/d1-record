@@ -1,5 +1,6 @@
 // Validators (`presence`, `length`, `uniqueness`, …) and running them on a record.
 import { addFailure, type Errors, type Failure } from "./errors-collection.ts";
+import { attributeOf } from "./metadata.ts";
 import type { AttributesOf } from "./model.ts";
 
 export interface LengthOptions {
@@ -162,5 +163,17 @@ export async function runValidations(
     for (const failure of failures) {
       target.errors[addFailure](attribute, { ...failure, message: options.message });
     }
+  }
+}
+
+/** The attributes a validation names (its own, and a uniqueness `scope`'s) must be the Model's. */
+export function checkValidatedNames(
+  model: Parameters<typeof attributeOf>[0],
+  { attribute, options }: Validation,
+): void {
+  attributeOf(model, attribute);
+  const { uniqueness } = options;
+  if (typeof uniqueness === "object") {
+    for (const name of uniqueness.scope ?? []) attributeOf(model, name);
   }
 }

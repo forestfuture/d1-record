@@ -1,15 +1,13 @@
 // Names the generators accept, and Rails' `tableize` for a Model's table.
-import { pluralize, singularize } from "../../src/inflections.ts";
+import { singularize } from "../../src/inflections.ts";
 import { underscore } from "../../src/naming.ts";
 import { classify } from "../project/names.ts";
 
 /** A name the generators accept: letters, digits and `_`, starting with a letter. */
 const allowed = /^[A-Za-z][A-Za-z0-9_]*$/;
 
-/** A Model's table, as Rails' `tableize` names it: `LineItem` → `line_items`. */
-export function tableize(className: string): string {
-  return pluralize(underscore(className));
-}
+/** A Model's table, as Rails' `tableize` names it, and as the library infers it: `LineItem` → `line_items`. */
+export { tableize } from "../../src/table-names.ts";
 
 /**
  * The class a `g model` name asks for, singular as Rails makes it (`line_items` → `LineItem`),

@@ -2,7 +2,6 @@
 // attributes, found in the schema its base class holds the first time one is read (#232).
 import { ancestors } from "./ancestors.ts";
 import { InvalidModel } from "./errors.ts";
-import { pluralize } from "./inflections.ts";
 import {
   define,
   type AttributeDefinition,
@@ -10,7 +9,6 @@ import {
   type AttributeType,
   type ValueSource,
 } from "./metadata.ts";
-import { underscore } from "./naming.ts";
 import { state } from "./record-state.ts";
 import {
   applyOverride,
@@ -20,7 +18,7 @@ import {
   specProblem,
   type SpecOverride,
 } from "./spec-keys.ts";
-import { bindTable } from "./table-names.ts";
+import { bindTable, ownValueSetter, tableize } from "./table-names.ts";
 
 /** One table in a generated schema: its attributes, and which is the primary key. */
 export interface TableSchema {
@@ -83,8 +81,11 @@ export type AttributeOverrides = Readonly<Record<string, AttributeOverride | fal
 export interface DatabaseSchema {
   readonly binding: string;
   readonly tables: TableSchemas;
-  /** The Models the schema was generated for: each one's class name, and its table. */
-  readonly models: Readonly<Record<string, string>>;
+  /**
+   * The Models the schema was generated for: each one's class name, and its table. Absent only
+   * while `d1-record schema` loads the Models, before it has found them; then nothing is checked.
+   */
+  readonly models?: Readonly<Record<string, string>>;
 }
 
 /** The statics a generated Model, or a class it's built on, may declare. */
@@ -103,51 +104,53 @@ interface Generated {
   readonly table: string;
   readonly primaryKey: string;
   readonly definitions: ReadonlyMap<string, AttributeDefinition>;
+  readonly ignoresColumns: boolean;
 }
 
 const noAttributes: ReadonlyMap<string, AttributeDefinition> = new Map();
 
 /**
- * What each generated Model resolved to, by class (a subclass shares its parent's), and the
- * classes whose accessors are defined. Module-level, but not request state (ADR-0003): derived
- * only from the classes.
+ * What each generated Model settled on when it was first used, by class (a subclass shares its
+ * parent's). Until then, they're found again on each read, since a `static {}` block reads them
+ * before the statics declared after it exist. Module-level, but not request state (ADR-0003):
+ * derived only from the classes.
  */
-const resolved = new WeakMap<object, Generated>();
-const owners = new WeakSet<object>();
+const settled = new WeakMap<object, Generated>();
 
 /** Whether a class is a base for Models, not a Model: it holds a schema, or says it's abstract. */
-function isBase(each: object): boolean {
+export function isBase(each: object): boolean {
   return (
     Object.hasOwn(each, "schema") ||
     (Object.hasOwn(each, "abstract") && (each as GeneratedClass).abstract === true)
   );
 }
 
-/** Whether a class declares its own attributes (`Model.define({...})` made it). */
-function declaresAttributes(each: object): boolean {
-  return Object.hasOwn(each, "attributeDefinitions") && !owners.has(each);
-}
-
 /**
- * Where a generated Model sits: the class directly below its nearest base, whose table it is,
- * and the schema that base holds or inherits. None for a base itself, or a hand-declared Model.
+ * The class a generated Model's table belongs to (the one directly below its nearest base), and
+ * the schema that base holds or inherits. None for a base itself, or a hand-declared Model (one
+ * whose class, or a parent's, declares its own attributes).
  */
-function placeOf(model: object): { owner: GeneratedClass; schema: DatabaseSchema } | undefined {
+function tableOwnerOf(
+  model: object,
+): { owner: GeneratedClass; schema: DatabaseSchema } | undefined {
   const chain = ancestors(model);
   const index = chain.findIndex(isBase);
-  if (index <= 0 || chain.slice(0, index).some(declaresAttributes)) return undefined;
+  const declared = chain
+    .slice(0, index)
+    .some((each) => Object.hasOwn(each, "attributeDefinitions"));
+  if (index <= 0 || declared) return undefined;
   const holder = chain.slice(index).find((each) => Object.hasOwn(each, "schema"));
   const schema = (holder as GeneratedClass | undefined)?.schema;
   return schema === undefined ? undefined : { owner: chain[index - 1] as GeneratedClass, schema };
 }
 
-/** The attribute accessors on the class whose table it is, as `Model.define({...})` defines them. */
-function defineAccessors(owner: GeneratedClass, names: Iterable<string>): void {
+/** The attribute accessors on a prototype, reading and writing a record's values. */
+export function defineAttributeAccessors(prototype: object, names: Iterable<string>): void {
   type Record = {
     [state]: { read(name: string): unknown; write(name: string, value: unknown): void };
   };
   for (const name of names) {
-    Object.defineProperty(owner.prototype, name, {
+    Object.defineProperty(prototype, name, {
       get(this: Record) {
         return this[state].read(name);
       },
@@ -164,7 +167,7 @@ function defineAccessors(owner: GeneratedClass, names: Iterable<string>): void {
  * Models, as `d1-record schema` loads the Models with before it has found them, checks none.
  */
 function rejectUngenerated(name: string, table: string, schema: DatabaseSchema): void {
-  if ((schema.models as DatabaseSchema["models"] | undefined) === undefined) return;
+  if (schema.models === undefined) return;
   const generatedTable = Object.hasOwn(schema.models, name) ? schema.models[name] : undefined;
   if (generatedTable === undefined) {
     throw new InvalidModel(`${name} isn't in the generated schema; run d1-record schema`);
@@ -176,9 +179,9 @@ function rejectUngenerated(name: string, table: string, schema: DatabaseSchema):
   }
 }
 
-/** Finds a generated Model's table in its schema, and gives the class its attributes. */
-function resolve(owner: GeneratedClass, schema: DatabaseSchema): Generated {
-  const table = Object.hasOwn(owner, "table") ? owner.table! : pluralize(underscore(owner.name));
+/** Finds a generated Model's table in its schema, and its attributes after its overrides. */
+function find(owner: GeneratedClass, schema: DatabaseSchema): Generated {
+  const table = Object.hasOwn(owner, "table") ? owner.table! : tableize(owner.name);
   rejectUngenerated(owner.name, table, schema);
   const tableSchema = Object.hasOwn(schema.tables, table) ? schema.tables[table] : undefined;
   if (tableSchema === undefined) {
@@ -188,25 +191,49 @@ function resolve(owner: GeneratedClass, schema: DatabaseSchema): Generated {
   const definitions = new Map(
     Object.entries(specs).map(([name, spec]) => [name, define(name, spec)]),
   );
-  owners.add(owner);
-  bindTable(owner as never, table, { ignoresColumns });
-  defineAccessors(owner, definitions.keys());
   const primaryKey = Object.hasOwn(owner, "primaryKey")
     ? owner.primaryKey!
     : tableSchema.primaryKey;
-  return { table, primaryKey, definitions };
+  return { table, primaryKey, definitions, ignoresColumns };
 }
 
-/** A generated Model's table, primary key and attributes; undefined for any other class. */
+/**
+ * A generated Model's table, primary key and attributes; undefined for any other class. What it
+ * settled on, once it's been used; otherwise found again.
+ */
 function generated(model: object): Generated | undefined {
-  let found = resolved.get(model);
+  const found = settled.get(model);
   if (found !== undefined) return found;
-  const place = placeOf(model);
+  const place = tableOwnerOf(model);
   if (place === undefined) return undefined;
-  found = resolved.get(place.owner) ?? resolve(place.owner, place.schema);
-  resolved.set(place.owner, found);
-  resolved.set(model, found);
-  return found;
+  return settled.get(place.owner) ?? find(place.owner, place.schema);
+}
+
+/**
+ * Settles a generated Model's table and attributes the first time it's used, when its class
+ * and its statics are all defined: binds its table, and defines its attribute accessors.
+ */
+export function settleGenerated(model: object): void {
+  if (settled.has(model)) return;
+  const place = tableOwnerOf(model);
+  if (place === undefined) return;
+  const { owner } = place;
+  let found = settled.get(owner);
+  if (found === undefined) {
+    found = find(owner, place.schema);
+    bindTable(owner, found.table, { ignoresColumns: found.ignoresColumns });
+    defineAttributeAccessors(owner.prototype, found.definitions.keys());
+    settled.set(owner, found);
+  }
+  settled.set(model, found);
+}
+
+/**
+ * Whether a class's attributes are fixed: a hand-declared Model's are when it's defined, and a
+ * generated Model's when it's first used. A base class has none, which is fixed too.
+ */
+export function attributesSettled(model: object): boolean {
+  return settled.has(model) || tableOwnerOf(model) === undefined;
 }
 
 /** Whether a class is a generated Model: built on a base holding a generated schema. */
@@ -218,18 +245,6 @@ export function isGenerated(model: object): boolean {
 export function schemaBinding(model: object): string | undefined {
   const holder = ancestors(model).find((each) => Object.hasOwn(each, "schema"));
   return (holder as GeneratedClass | undefined)?.schema?.binding;
-}
-
-/** A static that, read on a class, sets its own value (a class field, or `this.table = …`). */
-function ownValueSetter(name: string) {
-  return function (this: object, value: unknown): void {
-    Object.defineProperty(this, name, {
-      value,
-      writable: true,
-      enumerable: true,
-      configurable: true,
-    });
-  };
 }
 
 /**
