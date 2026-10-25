@@ -8,6 +8,7 @@ import {
   NotNullViolation,
   RecordNotUnique,
 } from "../../src/index.ts";
+import { Post } from "../fixtures/models/post.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model.define({
@@ -16,14 +17,6 @@ class User extends Model.define({
   role: "string",
 }) {
   static table = "users";
-}
-
-class Post extends Model.define({
-  id: { type: "integer", null: false },
-  userId: { type: "integer", null: false },
-  title: { type: "string", null: false },
-}) {
-  static table = "posts";
 }
 
 class Product extends Model.define({
