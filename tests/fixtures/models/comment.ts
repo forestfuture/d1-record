@@ -1,4 +1,8 @@
 // The fixture's Comment, a generated Model below a class marked abstract (#232).
+import { belongsTo } from "../../../src/index.ts";
 import { Auditable } from "./auditable.ts";
+import { Post } from "./post.ts";
 
-export class Comment extends Auditable {}
+export class Comment extends Auditable {
+  post = belongsTo(Post);
+}

@@ -115,4 +115,35 @@ describe("Models extending the app's base class", () => {
     expect(audited).toEqual(["Comment"]);
     expect(Comment.table).toBe("comments");
   });
+
+  test("associations between generated Models load, and preload in one batch", async () => {
+    const user = await User.create({ email: "lin@example.com" });
+    const post = await Post.create({ userId: user.id, title: "Linked" });
+    await Comment.create({ postId: post.id, body: "First" });
+    await user.profile.create({ bio: "Writes" });
+    const events: QueryEvent[] = [];
+    const recorded = connect(binding, { onQuery: (event) => events.push(event) });
+
+    const [found] = await recorded
+      .model(User)
+      .where({ id: user.id })
+      .includes("profile", { posts: "comments" })
+      .toArray();
+
+    expect(found?.loaded("profile")?.bio).toBe("Writes");
+    expect(found?.loaded("posts").map((each) => each.title)).toEqual(["Linked"]);
+    expect(found?.loaded("posts")[0]?.loaded("comments")[0]?.body).toBe("First");
+    expect((await post.user())?.email).toBe("lin@example.com");
+    expect(events).toHaveLength(4);
+  });
+
+  test("a subclass's associations use its parent's foreign keys", async () => {
+    class FeaturedPost extends Post {}
+    const post = await FeaturedPost.create({ userId: 1, title: "Starred" });
+    await Comment.create({ postId: post.id, body: "Nice" });
+
+    const bodies = (await post.comments().toArray()).map((comment) => comment.body);
+
+    expect(bodies).toEqual(["Nice"]);
+  });
 });

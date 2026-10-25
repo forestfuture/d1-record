@@ -158,8 +158,12 @@ export function explainMissingTable(error: unknown, models: readonly ModelClass[
   );
 }
 
-/** The class name a Model's names are inferred from: its table's and its foreign keys'. */
+/**
+ * The class name a Model's names are inferred from, its foreign keys': the class whose table it
+ * is (`Post`, for `class FeaturedPost extends Post {}`).
+ */
 export function modelClassName(model: object): string {
   const base = ancestors(model).find((each) => bases.has(each));
-  return base === undefined ? (model as { name: string }).name : className(base, model);
+  if (base !== undefined) return className(base, model);
+  return ((boundTableOf(model)?.owner ?? model) as { name: string }).name;
 }
