@@ -1,18 +1,9 @@
 import fc from "fast-check";
 import { describe, expect, test } from "vite-plus/test";
-import { connect, Model } from "../../src/index.ts";
+import { connect } from "../../src/index.ts";
+import { User } from "../fixtures/models/user.ts";
 import { objectKeys } from "../support/json-values.ts";
 import { PURE_RUNS } from "../support/properties.ts";
-
-class User extends Model.define({
-  id: { type: "integer", null: false },
-  email: { type: "string", null: false },
-  role: "string",
-  isActive: "boolean",
-  age: "integer",
-}) {
-  static table = "users";
-}
 
 type Name = "email" | "role" | "isActive" | "age";
 const attributeNames: Name[] = ["email", "role", "isActive", "age"];
