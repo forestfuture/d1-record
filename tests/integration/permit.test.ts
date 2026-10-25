@@ -8,17 +8,8 @@ import {
   test,
 } from "vite-plus/test";
 import { connect, Model, UnknownAttribute } from "../../src/index.ts";
+import { User } from "../fixtures/models/user.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
-
-class User extends Model.define({
-  id: { type: "integer", null: false },
-  email: { type: "string", null: false },
-  role: "string",
-  isActive: "boolean",
-  age: "integer",
-}) {
-  static table = "users";
-}
 
 // Untrusted input, as a request gives it: only the named attributes reach a record (#82).
 describe("Model.permit", () => {
@@ -70,7 +61,7 @@ describe("Model.permit", () => {
       '{"email":"ada@example.com","isActive":"false","role":"admin"}',
     );
     const permitted = User.permit(body, "email", "isActive");
-    expectTypeOf(permitted).toEqualTypeOf<{ email?: string; isActive?: boolean | null }>();
+    expectTypeOf(permitted).toEqualTypeOf<{ email?: string; isActive?: boolean }>();
 
     const user = await users().create(permitted);
 

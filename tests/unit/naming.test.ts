@@ -1,11 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
-import { connect, Model } from "../../src/index.ts";
+import { connect } from "../../src/index.ts";
+import { User } from "../fixtures/models/user.ts";
 import { underscore } from "../../src/naming.ts";
 import { originalUnderscore } from "../support/naming-oracle.ts";
-
-class User extends Model.define({ id: { type: "integer", null: false } }) {
-  static table = "users";
-}
 
 // No D1 needed: building a record and reading its errors never queries.
 const users = connect({} as never).model(User);
