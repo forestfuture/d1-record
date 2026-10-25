@@ -1,13 +1,15 @@
-import { Model, modelFor } from "@forestfuture/d1-record";
-import { tables } from "../db/schema";
+import { Model } from "@forestfuture/d1-record";
+import { schema } from "../db/schema";
 
 /**
- * Methods, callbacks and scopes written here are shared by every Model, as in Rails'
- * ApplicationRecord. It's abstract: it has no table of its own.
+ * The base class for this app's Models: `class Product extends ApplicationRecord {}`. Methods,
+ * callbacks and scopes written here are shared by every Model, as in Rails' ApplicationRecord.
+ * It's abstract: it has no table of its own.
  */
-class Base extends Model {
-  // The D1 binding Models query (Product.find(id)), from your Wrangler config's d1_databases.
-  static override binding = "DB";
+export abstract class ApplicationRecord extends Model {
+  // The generated schema: each Model's attributes, from its table, and the D1 binding Models
+  // query (Product.find(id)), from your Wrangler config's d1_databases.
+  static override schema = schema;
 
   // A method every record has:
   // label() {
@@ -44,6 +46,3 @@ class Base extends Model {
     // this.errorMessages({ blank: "is required" });
   }
 }
-
-/** The base class for this app's Models: `class Product extends ApplicationRecord("products") {}`. */
-export const ApplicationRecord = modelFor(tables, Base);

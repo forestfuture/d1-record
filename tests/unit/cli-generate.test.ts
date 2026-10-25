@@ -232,14 +232,14 @@ describe("Model files", () => {
 import { ApplicationRecord } from "./application-record";
 import { Order } from "./order";
 
-export class LineItem extends ApplicationRecord("line_items") {
+export class LineItem extends ApplicationRecord {
   order = belongsTo(Order);
 }
 `);
     expect(modelSource({ ...model, associations: [] }, { separateFiles: true }))
       .toBe(`import { ApplicationRecord } from "./application-record";
 
-export class LineItem extends ApplicationRecord("line_items") {}
+export class LineItem extends ApplicationRecord {}
 `);
   });
 
@@ -255,7 +255,7 @@ export class LineItem extends ApplicationRecord("line_items") {}
     expect(source).toContain('import { ApplicationRecord } from "./my\\"models\\\\record";');
     expect(appendModel(source, { ...quoted, className: "Order", table: "orders" })).toEqual({
       ok: true,
-      source: `${source}\nexport class Order extends ApplicationRecord("orders") {}\n`,
+      source: `${source}\nexport class Order extends ApplicationRecord {}\n`,
     });
   });
 
@@ -263,7 +263,7 @@ export class LineItem extends ApplicationRecord("line_items") {}
     const existing = `import { hasMany } from "@forestfuture/d1-record";
 import { ApplicationRecord } from "./models/application-record";
 
-export class Order extends ApplicationRecord("orders") {
+export class Order extends ApplicationRecord {
   lineItems = hasMany(LineItem);
 }
 `;
@@ -277,11 +277,11 @@ export class Order extends ApplicationRecord("orders") {
       source: `import { belongsTo, hasMany } from "@forestfuture/d1-record";
 import { ApplicationRecord } from "./models/application-record";
 
-export class Order extends ApplicationRecord("orders") {
+export class Order extends ApplicationRecord {
   lineItems = hasMany(LineItem);
 }
 
-export class LineItem extends ApplicationRecord("line_items") {
+export class LineItem extends ApplicationRecord {
   order = belongsTo(Order);
 }
 `,
@@ -299,7 +299,7 @@ export class LineItem extends ApplicationRecord("line_items") {
     };
     const existing = `import { DbRecord } from "./models/db-record";
 
-export class Order extends DbRecord("orders") {}
+export class Order extends DbRecord {}
 `;
 
     expect(appendModel(existing, logs)).toEqual({
@@ -308,9 +308,9 @@ export class Order extends DbRecord("orders") {}
 import { LogsRecord } from "./models/logs-record";
 import { DbRecord } from "./models/db-record";
 
-export class Order extends DbRecord("orders") {}
+export class Order extends DbRecord {}
 
-export class LineItem extends LogsRecord("line_items") {
+export class LineItem extends LogsRecord {
   order = belongsTo(Order);
 }
 `,

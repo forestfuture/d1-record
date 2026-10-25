@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { describe, expect, test } from "vite-plus/test";
+import { runSchema } from "../../cli/schema/command.ts";
 
 // SKILL.md ships in the package as plain Markdown, so its examples can't be included from files.
 // They're kept as type-checked files instead (site/snippets/skill/), and must match them exactly.
@@ -14,6 +15,15 @@ describe("the agent skill (skills/d1-record/SKILL.md)", () => {
       read("site/snippets/skill/models.ts"),
       read("site/snippets/skill/worker.ts"),
     ]);
+  });
+
+  test("its examples' schema is what their migrations and Models generate", async () => {
+    const output: string[] = [];
+    const cwd = new URL("../../site/snippets/skill/", import.meta.url).pathname;
+
+    const options = { cwd, models: "models.ts", out: "schema.ts", check: true };
+
+    expect(await runSchema(options, (line) => output.push(line))).toBe(0);
   });
 
   test("its rules are a region the docs site and llms.txt read", () => {

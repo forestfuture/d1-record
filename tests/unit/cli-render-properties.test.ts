@@ -6,10 +6,10 @@ import { schemaOf } from "../../cli/schema/schema.ts";
 import { jsonValues } from "../support/json-values.ts";
 import { PURE_RUNS } from "../support/properties.ts";
 
-/** The generated schema.ts as a value: its `export`s and `as const`s dropped, then run. */
+/** The generated schema.ts's tables as a value: its `export`s and `as const`s dropped, then run. */
 function generated(source: string): Record<string, { attributes: Record<string, unknown> }> {
   const code = source.replace(/^export const /gm, "const ").replace(/ as const;/g, ";");
-  return runInThisContext(`(() => {\n${code}\nreturn tables;\n})()`) as never;
+  return runInThisContext(`(() => {\n${code}\nreturn schema.tables;\n})()`) as never;
 }
 
 /** The `default` of a JSON column that a migration declares with `value` as its default. */
@@ -21,8 +21,9 @@ function defaultOf(value: unknown): unknown {
   );`;
   const result = schemaOf([{ name: "0001_create.sql", sql }]);
   if (!result.ok) throw new Error(result.errors.join("\n"));
-  const settings = generated(renderSchema(result.tables, "migrations/")).things!.attributes
-    .settings as { default: () => unknown };
+  const settings = generated(
+    renderSchema({ tables: result.tables, binding: "DB", models: [] }, "migrations/"),
+  ).things!.attributes.settings as { default: () => unknown };
   return settings.default();
 }
 

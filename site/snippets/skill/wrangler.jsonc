@@ -1,0 +1,11 @@
+// The skill's examples as a project, on the Getting started project's migrations, so
+// `d1-record schema --models models.ts --out schema.ts` generates their schema (tests/unit/skill.test.ts).
+{
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "my-app-db",
+      "migrations_dir": "../getting-started/migrations",
+    },
+  ],
+}

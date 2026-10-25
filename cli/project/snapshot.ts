@@ -6,6 +6,15 @@ import { hasNestedMigrations, migrationsOf, type Migration } from "./migrations.
 import { targetsOf, type ProjectOptions, type Target } from "./targets.ts";
 import { toolsWithFiles, type Tool } from "./tools.ts";
 
+/** A Model built on a database's base class, as its files define it. */
+export interface FoundModel {
+  className: string;
+  /** Its table: from its class name, or its `static table`. */
+  table: string;
+  /** The file that declares it. */
+  file: string;
+}
+
 /** One D1 database, and what's on disk for it. */
 export interface DatabaseSnapshot {
   target: Target;
@@ -21,6 +30,10 @@ export interface DatabaseSnapshot {
   nestedMigrations: boolean;
   /** The tools (Drizzle, Prisma) whose files are in the project or above it. */
   toolsFound: Tool[];
+  /** Its Models, found by loading the Model files (none until they're loaded). */
+  models: FoundModel[];
+  /** Why the Model files couldn't be read: a file that won't load, or a Model with no table. */
+  modelErrors: string[];
 }
 
 /** A project: its databases, and any other files a command asked for, by path. */
@@ -47,6 +60,8 @@ function databaseSnapshot(target: Target, toolsFound: Tool[]): DatabaseSnapshot 
     hasBase: existsSync(target.base.path),
     nestedMigrations: hasNestedMigrations(target),
     toolsFound,
+    models: [],
+    modelErrors: [],
   };
 }
 

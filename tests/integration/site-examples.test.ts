@@ -15,8 +15,7 @@ import {
 } from "../../site/snippets/guide/associations.ts";
 import * as batches from "../../site/snippets/guide/batches.ts";
 import { addExample, Booking, errorsExample } from "../../site/snippets/guide/validations.ts";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { runGenerate } from "../../cli/generate/command.ts";
 import { runSchema } from "../../cli/schema/command.ts";
@@ -33,6 +32,9 @@ import worker from "../../site/snippets/getting-started/src/index.ts";
 import * as several from "../../site/snippets/guide/several-databases.ts";
 import { publishDraftsAndRemove } from "../../site/snippets/getting-started/src/publish.ts";
 import { createTestDatabase, recordingBatches, type TestDatabase } from "../support/d1.ts";
+import { scratchDirs } from "../support/scratch.ts";
+
+const scratch = scratchDirs();
 
 // Inside a Worker, a Model's binding comes from cloudflare:workers; here, Miniflare's D1 stands in.
 const workers: { env: Record<string, unknown> } = { env: {} };
@@ -55,14 +57,15 @@ describe("Getting started", () => {
   });
   afterAll(() => dispose());
 
-  test("its files are what the tutorial's two g model commands write, apart from its edit to user.ts", () => {
-    const fresh = mkdtempSync(join(tmpdir(), "getting-started-"));
+  test("its files are what the tutorial's two g model commands write, apart from its edit to user.ts", async () => {
+    // In the repo, so the Models g model writes find this repo's library, as an app's do.
+    const fresh = scratch("getting-started-");
     writeFileSync(
       join(fresh, "wrangler.jsonc"),
       readFileSync(new URL("wrangler.jsonc", gettingStarted)),
     );
     const quiet = () => {};
-    runGenerate(
+    await runGenerate(
       {
         cwd: fresh,
         kind: "model",
@@ -71,7 +74,7 @@ describe("Getting started", () => {
       },
       quiet,
     );
-    runGenerate(
+    await runGenerate(
       {
         cwd: fresh,
         kind: "model",
@@ -95,11 +98,11 @@ describe("Getting started", () => {
     }
   });
 
-  test("its schema.ts is what its migrations generate", () => {
+  test("its schema.ts is what its migrations generate", async () => {
     const output: string[] = [];
 
     expect(
-      runSchema({ cwd: gettingStarted.pathname, check: true }, (line) => output.push(line)),
+      await runSchema({ cwd: gettingStarted.pathname, check: true }, (line) => output.push(line)),
     ).toBe(0);
   });
 

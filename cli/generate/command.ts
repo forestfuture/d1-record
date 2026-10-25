@@ -11,10 +11,16 @@ import {
 } from "../plan.ts";
 import { importPath, shown, slashed } from "../project/paths.ts";
 import { classify } from "../project/names.ts";
-import { readProject, type DatabaseSnapshot, type ProjectSnapshot } from "../project/snapshot.ts";
+import {
+  readProject,
+  type DatabaseSnapshot,
+  type FoundModel,
+  type ProjectSnapshot,
+} from "../project/snapshot.ts";
 import { defaultModels, oneModelsFile } from "../project/targets.ts";
 import { chooseDatabase } from "../project/wrangler.ts";
 import { byName, type Migration } from "../project/migrations.ts";
+import { withModels } from "../schema/models.ts";
 import { schemaOf, type GeneratedTable } from "../schema/schema.ts";
 import { schemaRefusal, schemaWrites, type SchemaTables } from "../schema/writes.ts";
 import { parseColumns, type ColumnArg } from "./columns.ts";
@@ -206,6 +212,7 @@ function requestFor(
   // Checked first, so a generator never plans a migration whose schema it then can't write.
   const refusal = schemaRefusal(project.cwd, db);
   if (refusal !== undefined) return refused(refusal);
+  if (db.modelErrors.length > 0) return refused(...db.modelErrors);
   const parsed = parseColumns(options.columns);
   if (!parsed.ok) return refused(...parsed.errors);
   const request = { project, db, options, columns: parsed.columns, notes: [] as string[] };
@@ -219,6 +226,11 @@ function requestFor(
   return { ...request, className: model.className };
 }
 
+/** The Models found, with the one `g model` writes in place of any of its name. */
+function withModel(models: readonly FoundModel[], added: FoundModel): FoundModel[] {
+  return [...models.filter((each) => each.className !== added.className), added];
+}
+
 /** Checks everything a generator would write, before anything is written. */
 function checkedFor(project: ProjectSnapshot, options: GenerateOptions): Checked | Plan {
   const request = requestFor(project, options);
@@ -230,8 +242,16 @@ function checkedFor(project: ProjectSnapshot, options: GenerateOptions): Checked
   const refusal = patternRefusal(request, checked.migration.path);
   if (refusal !== undefined) return unusable(refusal);
   const { migration, schema } = checked;
-  // The schema is planned from the migrations as they'll be, the new one included.
-  const db = { ...request.db, migrations: checked.after };
+  // The schema is planned from the migrations and Models as they'll be, the new ones included.
+  const models =
+    model === undefined || request.className === undefined
+      ? request.db.models
+      : withModel(request.db.models, {
+          className: request.className,
+          table: tableize(request.className),
+          file: model.path,
+        });
+  const db = { ...request.db, migrations: checked.after, models };
   return { db, migration, model, schema, notes: [...request.notes, ...checked.notes] };
 }
 
@@ -260,17 +280,19 @@ export function planGenerate(project: ProjectSnapshot, options: GenerateOptions)
 
 /**
  * `d1-record g model` and `g migration` (#66, #70): write a migration (and a Model), checked
- * against the existing migrations first, then regenerate the schema. Returns the exit code.
+ * against the existing migrations first, then regenerate the schema with the project's Models.
+ * Resolves to the exit code.
  */
-export function runGenerate(options: GenerateOptions, print: Print): number {
+export async function runGenerate(options: GenerateOptions, print: Print): Promise<number> {
   const cwd = resolve(options.cwd ?? process.cwd());
   const { config, models, out } = options;
   const model = options.kind === "model" ? modelName(options.name) : undefined;
   const files = model?.ok === true ? [modelPathOf(cwd, options, model.className)] : [];
-  const project = readProject(cwd, { config, models, out }, files);
-  if (typeof project === "string") {
-    print(project);
+  const read = readProject(cwd, { config, models, out }, files);
+  if (typeof read === "string") {
+    print(read);
     return 1;
   }
+  const project = await withModels(read, models);
   return apply(planGenerate(project, options), cwd, print);
 }

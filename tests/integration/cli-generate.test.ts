@@ -38,14 +38,16 @@ function project(files: Record<string, string> = {}): string {
 }
 
 /** Runs a generator (`g model …` or `g migration …`), collecting what it prints. */
-function generate(
+async function generate(
   cwd: string,
   args: string[],
   options: Partial<Parameters<typeof runGenerate>[0]> = {},
 ) {
   const [kind, name, ...columns] = args as ["model" | "migration", string, ...string[]];
   const output: string[] = [];
-  const code = runGenerate({ cwd, kind, name, columns, ...options }, (line) => output.push(line));
+  const code = await runGenerate({ cwd, kind, name, columns, ...options }, (line) =>
+    output.push(line),
+  );
   return { code, output: output.join("\n") };
 }
 
@@ -58,10 +60,12 @@ async function modelsIn(cwd: string, path: string) {
 const read = (cwd: string, path: string) => readFileSync(join(cwd, path), "utf8");
 
 describe("d1-record g model", () => {
-  test("refuses to write one file twice, such as a schema --out naming the new Model", () => {
+  test("refuses to write one file twice, such as a schema --out naming the new Model", async () => {
     const cwd = project({ "migrations/.keep": "" });
 
-    const { code, output } = generate(cwd, ["model", "Product"], { out: "src/models/product.ts" });
+    const { code, output } = await generate(cwd, ["model", "Product"], {
+      out: "src/models/product.ts",
+    });
 
     expect(code).toBe(1);
     expect(output).toBe(
@@ -71,10 +75,10 @@ describe("d1-record g model", () => {
     expect(readdirSync(join(cwd, "migrations"))).toEqual([".keep"]);
   });
 
-  test("writes a migration and a Model, regenerates the schema, and says what's next", () => {
+  test("writes a migration and a Model, regenerates the schema, and says what's next", async () => {
     const cwd = project();
 
-    const { code, output } = generate(cwd, [
+    const { code, output } = await generate(cwd, [
       "model",
       "Product",
       "name:string!",
@@ -90,27 +94,27 @@ Next: npx wrangler d1 migrations apply shop-db --local`);
     expect(read(cwd, "src/models/product.ts"))
       .toBe(`import { ApplicationRecord } from "./application-record";
 
-export class Product extends ApplicationRecord("products") {}
+export class Product extends ApplicationRecord {}
 `);
     expect(read(cwd, "src/db/schema.ts")).toContain(
       '  priceCents: { type: "integer", null: false, default: () => 0 },',
     );
   });
 
-  test("the generated application-record.ts shows how to hide attributes from toJSON", () => {
+  test("the generated application-record.ts shows how to hide attributes from toJSON", async () => {
     const cwd = project();
-    generate(cwd, ["model", "User", "email:string!"]);
+    await generate(cwd, ["model", "User", "email:string!"]);
 
     expect(read(cwd, "src/models/application-record.ts")).toContain(
       '// static override hiddenAttributes = ["passwordDigest"];',
     );
   });
 
-  test("a reference takes its table's key type, and its belongsTo imports the target's file", () => {
+  test("a reference takes its table's key type, and its belongsTo imports the target's file", async () => {
     const cwd = project();
-    generate(cwd, ["model", "Order", "total:integer"], { integerId: true });
+    await generate(cwd, ["model", "Order", "total:integer"], { integerId: true });
 
-    const { code } = generate(cwd, [
+    const { code } = await generate(cwd, [
       "model",
       "LineItem",
       "order:references",
@@ -126,16 +130,16 @@ export class Product extends ApplicationRecord("products") {}
 import { ApplicationRecord } from "./application-record";
 import { Order } from "./order";
 
-export class LineItem extends ApplicationRecord("line_items") {
+export class LineItem extends ApplicationRecord {
   order = belongsTo(Order);
 }
 `);
   });
 
-  test("--models puts Models and ApplicationRecord in another folder, for both commands", () => {
+  test("--models puts Models and ApplicationRecord in another folder, for both commands", async () => {
     const cwd = project();
 
-    const model = generate(cwd, ["model", "Product"], { models: "src/app/models" });
+    const model = await generate(cwd, ["model", "Product"], { models: "src/app/models" });
 
     expect(model.output).toBe(`Wrote migrations/0001_create_products.sql
 Wrote src/app/models/product.ts
@@ -146,15 +150,15 @@ Next: npx wrangler d1 migrations apply shop-db --local`);
       'import { ApplicationRecord } from "./application-record";',
     );
     expect(read(cwd, "src/app/models/application-record.ts")).toContain(
-      'import { tables } from "../../db/schema";',
+      'import { schema } from "../../db/schema";',
     );
     expect(existsSync(join(cwd, "src/models"))).toBe(false);
   });
 
-  test("refuses before writing anything when the schema can't be written (a Drizzle schema folder)", () => {
+  test("refuses before writing anything when the schema can't be written (a Drizzle schema folder)", async () => {
     const cwd = project({ "src/db/schema/index.ts": "export {};" });
 
-    const { code, output } = generate(cwd, ["model", "Product"]);
+    const { code, output } = await generate(cwd, ["model", "Product"]);
 
     expect(code).toBe(1);
     expect(output).toMatch(
@@ -164,42 +168,44 @@ Next: npx wrangler d1 migrations apply shop-db --local`);
     expect(existsSync(join(cwd, "src/models"))).toBe(false);
   });
 
-  test("--out regenerates another schema file, as in a Drizzle project with its own src/db/schema/", () => {
+  test("--out regenerates another schema file, as in a Drizzle project with its own src/db/schema/", async () => {
     const cwd = project({ "src/db/schema/index.ts": "export {};" });
 
-    const { code, output } = generate(cwd, ["model", "Product"], { out: "src/db/d1-record.ts" });
+    const { code, output } = await generate(cwd, ["model", "Product"], {
+      out: "src/db/d1-record.ts",
+    });
 
     expect(code).toBe(0);
     expect(output).toContain("Wrote src/db/d1-record.ts (1 table) from migrations/");
     expect(read(cwd, "src/models/application-record.ts")).toContain('from "../db/d1-record";');
   });
 
-  test("--models appends to one file", () => {
+  test("--models appends to one file", async () => {
     const cwd = project();
-    generate(cwd, ["model", "User", "email:string!:unique"], { models: "src/models.ts" });
+    await generate(cwd, ["model", "User", "email:string!:unique"], { models: "src/models.ts" });
 
-    generate(cwd, ["model", "Post", "user:references"], { models: "src/models.ts" });
+    await generate(cwd, ["model", "Post", "user:references"], { models: "src/models.ts" });
 
     expect(read(cwd, "src/models.ts")).toBe(`import { belongsTo } from "@forestfuture/d1-record";
 import { ApplicationRecord } from "./application-record";
 
-export class User extends ApplicationRecord("users") {}
+export class User extends ApplicationRecord {}
 
-export class Post extends ApplicationRecord("posts") {
+export class Post extends ApplicationRecord {
   user = belongsTo(User);
 }
 `);
   });
 
-  test("refuses, writing nothing, when the table or the Model file already exists", () => {
+  test("refuses, writing nothing, when the table or the Model file already exists", async () => {
     const cwd = project();
-    generate(cwd, ["model", "Product"]);
+    await generate(cwd, ["model", "Product"]);
 
-    expect(generate(cwd, ["model", "Product"])).toEqual({
+    expect(await generate(cwd, ["model", "Product"])).toEqual({
       code: 1,
       output: "src/models/product.ts already exists\nWrote nothing",
     });
-    expect(generate(cwd, ["model", "Product"], { models: "src/other" })).toEqual({
+    expect(await generate(cwd, ["model", "Product"], { models: "src/other" })).toEqual({
       code: 1,
       output: expect.stringMatching(
         /^0002_create_products\.sql: .*table products already exists\nWrote nothing$/,
@@ -210,10 +216,10 @@ export class Post extends ApplicationRecord("posts") {
 });
 
 describe("names", () => {
-  test("a plural Model name is made singular, with a note, as Rails does", () => {
+  test("a plural Model name is made singular, with a note, as Rails does", async () => {
     const cwd = project();
 
-    const { code, output } = generate(cwd, ["model", "line_items"]);
+    const { code, output } = await generate(cwd, ["model", "line_items"]);
 
     expect(code).toBe(0);
     expect(output).toContain("Wrote src/models/line-item.ts");
@@ -221,19 +227,19 @@ describe("names", () => {
       "Note: line_items looks plural, so the Model is LineItem, as Rails names it",
     );
     expect(read(cwd, "src/models/line-item.ts")).toContain(
-      'export class LineItem extends ApplicationRecord("line_items") {}',
+      "export class LineItem extends ApplicationRecord {}",
     );
   });
 
-  test("a name that isn't letters, digits and _ is refused, and nothing is written", () => {
+  test("a name that isn't letters, digits and _ is refused, and nothing is written", async () => {
     const cwd = project();
 
-    expect(generate(cwd, ["migration", "../../evil"])).toEqual({
+    expect(await generate(cwd, ["migration", "../../evil"])).toEqual({
       code: 1,
       output:
         "../../evil isn't a migration name; use letters, digits and _, like AddSkuToProducts\nWrote nothing",
     });
-    expect(generate(cwd, ["model", "foo-bar"])).toEqual({
+    expect(await generate(cwd, ["model", "foo-bar"])).toEqual({
       code: 1,
       output: "foo-bar isn't a Model name; use letters and digits, like LineItem\nWrote nothing",
     });
@@ -242,18 +248,18 @@ describe("names", () => {
 });
 
 describe("d1-record g migration", () => {
-  test("adds and removes columns, numbering after the existing migrations", () => {
+  test("adds and removes columns, numbering after the existing migrations", async () => {
     const cwd = project({
       "migrations/0007_create_products.sql": "CREATE TABLE products (id TEXT PRIMARY KEY);",
     });
 
-    const added = generate(cwd, [
+    const added = await generate(cwd, [
       "migration",
       "AddSkuToProducts",
       "sku:string:unique",
       "active:boolean!=true",
     ]);
-    const removed = generate(cwd, ["migration", "RemoveSkuFromProducts", "sku"]);
+    const removed = await generate(cwd, ["migration", "RemoveSkuFromProducts", "sku"]);
 
     expect(added.code).toBe(0);
     expect(added.output).toMatch(/^Wrote migrations\/0008_add_sku_to_products\.sql\n/);
@@ -264,23 +270,23 @@ describe("d1-record g migration", () => {
     expect(read(cwd, "src/db/schema.ts")).not.toContain("sku:");
   });
 
-  test("an empty migration for any other name; a NOT NULL column without a default is refused", () => {
+  test("an empty migration for any other name; a NOT NULL column without a default is refused", async () => {
     const cwd = project({
       "migrations/0001_create_products.sql": "CREATE TABLE products (id TEXT PRIMARY KEY);",
     });
 
-    expect(generate(cwd, ["migration", "BackfillPrices"]).code).toBe(0);
+    expect((await generate(cwd, ["migration", "BackfillPrices"])).code).toBe(0);
     expect(read(cwd, "migrations/0002_backfill_prices.sql")).toBe(
       "-- Write the migration's SQL here.\n",
     );
-    expect(generate(cwd, ["migration", "AddSkuToProducts", "sku:string!"])).toEqual({
+    expect(await generate(cwd, ["migration", "AddSkuToProducts", "sku:string!"])).toEqual({
       code: 1,
       output:
         "products.sku: SQLite can't add a NOT NULL column without a default; give one (sku:string!=…) or leave out the !\nWrote nothing",
     });
   });
 
-  test("several databases need --database, and a migrations_pattern the file wouldn't match is refused", () => {
+  test("several databases need --database, and a migrations_pattern the file wouldn't match is refused", async () => {
     const two = project({
       "wrangler.jsonc":
         '{ "d1_databases": [{ "binding": "DB" }, { "binding": "LOGS", "migrations_dir": "logs" }] }',
@@ -290,14 +296,14 @@ describe("d1-record g migration", () => {
         '{ "d1_databases": [{ "binding": "DB", "migrations_pattern": "migrations/*/migration.sql" }] }',
     });
 
-    expect(generate(two, ["model", "Product"])).toEqual({
+    expect(await generate(two, ["model", "Product"])).toEqual({
       code: 1,
       output: "This config has several D1 databases; choose one with --database (DB or LOGS)",
     });
-    expect(generate(two, ["model", "Entry"], { database: "LOGS" }).output).toContain(
+    expect((await generate(two, ["model", "Entry"], { database: "LOGS" })).output).toContain(
       "Wrote logs/0001_create_entries.sql\nWrote src/models/entry.ts\nWrote src/db/LOGS.ts",
     );
-    expect(generate(drizzle, ["model", "Product"])).toEqual({
+    expect(await generate(drizzle, ["model", "Product"])).toEqual({
       code: 1,
       output:
         "migrations/0001_create_products.sql wouldn't match migrations_pattern (migrations/*/migration.sql), so Wrangler wouldn't apply it; write the migration with your migration tool instead",
@@ -313,9 +319,9 @@ describe("generated files against D1", { timeout: 30_000 }, () => {
 
   test("the migrations apply to D1, and the Models create and find records through them", async () => {
     const cwd = project();
-    generate(cwd, ["model", "User", "email:string!:unique", "admin:boolean!=false"]);
-    generate(cwd, ["model", "Post", "user:references", "title:string!", "meta:json"]);
-    generate(cwd, ["migration", "AddViewsToPosts", "views:integer!=0:index"]);
+    await generate(cwd, ["model", "User", "email:string!:unique", "admin:boolean!=false"]);
+    await generate(cwd, ["model", "Post", "user:references", "title:string!", "meta:json"]);
+    await generate(cwd, ["migration", "AddViewsToPosts", "views:integer!=0:index"]);
     mf = new Miniflare({ modules: true, script: "export default {}", d1Databases: ["DB"] });
     const binding = await mf.getD1Database("DB");
     for (const file of readdirSync(join(cwd, "migrations")).sort()) {
@@ -341,9 +347,9 @@ describe("generated files against D1", { timeout: 30_000 }, () => {
 
   test("a generated reference can be removed again, and the migrations still apply to D1", async () => {
     const cwd = project();
-    generate(cwd, ["model", "User"]);
-    generate(cwd, ["model", "Post", "user:references", "title"]);
-    const removed = generate(cwd, ["migration", "RemoveUserFromPosts", "user:references"]);
+    await generate(cwd, ["model", "User"]);
+    await generate(cwd, ["model", "Post", "user:references", "title"]);
+    const removed = await generate(cwd, ["migration", "RemoveUserFromPosts", "user:references"]);
     const local = new Miniflare({
       modules: true,
       script: "export default {}",
