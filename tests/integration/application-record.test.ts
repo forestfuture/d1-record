@@ -5,7 +5,7 @@ import { Comment } from "../fixtures/models/comment.ts";
 import { Event } from "../fixtures/models/event.ts";
 import { Customer } from "../fixtures/models/customer.ts";
 import { Post } from "../fixtures/models/post.ts";
-import { saved } from "../fixtures/models/test-record.ts";
+import { saved, TestRecord } from "../fixtures/models/test-record.ts";
 import { User } from "../fixtures/models/user.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
@@ -162,5 +162,19 @@ describe("Models extending the app's base class", () => {
     } finally {
       await logs.dispose();
     }
+  });
+
+  test("define on the base class declares a Model's attributes, sharing the base", async () => {
+    class Sample extends TestRecord.define({
+      id: { type: "integer", null: false },
+      quantity: "integer",
+    }) {}
+    saved.length = 0;
+
+    const sample = await Sample.create({ quantity: 3 });
+
+    expect((await Sample.find(sample.id)).quantity).toBe(3);
+    expect(sample.label()).toBe(`Sample ${sample.id}`);
+    expect(saved).toEqual(["Sample"]);
   });
 });
