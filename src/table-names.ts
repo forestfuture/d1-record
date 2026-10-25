@@ -11,12 +11,12 @@ import { underscore } from "./naming.ts";
  */
 const bases = new WeakSet<object>();
 
-/** A generated base class's table, and whether its overrides ignore some of its columns. */
+/** A generated Model's table, and whether its overrides ignore some of its columns. */
 type BoundTable = { table: string; ignoresColumns: boolean };
 
 /**
- * What `ApplicationRecord("products", overrides)` said, by the base class it made: the table, and
- * whether the overrides ignore some of its columns (`{ notes: false }`).
+ * Each generated Model's table, by the class it belongs to, and whether its `static attributes`
+ * ignore some of its columns (`{ notes: false }`).
  */
 const boundTables = new WeakMap<object, BoundTable>();
 
@@ -40,8 +40,31 @@ function className(base: object, model: object): string {
 }
 
 /**
- * Gives the classes extending `base` an inferred `table`, by Rails' `tableize`: the class
- * name through `underscore`, pluralized (`BlogPost` → `blog_posts`, `Person` → `people`). A
+ * A class name's table, by Rails' `tableize`: the name through `underscore`, pluralized
+ * (`BlogPost` → `blog_posts`, `Person` → `people`). The generators name tables with it too.
+ */
+export function tableize(className: string): string {
+  return pluralize(underscore(className));
+}
+
+/**
+ * The setter of a static that a class can set for itself: an assignment (a static block, or a
+ * class field compiled without useDefineForClassFields) gives that class its own value, as
+ * `static table = "…"` does.
+ */
+export function ownValueSetter(name: string): (this: object, value: unknown) => void {
+  return function (this: object, value: unknown): void {
+    Object.defineProperty(this, name, {
+      value,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+  };
+}
+
+/**
+ * Gives the classes extending `base` (one `define` made) an inferred `table`, by `tableize`. A
  * subclass shares its parent's; `static table = "…"` anywhere in the chain overrides it.
  */
 export function inferTableNames(base: object): void {
@@ -50,18 +73,9 @@ export function inferTableNames(base: object): void {
     configurable: true,
     get(this: object) {
       const name = className(base, this);
-      return name === "" ? "" : pluralize(underscore(name));
+      return name === "" ? "" : tableize(name);
     },
-    // An assignment (a static block, or a class field compiled without
-    // useDefineForClassFields) names that class's table, as `static table = "…"` does.
-    set(this: object, table: unknown) {
-      Object.defineProperty(this, "table", {
-        value: table,
-        writable: true,
-        enumerable: true,
-        configurable: true,
-      });
-    },
+    set: ownValueSetter("table"),
   });
 }
 
@@ -74,30 +88,30 @@ function tableNameSource(model: object): string | undefined {
 }
 
 /**
- * Binds a generated Model's base class to its table: the table isn't inferred, and a subclass
- * can't name another, since the attributes are that table's columns; and records whether its
- * overrides ignore some columns.
+ * Binds a generated Model's table to the class it belongs to: a subclass can't name another,
+ * since the attributes are that table's columns; and records whether its overrides ignore some
+ * columns.
  */
 export function bindTable(
-  base: ModelClass,
+  owner: { table?: string },
   table: string,
   { ignoresColumns }: { ignoresColumns: boolean },
 ): void {
-  base.table = table;
-  boundTables.set(base, { table, ignoresColumns });
+  owner.table = table;
+  boundTables.set(owner, { table, ignoresColumns });
 }
 
-/** The table the nearest generated base class `model` extends (or is) is bound to, if any. */
+/** The table bound to the class `model` is, or extends, if any. */
 function boundTableOf(model: object): (BoundTable & { owner: object }) | undefined {
   const owner = ancestors(model).find((each) => boundTables.has(each));
   return owner && { ...boundTables.get(owner)!, owner };
 }
 
 /**
- * Whether a Model's base class ignores some of its table's columns, so its queries name their
- * columns rather than `*` and an ignored column is never read, as in Rails. The nearest bound table
- * decides. Remembered per Model: the base class is bound before any Model extending it exists,
- * so the answer can't change.
+ * Whether a Model ignores some of its table's columns, so its queries name their columns rather
+ * than `*` and an ignored column is never read, as in Rails. The nearest bound table decides.
+ * Remembered per Model: its table is bound when it's first used, before any query, so the
+ * answer can't change.
  */
 export function ignoresColumns(model: object): boolean {
   let answer = ignoring.get(model);

@@ -1,7 +1,6 @@
 // `Model.define({...})` and `Model`: the record class, its attribute accessors and its declarations (validations, error messages); its shared statics are in model-statics.ts.
 import type { Executor, QueryListener } from "./executor.ts";
 import {
-  attributeOf,
   define,
   type AttributeProperties,
   type AttributeDefinition,
@@ -25,6 +24,8 @@ import { associationOf, newRecord } from "./association-fields.ts";
 import { RecordStatement } from "./record-statement.ts";
 import { inferTableNames } from "./table-names.ts";
 import {
+  attributesSettled,
+  defineAttributeAccessors,
   defineGeneratedStatics,
   type AsSpecs,
   type AttributeOverrides,
@@ -39,7 +40,7 @@ import type { Relation, Scope, Scoped } from "./relation.ts";
 import { defineStatics, ModelStatics } from "./model-statics.ts";
 import { currentRelation } from "./current-database.ts";
 import { scopeBodies, scopeName, useModelBase } from "./scoped-relation.ts";
-import type { Validation, ValidationOptions } from "./validations.ts";
+import { checkValidatedNames, type Validation, type ValidationOptions } from "./validations.ts";
 
 /** Type-only brand on a scope static (`static newest = this.scope(…)`); never set at runtime. */
 declare const scopeBrand: unique symbol;
@@ -248,12 +249,9 @@ export class Model extends ModelStatics {
     attribute: keyof AttributesOf<InstanceType<C>> & string,
     options: ValidationOptions<InstanceType<C>>,
   ): void {
-    attributeOf(this, attribute);
-    const { uniqueness } = options;
-    if (typeof uniqueness === "object") {
-      for (const name of uniqueness.scope ?? []) attributeOf(this, name);
-    }
     const validation: Validation = { attribute, options: options as ValidationOptions<never> };
+    // A generated Model's attributes are fixed when it's first used, and checked then.
+    if (attributesSettled(this)) checkValidatedNames(this, validation);
     declare(this, "validations", validation);
   }
 
@@ -595,16 +593,7 @@ function defineModel<const A extends AttributeSpecs, B extends BaseClass>(
     );
   }
   inferTableNames(DefinedModel);
-  for (const name of Object.keys(specs)) {
-    Object.defineProperty(DefinedModel.prototype, name, {
-      get(this: Model) {
-        return this[state].read(name);
-      },
-      set(this: Model, value: unknown) {
-        this[state].write(name, value);
-      },
-    });
-  }
+  defineAttributeAccessors(DefinedModel.prototype, Object.keys(specs));
   return DefinedModel as never;
 }
 

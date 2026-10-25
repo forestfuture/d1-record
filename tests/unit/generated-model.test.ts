@@ -2,7 +2,14 @@
    declarations d1-record schema generates, which merge from another file: the accessors they
    type are defined when the Model's attributes resolve. */
 import { describe, expect, expectTypeOf, test } from "vite-plus/test";
-import { connect, InvalidModel, Model, sql, type TableAttributes } from "../../src/index.ts";
+import {
+  connect,
+  InvalidModel,
+  Model,
+  sql,
+  UnknownAttribute,
+  type TableAttributes,
+} from "../../src/index.ts";
 
 const db = connect({} as never);
 
@@ -39,6 +46,9 @@ const schema = {
     Unknown: "products",
     Unset: "products",
     Narrowed: "products",
+    Early: "products",
+    Article: "products",
+    Misspelled: "products",
   },
 } as const;
 
@@ -289,6 +299,45 @@ describe("a generated Model's static attributes", () => {
     for (const sku of [{ column: "code" }, "money", true, { default: "SKU" }, { null: "no" }]) {
       expect(() => db.model(withSku(sku)).build()).toThrow(message);
     }
+  });
+});
+
+describe("a generated Model's static {} blocks", () => {
+  test("see the overrides declared after them", () => {
+    class Early extends AppRecord {
+      static override table = "products";
+      static {
+        this.validates("flags" as never, { presence: true });
+      }
+      static override attributes = { flags: "boolean" } as const;
+    }
+
+    expect(Early.attributeDefinitions.get("flags")?.type).toBe("boolean");
+  });
+
+  test("see a static table declared after them", () => {
+    class Article extends AppRecord {
+      static {
+        this.validates("name" as never, { presence: true });
+      }
+      static override table = "products";
+    }
+
+    expect(() => db.model(Article)).not.toThrow();
+    expect(Article.table).toBe("products");
+  });
+
+  test("a misspelled attribute in validates is an UnknownAttribute when the Model is first used", () => {
+    class Misspelled extends AppRecord {
+      static override table = "products";
+      static {
+        this.validates("nmae" as never, { presence: true });
+      }
+    }
+
+    expect(() => db.model(Misspelled)).toThrow(
+      new UnknownAttribute('Misspelled has no attribute "nmae"'),
+    );
   });
 });
 
