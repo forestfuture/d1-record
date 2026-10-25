@@ -69,6 +69,10 @@ abstract class AppRecord extends Model {
 
 class Product extends AppRecord {
   static cheap = this.scope((q) => q.where(sql`flags = 0`));
+
+  get loudName(): string {
+    return this.name.toUpperCase();
+  }
 }
 interface Product extends TableAttributes<typeof products, (typeof Product)["attributes"]> {}
 
@@ -131,6 +135,46 @@ describe("a generated Model", () => {
     lamp.name = "Chair";
   });
 
+  test("its attributes are typed inside its methods", () => {
+    const lamp = db.model(Product).build({ name: "Lamp" });
+
+    expect(lamp.loudName).toBe("LAMP");
+    expectTypeOf<Product["name"]>().toEqualTypeOf<string>();
+  });
+
+  test("an unknown attribute in where, order or build is a compile error", () => {
+    const typeOnly = () => {
+      // @ts-expect-error not an attribute of products
+      void Product.where({ nmae: "Lamp" });
+      // @ts-expect-error not an attribute of products
+      void Product.order({ nmae: "asc" });
+      // @ts-expect-error not an attribute of products
+      void Product.build({ nmae: "Lamp" });
+    };
+
+    expectTypeOf(typeOnly).toBeFunction();
+  });
+
+  test("a value of the wrong type for an attribute is a compile error", () => {
+    const typeOnly = () => {
+      // @ts-expect-error flags is a number
+      void Product.where({ flags: "many" });
+      // @ts-expect-error name is a string
+      void Product.build({ name: 3 });
+    };
+
+    expectTypeOf(typeOnly).toBeFunction();
+  });
+
+  test("a misspelled attribute in validates is a compile error", () => {
+    const typeOnly = () => {
+      // @ts-expect-error not an attribute of products
+      Product.validates("nmae", { presence: true });
+    };
+
+    expectTypeOf(typeOnly).toBeFunction();
+  });
+
   test("a subclass, or an anonymous one, shares its parent's table", () => {
     const Anonymous = class extends Product {};
     class Special extends Product {}
@@ -152,7 +196,7 @@ describe("a generated Model", () => {
     void db.model(Event).cheap;
   });
 
-  test("once it's used, its base class's declarations are fixed too, as its own are", () => {
+  test("once it's used, its base class's declarations are fixed", () => {
     abstract class Sealed extends Model {
       static override schema = schema;
     }
@@ -200,20 +244,24 @@ describe("a generated Model's static attributes", () => {
     );
   });
 
-  test("ignoring the primary key is an InvalidModel; overriding a column is a type error", () => {
+  test("ignoring the primary key is an InvalidModel", () => {
     class Keyed extends AppRecord {
       static override table = "products";
       static override attributes = { id: false } as const;
     }
+
+    expect(() => db.model(Keyed).build()).toThrow(
+      new InvalidModel("Keyed.id is the primary key, so it can't be ignored"),
+    );
+  });
+
+  test("overriding a column is a compile error", () => {
     // @ts-expect-error a column comes from the table
     class Strange extends AppRecord {
       static override table = "products";
       static override attributes = { sku: { column: "code" } } as const;
     }
 
-    expect(() => db.model(Keyed).build()).toThrow(
-      new InvalidModel("Keyed.id is the primary key, so it can't be ignored"),
-    );
     expect(Strange).toBeTypeOf("function");
   });
 
@@ -260,12 +308,7 @@ describe("a generated Model's static attributes", () => {
     );
   });
 
-  test("a storage on a non-datetime, or an unknown storage, is a type error and an InvalidModel (#73)", () => {
-    const withFlags = (flags: unknown) =>
-      class Strange extends AppRecord {
-        static override table = "products";
-        static override attributes = { flags } as never;
-      };
+  test("a storage on a non-datetime, or an unknown storage, is a compile error (#73)", () => {
     // @ts-expect-error a storage is for a datetime
     class Integer extends AppRecord {
       static override attributes = { flags: { type: "integer", storage: "unixSeconds" } } as const;
@@ -275,6 +318,16 @@ describe("a generated Model's static attributes", () => {
       static override attributes = { flags: { type: "datetime", storage: "minutes" } } as const;
     }
 
+    expect([Integer, Minutes]).toHaveLength(2);
+  });
+
+  test("a storage on a non-datetime, or an unknown storage, is an InvalidModel past the types (#73)", () => {
+    const withFlags = (flags: unknown) =>
+      class Strange extends AppRecord {
+        static override table = "products";
+        static override attributes = { flags } as never;
+      };
+
     expect(() => db.model(withFlags({ type: "integer", storage: "unixSeconds" })).build()).toThrow(
       new InvalidModel(
         'Strange.flags is "integer", so it can\'t have a storage: only a datetime is stored as an epoch',
@@ -283,10 +336,9 @@ describe("a generated Model's static attributes", () => {
     expect(() => db.model(withFlags({ type: "datetime", storage: "minutes" })).build()).toThrow(
       InvalidModel,
     );
-    expect([Integer, Minutes]).toHaveLength(2);
   });
 
-  test("an override past the types is checked too: the column, or anything but a spec, is an InvalidModel", () => {
+  test("an override past the types that's a column, or isn't a type name, a spec or false, is an InvalidModel", () => {
     const withSku = (sku: unknown) =>
       class Strange extends AppRecord {
         static override table = "products";
