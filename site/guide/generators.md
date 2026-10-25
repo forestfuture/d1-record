@@ -106,16 +106,16 @@ npx d1-record g model Product 'name:string!' --models src/app/models
 ```
 
 ::: warning TIP
-`d1-record schema` writes `application-record.ts` there, and the generators write Models that import it, so both need `--models`. A `package.json` script saves retyping it: `"db:schema": "d1-record schema --models src/app/models"`.
+`d1-record schema` writes `application-record.ts` there and reads your Models from there, and the generators write Models that import it, so both need `--models`. A `package.json` script saves retyping it: `"db:schema": "d1-record schema --models src/app/models"`.
 :::
 
 ## Keeping the schema current
 
-The generators regenerate `src/db/schema.ts` themselves. After writing or editing a migration by hand, regenerate it:
+The generators regenerate `src/db/schema.ts` themselves. After writing or editing a migration by hand, or adding or renaming a Model, regenerate it:
 
 ```sh
 npx d1-record schema
 ```
 
-- **`--watch`** regenerates it whenever a migration changes.
+- **`--watch`** regenerates it whenever a migration or a Model file changes.
 - **`--check`** fails when the committed schema is out of date. Run it in CI.

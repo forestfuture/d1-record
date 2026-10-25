@@ -4,17 +4,17 @@ description: "Write methods, callbacks, and scopes once, on your app's base clas
 
 # Shared behavior
 
-Every Model extends your app’s `ApplicationRecord`, so whatever you write on its base class, every Model has.
+Every Model extends your app’s `ApplicationRecord`, so whatever you write on it, every Model has.
 
 ## Sharing methods, callbacks, and scopes
 
-Write them on `Base`, in `src/models/application-record.ts`:
+Write them on `ApplicationRecord`, in `src/models/application-record.ts`:
 
 <<< @/snippets/guide/application-record.ts#shared{ts}
 
 Each is shared like this:
 
-| On `Base`                                | Every Model                                            |
+| On `ApplicationRecord`                   | Every Model                                            |
 | ---------------------------------------- | ------------------------------------------------------ |
 | A method, such as `label()`              | has it, on every record                                |
 | A static method                          | has it, on the Model                                   |
@@ -30,14 +30,53 @@ A Model can replace a shared method or scope by declaring one of the same name.
 
 ## Writing for every table
 
-Inside `Base`, `this` is a record of any Model. It has every record method, such as `save()` and `attributes()`, but no attributes, since those differ from table to table:
+Inside `ApplicationRecord`, `this` is a record of any Model. It has every record method, such as `save()` and `attributes()`, but no attributes, since those differ from table to table:
 
 - Read attributes through `this.attributes()`, as `label()` does above.
 - Write shared scopes with `sql` fragments, since they run on each Model’s own table: `static newest = this.scope((q) => q.order(sql\`created_at DESC\`))`.
 - Validations name attributes, so they belong on each Model. Put shared checks in a callback instead.
 
-`Base` has no table of its own, so `db.model(Base)` throws `InvalidModel`. Once a Model has been used, its `Base` is sealed with it, so request code can’t add callbacks to every Model.
+`ApplicationRecord` has no table of its own, so `db.model(ApplicationRecord)` throws `InvalidModel`. Once a Model has been used, `ApplicationRecord` is sealed with it, so request code can’t add callbacks to every Model.
+
+## Sharing behavior between some Models
+
+To share behavior between only some Models, put it on a class between them and `ApplicationRecord`, marked `abstract`:
+
+```ts
+import { ApplicationRecord } from "./application-record";
+
+export abstract class Auditable extends ApplicationRecord {
+  static override abstract = true;
+
+  static {
+    this.afterSave((record) => {
+      console.log(`Saved ${record.constructor.name}`);
+    });
+  }
+}
+
+export class Invoice extends Auditable {}
+```
+
+`Auditable` has no table. Each class that extends it has its own, so `Invoice` reads and writes `invoices`.
 
 ## Sharing across databases
 
-Each database has its own base class, such as `DbRecord` and `LogsRecord`. To share behavior across all of them, write it in one class extending `Model.Base`, and extend that class in each base class’s file. See [Multiple databases](./several-databases).
+Each database has its own base class, such as `DbRecord` and `LogsRecord`, holding its own schema. To share behavior across all of them, write it on one abstract class extending `Model`, and extend that class in each base class’s file:
+
+```ts
+import { Model } from "@forestfuture/d1-record";
+import { schema } from "../db/LOGS";
+
+export abstract class AppRecord extends Model {
+  label() {
+    return `${this.constructor.name} ${JSON.stringify(this.attributes())}`;
+  }
+}
+
+export abstract class LogsRecord extends AppRecord {
+  static override schema = schema;
+}
+```
+
+See [Multiple databases](./several-databases).

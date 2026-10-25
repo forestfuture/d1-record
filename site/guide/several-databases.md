@@ -41,12 +41,12 @@ With several databases, it writes one of each per binding:
 | `DB`    | `src/db/DB.ts`   | `DbRecord`, in `src/models/db-record.ts`     |
 | `LOGS`  | `src/db/LOGS.ts` | `LogsRecord`, in `src/models/logs-record.ts` |
 
-Each base class names its binding, so its Models query that database:
+Each base class holds its database’s schema, which names its binding, so its Models query that database:
 
 ```ts
 import { LogsRecord } from "./logs-record";
 
-export class Entry extends LogsRecord("entries") {}
+export class Entry extends LogsRecord {}
 
 await Entry.where({ level: "error" }).count(); // on LOGS
 ```

@@ -77,12 +77,12 @@ A Model’s attributes come from the generated schema, so a Model only declares 
 
 <<< @/snippets/getting-started/src/models/post.ts{ts} [src/models/post.ts]
 
-The generated `User` is one line:
+The generated `User` is one line. Its table, `users`, comes from its class name:
 
 ```ts [src/models/user.ts]
 import { ApplicationRecord } from "./application-record";
 
-export class User extends ApplicationRecord("users") {}
+export class User extends ApplicationRecord {}
 ```
 
 Give it posts, a scope for active users, and rules for saving:

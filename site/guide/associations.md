@@ -73,7 +73,7 @@ If the name doesn’t follow the convention, pass `foreignKey`:
 ```ts
 import { belongsTo } from "@forestfuture/d1-record";
 
-export class Post extends ApplicationRecord("posts") {
+export class Post extends ApplicationRecord {
   author = belongsTo(User, { foreignKey: "userId" });
 }
 ```
