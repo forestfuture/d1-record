@@ -36,7 +36,7 @@ export function compileSelect(query: QueryDescription, projection?: string): Com
   const params: unknown[] = [];
   const list = projection ?? compileColumns(query.model, query.select);
   let sql = `SELECT ${query.distinct ? "DISTINCT " : ""}${list}`;
-  sql += ` FROM ${quoteIdentifier(query.model.tableName)}`;
+  sql += ` FROM ${quoteIdentifier(query.model.table)}`;
   sql += compileWhere(query, params);
   sql += compileOrder(query, params);
   sql += compilePagination(query, params);
@@ -115,7 +115,7 @@ export function compileInsert(
   model: ModelClass<Model>,
   assignments: readonly Assignment[],
 ): CompiledSql {
-  const table = quoteIdentifier(model.tableName);
+  const table = quoteIdentifier(model.table);
   if (assignments.length === 0) {
     return {
       sql: `INSERT INTO ${table} DEFAULT VALUES RETURNING ${allColumns(model)}`,
@@ -157,7 +157,7 @@ export function compileInsertRows(
   const json = storedRows(model, names, rows);
   // `WHERE true` keeps SQLite from reading ON CONFLICT as part of the SELECT.
   const sql =
-    `INSERT INTO ${quoteIdentifier(model.tableName)} (${columns}) ` +
+    `INSERT INTO ${quoteIdentifier(model.table)} (${columns}) ` +
     `SELECT ${values} FROM json_each(?) WHERE true${compileConflict(model, names, conflict)}`;
   return { sql, params: [json], model };
 }
@@ -197,7 +197,7 @@ export function compileUpdate(
   const primaryKey = attributeFor(model, model.primaryKey);
   attributeFor(model, model.primaryKey).bindCells(params, storedKey);
   return {
-    sql: `UPDATE ${quoteIdentifier(model.tableName)} SET ${sets} WHERE ${quoteIdentifier(primaryKey.column)} = ?`,
+    sql: `UPDATE ${quoteIdentifier(model.table)} SET ${sets} WHERE ${quoteIdentifier(primaryKey.column)} = ?`,
     params,
     model,
   };
@@ -241,7 +241,7 @@ export function compileUpdateAll(
   const params: unknown[] = [];
   const sets = compileSets(query.model, changes, params);
   const target = compileTarget(query, params);
-  const sql = `UPDATE ${quoteIdentifier(query.model.tableName)} SET ${sets}${target}`;
+  const sql = `UPDATE ${quoteIdentifier(query.model.table)} SET ${sets}${target}`;
   return { sql, params, model: query.model };
 }
 
@@ -249,7 +249,7 @@ export function compileUpdateAll(
 export function compileDeleteAll(query: QueryDescription): CompiledSql {
   const params: unknown[] = [];
   const target = compileTarget(query, params);
-  const sql = `DELETE FROM ${quoteIdentifier(query.model.tableName)}${target}`;
+  const sql = `DELETE FROM ${quoteIdentifier(query.model.table)}${target}`;
   return { sql, params, model: query.model };
 }
 
@@ -259,7 +259,7 @@ export function compileDelete(model: ModelClass<Model>, storedKey: unknown): Com
   const params: unknown[] = [];
   attributeFor(model, model.primaryKey).bindCells(params, storedKey);
   return {
-    sql: `DELETE FROM ${quoteIdentifier(model.tableName)} WHERE ${quoteIdentifier(column)} = ?`,
+    sql: `DELETE FROM ${quoteIdentifier(model.table)} WHERE ${quoteIdentifier(column)} = ?`,
     params,
     model,
   };

@@ -28,8 +28,8 @@ describe("modelFor: the generated Model", () => {
     class Product extends Model("products") {}
     class Event extends Model("events") {}
 
-    expect([Product.tableName, Product.primaryKey]).toEqual(["products", "id"]);
-    expect([Event.tableName, Event.primaryKey]).toEqual(["events", "eventId"]);
+    expect([Product.table, Product.primaryKey]).toEqual(["products", "id"]);
+    expect([Event.table, Event.primaryKey]).toEqual(["events", "eventId"]);
     expect([...Product.attributeDefinitions.keys()]).toEqual([
       "id",
       "name",
@@ -46,7 +46,7 @@ describe("modelFor: the generated Model", () => {
     const Anonymous = class extends Model("products") {};
     class Special extends class Product extends Model("products") {} {}
 
-    expect([Anonymous.tableName, Special.tableName]).toEqual(["products", "products"]);
+    expect([Anonymous.table, Special.table]).toEqual(["products", "products"]);
     expect(() => db.model(Anonymous)).not.toThrow();
   });
 
@@ -82,7 +82,7 @@ describe("modelFor: the generated Model", () => {
   test("Model({...}) is the library's Model, unchanged", () => {
     class Visit extends Model({ id: "integer", path: "string" }) {}
 
-    expect([Visit.tableName, Visit.primaryKey]).toEqual(["visits", "id"]);
+    expect([Visit.table, Visit.primaryKey]).toEqual(["visits", "id"]);
     expectTypeOf<Visit["path"]>().toEqualTypeOf<string | null>();
   });
 
@@ -103,14 +103,14 @@ describe("modelFor: the generated Model", () => {
     void (() => Model("products", { sku: { column: "code" } }));
   });
 
-  test("setting tableName on a generated Model is an InvalidModel: its attributes are that table's", () => {
+  test("setting table on a generated Model is an InvalidModel: its attributes are that table's", () => {
     class Product extends Model("products") {
-      static override tableName = "goods";
+      static override table = "goods";
     }
 
     expect(() => db.model(Product)).toThrow(
       new InvalidModel(
-        'Product sets tableName "goods", but its attributes are the products table\'s; name the table in its base class\'s call instead (ApplicationRecord("…"))',
+        'Product sets table "goods", but its attributes are the products table\'s; name the table in its base class\'s call instead (ApplicationRecord("…"))',
       ),
     );
   });
@@ -216,7 +216,7 @@ describe("modelFor(tables, Base): an app's own base class, as Rails' Application
     }
 
     static describe() {
-      return `${this.name} on ${this.tableName}`;
+      return `${this.name} on ${this.table}`;
     }
 
     static newest = this.scope((q) => q.order(sql`created_at DESC`));

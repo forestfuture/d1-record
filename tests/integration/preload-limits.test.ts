@@ -7,7 +7,7 @@ class Note extends Model.define({
   notebookId: "string",
   body: "string",
 }) {
-  static tableName = "notes";
+  static table = "notes";
 
   notebook = belongsTo(Notebook);
 }
@@ -17,7 +17,7 @@ class Notebook extends Model.define({
   title: "string",
   color: "string",
 }) {
-  static tableName = "notebooks";
+  static table = "notebooks";
 
   notes = hasMany(Note);
 }

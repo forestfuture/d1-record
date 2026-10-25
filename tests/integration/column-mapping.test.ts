@@ -11,7 +11,7 @@ class Account extends Model.define({
   sha256Hash: "string",
   legacyId: { type: "string", column: "person_identifier" },
 }) {
-  static tableName = "accounts";
+  static table = "accounts";
 }
 
 describe("column mapping", () => {

@@ -7,7 +7,7 @@ class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
 }) {
-  static tableName = "users";
+  static table = "users";
 
   posts = hasMany(Post); // User → userId
   profile = hasOne(Profile); // User → userId
@@ -18,7 +18,7 @@ class Post extends Model.define({
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
 }) {
-  static tableName = "posts";
+  static table = "posts";
 
   user = belongsTo(User); // user → userId
 }
@@ -28,7 +28,7 @@ class Writer extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
 }) {
-  static tableName = "users";
+  static table = "users";
 
   posts = hasMany(Article, { foreignKey: "userId" });
 }
@@ -38,7 +38,7 @@ class Article extends Model.define({
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
 }) {
-  static tableName = "posts";
+  static table = "posts";
 
   author = belongsTo(Writer, { foreignKey: "userId" });
 }
@@ -48,7 +48,7 @@ class Profile extends Model.define({
   userId: { type: "integer", null: false },
   bio: "string",
 }) {
-  static tableName = "profiles";
+  static table = "profiles";
 }
 
 describe("inferred foreign keys", () => {

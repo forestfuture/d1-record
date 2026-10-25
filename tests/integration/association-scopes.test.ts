@@ -17,7 +17,7 @@ class User extends Model.define({
   email: { type: "string", null: false },
   role: "string",
 }) {
-  static tableName = "users";
+  static table = "users";
 
   // Newest first, as Rails' `has_many :posts, -> { order(created_at: :desc) }`.
   posts = hasMany(Post, {
@@ -46,7 +46,7 @@ class Post extends Model.define({
   published: { type: "boolean", null: false },
   createdAt: "datetime",
 }) {
-  static tableName = "posts";
+  static table = "posts";
 
   static drafts = this.scope((q) => q.where({ published: false }));
 
@@ -59,7 +59,7 @@ class Post extends Model.define({
 class Broken extends Model.define({
   id: { type: "integer", null: false },
 }) {
-  static tableName = "users";
+  static table = "users";
 
   // Scopes are typed from the target, so this is a type error too; the runtime check is tested.
   // @ts-expect-error nope isn't a Post attribute

@@ -14,7 +14,7 @@ class User extends Model.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
 }) {
-  static tableName = "users";
+  static table = "users";
 
   profile = hasOne(Profile, { foreignKey: "userId" });
 
@@ -30,7 +30,7 @@ class Post extends Model.define({
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
 }) {
-  static tableName = "posts";
+  static table = "posts";
 
   author = belongsTo(User, { foreignKey: "userId" });
   comments = hasMany(Comment, { foreignKey: "postId" });
@@ -45,7 +45,7 @@ class Comment extends Model.define({
   postId: "integer",
   body: "string",
 }) {
-  static tableName = "comments";
+  static table = "comments";
 }
 
 class Profile extends Model.define({
@@ -53,7 +53,7 @@ class Profile extends Model.define({
   userId: { type: "integer", null: false },
   bio: "string",
 }) {
-  static tableName = "profiles";
+  static table = "profiles";
 
   static {
     this.validates("bio", { presence: true });
@@ -66,14 +66,14 @@ class ApiKey extends Model.define({
   id: { type: "string", null: false, default: () => `key-${++counter}` },
   label: { type: "string", null: false },
 }) {
-  static tableName = "api_keys";
+  static table = "api_keys";
 }
 
 class Account extends Model.define({
   id: { type: "integer", null: false },
   externalAccountId: "string",
 }) {
-  static tableName = "accounts";
+  static table = "accounts";
 
   apiKey = belongsTo(ApiKey, { foreignKey: "externalAccountId" });
 

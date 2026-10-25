@@ -19,7 +19,7 @@ describe("model declaration", () => {
   });
   afterAll(() => dispose());
 
-  test("a model without a tableName uses the one inferred from its class name", async () => {
+  test("a model without a table uses the one inferred from its class name", async () => {
     class User extends Model.define({ id: "integer", email: "string" }) {}
     const users = connect(binding).model(User);
 
@@ -29,15 +29,15 @@ describe("model declaration", () => {
     await users.where({ id: 7 }).deleteAll();
   });
 
-  test("an empty tableName is rejected when first used", () => {
+  test("an empty table is rejected when first used", () => {
     class Nameless extends Model.define({ id: "integer" }) {
-      static tableName = "";
+      static table = "";
     }
 
     const use = () => connect(binding).model(Nameless);
 
     expect(use).toThrow(InvalidModel);
-    expect(use).toThrow(/Nameless.*tableName/);
+    expect(use).toThrow(/Nameless.*table/);
     expect(use).toThrow(D1RecordError);
   });
 
@@ -64,7 +64,7 @@ describe("model declaration", () => {
       expect(error).toHaveProperty(
         "message",
         expect.stringMatching(
-          /e's table "es" doesn't exist in D1 \(inferred from the class name e; create it, set static tableName, or keep class names if your bundler renames them\)/,
+          /e's table "es" doesn't exist in D1 \(inferred from the class name e; create it, set static table, or keep class names if your bundler renames them\)/,
         ),
       );
     }
@@ -72,7 +72,7 @@ describe("model declaration", () => {
 
   test("a missing table that was declared is D1's own error, as before", async () => {
     class Missing extends Model.define({ id: "integer" }) {
-      static tableName = "nowhere";
+      static table = "nowhere";
     }
 
     const read = connect(binding).model(Missing).toArray();
@@ -83,7 +83,7 @@ describe("model declaration", () => {
 
   test("a class field that would hide an attribute's accessor is rejected when first used", () => {
     class Shadowed extends Model.define({ id: "integer", email: "string" }) {
-      static tableName = "users";
+      static table = "users";
       email!: string | null; // should have been left to Model.define({...})
     }
 
@@ -92,7 +92,7 @@ describe("model declaration", () => {
 
   test("where rejects a key that isn't a declared attribute", () => {
     class User extends Model.define({ id: "integer", email: "string" }) {
-      static tableName = "users";
+      static table = "users";
     }
     const users = connect(binding).model(User);
 
@@ -104,7 +104,7 @@ describe("model declaration", () => {
 
   test("an attribute named like a record method is rejected when first used", () => {
     class Clashing extends Model.define({ id: "integer", attributes: "json" }) {
-      static tableName = "users";
+      static table = "users";
     }
 
     expect(() => connect(binding).model(Clashing)).toThrow(/Clashing.*"attributes"/);
@@ -112,7 +112,7 @@ describe("model declaration", () => {
 
   test("column() naming an unknown attribute is rejected as soon as where is called", () => {
     class User extends Model.define({ id: "integer", createdAt: "datetime" }) {
-      static tableName = "users";
+      static table = "users";
     }
     const users = connect(binding).model(User);
 
@@ -123,10 +123,10 @@ describe("model declaration", () => {
 
   test("a primaryKey that isn't a declared attribute is rejected when first used", () => {
     class Keyless extends Model.define({ email: "string" }) {
-      static tableName = "users";
+      static table = "users";
     }
     class WrongKey extends Model.define({ uuid: "string" }) {
-      static tableName = "users";
+      static table = "users";
       static primaryKey = "id";
     }
 
@@ -136,10 +136,10 @@ describe("model declaration", () => {
 
   test("errors and abortReason are reserved: they're record properties", () => {
     class WithErrors extends Model.define({ id: "integer", errors: "json" }) {
-      static tableName = "users";
+      static table = "users";
     }
     class WithReason extends Model.define({ id: "integer", abortReason: "string" }) {
-      static tableName = "users";
+      static table = "users";
     }
 
     expect(() => connect(binding).model(WithErrors)).toThrow(

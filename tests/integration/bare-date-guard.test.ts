@@ -11,7 +11,7 @@ class Stamp extends Model.define({
   mapped: { type: "datetime", storage: "unixSeconds", column: "mapped_at" },
   iso: "datetime",
 }) {
-  static tableName = "guarded_stamps";
+  static table = "guarded_stamps";
 }
 
 describe("a bare date beside an integer-stored column in a fragment (#149)", () => {

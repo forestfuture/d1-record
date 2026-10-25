@@ -11,7 +11,7 @@ class User extends Model.define({
   isActive: "boolean",
   age: "integer",
 }) {
-  static tableName = "users";
+  static table = "users";
 }
 
 type Name = "email" | "role" | "isActive" | "age";

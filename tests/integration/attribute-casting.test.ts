@@ -19,11 +19,11 @@ class Sample extends Model.define({
   stamp: "datetime",
   settings: "json",
 }) {
-  static tableName = "samples";
+  static table = "samples";
 }
 
 class ApiKey extends Model.define({ id: { type: "string", null: false }, label: "string" }) {
-  static tableName = "api_keys";
+  static table = "api_keys";
 }
 
 // A foreign key whose type differs from the key it points at: an integer holding a text key.
@@ -31,7 +31,7 @@ class KeyedSample extends Model.define({
   id: { type: "integer", null: false },
   quantity: "integer",
 }) {
-  static tableName = "samples";
+  static table = "samples";
 
   apiKey = belongsTo(ApiKey, { foreignKey: "quantity" });
 }

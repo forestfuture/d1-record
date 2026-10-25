@@ -6,7 +6,7 @@ import { jsonValues } from "../support/json-values.ts";
 import { SLOW_RUNS, SLOW_TIMEOUT } from "../support/properties.ts";
 
 class Sample extends Model.define({ id: { type: "integer", null: false }, settings: "json" }) {
-  static tableName = "samples";
+  static table = "samples";
 }
 
 // A JSON attribute is saved as text and parsed back, so any JSON value, a top-level number or

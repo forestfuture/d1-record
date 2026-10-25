@@ -15,12 +15,12 @@ class Reading extends Model.define({
   settings: "json",
   secret: "integer",
 }) {
-  static tableName = "strict_reads";
+  static table = "strict_reads";
   static override filterAttributes = ["secret"];
 }
 
 class Owner extends Model.define({ id: { type: "integer", null: false } }) {
-  static tableName = "strict_owners";
+  static table = "strict_owners";
 
   readings = hasMany(Reading, { foreignKey: "ownerId" });
 }

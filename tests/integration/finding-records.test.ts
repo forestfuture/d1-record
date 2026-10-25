@@ -7,7 +7,7 @@ class User extends Model.define({
   email: { type: "string", null: false },
   role: "string",
 }) {
-  static tableName = "users";
+  static table = "users";
 }
 
 describe("finding records", () => {

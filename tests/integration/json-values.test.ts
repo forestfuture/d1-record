@@ -8,12 +8,12 @@ class Doc extends Model.define({
   settings: "json",
   secret: "json",
 }) {
-  static tableName = "json_docs";
+  static table = "json_docs";
   static override filterAttributes = ["secret"];
 }
 
 class Folder extends Model.define({ id: { type: "integer", null: false } }) {
-  static tableName = "json_folders";
+  static table = "json_folders";
 
   docs = hasMany(Doc, { foreignKey: "folderId" });
 }

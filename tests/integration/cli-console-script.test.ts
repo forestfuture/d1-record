@@ -8,7 +8,7 @@ class Sample extends Model.define({
   label: "string",
   quantity: "integer",
 }) {
-  static tableName = "samples";
+  static table = "samples";
 }
 
 // `d1-record console -e` (#105): one piece of code, its result on stdout, its failure on stderr.

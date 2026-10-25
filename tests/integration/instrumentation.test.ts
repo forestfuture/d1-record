@@ -3,13 +3,13 @@ import { connect, Model, type QueryEvent } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model.define({ id: "integer", email: "string" }) {
-  static tableName = "users";
+  static table = "users";
   // These tests read bound values, so nothing is filtered (#83).
   static override filterAttributes = [];
 }
 
 class Missing extends Model.define({ id: "integer" }) {
-  static tableName = "no_such_table";
+  static table = "no_such_table";
 }
 
 describe("instrumentation", () => {

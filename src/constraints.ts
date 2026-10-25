@@ -57,7 +57,7 @@ function failedModel(
   table: string | undefined,
   models: readonly ModelClass[],
 ): ModelClass | undefined {
-  if (table !== undefined) return models.find((model) => model.tableName === table);
+  if (table !== undefined) return models.find((model) => model.table === table);
   return new Set(models).size === 1 ? models[0] : undefined;
 }
 
@@ -71,7 +71,7 @@ function violation(
   const model = failedModel(table, models);
   const attributes =
     model === undefined ? [] : columns.flatMap((column) => attributesForColumn(model, column));
-  const failedTable = table ?? model?.tableName ?? null;
+  const failedTable = table ?? model?.table ?? null;
   const named = columns.length > 0 ? ` (${columns.join(", ")})` : "";
   return new Kind(`${model?.name ?? failedTable ?? "batch"}${named}: ${label}`, {
     table: failedTable,

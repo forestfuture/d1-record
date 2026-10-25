@@ -8,14 +8,14 @@ class User extends Model.define({
   age: "integer",
   createdAt: "datetime",
 }) {
-  static tableName = "users";
+  static table = "users";
 }
 
 class Sample extends Model.define({
   id: { type: "integer", null: false },
   settings: "json",
 }) {
-  static tableName = "samples";
+  static table = "samples";
 }
 
 const day = (n: number) => new Date(Date.UTC(2026, 0, n));

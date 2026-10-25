@@ -7,7 +7,7 @@ class User extends Model.define({
   email: { type: "string", null: false },
   role: "string",
 }) {
-  static tableName = "users";
+  static table = "users";
   static hiddenAttributes = ["email"];
 }
 
@@ -16,7 +16,7 @@ class Member extends Model.define({
   email: { type: "string", null: false },
   role: "string",
 }) {
-  static tableName = "users";
+  static table = "users";
 }
 
 class Base extends Model {
@@ -102,7 +102,7 @@ describe("hiddenAttributes", () => {
   describe("naming one the Model doesn't have", () => {
     test("in its own list is an InvalidModel", () => {
       class Typo extends Model.define({ id: "integer", role: "string" }) {
-        static override tableName = "users";
+        static override table = "users";
         static override hiddenAttributes = ["rol"];
       }
 
@@ -133,7 +133,7 @@ describe("hiddenAttributes", () => {
       Model.hiddenAttributes = ["nickname"];
       try {
         class Plain extends Model.define({ id: "integer", role: "string" }) {
-          static override tableName = "users";
+          static override table = "users";
         }
 
         expect(() => connect(binding).model(Plain)).not.toThrow();
@@ -162,7 +162,7 @@ describe("hiddenAttributes", () => {
 
   test("the list is read each time, so a change after first use applies", async () => {
     class Live extends Model.define({ id: "integer", email: "string", role: "string" }) {
-      static override tableName = "users";
+      static override table = "users";
     }
     const live = await connect(binding)
       .model(Live)

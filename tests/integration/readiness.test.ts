@@ -8,7 +8,7 @@ class Comment extends Model.define({
   postId: "integer",
   body: "string",
 }) {
-  static tableName = "comments";
+  static table = "comments";
 
   post = belongsTo(Post, { foreignKey: "postId" });
 }
@@ -18,19 +18,19 @@ class Post extends Model.define({
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
 }) {
-  static tableName = "posts";
+  static table = "posts";
 
   comments = hasMany(Comment, { foreignKey: "postId" });
 }
 
 // Its target names a primary key that isn't an attribute: invalid, found at first use.
 class Broken extends Model.define({ id: { type: "integer", null: false } }) {
-  static tableName = "comments";
+  static table = "comments";
   static override primaryKey = "missing";
 }
 
 class Pointing extends Model.define({ id: { type: "integer", null: false }, postId: "integer" }) {
-  static tableName = "comments";
+  static table = "comments";
 
   broken = belongsTo(Broken, { foreignKey: "postId" });
 }

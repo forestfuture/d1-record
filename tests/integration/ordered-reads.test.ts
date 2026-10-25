@@ -8,7 +8,7 @@ class Post extends Model.define({
   title: { type: "string", null: false },
   createdAt: "datetime",
 }) {
-  static tableName = "posts";
+  static table = "posts";
 }
 
 /**

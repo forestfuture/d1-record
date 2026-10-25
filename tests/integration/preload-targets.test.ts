@@ -4,7 +4,7 @@ import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 // Fresh Models used by no other test: Entry and Remark are only ever reached through includes.
 class Owner extends Model.define({ id: { type: "integer", null: false }, email: "string" }) {
-  static tableName = "users";
+  static table = "users";
   entries = hasMany(Entry, { foreignKey: "userId" });
 }
 
@@ -13,7 +13,7 @@ class Entry extends Model.define({
   userId: "integer",
   title: "string",
 }) {
-  static tableName = "posts";
+  static table = "posts";
   owner = belongsTo(Owner, { foreignKey: "userId" });
   remarks = hasMany(Remark, { foreignKey: "postId" });
 }
@@ -23,7 +23,7 @@ class Remark extends Model.define({
   postId: "integer",
   body: "string",
 }) {
-  static tableName = "comments";
+  static table = "comments";
 }
 
 describe("Models reached only through includes", () => {
@@ -50,11 +50,11 @@ describe("Models reached only through includes", () => {
 
   test("have their declarations checked", () => {
     class Broken extends Model.define({ id: "integer", userId: "integer" }) {
-      static tableName = "posts";
+      static table = "posts";
       owner = belongsTo(Owner, { foreignKey: "ownerId" });
     }
     class Root extends Model.define({ id: "integer" }) {
-      static tableName = "users";
+      static table = "users";
       broken = hasMany(Broken, { foreignKey: "userId" });
     }
 

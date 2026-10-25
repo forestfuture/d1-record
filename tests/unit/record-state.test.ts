@@ -6,7 +6,7 @@ class User extends Model.define({
   email: { type: "string", null: false },
   role: "string",
 }) {
-  static tableName = "users";
+  static table = "users";
 }
 
 // No D1 needed: these records are only built, never loaded or written.
@@ -50,7 +50,7 @@ describe("record state without D1", () => {
     class Token extends Model.define({
       id: { type: "string", null: false, default: () => undefined },
     }) {
-      static tableName = "tokens";
+      static table = "tokens";
     }
 
     expect(() =>

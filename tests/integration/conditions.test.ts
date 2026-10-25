@@ -8,7 +8,7 @@ class User extends Model.define({
   role: "string",
   suspended: { type: "boolean", null: false },
 }) {
-  static tableName = "users";
+  static table = "users";
 }
 
 describe("conditions", () => {

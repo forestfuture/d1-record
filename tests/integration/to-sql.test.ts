@@ -8,7 +8,7 @@ class User extends Model.define({
   role: "string",
   age: "integer",
 }) {
-  static tableName = "users";
+  static table = "users";
 
   posts = hasMany(Post, { foreignKey: "userId" });
 }
@@ -18,7 +18,7 @@ class Session extends Model.define({
   token: { type: "string", null: false, column: "id" },
   label: { type: "string", null: false },
 }) {
-  static tableName = "api_keys";
+  static table = "api_keys";
   static primaryKey = "token";
 }
 
@@ -27,7 +27,7 @@ class Post extends Model.define({
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
 }) {
-  static tableName = "posts";
+  static table = "posts";
 }
 
 describe("toSql", () => {

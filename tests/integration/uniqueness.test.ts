@@ -9,7 +9,7 @@ class Account extends Model.define({
   userID: "integer",
   htmlURL: "string",
 }) {
-  static tableName = "accounts";
+  static table = "accounts";
 
   static {
     this.validates("externalAccountId", { uniqueness: { scope: ["userID"] } });

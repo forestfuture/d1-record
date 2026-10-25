@@ -6,7 +6,7 @@ import type { ModelClass } from "./model.ts";
 import { underscore } from "./naming.ts";
 
 /**
- * The classes `Model.define({...})` makes; their `tableName` is inferred unless a subclass sets one.
+ * The classes `Model.define({...})` makes; their `table` is inferred unless a subclass sets one.
  * Module-level, but not request state (ADR-0003): derived only from the classes.
  */
 const bases = new WeakSet<object>();
@@ -40,23 +40,23 @@ function className(base: object, model: object): string {
 }
 
 /**
- * Gives the classes extending `base` an inferred `tableName`, by Rails' `tableize`: the class
+ * Gives the classes extending `base` an inferred `table`, by Rails' `tableize`: the class
  * name through `underscore`, pluralized (`BlogPost` → `blog_posts`, `Person` → `people`). A
- * subclass shares its parent's; `static tableName = "…"` anywhere in the chain overrides it.
+ * subclass shares its parent's; `static table = "…"` anywhere in the chain overrides it.
  */
 export function inferTableNames(base: object): void {
   bases.add(base);
-  Object.defineProperty(base, "tableName", {
+  Object.defineProperty(base, "table", {
     configurable: true,
     get(this: object) {
       const name = className(base, this);
       return name === "" ? "" : pluralize(underscore(name));
     },
     // An assignment (a static block, or a class field compiled without
-    // useDefineForClassFields) names that class's table, as `static tableName = "…"` does.
-    set(this: object, tableName: unknown) {
-      Object.defineProperty(this, "tableName", {
-        value: tableName,
+    // useDefineForClassFields) names that class's table, as `static table = "…"` does.
+    set(this: object, table: unknown) {
+      Object.defineProperty(this, "table", {
+        value: table,
         writable: true,
         enumerable: true,
         configurable: true,
@@ -67,7 +67,7 @@ export function inferTableNames(base: object): void {
 
 /** The class name a Model's table name was inferred from, or undefined when it's declared. */
 function tableNameSource(model: object): string | undefined {
-  const owner = ancestors(model).find((each) => Object.hasOwn(each, "tableName"));
+  const owner = ancestors(model).find((each) => Object.hasOwn(each, "table"));
   return owner !== undefined && bases.has(owner) && !boundTables.has(owner)
     ? className(owner, model)
     : undefined;
@@ -83,7 +83,7 @@ export function bindTable(
   table: string,
   { ignoresColumns }: { ignoresColumns: boolean },
 ): void {
-  base.tableName = table;
+  base.table = table;
   boundTables.set(base, { table, ignoresColumns });
 }
 
@@ -122,19 +122,19 @@ export function rejectAbstract(model: ModelClass): void {
 
 /** A Model must have a table name: its own, or one inferred from its class name. */
 export function requireTableName(model: ModelClass): void {
-  const { tableName } = model;
+  const { table } = model;
   const bound = boundTableOf(model)?.table;
-  if (bound !== undefined && tableName !== bound) {
+  if (bound !== undefined && table !== bound) {
     throw new InvalidModel(
-      `${model.name} sets tableName "${String(tableName)}", but its attributes are the ${bound} ` +
+      `${model.name} sets table "${String(table)}", but its attributes are the ${bound} ` +
         "table's; name the table in its base class's call instead (ApplicationRecord(\"…\"))",
     );
   }
-  if (typeof tableName === "string" && tableName !== "") return;
+  if (typeof table === "string" && table !== "") return;
   throw new InvalidModel(
     tableNameSource(model) === ""
-      ? `${model.name || "A Model class"} has no class name to infer its table from; set static tableName`
-      : `${model.name}'s tableName must be a table's name; remove it to use the one inferred from the class name`,
+      ? `${model.name || "A Model class"} has no class name to infer its table from; set static table`
+      : `${model.name}'s table must be a table's name; remove it to use the one inferred from the class name`,
   );
 }
 
@@ -145,12 +145,12 @@ export function requireTableName(model: ModelClass): void {
 export function explainMissingTable(error: unknown, models: readonly ModelClass[]): unknown {
   const message = error instanceof Error ? error.message : String(error);
   const table = /no such table: ([^\s:]+)/.exec(message)?.[1];
-  const model = models.find((each) => each.tableName === table && tableNameSource(each));
+  const model = models.find((each) => each.table === table && tableNameSource(each));
   const source = model && tableNameSource(model);
   if (table === undefined || model === undefined) return error;
   return new InvalidModel(
     `${model.name}'s table "${table}" doesn't exist in D1 (inferred from the class name ` +
-      `${source}; create it, set static tableName, or keep class names if your ` +
+      `${source}; create it, set static table, or keep class names if your ` +
       "bundler renames them)",
     { cause: error },
   );

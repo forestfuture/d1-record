@@ -11,7 +11,7 @@ class Sample extends Model.define({
   stamp: "datetime",
   settings: "json",
 }) {
-  static tableName = "samples";
+  static table = "samples";
 }
 
 class JsonValue extends Model.define({
@@ -19,7 +19,7 @@ class JsonValue extends Model.define({
   checked: "json", // TEXT CHECK (json_valid(checked)), as D1 recommends
   value: "json", // declared JSON
 }) {
-  static tableName = "json_values";
+  static table = "json_values";
 }
 
 describe("attribute types", () => {

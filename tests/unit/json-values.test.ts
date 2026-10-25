@@ -6,7 +6,7 @@ class Doc extends Model.define({
   settings: "json",
   secret: "json",
 }) {
-  static tableName = "json_docs";
+  static table = "json_docs";
   static override filterAttributes = ["secret"];
 }
 

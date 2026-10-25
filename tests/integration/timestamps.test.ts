@@ -8,7 +8,7 @@ class ApiKey extends Model.define({
   createdAt: "datetime",
   updatedAt: "datetime",
 }) {
-  static tableName = "api_keys";
+  static table = "api_keys";
 }
 
 const past = new Date(Date.UTC(2020, 0, 1));

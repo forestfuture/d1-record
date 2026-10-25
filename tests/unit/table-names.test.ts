@@ -73,29 +73,29 @@ const inflected: [string, string][] = [
 describe("inferred table names", () => {
   // Rails' tableize: underscore, then pluralize by Active Support's English inflections.
   test.each(inflected)("%s → %s", (className, table) => {
-    expect(modelNamed(className).tableName).toBe(table);
+    expect(modelNamed(className).table).toBe(table);
   });
 
-  test("an explicit tableName wins", () => {
+  test("an explicit table wins", () => {
     class Person extends Model.define({ id: "integer" }) {
-      static tableName = "humans";
+      static table = "humans";
     }
 
-    expect(Person.tableName).toBe("humans");
+    expect(Person.table).toBe("humans");
   });
 
   test("a subclass shares its parent's table, inferred or explicit, unless it declares its own", () => {
     class User extends Model.define({ id: "integer" }) {}
     class Admin extends User {}
     class Archived extends User {
-      static tableName = "archived_users";
+      static table = "archived_users";
     }
     class Account extends Model.define({ id: "integer" }) {
-      static tableName = "billing_accounts";
+      static table = "billing_accounts";
     }
     class Business extends Account {}
 
-    expect([Admin.tableName, Archived.tableName, Business.tableName]).toEqual([
+    expect([Admin.table, Archived.table, Business.table]).toEqual([
       "users",
       "archived_users",
       "billing_accounts",
@@ -106,30 +106,26 @@ describe("inferred table names", () => {
     // What a minifier without keep_names does: the class is now called e.
     const e = class extends Model.define({ id: "integer" }) {};
 
-    expect(e.tableName).toBe("es");
+    expect(e.table).toBe("es");
   });
 
-  test("assigning tableName sets it for that class, as compiled class fields and static blocks do", () => {
+  test("assigning table sets it for that class, as compiled class fields and static blocks do", () => {
     class User extends Model.define({ id: "integer" }) {}
     class Admin extends User {}
     class Member extends Model.define({ id: "integer" }) {
       static {
-        this.tableName = "people";
+        this.table = "people";
       }
     }
 
-    // What `static tableName = "…"` compiles to without useDefineForClassFields.
-    User.tableName = "members";
-    Admin.tableName = "admins";
+    // What `static table = "…"` compiles to without useDefineForClassFields.
+    User.table = "members";
+    Admin.table = "admins";
 
-    expect([User.tableName, Admin.tableName, Member.tableName]).toEqual([
-      "members",
-      "admins",
-      "people",
-    ]);
+    expect([User.table, Admin.table, Member.table]).toEqual(["members", "admins", "people"]);
   });
 
-  test("a class with no name to infer from must declare its tableName", () => {
+  test("a class with no name to infer from must declare its table", () => {
     const anonymous = [class extends Model.define({ id: "integer" }) {}][0]!;
     const defaultExport = { default: class extends Model.define({ id: "integer" }) {} }.default;
     const direct = Model.define({ id: "integer" });
@@ -137,7 +133,7 @@ describe("inferred table names", () => {
     for (const model of [anonymous, defaultExport, direct]) {
       expect(() => db.model(model)).toThrow(InvalidModel);
       expect(() => db.model(model)).toThrow(
-        /has no class name to infer its table from; set static tableName/,
+        /has no class name to infer its table from; set static table/,
       );
     }
   });
