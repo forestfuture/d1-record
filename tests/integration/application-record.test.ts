@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, describe, expect, expectTypeOf, test, vi } from "vite-plus/test";
+import { runSchema } from "../../cli/schema/command.ts";
 import { connect, type QueryEvent } from "../../src/index.ts";
 import { audited } from "../fixtures/models/auditable.ts";
 import { Comment } from "../fixtures/models/comment.ts";
 import { Event } from "../fixtures/models/event.ts";
 import { Customer } from "../fixtures/models/customer.ts";
 import { Post } from "../fixtures/models/post.ts";
-import { saved, TestRecord } from "../fixtures/models/test-record.ts";
+import { saved, DbRecord } from "../fixtures/models/db-record.ts";
 import { User } from "../fixtures/models/user.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
@@ -23,6 +24,15 @@ describe("Models extending the app's base class", () => {
     workers.env.DB = binding;
   });
   afterAll(() => dispose());
+
+  test("the fixtures' schemas are what their migrations and Models generate", async () => {
+    const cwd = new URL("../fixtures/", import.meta.url).pathname;
+    const output: string[] = [];
+
+    const options = { cwd, models: "models", out: ".", check: true };
+
+    expect(await runSchema(options, (line) => output.push(line))).toBe(0);
+  });
 
   test("a Model has its table's attributes, its table named after its class", async () => {
     const user = await db().model(User).create({ email: "ada@example.com" });
@@ -149,7 +159,9 @@ describe("Models extending the app's base class", () => {
   });
 
   test("Models on two base classes query their own schema's databases", async () => {
-    const logs = await createTestDatabase(new URL("../fixtures/logs.sql", import.meta.url));
+    const logs = await createTestDatabase(
+      new URL("../fixtures/migrations/logs/0001_logs.sql", import.meta.url),
+    );
     workers.env.LOGS = logs.db;
 
     try {
@@ -165,7 +177,7 @@ describe("Models extending the app's base class", () => {
   });
 
   test("define on the base class declares a Model's attributes, sharing the base", async () => {
-    class Sample extends TestRecord.define({
+    class Sample extends DbRecord.define({
       id: { type: "integer", null: false },
       quantity: "integer",
     }) {}

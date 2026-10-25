@@ -93,6 +93,13 @@ function byName<T>(items: readonly T[], name: (item: T) => string): T[] {
   return [...items].sort((a, b) => (name(a) < name(b) ? -1 : name(a) > name(b) ? 1 : 0));
 }
 
+/** The Models' entries as an object: on one line, or one a line when that would be too long. */
+function modelsSource(entries: readonly string[]): string {
+  const line = entries.length === 0 ? "{}" : `{ ${entries.join(", ")} }`;
+  if (`  models: ${line},`.length <= 100) return line;
+  return `{\n${entries.map((entry) => `    ${entry},`).join("\n")}\n  }`;
+}
+
 /** The `schema` value: the binding, every table by name, and every Model's table by class. */
 function schemaValueSource({ tables, binding, models }: SchemaSource): string {
   const entries = tables
@@ -110,7 +117,7 @@ export const schema = {
   tables: {
 ${entries}
   },
-  models: ${listed.length === 0 ? "{}" : `{ ${listed.join(", ")} }`},
+  models: ${modelsSource(listed)},
 } as const;`;
 }
 

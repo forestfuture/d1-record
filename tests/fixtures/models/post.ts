@@ -2,10 +2,10 @@
 // (#232).
 import { belongsTo, hasMany } from "../../../src/index.ts";
 import { Comment } from "./comment.ts";
-import { TestRecord } from "./test-record.ts";
+import { DbRecord } from "./db-record.ts";
 import { User } from "./user.ts";
 
-export class Post extends TestRecord {
+export class Post extends DbRecord {
   static override attributes = { published: "boolean" } as const;
 
   user = belongsTo(User);

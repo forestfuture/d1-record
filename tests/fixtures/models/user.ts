@@ -2,9 +2,9 @@
 import { hasMany, hasOne } from "../../../src/index.ts";
 import { Post } from "./post.ts";
 import { Profile } from "./profile.ts";
-import { TestRecord } from "./test-record.ts";
+import { DbRecord } from "./db-record.ts";
 
-export class User extends TestRecord {
+export class User extends DbRecord {
   posts = hasMany(Post);
   profile = hasOne(Profile);
 }
