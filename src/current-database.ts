@@ -3,6 +3,7 @@
 // `cloudflare:workers` (#77). Nothing per-request is ever stored on a class (ADR-0003): a
 // request's database lives only in its AsyncLocalStorage, and a binding's Database holds no
 // per-request state.
+import { schemaBinding } from "./generated-model.ts";
 import { connect, databaseParts, type Database } from "./database.ts";
 import { NoDatabase } from "./errors.ts";
 import { CurrentExecutor, type Executor } from "./executor.ts";
@@ -149,5 +150,5 @@ function currentExecutor(name: string | undefined): Executor {
 export function currentRelation<C extends ModelClass>(
   model: C,
 ): Scoped<InstanceType<C>, ScopesOf<C>> {
-  return relationFor(currentExecutor(model.binding), model);
+  return relationFor(currentExecutor(model.binding ?? schemaBinding(model)), model);
 }

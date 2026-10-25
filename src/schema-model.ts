@@ -7,24 +7,9 @@ import {
   type ValueSource,
 } from "./metadata.ts";
 import { defineModel, Model, type BaseClass, type ModelBaseFor, type ModelClass } from "./model.ts";
-import {
-  applyOverride,
-  isAttributeType,
-  isSpecOverride,
-  overridableKeyNames,
-  specProblem,
-  type SpecOverride,
-} from "./spec-keys.ts";
+import { specsFor, type TableSchema, type TableSchemas } from "./generated-model.ts";
+import type { SpecOverride } from "./spec-keys.ts";
 import { bindTable } from "./table-names.ts";
-
-/** One table in a generated schema: its attributes, and which is the primary key. */
-export interface TableSchema {
-  readonly attributes: AttributeSpecs;
-  readonly primaryKey: string;
-}
-
-/** A generated schema's tables, by name (`tables` in `src/db/schema.ts`). */
-export type TableSchemas = Readonly<Record<string, TableSchema>>;
 
 /**
  * A change to a generated attribute: its type alone, or its type, nullability, default and
@@ -85,64 +70,6 @@ export interface SchemaModel<T extends TableSchemas, B extends BaseClass = typeo
     overrides?: Exactly<O, T[N]>,
   ): ModelBaseFor<AsSpecs<OverriddenSpecs<T[N]["attributes"], O>>, B>;
   <const A extends AttributeSpecs>(specs: A & ExactSpecs<A>): ModelBaseFor<A, B>;
-}
-
-/**
- * An override as given, checked (TypeScript checks it too, but not in plain JavaScript or past
- * a cast): `false` to ignore the column, or the spec changes.
- */
-function checked(where: string, attribute: string, override: unknown): SpecOverride | false {
-  if (override === false) return false;
-  if (isAttributeType(override)) return { type: override };
-  if (!isSpecOverride(override)) {
-    throw new InvalidModel(
-      `${where}.${attribute}: an override is a type name, { ${overridableKeyNames} }, or false`,
-    );
-  }
-  return override;
-}
-
-/**
- * A generated spec with an override applied, refused if it leaves a spec a type can't have (#99,
- * #73). The merged spec's type isn't known statically, so it's checked here, as a Model's is.
- */
-function checkedOverride(
-  where: string,
-  spec: AttributeSpecs[string],
-  change: SpecOverride,
-): AttributeSpecs[string] {
-  const changed = applyOverride(typeof spec === "string" ? { type: spec } : spec, change);
-  const problem = specProblem(where, changed);
-  if (problem !== undefined) throw new InvalidModel(problem);
-  return changed as AttributeSpecs[string];
-}
-
-/** A table's attribute specs with `overrides` applied; throws `InvalidModel` for a bad one. */
-function specsFor(
-  name: string,
-  table: TableSchema,
-  overrides: Readonly<Record<string, unknown>>,
-): { specs: AttributeSpecs; ignoresColumns: boolean } {
-  const where = name;
-  const changes = new Map<string, ReturnType<typeof checked>>();
-  for (const [attribute, override] of Object.entries(overrides)) {
-    if (override === undefined) continue;
-    if (!Object.hasOwn(table.attributes, attribute)) {
-      throw new InvalidModel(`${name} has no attribute ${attribute} to override`);
-    }
-    if (override === false && attribute === table.primaryKey) {
-      throw new InvalidModel(`${name}.${attribute} is the primary key, so it can't be ignored`);
-    }
-    changes.set(attribute, checked(where, attribute, override));
-  }
-  const specs: AttributeSpecs = {};
-  for (const [attribute, spec] of Object.entries(table.attributes)) {
-    const change = changes.get(attribute);
-    if (change === false) continue;
-    specs[attribute] =
-      change === undefined ? spec : checkedOverride(`${name}.${attribute}`, spec, change);
-  }
-  return { specs, ignoresColumns: [...changes.values()].includes(false) };
 }
 
 /**
