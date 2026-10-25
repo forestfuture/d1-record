@@ -1,27 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { belongsTo, connect, hasMany, hasOne, Model } from "../../src/index.ts";
+import { belongsTo, connect, hasMany, Model } from "../../src/index.ts";
+import { Post } from "../fixtures/models/post.ts";
+import { User } from "../fixtures/models/user.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
-// Foreign keys inferred by Rails' convention: no foreignKey anywhere below.
-class User extends Model.define({
-  id: { type: "integer", null: false },
-  email: { type: "string", null: false },
-}) {
-  static table = "users";
-
-  posts = hasMany(Post); // User → userId
-  profile = hasOne(Profile); // User → userId
-}
-
-class Post extends Model.define({
-  id: { type: "integer", null: false },
-  userId: { type: "integer", null: false },
-  title: { type: "string", null: false },
-}) {
-  static table = "posts";
-
-  user = belongsTo(User); // user → userId
-}
+// The fixtures declare no foreignKey: User's hasMany and hasOne, and Post's belongsTo(User), all
+// infer `userId` by Rails' convention.
 
 // Named so their inferred keys (writerId, authorId) don't exist: the explicit ones must be used.
 class Writer extends Model.define({
@@ -41,14 +25,6 @@ class Article extends Model.define({
   static table = "posts";
 
   author = belongsTo(Writer, { foreignKey: "userId" });
-}
-
-class Profile extends Model.define({
-  id: { type: "integer", null: false },
-  userId: { type: "integer", null: false },
-  bio: "string",
-}) {
-  static table = "profiles";
 }
 
 describe("inferred foreign keys", () => {
