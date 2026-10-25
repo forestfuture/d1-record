@@ -5,15 +5,23 @@ A Rails-inspired Active Record library for Cloudflare Workers backed by Cloudfla
 ## Language
 
 **Model**:
-A class created with `Model({...attributes})`, or with the app's `ApplicationRecord("table")` from the **Generated schema**, that describes one D1 table: its attributes, validations, callbacks, associations and scopes.
+A class extending the app's **Base class** that describes one D1 table: its attributes, validations, callbacks, associations and scopes. Its table is named after its class (`Post` → `posts`), or by `static table`; a subclass of a Model shares its table.
 _Avoid_: Record (as the base class; `ApplicationRecord` is the one exception, named as Rails names it), entity, schema
 
+**Generated Model**:
+A **Model** whose attributes are its table's in the **Generated schema**, after its **Override**s. `d1-record schema` must have seen its class: one it hasn't is an `InvalidModel` when used.
+_Avoid_: Plain model, schema model
+
+**Hand-declared Model**:
+A **Model** whose attributes are declared in its class, with `Model.define({...})` or `ApplicationRecord.define({...})`, for a table no migration makes.
+_Avoid_: Manual model, defined model
+
 **Generated schema**:
-The file `d1-record schema` writes from a project's migrations: each table's attributes, as a document like Rails' `schema.rb`. It's committed, and never edited by hand; the app's `ApplicationRecord` builds Models on it.
+The file `d1-record schema` writes from a project's migrations and Model files: each table's attributes, the **Binding**, the **Generated Model**s, and type declarations adding each one's attributes to its class. It's a document like Rails' `schema.rb`, committed and never edited by hand; the app's **Base class** holds it.
 _Avoid_: Schema dump, types file
 
 **Base class**:
-The app's class extending `Model.Base` (in `application-record.ts`) that every Model is built on, so the methods, callbacks and scopes written on it are shared, as on Rails' `ApplicationRecord`. It's abstract: it has no table.
+The app's abstract class extending `Model`, `ApplicationRecord` (in `application-record.ts`), that holds the **Generated schema** and that every Model is built on, so the methods, callbacks and scopes written on it are shared. It has no table. So has a class between it and some Models marked `static abstract = true`.
 _Avoid_: Mixin, concern, parent model
 
 **Generator**:
@@ -25,7 +33,7 @@ The interactive session `d1-record console` opens: a REPL on the project's local
 _Avoid_: Shell, REPL (in the guide), playground
 
 **Override**:
-A change a Model makes to an attribute of the **Generated schema** (its type, nullability, default, **Generated id**, or **Epoch storage**), or `false` to ignore the column.
+A change a **Generated Model** makes to an attribute of its table, in `static attributes` (its type, nullability, default, **Generated id**, or **Epoch storage**), or `false` to ignore the column.
 _Avoid_: Patch, customization
 
 **Epoch storage**:
@@ -145,7 +153,7 @@ The database a query started from a Model (`User.find(id)`) uses: the request's,
 _Avoid_: Default connection, global database
 
 **Binding**:
-The name of the D1 binding a Model queries, from the Wrangler config (`static binding = "DB"`), usually set on the app's **Base class**.
+The name of the D1 binding a Model queries, from the Wrangler config, in the **Generated schema** its **Base class** holds.
 _Avoid_: Connection name, database name
 
 **Session**:
