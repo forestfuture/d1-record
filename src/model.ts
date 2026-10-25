@@ -133,11 +133,6 @@ export class Model extends ModelStatics {
    * true`): it has no table, it shares its behavior, and each class directly below it has one.
    */
   declare static abstract?: boolean;
-  /**
-   * The D1 binding this Model queries when there's no request database (`withDatabase`), as
-   * Rails' `connects_to`: `static override binding = "DB"`, usually on the app's base class.
-   */
-  static binding: string | undefined;
 
   /**
    * An app-wide query listener, as `connect(env.DB, { onQuery })` is a database's: called for
@@ -215,7 +210,7 @@ export class Model extends ModelStatics {
 
   /**
    * All of this Model's records, as Rails' `Product.all`: a Relation on the current database
-   * (the request's, set with `withDatabase`, or else the Model's `binding`).
+   * (the request's, set with `withDatabase`, or else the binding in its base class's schema).
    */
   static all<C extends QueryableClass>(this: C): Scoped<InstanceType<C>, ScopesOf<C>> {
     return currentRelation(this);
@@ -589,7 +584,7 @@ export type ModelBaseFor<
   Omit<B, "prototype">;
 
 /** `Model.define({...})` on `base`: a class with the attributes' accessors, extending `base`. */
-export function defineModel<const A extends AttributeSpecs, B extends BaseClass>(
+function defineModel<const A extends AttributeSpecs, B extends BaseClass>(
   specs: A,
   base: B,
 ): ModelBaseFor<A, B> {

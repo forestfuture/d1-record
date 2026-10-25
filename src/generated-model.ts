@@ -35,7 +35,7 @@ export type TableSchemas = Readonly<Record<string, TableSchema>>;
  * A change to a generated attribute: its type alone, or its type, nullability, default and
  * `generateId`, typed so `generateId` goes only with a string, and never with a default (#99).
  */
-export type AttributeOverride =
+type AttributeOverride =
   | AttributeType
   | (Pick<SpecOverride, "null"> & { type?: "string"; storage?: never } & ValueSource)
   | (Pick<SpecOverride, "null" | "default"> & {
@@ -284,7 +284,7 @@ function checkedOverride(
 }
 
 /** A table's attribute specs with `overrides` applied; throws `InvalidModel` for a bad one. */
-export function specsFor(
+function specsFor(
   name: string,
   table: TableSchema,
   overrides: Readonly<Record<string, unknown>>,

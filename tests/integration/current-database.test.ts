@@ -16,13 +16,22 @@ import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 const workers: { env: Record<string, unknown> } = { env: {} };
 vi.mock("cloudflare:workers", () => workers);
 
-class User extends Model.define({
+/** An app's base class for the DB binding: its generated schema names the binding. */
+abstract class DbRecord extends Model {
+  static override schema = { binding: "DB", tables: {}, models: {} };
+}
+
+/** An app's base class for the LOGS binding: its generated schema names the binding. */
+abstract class LogsRecord extends Model {
+  static override schema = { binding: "LOGS", tables: {}, models: {} };
+}
+
+class User extends DbRecord.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
   role: "string",
 }) {
   static table = "users";
-  static override binding = "DB";
   static withRole = this.scope((q, role: string) => q.where({ role }));
 }
 
@@ -32,9 +41,8 @@ class Unbound extends Model.define({ id: { type: "integer", null: false }, email
 }
 
 // A Model on a binding this Worker doesn't have.
-class Elsewhere extends Model.define({ id: { type: "integer", null: false } }) {
+class Elsewhere extends LogsRecord.define({ id: { type: "integer", null: false } }) {
   static table = "users";
-  static override binding = "LOGS";
 }
 
 let binding: TestDatabase;
@@ -73,7 +81,7 @@ describe("Product.find(id): a query started from a Model", () => {
   test("level 2 outside a Worker: the request's database serves a Model with no binding", async () => {
     await expect(Unbound.find(1)).rejects.toThrow(
       new NoDatabase(
-        'No database for this query: its Model names no binding (static binding = "DB", in its base class). Wrap the code in withDatabase(connect(env.DB), …), or use db.model(Model)',
+        "No database for this query: its Model's base class holds no generated schema, which names its binding. Wrap the code in withDatabase(connect(env.DB), …), or use db.model(Model)",
       ),
     );
     expect((await withDatabase(connect(binding), () => Unbound.find(2))).email).toBe(

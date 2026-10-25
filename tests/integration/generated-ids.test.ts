@@ -1,12 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import {
-  connect,
-  hasMany,
-  InvalidModel,
-  Model,
-  modelFor,
-  RecordNotUnique,
-} from "../../src/index.ts";
+import { connect, hasMany, InvalidModel, Model, RecordNotUnique } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -37,30 +30,47 @@ class NumberedNote extends Model.define({
 let issued = 0;
 const sequential = () => `id-${++issued}`;
 
-class SequentialBase extends Model {
+// A generated schema, as `d1-record schema` writes it, for Models built on it.
+const schema = {
+  binding: "DB",
+  tables: {
+    notes: {
+      attributes: { id: { type: "string", null: false, generateId: true }, body: "string" },
+      primaryKey: "id",
+    },
+    notebooks: {
+      attributes: {
+        id: { type: "string", null: false, generateId: true },
+        title: "string",
+        color: { type: "string", default: () => "blue" },
+      },
+      primaryKey: "id",
+    },
+  },
+  models: {
+    SequentialNote: "notes",
+    Given: "notebooks",
+    Plain: "notebooks",
+    Retyped: "notebooks",
+    Titled: "notebooks",
+    Colored: "notebooks",
+    Doubled: "notebooks",
+    Counted: "notebooks",
+  },
+} as const;
+
+abstract class SequentialBase extends Model {
+  static override schema = schema;
   static override generateId = sequential;
 }
 
-const tables = {
-  notes: {
-    attributes: { id: { type: "string", null: false, generateId: true }, body: "string" },
-    primaryKey: "id",
-  },
-} as const;
+class SequentialNote extends SequentialBase {
+  static override table = "notes";
+}
 
-class SequentialNote extends modelFor(tables, SequentialBase)("notes") {}
-
-const generatedTables = {
-  notebooks: {
-    attributes: {
-      id: { type: "string", null: false, generateId: true },
-      title: "string",
-      color: { type: "string", default: () => "blue" },
-    },
-    primaryKey: "id",
-  },
-} as const;
-const ApplicationRecord = modelFor(generatedTables);
+abstract class ApplicationRecord extends Model {
+  static override schema = schema;
+}
 
 class PrefixedNote extends Model.define({
   id: { type: "string", null: false, generateId: true },
@@ -96,7 +106,9 @@ describe("generated ids", () => {
   });
 
   test("a function assigned to the base class's generateId makes every Model's ids", async () => {
-    const note = await connect(binding).model(SequentialNote).create({ body: "hi" });
+    const note = await connect(binding)
+      .model(SequentialNote as unknown as typeof Note)
+      .create({ body: "hi" });
 
     expect(note.id).toBe("id-1");
   });
@@ -180,48 +192,77 @@ describe("generated ids", () => {
     });
   });
 
-  describe('overriding one in ApplicationRecord("table", {...})', () => {
-    test("a default replaces generateId", () => {
-      class Given extends ApplicationRecord("notebooks", { id: { default: () => "fixed" } }) {}
+  describe("overriding one in a generated Model's static attributes", () => {
+    /** A generated Model's attributes as a new record has them (its types aren't generated here). */
+    const built = (model: object) =>
+      connect(binding)
+        .model(model as typeof Note)
+        .build()
+        .attributes();
 
-      expect(connect(binding).model(Given).build().id).toBe("fixed");
+    test("a default replaces generateId", () => {
+      class Given extends ApplicationRecord {
+        static override table = "notebooks";
+        static override attributes = { id: { default: () => "fixed" } } as const;
+      }
+
+      expect(built(Given).id).toBe("fixed");
     });
 
     test("generateId: false turns it off", () => {
-      class Plain extends ApplicationRecord("notebooks", { id: { generateId: false } }) {}
+      class Plain extends ApplicationRecord {
+        static override table = "notebooks";
+        static override attributes = { id: { generateId: false } } as const;
+      }
 
-      expect(connect(binding).model(Plain).build().id).toBeNull();
+      expect(built(Plain).id).toBeNull();
     });
 
     test("changing the type drops it", () => {
-      class Retyped extends ApplicationRecord("notebooks", { id: "integer" }) {}
+      class Retyped extends ApplicationRecord {
+        static override table = "notebooks";
+        static override attributes = { id: "integer" } as const;
+      }
 
-      expect(connect(binding).model(Retyped).build().id).toBeNull();
+      expect(built(Retyped).id).toBeNull();
     });
 
     test("generateId: true turns it on for a string attribute", () => {
-      class Titled extends ApplicationRecord("notebooks", { title: { generateId: true } }) {}
+      class Titled extends ApplicationRecord {
+        static override table = "notebooks";
+        static override attributes = { title: { generateId: true } } as const;
+      }
 
-      expect(connect(binding).model(Titled).build().title).toMatch(uuid);
+      expect(built(Titled).title).toMatch(uuid);
     });
 
     test("generateId: false leaves a default alone", () => {
-      class Colored extends ApplicationRecord("notebooks", { color: { generateId: false } }) {}
+      class Colored extends ApplicationRecord {
+        static override table = "notebooks";
+        static override attributes = { color: { generateId: false } } as const;
+      }
 
-      expect(connect(binding).model(Colored).build().color).toBe("blue");
+      expect(built(Colored).color).toBe("blue");
     });
 
-    test("a bad one is an InvalidModel when called", () => {
-      expect(() =>
-        // @ts-expect-error a compile error too; this checks plain JavaScript
-        ApplicationRecord("notebooks", { id: { generateId: true, default: () => "x" } }),
-      ).toThrow(new InvalidModel("notebooks.id has both generateId and a default; keep one"));
-      expect(() =>
-        // @ts-expect-error a compile error too; this checks plain JavaScript
-        ApplicationRecord("notebooks", { id: { type: "integer", generateId: true } }),
-      ).toThrow(
+    test("a bad one is a compile error, and an InvalidModel when used", () => {
+      // @ts-expect-error generateId and a default can't go together
+      class Doubled extends ApplicationRecord {
+        static override table = "notebooks";
+        static override attributes = { id: { generateId: true, default: () => "x" } } as const;
+      }
+      // @ts-expect-error an integer has no generated id
+      class Counted extends ApplicationRecord {
+        static override table = "notebooks";
+        static override attributes = { id: { type: "integer", generateId: true } } as const;
+      }
+
+      expect(() => built(Doubled)).toThrow(
+        new InvalidModel("Doubled.id has both generateId and a default; keep one"),
+      );
+      expect(() => built(Counted)).toThrow(
         new InvalidModel(
-          'notebooks.id is "integer", so it can\'t have generateId: generated ids are strings',
+          'Counted.id is "integer", so it can\'t have generateId: generated ids are strings',
         ),
       );
     });

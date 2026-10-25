@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, InvalidModel, Model, modelFor } from "../../src/index.ts";
+import { connect, InvalidModel, Model } from "../../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 
 class User extends Model.define({
@@ -19,18 +19,11 @@ class Member extends Model.define({
   static table = "users";
 }
 
-class Base extends Model {
+abstract class Base extends Model {
   static override hiddenAttributes = ["email"];
 }
-const ApplicationRecord = modelFor(
-  {
-    users: {
-      attributes: { id: "integer", email: "string", role: "string" },
-      primaryKey: "id",
-    },
-  } as const,
-  Base,
-);
+/** The users table's attributes, on the app's base class. */
+const UserRecord = Base.define({ id: "integer", email: "string", role: "string" });
 
 // What `toJSON()` leaves out of a record, so `Response.json(user)` can't leak it (#101).
 describe("hiddenAttributes", () => {
@@ -74,14 +67,17 @@ describe("hiddenAttributes", () => {
     const row = { id: 1, email: "ada@example.com", role: "admin" };
 
     test("every Model built on it inherits them", async () => {
-      class Account extends ApplicationRecord("users") {}
+      class Account extends UserRecord {
+        static override table = "users";
+      }
       const account = await connect(binding).model(Account).create(row);
 
       expect(account.toJSON()).toEqual({ id: 1, role: "admin" });
     });
 
     test("a Model's own list replaces them", async () => {
-      class Account extends ApplicationRecord("users") {
+      class Account extends UserRecord {
+        static override table = "users";
         static override hiddenAttributes = [...Base.hiddenAttributes, "role"];
       }
       const account = await connect(binding).model(Account).create(row);
@@ -90,7 +86,8 @@ describe("hiddenAttributes", () => {
     });
 
     test("an empty list of its own hides nothing", async () => {
-      class Reader extends ApplicationRecord("users") {
+      class Reader extends UserRecord {
+        static override table = "users";
         static override hiddenAttributes = [];
       }
       const reader = await connect(binding).model(Reader).create(row);
@@ -114,12 +111,12 @@ describe("hiddenAttributes", () => {
     });
 
     test("is ignored when the base class's list does", () => {
-      const Slim = modelFor(
-        { users: { attributes: { id: "integer", role: "string" }, primaryKey: "id" } } as const,
-        Base,
-      );
-      class Plain extends Slim("users") {}
-      class Extended extends Slim("users") {
+      const Slim = Base.define({ id: "integer", role: "string" });
+      class Plain extends Slim {
+        static override table = "users";
+      }
+      class Extended extends Slim {
+        static override table = "users";
         static override hiddenAttributes = [...Base.hiddenAttributes, "role"];
       }
       const db = connect(binding);
@@ -143,7 +140,8 @@ describe("hiddenAttributes", () => {
     });
 
     test("in its own list is still an InvalidModel when the base class has a list", () => {
-      class Typo extends ApplicationRecord("users") {
+      class Typo extends UserRecord {
+        static override table = "users";
         static override hiddenAttributes = [...Base.hiddenAttributes, "rol"];
       }
 
@@ -151,7 +149,9 @@ describe("hiddenAttributes", () => {
     });
 
     test("is fine for a Model that extends another Model, which has the parent's attributes", () => {
-      class Account extends ApplicationRecord("users") {}
+      class Account extends UserRecord {
+        static override table = "users";
+      }
       class Admin extends Account {
         static override hiddenAttributes = ["role"];
       }

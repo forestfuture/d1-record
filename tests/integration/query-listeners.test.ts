@@ -3,7 +3,6 @@ import {
   batch,
   connect,
   Model,
-  modelFor,
   NotNullViolation,
   withDatabase,
   type QueryEvent,
@@ -16,18 +15,21 @@ vi.mock("cloudflare:workers", () => workers);
 
 // An app's base class with an app-wide listener (#78), as application-record.ts would declare it.
 const logged: QueryEvent[] = [];
-class Base extends Model {
-  static override binding = "DB";
+abstract class ApplicationRecord extends Model {
+  // Its generated schema names the binding (these Models declare their own attributes).
+  static override schema = { binding: "DB", tables: {}, models: {} };
   static override onQuery = (event: QueryEvent) => {
     logged.push(event);
   };
 }
-const ApplicationRecord = modelFor({}, Base);
 
-class User extends ApplicationRecord({ id: { type: "integer", null: false }, email: "string" }) {
+class User extends ApplicationRecord.define({
+  id: { type: "integer", null: false },
+  email: "string",
+}) {
   static table = "users";
 }
-class Post extends ApplicationRecord({
+class Post extends ApplicationRecord.define({
   id: { type: "integer", null: false },
   userId: "integer",
   title: "string",

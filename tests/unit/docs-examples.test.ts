@@ -12,7 +12,7 @@ describe("the guide's example blocks", () => {
     `import { belongsTo, connect, hasMany, Model, type Database } from "@forestfuture/d1-record";
 import { User } from "../shared/users";
 import { Tag } from "./tags";
-import { tables } from "../db/schema";
+import { schema } from "../db/schema";
 import { ApplicationRecord } from "./application-record";
 import { column } from "./columns";
 
@@ -29,11 +29,11 @@ export const label = "a Post";
 // #endregion commented
 
 // #region base
-export class Comment extends ApplicationRecord("comments") {}
+export class Comment extends ApplicationRecord {}
 // #endregion base
 
 // #region schema
-export const shown = tables;
+export const shown = schema;
 // #endregion schema
 
 export async function read(db: Database) {
@@ -46,9 +46,9 @@ export async function read(db: Database) {
   );
 
   test("the generated schema is imported as written, not as one of the app's models", () => {
-    expect(exampleBlock(file, "schema")).toBe(`import { tables } from "../db/schema";
+    expect(exampleBlock(file, "schema")).toBe(`import { schema } from "../db/schema";
 
-export const shown = tables;`);
+export const shown = schema;`);
   });
 
   test("start with the imports their code uses, and only those; the app's models come from ./models", () => {
@@ -71,7 +71,7 @@ export const label = "a Post";`);
     expect(exampleBlock(file, "base"))
       .toBe(`import { ApplicationRecord } from "./application-record";
 
-export class Comment extends ApplicationRecord("comments") {}`);
+export class Comment extends ApplicationRecord {}`);
   });
 
   test("are dedented, and have no imports when their code uses none", () => {

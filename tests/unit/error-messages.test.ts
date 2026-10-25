@@ -1,12 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import {
-  connect,
-  hasMany,
-  InvalidModel,
-  Model,
-  modelFor,
-  type ErrorMessages,
-} from "../../src/index.ts";
+import { connect, hasMany, InvalidModel, Model, type ErrorMessages } from "../../src/index.ts";
 
 // No D1 needed: none of these validations asks it anything.
 const db = connect({} as never);
@@ -28,22 +21,24 @@ class Base extends Model {
     });
   }
 }
-const ApplicationRecord = modelFor(tables, Base);
+/** The accounts and posts tables' attributes, on the app's base class. */
+const AccountRecord = Base.define(tables.accounts.attributes);
+const PostRecord = Base.define(tables.posts.attributes);
 
-class Account extends ApplicationRecord("accounts") {
+class Account extends AccountRecord {
   static {
     this.validates("email", { presence: true });
     this.validates("handle", { length: { minimum: 3 } });
   }
 }
 
-class Post extends ApplicationRecord("posts") {
+class Post extends PostRecord {
   static {
     this.validates("title", { presence: true, length: { minimum: 1 } });
   }
 }
 
-class Member extends ApplicationRecord("accounts") {
+class Member extends AccountRecord {
   static {
     this.errorMessages({
       blank: "must be filled in",
@@ -118,7 +113,7 @@ describe("error messages", () => {
         this.errorMessages({ attributes: { title: { blank: "x" } } });
       }
     }
-    class Note extends modelFor(tables, Strict)("posts") {
+    class Note extends Strict.define(tables.posts.attributes) {
       static {
         this.errorMessages({ blank: "is empty" });
         this.validates("title", { presence: true });
@@ -129,7 +124,7 @@ describe("error messages", () => {
   });
 
   test("a message is worked out when it's read, so %{value} is the value then", async () => {
-    class Handle extends ApplicationRecord("accounts") {
+    class Handle extends AccountRecord {
       static {
         this.errorMessages({ invalid: "%{value} isn't a handle" });
         this.validates("handle", { format: /^[a-z]+$/ });
@@ -144,7 +139,7 @@ describe("error messages", () => {
   });
 
   test("full messages and %{attribute} use the names from humanAttributeNames", async () => {
-    class Signup extends ApplicationRecord("accounts") {
+    class Signup extends AccountRecord {
       static {
         this.humanAttributeNames({ email: "Email address" });
         this.errorMessages({
@@ -162,7 +157,7 @@ describe("error messages", () => {
   });
 
   test("humanAttributeName() gives a Model's name for an attribute, its base class's, or one in words", () => {
-    class Signup extends ApplicationRecord("accounts") {
+    class Signup extends AccountRecord {
       static {
         this.humanAttributeNames({ email: "Email address" });
       }
@@ -174,7 +169,7 @@ describe("error messages", () => {
   });
 
   test("humanAttributeName() before a Model's first use sees names declared after it", () => {
-    class Early extends ApplicationRecord("accounts") {}
+    class Early extends AccountRecord {}
 
     const before = Early.humanAttributeName("handle");
     Early.humanAttributeNames({ handle: "Username" });
@@ -183,7 +178,7 @@ describe("error messages", () => {
   });
 
   test("a parent's names declared after its subclass's still reach the subclass, as its messages do", () => {
-    class Parent extends ApplicationRecord("accounts") {}
+    class Parent extends AccountRecord {}
     class Child extends Parent {
       static {
         this.humanAttributeNames({ email: "Email address" });
@@ -196,7 +191,7 @@ describe("error messages", () => {
   });
 
   test("errors.add with a type alone looks its message up", () => {
-    class Booking extends ApplicationRecord("posts") {
+    class Booking extends PostRecord {
       static {
         this.errorMessages({ afterStart: "must be after the start" });
       }
@@ -260,7 +255,7 @@ describe("error messages", () => {
   });
 
   test("messages for an attribute a Model doesn't have are refused at first use", () => {
-    class Typo extends ApplicationRecord("accounts") {
+    class Typo extends AccountRecord {
       static {
         // @ts-expect-error a Model's messages name its attributes, associations or base
         this.errorMessages({ attributes: { emial: { blank: "x" } } });
@@ -275,7 +270,7 @@ describe("error messages", () => {
   });
 
   test("a name for an attribute a Model doesn't have is refused at first use", () => {
-    class Renamed extends ApplicationRecord("accounts") {
+    class Renamed extends AccountRecord {
       static {
         // @ts-expect-error the same for its attribute names
         this.humanAttributeNames({ emial: "Email address" });
@@ -286,7 +281,7 @@ describe("error messages", () => {
   });
 
   test("a Model's messages and names can be for its associations and base", () => {
-    class Owner extends ApplicationRecord("accounts") {
+    class Owner extends AccountRecord {
       posts = hasMany(Post, { foreignKey: "id" });
       static {
         this.errorMessages({
@@ -305,7 +300,7 @@ describe("error messages", () => {
   });
 
   test("%{value} is the attribute's value, and %{model} the Model in words", async () => {
-    class BlogAccount extends ApplicationRecord("accounts") {
+    class BlogAccount extends AccountRecord {
       static {
         this.errorMessages({ invalid: "%{value} isn't allowed for a %{model}" });
         this.validates("handle", { format: /^[a-z]+$/ });
@@ -318,7 +313,7 @@ describe("error messages", () => {
   });
 
   test("%{value} of a filtered attribute is [FILTERED]", async () => {
-    class Contact extends ApplicationRecord("accounts") {
+    class Contact extends AccountRecord {
       static {
         this.errorMessages({ invalid: "%{value} isn't an email" });
         this.validates("email", { format: /@/ });
@@ -332,7 +327,7 @@ describe("error messages", () => {
 
   test("a class's calls add up, and a later one's message wins", async () => {
     const shared: ErrorMessages = { blank: "is required here" };
-    class Twice extends ApplicationRecord("posts") {
+    class Twice extends PostRecord {
       static {
         this.errorMessages(shared);
         this.errorMessages({ tooShort: "is too short" });
@@ -348,7 +343,7 @@ describe("error messages", () => {
   });
 
   test("a class's calls add up for an attribute too, type by type", async () => {
-    class Twice extends ApplicationRecord("posts") {
+    class Twice extends PostRecord {
       static {
         this.errorMessages({ attributes: { title: { blank: "first", tooShort: "short" } } });
         this.errorMessages({ attributes: { title: { blank: "second" } } });
@@ -363,7 +358,7 @@ describe("error messages", () => {
   });
 
   test("messages can't be declared once a Model is used", () => {
-    class Late extends ApplicationRecord("posts") {}
+    class Late extends PostRecord {}
     db.model(Late);
 
     expect(() => Late.errorMessages({ blank: "later" })).toThrow(InvalidModel);

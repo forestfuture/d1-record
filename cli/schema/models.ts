@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { dirname, resolve, sep } from "node:path";
 import {
   forgetProjectFiles,
+  isBase,
   loadLibrary,
   modelFiles,
   projectJiti,
@@ -79,14 +80,6 @@ function chainOf(value: object): object[] {
     chain.push(each);
   }
   return chain;
-}
-
-/** Whether a class is a base for Models: it holds a schema, or says it's abstract. */
-function isBase(each: object): boolean {
-  return (
-    Object.hasOwn(each, "schema") ||
-    (Object.hasOwn(each, "abstract") && (each as { abstract: unknown }).abstract === true)
-  );
 }
 
 /** The database whose schema a class's nearest base holds, if it's one being generated. */

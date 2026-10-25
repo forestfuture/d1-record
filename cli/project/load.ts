@@ -76,3 +76,14 @@ export function forgetProjectFiles(cwd: string, jiti: Jiti, keep: ReadonlySet<st
     }
   }
 }
+
+/**
+ * Whether a class is one Models are built on, not a Model: it holds a schema (the app's
+ * `ApplicationRecord`), or says it's abstract (`static abstract = true`).
+ */
+export function isBase(each: object): boolean {
+  return (
+    Object.hasOwn(each, "schema") ||
+    (Object.hasOwn(each, "abstract") && (each as { abstract: unknown }).abstract === true)
+  );
+}

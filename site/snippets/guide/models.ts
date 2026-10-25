@@ -23,7 +23,7 @@ export class User extends Model.define({
 // #endregion declare
 
 // #region generated
-export class Product extends ApplicationRecord("products") {
+export class Product extends ApplicationRecord {
   static newest = this.scope((q) => q.order({ createdAt: "desc" }));
 }
 // #endregion generated

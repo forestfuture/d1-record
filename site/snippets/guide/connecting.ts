@@ -2,20 +2,19 @@ import {
   batch,
   connect,
   Model,
-  modelFor,
   withDatabase,
   withSession,
   type Database,
   type QueryListener,
 } from "@forestfuture/d1-record";
 import { env as workerEnv } from "cloudflare:workers";
-import { tables } from "../db/schema";
+import { schema } from "../db/schema";
 import { Post, User } from "../getting-started/models";
 
 export const plain = {
   async fetch(_request: Request, _env: Env): Promise<Response> {
     // #region binding
-    // No setup: each Model queries its binding (static binding = "DB") during the request.
+    // No setup: each Model queries the binding its generated schema names during the request.
     const user = await User.findByOrThrow({ email: "ada@example.com" });
     const posts = await Post.where({ userId: user.id }).order({ id: "desc" }).toArray();
     // #endregion binding
@@ -45,15 +44,13 @@ export const api = {
 
 // #region app-wide
 // src/models/application-record.ts: every query, from every Model, whichever database runs it.
-class Base extends Model {
-  static override binding = "DB";
+export abstract class ApplicationRecord extends Model {
+  static override schema = schema;
 
   static override onQuery: QueryListener = ({ model, sql, durationMs, error }) => {
     console.log(`${model} ${durationMs.toFixed(1)}ms ${sql}`, error ?? "");
   };
 }
-
-export const ApplicationRecord = modelFor(tables, Base);
 // #endregion app-wide
 
 /** What your app exports as its Worker today: a framework's, or your own. */
@@ -87,7 +84,9 @@ export const logged = {
 
 // #region app-wide-development
 // Logs only when LOG_SQL is set (in .dev.vars), read from the Worker's env when a query runs.
-class QuietInProduction extends Model {
+export abstract class QuietInProduction extends Model {
+  static override schema = schema;
+
   static override onQuery: QueryListener = ({ model, sql, durationMs }) => {
     if ((workerEnv as { LOG_SQL?: string }).LOG_SQL) {
       console.log(`${model} ${durationMs.toFixed(1)}ms ${sql}`);
@@ -95,7 +94,6 @@ class QuietInProduction extends Model {
   };
 }
 // #endregion app-wide-development
-export const quiet = modelFor(tables, QuietInProduction);
 
 export const development = {
   fetch(request, env: Env & { LOG_SQL?: string }, ctx) {

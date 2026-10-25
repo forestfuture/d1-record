@@ -9,13 +9,13 @@ import {
   hasOne,
   lt,
   Model,
-  modelFor,
   type HasMany,
   type QuerySql,
   type RecordStatement,
   Relation,
   sql,
   withSession,
+  type TableAttributes,
 } from "../../src/index.ts";
 
 class User extends Model.define({
@@ -35,6 +35,24 @@ class User extends Model.define({
 
 // connect() never touches the binding until a query runs, and these tests run none.
 const db = connect({} as never);
+
+// A generated schema, and an app's base class holding it.
+const notes = { id: { type: "string", null: false }, body: "string", openedAt: "integer" } as const;
+abstract class ApplicationRecord extends Model {
+  static override schema = {
+    binding: "DB",
+    tables: { notes: { attributes: notes, primaryKey: "id" } },
+    models: { Note: "notes" },
+  } as const;
+}
+
+// The interface stands in for the declarations d1-record schema generates in another file.
+/* oxlint-disable typescript/no-unsafe-declaration-merging */
+class Note extends ApplicationRecord {
+  static override attributes = { openedAt: { type: "datetime", storage: "unixSeconds" } } as const;
+}
+interface Note extends TableAttributes<typeof notes, (typeof Note)["attributes"]> {}
+/* oxlint-enable typescript/no-unsafe-declaration-merging */
 
 describe("types", () => {
   test("record properties are inferred from Model.define({...}), nullable unless null: false", () => {
@@ -430,23 +448,23 @@ describe("types", () => {
   });
 
   test("a misspelled key in a spec or override is a compile error", () => {
-    const ApplicationRecord = modelFor({
-      notes: {
-        attributes: { id: { type: "string", null: false }, body: "string" },
-        primaryKey: "id",
-      },
-    } as const);
-
     // Compile-time checks only: the misspelled override also throws at runtime.
     const typeOnly = () => {
       // @ts-expect-error nul isn't a spec key
       Model.define({ id: { type: "string", nul: false } });
       // @ts-expect-error nul isn't a spec key
-      ApplicationRecord({ id: { type: "string", nul: false } });
+      ApplicationRecord.define({ id: { type: "string", nul: false } });
       // @ts-expect-error nul isn't an override key
-      ApplicationRecord("notes", { body: { nul: false } });
+      class Misspelled extends ApplicationRecord {
+        static override attributes = { body: { nul: false } } as const;
+      }
       Model.define({ id: { type: "string", null: false, column: "note_id", default: () => "x" } });
-      ApplicationRecord("notes", { body: { type: "string", null: false, default: () => "" } });
+      class Required extends ApplicationRecord {
+        static override attributes = {
+          body: { type: "string", null: false, default: () => "" },
+        } as const;
+      }
+      return [Misspelled, Required];
     };
     expectTypeOf(typeOnly).toBeFunction();
   });
@@ -494,17 +512,7 @@ describe("types", () => {
     expectTypeOf(typeOnly).toBeFunction();
   });
 
-  test("typeForAttribute on a modelFor Model follows its overrides, and checks the name (#148)", () => {
-    const ApplicationRecord = modelFor({
-      notes: {
-        attributes: { id: { type: "string", null: false }, openedAt: "integer" },
-        primaryKey: "id",
-      },
-    } as const);
-    class Note extends ApplicationRecord("notes", {
-      openedAt: { type: "datetime", storage: "unixSeconds" },
-    }) {}
-
+  test("typeForAttribute on a generated Model follows its overrides, and checks the name (#148)", () => {
     const typeOnly = () => {
       expectTypeOf(Note.typeForAttribute("openedAt")).toEqualTypeOf<
         AttributeConversions<Date | null>

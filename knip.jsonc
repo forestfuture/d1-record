@@ -4,8 +4,13 @@
     ".": {
       // The `d1-record` command: package.json's bin points at its build, dist/cli.mjs.
       "entry": ["cli/bin.ts"],
-      // A generated schema, committed as the end-to-end test's fixture: all of it is output.
-      "ignore": ["tests/fixtures/schema-project/schema.ts"],
+      // Generated schemas, committed as tests' fixtures: all of each is output, every table
+      // exported as d1-record schema writes it.
+      "ignore": [
+        "tests/fixtures/schema-project/schema.ts",
+        "tests/fixtures/schema.ts",
+        "tests/fixtures/logs-schema.ts",
+      ],
       "typescript": {
         "config": [
           "tsconfig.json",

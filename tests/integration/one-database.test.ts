@@ -16,14 +16,18 @@ import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
 const workers: { env: Record<string, unknown> } = { env: {} };
 vi.mock("cloudflare:workers", () => workers);
 
-class Post extends Model.define({
+/** An app's base class for the DB binding: its generated schema names the binding. */
+abstract class DbRecord extends Model {
+  static override schema = { binding: "DB", tables: {}, models: {} };
+}
+
+class Post extends DbRecord.define({
   id: { type: "integer", null: false },
   userId: { type: "integer", null: false },
   title: { type: "string", null: false },
   published: "boolean",
 }) {
   static table = "posts";
-  static override binding = "DB";
   static isPublished = this.scope((q) => q.where({ published: true }));
   // A scope that starts again from the Model's statics: on the current database.
   static everyPublished: ScopeStatic<[]> = this.scope(() => Post.where({ published: true }));
@@ -31,12 +35,11 @@ class Post extends Model.define({
   author = belongsTo(User, { foreignKey: "userId" });
 }
 
-class User extends Model.define({
+class User extends DbRecord.define({
   id: { type: "integer", null: false },
   email: { type: "string", null: false },
 }) {
   static table = "users";
-  static override binding = "DB";
 
   posts = hasMany(Post, { foreignKey: "userId", dependent: "destroy" });
 

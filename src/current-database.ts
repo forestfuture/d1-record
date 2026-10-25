@@ -109,7 +109,7 @@ function onlyRequested(requested: readonly Database[], name: string | undefined)
   }
   throw noDatabase(
     name === undefined
-      ? 'its Model names no binding (static binding = "DB", in its base class)'
+      ? "its Model's base class holds no generated schema, which names its binding"
       : `the binding ${name} is only there inside a Worker`,
   );
 }
@@ -131,7 +131,7 @@ async function databaseFor(name: string | undefined): Promise<Database> {
 }
 
 /**
- * One Executor per binding name (a Model's `static binding`), finding the current database each
+ * One Executor per binding name (from a Model's schema), finding the current database each
  * time a query runs; Models on one binding share it, so their statements can share a batch.
  */
 const executors = new Map<string | undefined, Executor>();
@@ -150,5 +150,5 @@ function currentExecutor(name: string | undefined): Executor {
 export function currentRelation<C extends ModelClass>(
   model: C,
 ): Scoped<InstanceType<C>, ScopesOf<C>> {
-  return relationFor(currentExecutor(model.binding ?? schemaBinding(model)), model);
+  return relationFor(currentExecutor(schemaBinding(model)), model);
 }

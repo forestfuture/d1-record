@@ -1,9 +1,11 @@
-import { Model, modelFor } from "@forestfuture/d1-record";
-import { tables } from "../db/schema";
+import { Model } from "@forestfuture/d1-record";
+import { schema } from "../db/schema";
 
 // #region base
 // src/models/application-record.ts
-class Base extends Model {
+export abstract class ApplicationRecord extends Model {
+  static override schema = schema;
+
   static {
     this.errorMessages({
       blank: "is required",
@@ -15,12 +17,10 @@ class Base extends Model {
     this.humanAttributeNames({ createdAt: "Added on" });
   }
 }
-
-export const ApplicationRecord = modelFor(tables, Base);
 // #endregion base
 
 // #region model
-export class Product extends ApplicationRecord("products") {
+export class Product extends ApplicationRecord {
   static {
     this.errorMessages({
       greaterThan: "must be more than %{count}",
