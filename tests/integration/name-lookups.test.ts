@@ -1,23 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
-import { connect, hasMany, Model, UnknownAssociation, UnknownAttribute } from "../../src/index.ts";
+import { connect, UnknownAssociation, UnknownAttribute } from "../../src/index.ts";
+import { User } from "../fixtures/models/user.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
-
-class Post extends Model.define({
-  id: { type: "integer", null: false },
-  userId: { type: "integer", null: false },
-  title: { type: "string", null: false },
-}) {
-  static table = "posts";
-}
-
-class User extends Model.define({
-  id: { type: "integer", null: false },
-  email: { type: "string", null: false },
-}) {
-  static table = "users";
-
-  posts = hasMany(Post, { foreignKey: "userId" });
-}
 
 // Names an app might take from a URL (`?include=`), and that every JavaScript object inherits:
 // each is an unknown name, never one of Object's own members (#84).
