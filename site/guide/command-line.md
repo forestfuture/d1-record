@@ -31,7 +31,7 @@ It applies your migrations, in order, to an in-memory SQLite database, and write
 | `--models <dir>`     | Where your Models and `application-record.ts` are (`src/models/` by default).                      |
 | `--config <file>`    | Use this Wrangler config instead of finding `wrangler.jsonc`, `wrangler.json`, or `wrangler.toml`. |
 
-**What it reads:** each entry of the Wrangler config’s `d1_databases`, with its `binding`, `migrations_dir` (default `migrations/`), `migrations_pattern` (for migrations in folders), and `migrations_table` (left out of the schema). Migrations apply in file-name order, as Wrangler applies them. It also loads the Model files in `--models`, using your project’s own `@forestfuture/d1-record`, to find each Model and its table.
+**What it reads:** each entry of the Wrangler config’s `d1_databases`, with its `binding`, `migrations_dir` (default `migrations/`), `migrations_pattern` (for migrations in folders), and `migrations_table` (left out of the schema). Migrations apply in file-name order, as Wrangler applies them. It also loads the Model files in `--models`, using your project’s own `@forestfuture/d1-record`, to find each Model and its table, so code at a Model file’s top level runs.
 
 **What it writes:**
 
