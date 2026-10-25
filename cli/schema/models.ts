@@ -2,14 +2,16 @@
 // the schema as the migrations make it now standing in for each schema file (#232).
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve, sep } from "node:path";
+import { ancestors } from "../../src/ancestors.ts";
+import { isBase } from "../../src/generated-model.ts";
 import {
   forgetProjectFiles,
-  isBase,
   loadLibrary,
   modelFiles,
   projectJiti,
   type Jiti,
 } from "../project/load.ts";
+import { isIdentifier } from "../project/names.ts";
 import { shown } from "../project/paths.ts";
 import type { DatabaseSnapshot, FoundModel, ProjectSnapshot } from "../project/snapshot.ts";
 import { defaultModels } from "../project/targets.ts";
@@ -73,21 +75,12 @@ async function freshSchemas(
   return schemas;
 }
 
-/** A class and every class it extends, nearest first. */
-function chainOf(value: object): object[] {
-  const chain: object[] = [];
-  for (let each: object | null = value; each !== null; each = Object.getPrototypeOf(each)) {
-    chain.push(each);
-  }
-  return chain;
-}
-
 /** The database whose schema a class's nearest base holds, if it's one being generated. */
 function databaseOf(
   value: object,
   schemas: ReadonlyMap<unknown, DatabaseSnapshot>,
 ): DatabaseSnapshot | undefined {
-  const holder = chainOf(value).find((each) => Object.hasOwn(each, "schema"));
+  const holder = ancestors(value).find((each) => Object.hasOwn(each, "schema"));
   return holder === undefined ? undefined : schemas.get((holder as { schema: unknown }).schema);
 }
 
@@ -96,14 +89,27 @@ function declares(file: string, name: string): boolean {
   return new RegExp(`\\bclass\\s+${name}\\b`).test(readFileSync(file, "utf8"));
 }
 
+/** A class a file exports, by the name it's exported as. */
+interface Exported {
+  name: string;
+  model: LoadedClass;
+}
+
 /** Adds a class from `file` if it's a Model directly below a base: one whose table it is. */
-function addModel(cwd: string, file: string, exported: [string, LoadedClass], found: Found): void {
-  const [name, model] = exported;
+function addModel(cwd: string, file: string, { name, model }: Exported, found: Found): void {
   if (isBase(model) || !isBase(Object.getPrototypeOf(model) as object)) return;
   if (name === "default") {
     found.errors.push(
       `${shown(cwd, file)} exports ${model.name} as its default; export it by name ` +
         `(export class ${model.name} …), so d1-record schema can add its attributes`,
+    );
+    return;
+  }
+  // Its name is written into schema.ts as code.
+  if (!isIdentifier(model.name)) {
+    found.errors.push(
+      `${shown(cwd, file)} exports a Model named ${JSON.stringify(model.name)}, which isn't a name ` +
+        "d1-record schema can write as code; name the class with letters, digits, _ and $",
     );
     return;
   }
@@ -143,7 +149,7 @@ function addExported(
   for (const [name, value] of Object.entries(exported)) {
     const isModel = typeof value === "function" && value.prototype instanceof context.library.Model;
     if (isModel && databaseOf(value, context.schemas) !== undefined) {
-      addModel(cwd, file, [name, value as unknown as LoadedClass], context.found);
+      addModel(cwd, file, { name, model: value as unknown as LoadedClass }, context.found);
     }
   }
 }
@@ -172,11 +178,14 @@ async function modelsIn(
  */
 export async function withModels(
   project: ProjectSnapshot,
-  models = defaultModels,
+  { models = defaultModels, check = false }: { models?: string; check?: boolean } = {},
 ): Promise<ProjectSnapshot> {
   const { cwd } = project;
   const files = modelFiles(cwd, models);
   if (typeof files === "string" || files.length === 0) return project;
+  // A missing schema file is out of date anyway, and --check writes nothing, not even for a
+  // moment to load the Models with.
+  if (check && project.databases.some((db) => db.schema === undefined)) return project;
   const jiti = projectJiti(cwd);
   const loadedBefore = new Set(Object.keys(jiti.cache));
   const placeholders: string[] = [];

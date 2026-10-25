@@ -63,7 +63,7 @@ export async function runSchema(options: SchemaOptions, print: Print): Promise<n
     print(read);
     return 1;
   }
-  const project = await withModels(read, options.models);
+  const project = await withModels(read, { models: options.models, check: options.check });
   return apply(planSchema(project, options.check === true), project.cwd, print);
 }
 
