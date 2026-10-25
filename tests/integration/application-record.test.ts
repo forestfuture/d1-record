@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, expectTypeOf, test, vi } from "v
 import { connect, type QueryEvent } from "../../src/index.ts";
 import { audited } from "../fixtures/models/auditable.ts";
 import { Comment } from "../fixtures/models/comment.ts";
+import { Event } from "../fixtures/models/event.ts";
 import { Customer } from "../fixtures/models/customer.ts";
 import { Post } from "../fixtures/models/post.ts";
 import { saved } from "../fixtures/models/test-record.ts";
@@ -145,5 +146,21 @@ describe("Models extending the app's base class", () => {
     const bodies = (await post.comments().toArray()).map((comment) => comment.body);
 
     expect(bodies).toEqual(["Nice"]);
+  });
+
+  test("Models on two base classes query their own schema's databases", async () => {
+    const logs = await createTestDatabase(new URL("../fixtures/logs.sql", import.meta.url));
+    workers.env.LOGS = logs.db;
+
+    try {
+      await Event.create({ name: "signup" });
+      await User.create({ email: "logged@example.com" });
+
+      const { results } = await logs.db.prepare("SELECT name FROM events").all();
+      expect(results).toEqual([{ name: "signup" }]);
+      expect(await User.where({ email: "logged@example.com" }).exists()).toBe(true);
+    } finally {
+      await logs.dispose();
+    }
   });
 });
