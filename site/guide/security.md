@@ -24,6 +24,7 @@ These are the project’s own reviews, not an independent audit. Each says what 
 - **Authorization.** Whether this user may read or change this record is your app’s decision.
 - **Formats and ranges.** Casting checks types, not meaning: use [validations](./validations).
 - **Bare values inside `sql` fragments.** A value with no attribute isn’t hidden from listeners. Write it as `column("token").value(token)`, and it’s filtered like the attribute’s other values.
+- **Which associations a request may include.** A name from `?include=` only matches a Model’s own associations, but each level of a chain adds a subquery. Allow only the include paths you mean.
 
 ## Guarantees, and the tests that check them
 
@@ -97,6 +98,25 @@ Each security review adds an entry here: what it covered, how, what it found, an
 | Low      | Found by the generated tests: refusing a value with no JSON form and no string form threw `Cannot convert object to primitive value` first (only code can assign one) | Fixed, with the property that found it                                                                            | [#122](https://github.com/forestfuture/d1-record/issues/122)                                                                                                 |
 
 **Not covered:** the Scorecard findings, which are about the project’s practices, not its code, and the dependencies’ own code.
+
+### 2026-10-25: before 0.5.0
+
+**Scope:** the changes to the library (`src/`), the command line (`cli/`), and CI since the 2026-10-04 review: Models extending `ApplicationRecord` (#232), `withSession` (#220), preloading in one batch (#217), stored dates (#73, #159, #216), error messages (#88), `column().value()` (#142), and the console (#104).
+
+**Method:**
+
+- a security review of those changes with Sentry’s `security-review` skill (OWASP-based), tracing each untrusted input (a request’s cookie or header, `?include=` names, assigned values, stored cells) to where the library uses it;
+- Trail of Bits’ `differential-review` of #232’s change before it merged.
+
+**Findings:**
+
+| Severity | Finding                                                                   | Outcome                                                          | Link                                                         |
+| -------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------ |
+| Low      | `d1-record schema` wrote a class’s name into generated source unchecked   | Fixed before merging: a name that isn’t an identifier is refused | [#234](https://github.com/forestfuture/d1-record/pull/234)   |
+| Low      | `d1-record schema --check` wrote a placeholder schema when there was none | Fixed before merging: `--check` writes nothing                   | [#234](https://github.com/forestfuture/d1-record/pull/234)   |
+| Low      | A chain of includes named in a request nests a subquery per level         | Documented: allow only the include paths you mean                | [#235](https://github.com/forestfuture/d1-record/issues/235) |
+
+**Not covered:** how D1 handles a bookmark it can’t parse (it reaches D1 only from the request that sends it); D1 and workerd themselves; the dependencies’ code; apps’ own code.
 
 ## Reporting a vulnerability
 
