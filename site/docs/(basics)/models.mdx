@@ -7,6 +7,10 @@ A Model describes one table. Its attributes come from your migrations, through t
 
 ## Defining Models
 
+:::note
+`ApplicationRecord` is the base class for all your app’s Models. It holds your tables’ attributes from the generated schema, and the methods, callbacks, and scopes you write on it are shared by every Model. `d1-record schema` writes it for you, as [Generating `ApplicationRecord`](#generating-applicationrecord) shows.
+:::
+
 Extend your app’s `ApplicationRecord`:
 
 <include>/_excerpts/guide/models/generated.ts</include>
