@@ -10,6 +10,7 @@
     "not_found_handling": "404-page",
   },
   "workers_dev": false,
-  // The custom domain is added once in the Cloudflare dashboard (docs/agents/cloudflare-tokens.md).
-  "routes": [{ "pattern": "d1-record.forestfuture.dev", "custom_domain": true }],
+  // The hostname's proxied DNS record is added once in the Cloudflare dashboard
+  // (docs/agents/cloudflare-tokens.md); the route needs only Workers Routes: Edit.
+  "routes": [{ "pattern": "d1-record.forestfuture.dev/*", "zone_name": "forestfuture.dev" }],
 }
