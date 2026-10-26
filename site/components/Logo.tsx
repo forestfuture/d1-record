@@ -1,6 +1,7 @@
-// The d1-record logo: small beside the site's name in the header, large on the home page. The
-// mark is public/logo.svg, which blume.config.ts's `logo` also shows in the 404 page's header;
-// replace that file to change it everywhere.
+// The d1-record logo: small beside the site's name in the header, large on the home page, where
+// the animated orb (orb.ts) covers it once WebGL draws. The mark is public/logo.svg, which
+// blume.config.ts's `logo` also shows in the 404 page's header; replace that file to change it
+// everywhere.
 import mark from "../public/logo.svg?raw";
 
 const sizes = { sm: 20, lg: 40 } as const;
