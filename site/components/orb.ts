@@ -1,4 +1,4 @@
-// The home page's orb: a forest-green ball of slowly drifting light, drawn with WebGL over the
+// The home page's orb: a forest-green ball of moving light, drawn with WebGL over the
 // static logo. Where WebGL is missing the static logo stays, and for readers who ask for reduced
 // motion the orb holds one still frame.
 
@@ -7,10 +7,11 @@ attribute vec2 position;
 void main() { gl_Position = vec4(position, 0.0, 1.0); }
 `;
 
-// A sphere lit from the upper left. Inside it, two layers of value noise warp a third, so bands
-// of light drift through the glass, seen deeper at the centre than at the rim. Glowing strands
-// cross the bands, and a burst of light wanders at the lower right; the brighter the light,
-// the hotter its colour, from teal through magenta to white.
+// A sphere of deep green glass with light moving inside it. Seven layers of soft strands, each a
+// set of bent parallel lines, turn and drift through the ball and fade in and out, glowing teal,
+// green, or magenta. A burst at the lower right pulses and turns, and strands brighten near it;
+// the brightest light turns magenta, then white. Only the light rolls off towards white, so the
+// green body keeps its colour.
 const FRAGMENT = `
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
@@ -19,6 +20,13 @@ precision mediump float;
 #endif
 uniform vec2 resolution;
 uniform float time;
+
+const vec3 SHADE = vec3(0.02, 0.13, 0.04);
+const vec3 FOREST = vec3(0.1, 0.42, 0.1);
+const vec3 TEAL = vec3(0.2, 0.85, 0.7);
+const vec3 LEAF = vec3(0.45, 0.9, 0.3);
+const vec3 MAGENTA = vec3(0.84, 0.23, 0.69);
+const vec3 CORE = vec3(1.0, 0.97, 0.92);
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 
@@ -42,6 +50,26 @@ float layers(vec2 p) {
   return sum;
 }
 
+vec3 strandColour(float i) {
+  float k = mod(i, 3.0);
+  if (k < 0.5) return TEAL;
+  if (k < 1.5) return LEAF;
+  return MAGENTA;
+}
+
+// One layer of strands: parallel lines across the ball at an angle that turns over time, bent
+// by a wave along them, glowing with a long soft tail, and fading in and out.
+vec3 strand(vec2 q, float i, float t) {
+  float spin = (mod(i, 2.0) * 2.0 - 1.0) * (0.12 + 0.04 * i);
+  float turn = i * 2.39996 + t * spin;
+  vec2 across = vec2(cos(turn), sin(turn));
+  float bend = 0.35 * sin(dot(q, vec2(-across.y, across.x)) * 1.4 + t * 0.8 + i);
+  float lane = abs(fract((dot(q, across) + bend) * 0.9 + 0.17 * i + t * 0.06) - 0.5) * 2.0;
+  float line = 0.035 / (lane + 0.035) - 0.034;
+  float life = 0.5 + 0.5 * sin(t * 0.55 + i * 1.7);
+  return strandColour(i) * max(line, 0.0) * life * life;
+}
+
 void main() {
   float side = min(resolution.x, resolution.y);
   vec2 p = (2.0 * gl_FragCoord.xy - resolution) / side * 1.02;
@@ -50,58 +78,43 @@ void main() {
   if (coverage <= 0.0) { gl_FragColor = vec4(0.0); return; }
 
   float z = sqrt(max(1.0 - r * r, 0.0));
-  vec3 normal = vec3(p, z);
-  vec2 inside = p / (z + 0.6) * 1.6;
-  float t = time * 0.12;
-  vec2 warp = vec2(layers(inside + vec2(t, -t)), layers(inside + vec2(5.2 - t, 1.3 + t)));
-  float light = layers(inside * 1.3 + 2.4 * warp + t);
+  float t = time * 0.35;
+  // Seen through the glass: stretched towards the rim, and bent smoothly by slow noise.
+  vec2 q = p / (z + 0.5) * 1.4;
+  vec2 warp = vec2(noise(q * 0.9 + vec2(0.3 * t, 0.0)), noise(q * 0.9 + vec2(4.1, 0.3 * t))) - 0.5;
+  q += 1.1 * warp;
 
-  vec3 pale = vec3(0.64, 0.87, 0.56);
-  vec3 forest = vec3(0.1, 0.42, 0.1);
-  vec3 shade = vec3(0.03, 0.17, 0.05);
-  vec3 teal = vec3(0.2, 0.85, 0.7);
-  vec3 magenta = vec3(0.84, 0.23, 0.69);
-  vec3 core = vec3(1.0, 0.97, 0.92);
-
-  // A dark green body with a few pale clouds, lit from the upper left.
-  vec3 color = mix(shade, forest, smoothstep(0.25, 0.75, light));
-  color = mix(color, pale, 0.35 * smoothstep(0.68, 0.95, light));
-  vec3 key = normalize(vec3(-0.5, 0.6, 0.65));
-  color *= 0.55 + 0.6 * clamp(dot(normal, key), 0.0, 1.0);
-
-  // The burst: a glow, and two sets of rays turning slowly against each other. At time 0, the
-  // still frame, it sits halfway from the centre to the edge, down and to the right, and it
-  // wanders slowly around that point.
-  vec2 centre = vec2(0.35, -0.35) + 0.16 * vec2(sin(t * 0.9), sin(t * 0.7));
+  // The burst sits halfway from the centre to the edge, down and to the right, at time 0 (the
+  // still frame), and wanders around that point. It pulses, and its smeared glow turns.
+  vec2 centre = vec2(0.35, -0.35) + 0.12 * vec2(sin(t * 0.5), sin(t * 0.37));
   vec2 fromCentre = p - centre;
   float d = length(fromCentre);
-  float angle = atan(fromCentre.y, fromCentre.x);
-  float rays = pow(abs(cos(angle * 3.0 + t * 1.5)), 16.0) + 0.6 * pow(abs(cos(angle * 5.0 - t)), 30.0);
-  // A long glow smeared along the diagonal, swaying a little, under a broad core and a soft halo.
-  float tilt = -0.785 + 0.2 * sin(t * 0.5);
+  float pulse = 0.75 + 0.25 * sin(t * 1.1) * sin(t * 0.63 + 1.0);
+  float tilt = -0.785 + 0.6 * sin(t * 0.3);
   vec2 along = vec2(cos(tilt), sin(tilt));
   float a = dot(fromCentre, along);
   float b = dot(fromCentre, vec2(-along.y, along.x));
-  float smear = exp(-(a * a * 3.0 + b * b * 40.0));
-  float burst = 1.3 * exp(-d * d * 22.0) + 0.7 * smear + 0.35 * exp(-d * d * 5.0) + 0.4 * rays * exp(-d * 2.5);
+  float smear = exp(-(a * a * 2.5 + b * b * 35.0));
+  float burst = pulse * (0.8 * exp(-d * d * 30.0) + 0.5 * smear);
+  float halo = pulse * exp(-d * d * 6.0);
 
-  // Strands: thin ridges where a second, oppositely warped field crosses its midpoint, shown
-  // where a slow third field lets them through, and brighter near the burst.
-  float ridge = 1.0 - abs(2.0 * layers(inside * 1.1 - 1.7 * warp - t) - 1.0);
-  float through = smoothstep(0.4, 0.65, layers(inside * 0.7 + vec2(3.1, 7.4) + 0.5 * t));
-  float strands = (pow(ridge, 30.0) + 0.3 * pow(ridge, 6.0)) * through * (0.6 + 1.4 * exp(-d * 2.0));
+  vec3 glow = vec3(0.0);
+  for (int n = 0; n < 7; n++) glow += strand(q, float(n), t);
+  glow *= 1.0 + 1.5 * exp(-d * 2.0);
 
-  // Light turns hotter as it brightens: teal, then magenta, then white at the core.
-  float heat = strands + burst;
-  vec3 glow = mix(teal, magenta, smoothstep(0.3, 1.0, heat));
-  glow = mix(glow, core, smoothstep(0.9, 1.8, heat));
-  color += glow * heat;
+  // Light turns hotter as it brightens: magenta where strands and the burst pile up, then white.
+  float heat = burst + dot(glow, vec3(0.3));
+  vec3 light = glow + MAGENTA * (0.9 * halo + smoothstep(0.35, 0.9, heat) * heat * 0.5);
+  light += CORE * smoothstep(0.6, 1.3, heat) * heat;
+  light = 1.0 - exp(-1.3 * light);
 
-  float highlight = pow(clamp(dot(normal, normalize(key + vec3(0.0, 0.0, 1.0))), 0.0, 1.0), 40.0);
-  color += mix(pale, teal, 0.4) * 0.5 * pow(1.0 - z, 3.0) + vec3(0.4 * highlight);
-  // Bright light rolls off towards white rather than clipping at it.
-  color = 1.0 - exp(-1.25 * color);
-  gl_FragColor = vec4(color * coverage, coverage);
+  // Deep green glass, darker towards the rim and under the burst's halo, so its magenta stays
+  // vivid, with a little slow cloud and a teal edge.
+  vec3 body = mix(SHADE, FOREST, 0.1 + 0.5 * z * z) * (0.7 + 0.5 * layers(q * 1.2 - 0.2 * t));
+  body *= 1.0 - 0.7 * min(halo, 1.0);
+  vec3 color = 1.0 - (1.0 - body) * (1.0 - light);
+  color += TEAL * 0.35 * pow(1.0 - z, 3.0);
+  gl_FragColor = vec4(min(color, 1.0) * coverage, coverage);
 }
 `;
 
