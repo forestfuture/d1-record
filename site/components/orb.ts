@@ -8,7 +8,8 @@ void main() { gl_Position = vec4(position, 0.0, 1.0); }
 `;
 
 // A sphere lit from the upper left. Inside it, two layers of value noise warp a third, so bands
-// of light drift through the glass, seen deeper at the centre than at the rim.
+// of light drift through the glass, seen deeper at the centre than at the rim. Amber streaks
+// cross the bands, and a burst of light rays out from the centre.
 const FRAGMENT = `
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
@@ -54,17 +55,31 @@ void main() {
   vec2 warp = vec2(layers(inside + vec2(t, -t)), layers(inside + vec2(5.2 - t, 1.3 + t)));
   float light = layers(inside * 1.3 + 2.4 * warp + t);
 
-  vec3 deep = vec3(0.03, 0.17, 0.05);
+  // Thin ridges where a second, oppositely warped field crosses its midpoint: the amber streaks.
+  float ridge = 1.0 - abs(2.0 * layers(inside * 2.2 - 1.7 * warp - t) - 1.0);
+  float streak = pow(ridge, 8.0);
+
+  vec3 pale = vec3(0.64, 0.87, 0.56);
   vec3 forest = vec3(0.133, 0.545, 0.133);
-  vec3 leaf = vec3(0.64, 0.87, 0.56);
-  vec3 color = mix(deep, forest, smoothstep(0.2, 0.65, light));
-  color = mix(color, leaf, 0.8 * smoothstep(0.62, 0.9, light));
+  vec3 shade = vec3(0.03, 0.17, 0.05);
+  vec3 amber = vec3(0.949, 0.663, 0.231);
+  vec3 core = vec3(1.0, 0.97, 0.88);
+  vec3 color = mix(pale, forest, smoothstep(0.2, 0.65, light));
+  color = mix(color, shade, 0.8 * smoothstep(0.62, 0.9, light));
 
   vec3 key = normalize(vec3(-0.5, 0.6, 0.65));
   color *= 0.55 + 0.6 * clamp(dot(normal, key), 0.0, 1.0);
+  color += amber * 0.7 * streak;
+
+  // The burst: a glow at the centre, and two sets of rays turning slowly against each other.
+  float angle = atan(p.y, p.x);
+  float rays = pow(abs(cos(angle * 3.0 + t * 1.5)), 30.0) + 0.6 * pow(abs(cos(angle * 5.0 - t)), 60.0);
+  float burst = exp(-r * r * 30.0) + 0.8 * rays * exp(-r * 3.0);
+  color += mix(amber, core, exp(-r * r * 12.0)) * burst;
+
   float highlight = pow(clamp(dot(normal, normalize(key + vec3(0.0, 0.0, 1.0))), 0.0, 1.0), 40.0);
-  color += leaf * 0.5 * pow(1.0 - z, 3.0) + vec3(0.6 * highlight);
-  gl_FragColor = vec4(color * coverage, coverage);
+  color += mix(pale, amber, 0.35) * 0.6 * pow(1.0 - z, 3.0) + vec3(0.6 * highlight);
+  gl_FragColor = vec4(min(color, 1.0) * coverage, coverage);
 }
 `;
 
