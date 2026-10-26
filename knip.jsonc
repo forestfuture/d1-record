@@ -25,8 +25,17 @@
     },
     "site": {
       // Examples reach pages through the excerpts the site's build writes, not through imports;
-      // Blume loads its config and each group's meta.ts itself.
-      "entry": ["snippets/**/*.ts", "blume.config.ts", "docs/**/meta.ts"],
+      // Blume loads its config, components.ts and each group's meta.ts itself. Logo.tsx is
+      // imported from .astro files, which knip doesn't read.
+      "entry": [
+        "snippets/**/*.ts",
+        "blume.config.ts",
+        "components.ts",
+        "components/Logo.tsx",
+        "docs/**/meta.ts",
+      ],
+      // Types for Logo.tsx's JSX, which tsconfig.json's "jsx" setting reads without an import.
+      "ignoreDependencies": ["@types/react"],
     },
   },
 }

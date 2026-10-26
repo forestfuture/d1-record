@@ -1,0 +1,24 @@
+---
+// The header's brand link, in place of Blume's: the small logo beside the site's name. The home
+// page leaves it out, since its large logo and title sit just below.
+import Logo from "./Logo.tsx";
+
+interface Props {
+  site: { title: string };
+}
+
+const { site } = Astro.props;
+const home = Astro.url.pathname === "/";
+---
+
+{
+  !home && (
+    <a
+      class="inline-flex min-w-0 items-center gap-2 font-semibold text-base text-foreground"
+      href="/"
+    >
+      <Logo size="sm" />
+      <span class="truncate">{site.title}</span>
+    </a>
+  )
+}

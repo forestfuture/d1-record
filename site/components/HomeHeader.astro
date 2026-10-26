@@ -1,0 +1,31 @@
+---
+// Above the home page's title, the large logo and the site's name, in the same column as the
+// title (the width Blume gives a centered page's article). The title below becomes the tagline,
+// in a smaller size. Blume renders this slot above every page's article, so the other pages
+// render nothing here.
+import data from "blume:data";
+import Logo from "./Logo.tsx";
+
+interface Props {
+  route: string;
+}
+
+const { route } = Astro.props;
+---
+
+{
+  route === "/" && (
+    <div class="mx-auto mb-3 flex max-w-[54rem] items-center gap-3" data-home-header>
+      <Logo size="lg" />
+      <p class="font-display font-semibold text-4xl text-foreground tracking-[-0.05em] sm:text-5xl">
+        {data.config.title}
+      </p>
+    </div>
+  )
+}
+
+<style is:global>
+  #blume-content:has([data-home-header]) article h1 {
+    font-size: 1.875rem;
+  }
+</style>

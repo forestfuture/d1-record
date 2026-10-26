@@ -1,7 +1,13 @@
 {
-  // The site's own config, folder meta and excerpt writer (Node); the examples have their own
-  // (snippets/tsconfig.json).
+  // The site's own config, folder meta, excerpt writer (Node) and components; the examples have
+  // their own (snippets/tsconfig.json).
   "extends": "../tsconfig.json",
-  "compilerOptions": { "types": ["node"] },
-  "include": ["blume.config.ts", "excerpts.ts", "docs/**/meta.ts"]
+  "compilerOptions": { "types": ["node"], "jsx": "react-jsx" },
+  "include": [
+    "blume.config.ts",
+    "components.ts",
+    "components/**/*.tsx",
+    "excerpts.ts",
+    "docs/**/meta.ts"
+  ]
 }
