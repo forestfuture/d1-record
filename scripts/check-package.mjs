@@ -2,7 +2,7 @@
 // agents, and the package's own metadata. Run with `vp run check:package`, after `vp pack` and `vp run docs:build`
 // (as CI does): it packs what's built, skipping `prepack`, so pnpm prints only the JSON.
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 
 const expected = [
   "LICENSE",
@@ -30,12 +30,23 @@ if (JSON.stringify(packed) !== JSON.stringify(expected)) {
 }
 console.log(`The tarball holds exactly: ${packed.join(", ")}`);
 
-// An agent reads llms-full.txt as one file, so a link to another page can't be relative (#133).
-const relative = readFileSync(new URL("../llms-full.txt", import.meta.url), "utf8").match(
-  /\]\(\.{1,2}\/[^)]*\)/g,
-);
+// An agent reads llms-full.txt as one file, away from the site, so a link to another page can't be
+// relative to its page (#133). Blume writes those links from the site's root (`/models`), and each
+// page opens with its `Source:` URL, which gives the host to resolve them against.
+const guide = readFileSync(new URL("../llms-full.txt", import.meta.url), "utf8");
+const relative = guide.match(/\]\(\.{1,2}\/[^)]*\)/g);
 if (relative) {
   console.error(`llms-full.txt has ${relative.length} relative links, such as ${relative[0]}`);
   process.exit(1);
 }
-console.log("llms-full.txt's links to pages are absolute");
+const pages = readdirSync(new URL("../site/docs", import.meta.url), { recursive: true }).filter(
+  (name) => /\.mdx?$/.test(name) && !name.startsWith("_"),
+).length;
+const sources = guide.match(/^Source: https:\/\/d1-record\.forestfuture\.dev\//gm)?.length ?? 0;
+if (sources !== pages) {
+  console.error(`llms-full.txt names the source URL of ${sources} pages, of the guide's ${pages}`);
+  process.exit(1);
+}
+console.log(
+  `llms-full.txt names each of its ${pages} pages' source URL, and links no page relatively`,
+);
