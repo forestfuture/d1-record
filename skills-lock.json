@@ -79,6 +79,12 @@
       "skillPath": "skills/engineering/tdd/SKILL.md",
       "computedHash": "9ce12c4a1e209e557fcf9d02086ade3d7ffdb976186018fc1b063b4164246004"
     },
+    "to-spec": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/to-spec/SKILL.md",
+      "computedHash": "3fa1a0695d4ea242fae9e569e4d22aa1788623197abb33bfadafae7315789bbf"
+    },
     "writing-for-agents": {
       "source": "mattpocock/skills",
       "sourceType": "github",
