@@ -43,6 +43,16 @@ describe("the guide's pages", () => {
     expect(other.map(({ name, line }) => `${name}: ${line}`)).toEqual([]);
   });
 
+  test("never escape a brace, which agents would read in the page's Markdown", () => {
+    const escaped = pages.flatMap(({ name, text }) =>
+      prose(text)
+        .filter((line) => line.includes("\\{"))
+        .map((line) => `${name}: ${line.trim()}`),
+    );
+
+    expect(escaped).toEqual([]);
+  });
+
   test("use smart quotes and apostrophes in prose", () => {
     const straight = pages.flatMap(({ name, text }) =>
       prose(text)
