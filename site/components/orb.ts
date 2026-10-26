@@ -70,9 +70,9 @@ void main() {
   color *= 0.55 + 0.6 * clamp(dot(normal, key), 0.0, 1.0);
 
   // The burst: a glow, and two sets of rays turning slowly against each other. At time 0, the
-  // still frame, it sits halfway from the centre to the right and bottom edges, and it wanders
-  // slowly around that point.
-  vec2 centre = vec2(0.5, -0.5) + 0.16 * vec2(sin(t * 0.9), sin(t * 0.7));
+  // still frame, it sits halfway from the centre to the edge, down and to the right, and it
+  // wanders slowly around that point.
+  vec2 centre = vec2(0.35, -0.35) + 0.16 * vec2(sin(t * 0.9), sin(t * 0.7));
   vec2 fromCentre = p - centre;
   float d = length(fromCentre);
   float angle = atan(fromCentre.y, fromCentre.x);
