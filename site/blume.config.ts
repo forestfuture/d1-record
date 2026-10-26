@@ -5,6 +5,10 @@ export default defineConfig({
   description: "A Rails-inspired Active Record for Cloudflare Workers and D1.",
   github: { owner: "forestfuture", repo: "d1-record", dir: "site" },
   lastModified: "git",
+  // Cloudflare Web Analytics counts page views, turned on for the zone in the dashboard. Adding
+  // Blume's cloudflare() adapter as well would count each view twice. It has no event API, so the
+  // page rating stays off until its votes have somewhere to go.
+  feedback: false,
   theme: { accent: { light: "#2f6b3f", dark: "#8cc79a" } },
   footer: {
     copyright: "A ForestFuture project",
