@@ -50,7 +50,7 @@ Reloaded: Post, User
 
 If a file fails to load, say a syntax error in the middle of an edit, the console names the file and keeps the Models you had.
 
-:::warning[TIP]
+:::note
 Only files in your project’s folder are read again. Your database connection and `@forestfuture/d1-record` stay as they are.
 :::
 
@@ -68,7 +68,7 @@ SQL logging on
 
 Each line shows the Model, the time, the SQL, and the values it bound. Filtered attributes show as `[FILTERED]`, as they do in `onQuery`. A statement that fails prints `failed` and the reason in place of the time. `verbose!` toggles it too, and `.verbose on` and `.verbose off` set it explicitly.
 
-:::warning[TIP]
+:::note
 The SQL comes from the database’s own `onQuery`, so a listener you set on your base class still runs as well.
 :::
 
@@ -136,11 +136,11 @@ echo 'await User.count()' | npx d1-record console --remote --yes
 
 What you type isn’t kept unless you add `--history`, and then it goes in `.wrangler/d1-record-history-remote`, a file of its own, so the up arrow never offers a local session a line you typed against the real database.
 
-:::warning[TIP]
+:::note
 The binding needs a `database_id`. If it also has a `preview_database_id`, Wrangler opens that one in place of `database_id`, and the console says so: `Remote preview database DB (…)`.
 :::
 
-:::warning[TIP]
+:::note
 A token needs **D1: Edit** and **Workers Scripts: Edit**, and the account needs a `workers.dev` subdomain, as `wrangler dev` needs for a remote binding.
 :::
 
@@ -162,11 +162,11 @@ npx d1-record console -e 'await User.count()'
 - **Join statements with `;`.** The last value is the result: `-e 'await User.create({ name: "Dan" }); await User.count()'`.
 - **It keeps no history,** ignores what is piped to it, and has no time limit: stop it with Ctrl-C, or run it under `timeout`.
 
-:::warning[TIP]
+:::note
 Await every call. `User.find(1)` without `await` prints `Promise { <pending> }`, and a promise you don’t await may not finish before the console exits, and its failure isn’t reported.
 :::
 
-:::warning[TIP]
+:::note
 Put the code in single quotes, so your shell leaves `$`, `!`, and backticks alone. With `--remote`, `$(…)` makes stdout a pipe, so there is no terminal to ask: add `--yes`, as in `npx d1-record console --remote --yes -e 'await User.count()'`.
 :::
 
@@ -180,7 +180,7 @@ echo 'await User.count()' | npx d1-record console
 
 That prints the same transcript a session does (the database, a prompt before each line, `#=> ` before each result) and exits 0 even when a line fails. For a script that checks the result or the exit code, use `-e`.
 
-:::warning[TIP]
+:::note
 The console reads your TypeScript Models directly, including extensionless imports and `tsconfig.json` paths, so it works in TypeScript projects. It needs Node.js 22.13 or later, and `wrangler` and `@forestfuture/d1-record` installed in your project. It uses your copies, so your Models and the console share one library.
 :::
 

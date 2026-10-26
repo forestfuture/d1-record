@@ -102,7 +102,7 @@ After `author.articles().where({ title: "Untitled" }).deleteAll()`, you’d expe
 
 </Callout>
 
-:::warning[TIP]
+:::note
 A `belongsTo` whose foreign key is `null`, or an association on an unsaved owner, reads without a query.
 :::
 
@@ -116,7 +116,7 @@ Nest with an object: `includes({ articles: "comments" })` or `includes({ article
 
 The whole tree goes to D1 with the authors’ own query, in one round trip. The example above sends four queries. A nested query that would bind more than D1’s 100 values waits for the records above it, and takes one more round trip.
 
-:::warning[TIP]
+:::note
 With a `limit` or `offset`, `includes` ends the order with the primary key, so the preloads find the same records the query loads.
 :::
 
@@ -126,7 +126,7 @@ Rails sends each association’s preload query on its own, so every association 
 
 </Callout>
 
-:::warning[TIP]
+:::note
 `hasMany` and `hasOne` find their records by the foreign key, both with `includes` and when you read one record’s association, such as `author.articles()`. Add an index to the foreign key column. Otherwise D1 reads every row of the table for each lookup, and bills you for each row it reads. A `references` column from the [generators](./generators) is indexed already, and you can add an index to any other foreign key yourself:
 
 ```sql
@@ -167,7 +167,7 @@ Narrow or order an association’s records with `scope`:
 
 The scope applies to reads and preloads alike, and records created through the association take its equality values. `q` is the target’s Relation, with its attributes and scopes.
 
-:::warning[TIP]
+:::note
 A scope that uses `limit`, `offset`, or `distinct` can’t be preloaded, since it would apply to every owner’s records together. `includes` throws `IncompatibleRelation` before it sends any preload.
 :::
 
@@ -193,7 +193,7 @@ Set what destroying the owner does to its records with `dependent`:
 
 Everything a destroy does, the owner’s DELETE included, is written in one atomic batch. Strategies run after the owner’s `beforeDestroy` callbacks, so an `abort()` leaves the records alone.
 
-:::warning[TIP]
+:::note
 Without a strategy, it’s up to the database. If the table declares the foreign key with `REFERENCES`, destroying an owner whose records still point at it throws `InvalidForeignKey`.
 :::
 

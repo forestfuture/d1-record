@@ -36,7 +36,7 @@ ALTER TABLE users RENAME COLUMN bio TO about;
 
 The attribute follows the column, so `bio` becomes `about`. Update the code that uses it, then apply the migration and deploy together, since the old code reads a column that’s gone.
 
-:::warning[TIP]
+:::note
 Keeping the old attribute name for a renamed column is planned in [#65](https://github.com/forestfuture/d1-record/issues/65).
 :::
 
@@ -87,6 +87,6 @@ ALTER TABLE products_new RENAME TO products;
 - **Indexes** are dropped with the old table, so recreate them after the swap.
 - **The schema** needs regenerating with `npx d1-record schema`, since you wrote this migration by hand.
 
-:::warning[TIP]
+:::note
 Wrangler backs up the database before applying migrations to it.
 :::

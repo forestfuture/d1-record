@@ -13,7 +13,7 @@ Register callbacks in a Model’s `static {}` block. Each receives the record, a
 
 Callbacks of one kind run in the order declared. A subclass runs its parent’s callbacks, then its own.
 
-:::warning[TIP]
+:::note
 Once a Model has been used, registering another callback throws `InvalidModel`, so request code can’t add one that leaks into later requests.
 :::
 
@@ -64,7 +64,7 @@ this.beforeSave((order) => {
 
 Only `abort()` stops a save. Returning `false` does nothing, and any other error reaches the caller as it is.
 
-:::warning[TIP]
+:::note
 In an after-callback, the write has already happened, so `abort()` throws `AbortAfterPersistence`, naming the callback.
 :::
 

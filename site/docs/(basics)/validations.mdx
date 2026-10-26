@@ -20,7 +20,7 @@ const account = Account.build(permitted);
 const valid = await account.isValid();
 ```
 
-:::warning[TIP]
+:::note
 `isValid()` is async, since `uniqueness` asks D1.
 :::
 
@@ -117,7 +117,7 @@ Each message is looked up when you read it:
 
 `fullMessages()` starts each message with the attribute’s name, made from the attribute itself: `createdAt` reads as “Created at”. To use another name, call `this.humanAttributeNames`, as the examples above do. Call it in the base class for every Model, or in a Model for its own attributes.
 
-:::warning[TIP]
+:::note
 `Product.humanAttributeName("priceCents")` returns the same name, for a form’s label.
 :::
 

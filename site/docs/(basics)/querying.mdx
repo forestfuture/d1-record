@@ -7,7 +7,7 @@ A query is a **Relation**. Each method that narrows, orders, or pages it returns
 
 <include>/_excerpts/guide/querying/relation.ts</include>
 
-:::warning[TIP]
+:::note
 Relations have no `then`, so an `async` function that returns one never runs it by accident. Ask for results with a method such as `toArray()`, `first()`, or `count()`.
 :::
 
@@ -30,7 +30,7 @@ Pass `where` an object of attributes that must all match:
 
 Values are [cast to the attribute’s type](./models#casting-assigned-values), so `where({ quantity: "42" })` finds 42. A value that can’t be cast matches nothing: `findBy` resolves to `null`, and `find` throws `RecordNotFound`.
 
-:::warning[TIP]
+:::note
 In a list, values that can’t be cast are left out. So `whereNot({ id: "abc" })` on an integer key excludes nothing.
 :::
 
@@ -76,7 +76,7 @@ For a cache key, or the value a test expects of a raw row, `serialize` gives the
 - **`deserialize`** reads a cell as loading a record does, and NULL and `undefined` are `null`. It throws the same `TypeError` for a cell that isn’t the attribute’s type. See [Fixing cells of the wrong type](./adopt-a-database#fixing-cells-of-the-wrong-type).
 - **A filtered attribute’s value** is hidden in those errors, as it is anywhere else.
 
-:::warning[TIP]
+:::note
 `typeForAttribute` needs no connection to D1, and the attribute’s name is checked when you compile.
 :::
 
@@ -94,7 +94,7 @@ Sort by each key in turn with `order`, and page with `limit` and `offset`:
 
 Calling `order` again adds more keys. `reorder` replaces the order so far, and `reorder()` removes it. To get a page with its total, use [`paginate`](#paginating).
 
-:::warning[TIP]
+:::note
 NULLs sort first in ascending order, as in SQLite. Place them with `nulls: "first"` or `nulls: "last"`.
 :::
 
@@ -124,7 +124,7 @@ By default, a page holds 25 records, and none holds more than 100. To change bot
 
 <include>/_excerpts/guide/paginating/per-page.ts</include>
 
-:::warning[TIP]
+:::note
 D1 limits neither the rows a query returns nor the size of its response. `maxPerPage` keeps one request from reading, and paying for, too many rows, within a Worker’s 128 MB of memory and a query’s 30 seconds.
 :::
 
@@ -182,7 +182,7 @@ The values come back in `params`, apart from the SQL.
 
 A Statement from `toInsert`, `toUpdateAll`, `toDeleteAll`, and the other `to…` methods has `toSql()` too. A `none()` Relation shows `1 = 0`, the condition that matches nothing.
 
-:::warning[TIP]
+:::note
 `toSql()` returns the real values, filtered attributes included. To see what a query sent, with those filtered, use [`onQuery`](./logging).
 :::
 
@@ -209,7 +209,7 @@ Call it as a static, or on any Relation of the Model:
 - A scope can’t reuse a Relation method’s name (`where`, `count`) or a Model static’s (`validates`, `scope`, `all`).
 - Inside a scope, `q` has every Relation method but not the Model’s other scopes. Share logic between scopes with a plain function.
 
-:::warning[TIP]
+:::note
 A scope whose body names its own class needs its type written out: `static roots: ScopeStatic<[]> = this.scope(…)`.
 :::
 

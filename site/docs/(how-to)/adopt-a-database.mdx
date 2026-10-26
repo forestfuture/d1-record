@@ -30,7 +30,7 @@ If `src/models/application-record.ts` already exists, point it at the new file w
 
 Pass `--out` to every later `schema` and `g` command, or keep it in a `package.json` script.
 
-:::warning[TIP]
+:::note
 Without `--out`, d1-record refuses to write over a file it didn’t write, or beside a folder of the same name, so Drizzle’s schema is safe.
 :::
 
@@ -60,7 +60,7 @@ If another tool still writes the other form, compare through `strftime` in a fra
 
 `strftime` reads every form SQLite knows and writes d1-record’s ISO text, so rows in either form compare and sort as the times they are.
 
-:::warning[TIP]
+:::note
 A wrapped column can’t use its index for that condition, so SQLite reads the whole table.
 :::
 
@@ -112,11 +112,11 @@ Under `unixSeconds`, a `Date` is stored to the second, so a condition such as `l
 A `Date` beside that column in a `sql` fragment throws `TypeError`: a fragment has no attribute, so it would bind as ISO text. Use `column("publishedAt").value(date)`, which writes it as the attribute stores it. See [Writing SQL fragments](./querying#writing-sql-fragments).
 :::
 
-:::warning[TIP]
+:::note
 In a raw `env.DB.prepare(...)` statement, bind `Article.typeForAttribute("publishedAt").serialize(date)`, and read a cell with `deserialize`. See [Using raw statements](./querying#using-raw-statements).
 :::
 
-:::warning[TIP]
+:::note
 Prisma’s dates need no override. On D1, Prisma writes a `DateTime` as ISO text, which d1-record reads as it is.
 :::
 
@@ -147,6 +147,6 @@ Then fix the cause:
 - If a few rows hold the wrong thing, `UPDATE` them.
 - If the column isn’t used, ignore it with `false` in the override.
 
-:::warning[TIP]
+:::note
 SQLite converts a value to the column’s declared type only when it can: `'42'` in an `INTEGER` column is stored as 42, and `'abc'` stays text.
 :::

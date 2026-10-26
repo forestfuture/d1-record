@@ -15,15 +15,15 @@ Every query inside it goes through the request’s Session. That includes unique
 
 `withSession` keeps the Session’s bookmark in a `d1-bookmark` cookie. The user’s next request sends it back, and its Session starts from there. If your handler throws, the error reaches you unchanged and no cookie is set.
 
-:::warning[TIP]
+:::note
 The cookie is `HttpOnly`, `Secure`, and `SameSite=Lax`, with `Path=/`. To name it something else, pass `{ cookie: "name" }` before your handler.
 :::
 
-:::warning[TIP]
+:::note
 For a second D1 database, call `withSession` again inside the first one. Give each its own cookie name.
 :::
 
-:::warning[TIP]
+:::note
 `withSession` needs Node.js compatibility, which is on by default for compatibility dates from 2026-08-04. For an earlier date, add `"compatibility_flags": ["nodejs_compat"]`.
 :::
 
@@ -35,7 +35,7 @@ If your clients aren’t browsers, carry the bookmark in a header instead:
 
 Each response has the bookmark in its `x-d1-bookmark` header. Clients send that header with their next request.
 
-:::warning[TIP]
+:::note
 A browser app on another origin can only read the header if your CORS response lists it in `Access-Control-Expose-Headers`.
 :::
 

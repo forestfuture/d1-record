@@ -42,7 +42,7 @@ A usage error means the code needs to change:
 | `NoDatabase`           | using a record made with `new` rather than `build`                              |
 | `NoSession`            | `db.bookmark()` on a Database opened without a session                          |
 
-:::warning[TIP]
+:::note
 A name from a request, such as `?include=` or a JSON key, only ever matches the Model’s own attributes and associations; `constructor` and `__proto__` are unknown like any other. Return a 400 for these errors.
 :::
 

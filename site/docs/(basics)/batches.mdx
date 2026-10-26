@@ -43,7 +43,7 @@ Each bulk write has a `to…` form that prepares it instead of running it: `toIn
 - **Inspecting:** a prepared write’s `toSql()` shows the SQL and values it will send, [without sending them](./querying#seeing-a-querys-sql).
 - **Databases:** a batch runs on the database its entries were built on. Entries from two databases throw `IncompatibleRelation`.
 
-:::warning[TIP]
+:::note
 D1 can’t keep a transaction open across `await`s, so there’s no `transaction()` block. A batch is how you make writes atomic.
 :::
 
