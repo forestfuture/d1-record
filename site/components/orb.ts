@@ -9,7 +9,7 @@ void main() { gl_Position = vec4(position, 0.0, 1.0); }
 
 // A sphere lit from the upper left. Inside it, two layers of value noise warp a third, so bands
 // of light drift through the glass, seen deeper at the centre than at the rim. Glowing strands
-// cross the bands, and a burst of light wanders around the upper left; the brighter the light,
+// cross the bands, and a burst of light wanders just off centre; the brighter the light,
 // the hotter its colour, from teal through magenta to white.
 const FRAGMENT = `
 #ifdef GL_FRAGMENT_PRECISION_HIGH
@@ -69,9 +69,9 @@ void main() {
   vec3 key = normalize(vec3(-0.5, 0.6, 0.65));
   color *= 0.55 + 0.6 * clamp(dot(normal, key), 0.0, 1.0);
 
-  // The burst wanders slowly around the upper left: a glow, and two sets of rays turning slowly
-  // against each other.
-  vec2 centre = vec2(-0.32, 0.3) + 0.16 * vec2(cos(t * 0.9), sin(t * 0.7));
+  // The burst: a glow, and two sets of rays turning slowly against each other. It sits just off
+  // centre at time 0, the still frame, and wanders slowly around that point.
+  vec2 centre = vec2(-0.04, -0.05) + 0.16 * vec2(sin(t * 0.9), sin(t * 0.7));
   vec2 fromCentre = p - centre;
   float d = length(fromCentre);
   float angle = atan(fromCentre.y, fromCentre.x);
@@ -96,8 +96,9 @@ void main() {
 }
 `;
 
-/** The moment the still frame shows, and the animation starts from, in seconds. */
-const START = 8;
+/** The moment the still frame shows, and the animation starts from, in seconds. At 0 the burst
+ * sits exactly at its point in the shader. */
+const START = 0;
 
 function compile(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {
   const shader = gl.createShader(type);
