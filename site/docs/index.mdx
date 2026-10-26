@@ -47,8 +47,8 @@ npm install @forestfuture/d1-record
     N+1. Hand-written SQL goes through a tagged template, so values are always bound.
   </Card>
   <Card title="A predictable lifecycle" href="/persistence" icon="refresh-cw">
-    `save`, `create`, `update`, and `destroy` run validations and callbacks in Rails’ order, with
-    dirty tracking and dependent strategies. Methods that throw end in `OrThrow`.
+    `save`, `create`, `update`, and `destroy` run validations and callbacks in a predictable order,
+    with dirty tracking and dependent strategies. Methods that throw end in `OrThrow`.
   </Card>
   <Card title="Atomic where D1 allows" href="/batches" icon="layers">
     D1 can’t hold a transaction open across awaits, so `batch` writes a set of statements and
