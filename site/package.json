@@ -11,6 +11,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261006.1",
+    "@types/react": "19.3.0",
     "blume": "2.2.5",
     "wrangler": "^4.147.0"
   }
