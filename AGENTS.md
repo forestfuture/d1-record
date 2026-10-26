@@ -16,7 +16,7 @@ Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agen
 
 ## Working on an issue
 
-Follow `docs/agents/workflow.md` for every issue. In short: orient (the issue and its comments, `GLOSSARY.md`, the contract, ADRs) → **agree the test seams and open decisions with the human before writing tests** → build red → green, one committed slice at a time → `code-review` skill → **push only with the human's approval**, then close the issue with a summary. Workflow skills (`tdd`, `code-review`, `grilling`, `domain-modeling`, `implement`, `implement-spec`, `pr`, `retro`, `codebase-design`) are in `.claude/skills/`. Agents other than Claude Code can read each `SKILL.md` as plain instructions. To update or add skills, see `.claude/skills/README.md`.
+Follow `docs/agents/workflow.md` for every issue. In short: orient (the issue and its comments, `GLOSSARY.md`, the contract, ADRs) → **agree the test seams and open decisions with the human before writing tests** → build red → green, one committed slice at a time → `code-review` skill → **push only with the human's approval**, then close the issue with a summary. Workflow skills (`tdd`, `code-review`, `grilling`, `domain-modeling`, `implement`, `implement-spec`, `to-spec`, `pr`, `retro`, `codebase-design`) are in `.claude/skills/`. Agents other than Claude Code can read each `SKILL.md` as plain instructions. To update or add skills, see `.claude/skills/README.md`.
 
 ## Project
 
