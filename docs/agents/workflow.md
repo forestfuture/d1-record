@@ -75,3 +75,5 @@ Run the `code-review` skill, with `main` (the branch's merge-base) as the fixed 
 The `implement` skill chains steps 3–4 (`tdd`, then `code-review`). This document adds the repo-specific parts around it: the checkpoints, the D1 seam, the contract, and closing the issue.
 
 For a parent issue with sub-issues, the human can run `/implement-spec` instead. It builds the sub-issues in parallel worktrees and merges them onto one integration branch. Agree the seams and open decisions for each sub-issue first (step 2), and treat opening and merging the pull request from the integration branch like a push: only with the human's approval.
+
+To turn a discussion into an issue, the human can run `/to-spec`. It writes a spec from what the conversation has already settled, checks the test seams with the human, and opens it as a `ready-for-agent` issue.
