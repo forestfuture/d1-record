@@ -1,1 +1,49 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><defs><radialGradient id="d1-record-logo" cx="0.36" cy="0.3" r="0.78"><stop offset="0" stop-color="#a3dc96"/><stop offset="0.45" stop-color="#228b22"/><stop offset="1" stop-color="#0a3812"/></radialGradient></defs><circle cx="20" cy="20" r="20" fill="url(#d1-record-logo)"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
+  <defs>
+    <radialGradient id="d1r-ball" cx="0.4" cy="0.36" r="0.7">
+      <stop offset="0" stop-color="#a3de8f"/>
+      <stop offset="0.55" stop-color="#228b22"/>
+      <stop offset="1" stop-color="#0b3f12"/>
+    </radialGradient>
+    <radialGradient id="d1r-burst" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fffaf0"/>
+      <stop offset="0.25" stop-color="#ffe2a8" stop-opacity="0.9"/>
+      <stop offset="0.6" stop-color="#f2a93b" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#f2a93b" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="d1r-rim" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.78" stop-color="#d9c97a" stop-opacity="0"/>
+      <stop offset="1" stop-color="#d9c97a" stop-opacity="0.75"/>
+    </radialGradient>
+    <linearGradient id="d1r-ray" x1="0" x2="1">
+      <stop offset="0" stop-color="#ffe2a8" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#fffaf0"/>
+      <stop offset="1" stop-color="#ffe2a8" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="d1r-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="0.6"/>
+    </filter>
+    <clipPath id="d1r-clip"><circle cx="20" cy="20" r="20"/></clipPath>
+  </defs>
+  <circle cx="20" cy="20" r="20" fill="url(#d1r-ball)"/>
+  <g clip-path="url(#d1r-clip)" fill="none" stroke="#f2c14e" stroke-linecap="round">
+    <g filter="url(#d1r-glow)" stroke-width="1.4" opacity="0.85">
+      <path d="M2 14c6-3 9 2 15-1s9-6 16-3"/>
+      <path d="M6 31c5-4 8 0 13-3s7-7 14-5"/>
+      <path d="M27 4c-2 6 3 9 1 15s-5 8-3 15"/>
+    </g>
+    <g stroke-width="0.6" opacity="0.9">
+      <path d="M2 14c6-3 9 2 15-1s9-6 16-3"/>
+      <path d="M6 31c5-4 8 0 13-3s7-7 14-5"/>
+      <path d="M27 4c-2 6 3 9 1 15s-5 8-3 15"/>
+    </g>
+  </g>
+  <g fill="url(#d1r-ray)">
+    <rect x="6" y="19.6" width="28" height="0.8" transform="rotate(-35 20 20)"/>
+    <rect x="9" y="19.7" width="22" height="0.6" transform="rotate(25 20 20)"/>
+    <rect x="11" y="19.75" width="18" height="0.5" transform="rotate(85 20 20)"/>
+  </g>
+  <circle cx="20" cy="20" r="9" fill="url(#d1r-burst)"/>
+  <circle cx="20" cy="20" r="20" fill="url(#d1r-rim)"/>
+  <ellipse cx="13" cy="11" rx="4.5" ry="3" fill="#ffffff" opacity="0.35" filter="url(#d1r-glow)" transform="rotate(-35 13 11)"/>
+</svg>
