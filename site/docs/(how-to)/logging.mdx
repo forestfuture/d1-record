@@ -40,7 +40,7 @@ To group a request’s queries, open its database with a listener that knows the
 
 Logged as JSON, each line can be filtered by `requestId` in [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/). Turn them on with `"observability": { "enabled": true }` in your Wrangler config.
 
-:::warning[TIP]
+:::note
 `withDatabase` needs Node.js compatibility, which is on by default for compatibility dates from 2026-08-04. For an earlier date, add `"compatibility_flags": ["nodejs_compat"]`.
 :::
 

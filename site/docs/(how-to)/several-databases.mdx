@@ -87,7 +87,7 @@ With read replication, give each database its own Session. Nest a `withSession` 
 
 Every query in `handle` goes through the Session of its Model’s database. See [Read replicas](./read-your-own-writes) for where each Session starts.
 
-:::warning[TIP]
+:::note
 To pass per-request options without Sessions, such as `onQuery`, open the databases yourself and pass them all to `withDatabase`:
 
 <include>/_excerpts/guide/connecting/several.ts</include>
@@ -131,7 +131,7 @@ test("signing in logs an entry", async () => {
 
 Each Model now finds its own database, as it does in a Worker. Call your Worker’s `fetch` without `withDatabase`.
 
-:::warning[TIP]
+:::note
 Assign the bindings onto the mocked `env` object, as above. d1-record reads `env` the first time a Model needs its binding, so it never sees an object assigned later.
 :::
 

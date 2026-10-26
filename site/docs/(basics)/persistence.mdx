@@ -64,7 +64,7 @@ Destroy a record with `destroy`:
 
 It runs the destroy callbacks and the associations’ [`dependent` options](./associations#destroying-dependent-records), then deletes the row. A destroyed record’s attributes stay readable, but setting one, or calling `save`, `update`, `destroy`, or `reload`, throws `RecordDestroyed`.
 
-:::warning[TIP]
+:::note
 If another request already deleted the row, `save` and `destroy` still succeed.
 :::
 

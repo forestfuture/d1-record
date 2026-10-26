@@ -53,7 +53,7 @@ Each column is `name:type`, with optional marks:
 
 The [column syntax](./command-line#column-syntax) lists every type.
 
-:::warning[TIP]
+:::note
 Quote columns that contain `!`, so bash and zsh leave it alone.
 :::
 
@@ -110,7 +110,7 @@ npx d1-record schema --models src/app/models
 npx d1-record g model Product 'name:string!' --models src/app/models
 ```
 
-:::warning[TIP]
+:::note
 `d1-record schema` writes `application-record.ts` there and reads your Models from there, and the generators write Models that import it, so both need `--models`. A `package.json` script saves retyping it: `"db:schema": "d1-record schema --models src/app/models"`.
 :::
 

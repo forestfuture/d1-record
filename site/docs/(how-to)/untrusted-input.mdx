@@ -11,7 +11,7 @@ Only permit the fields you want from a request:
 
 <include>/_excerpts/guide/untrusted-input/permit.ts</include>
 
-:::warning[TIP]
+:::note
 `permit` can also read `FormData` or `URLSearchParams`.
 :::
 
@@ -48,6 +48,6 @@ Check that a value is a string before you query with it. JSON can send `null`, a
 
 <include>/_excerpts/guide/untrusted-input/null-check.ts</include>
 
-:::warning[TIP]
+:::note
 A value that can’t be cast matches nothing, so `whereNot({ id: "abc" })` excludes nothing.
 :::

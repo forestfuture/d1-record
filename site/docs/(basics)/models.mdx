@@ -111,7 +111,7 @@ export class Account extends ApplicationRecord {
 
 A subclass shares its parent’s table. A class with no name to take one from must set `static table`.
 
-:::warning[TIP]
+:::note
 Pluralization follows English rules, quirks included: `Human` becomes `humen` and `Leaf` becomes `leafs`. There’s no way to add your own rules, so set `table` instead.
 :::
 
@@ -150,15 +150,15 @@ An attribute can be `null` unless it’s declared `null: false`, and its TypeScr
 
 A `datetime` read from text with no time zone, such as SQLite’s `DEFAULT CURRENT_TIMESTAMP` writes, is UTC in any time zone.
 
-:::warning[TIP]
+:::note
 A column that holds both ISO text and SQLite’s date text compares as text. See [Comparing dates in two forms](./adopt-a-database#comparing-dates-in-two-forms).
 :::
 
-:::warning[TIP]
+:::note
 Store `json` attributes in a `TEXT` column, as [D1 recommends](https://developers.cloudflare.com/d1/sql-api/query-json/#types), and add `CHECK (json_valid(settings))` to have D1 reject invalid JSON. A column declared `JSON` works too.
 :::
 
-:::warning[TIP]
+:::note
 A `datetime` can be kept as a Unix time in an `INTEGER` column, as Drizzle writes it. Declare it with `storage: "unixSeconds"` or `"unixMilliseconds"`; [Reading Unix timestamps](./adopt-a-database#reading-unix-timestamps) shows how.
 :::
 
@@ -188,7 +188,7 @@ Anything else throws `TypeError` naming the Model and the attribute, and the att
 - For a `datetime`: a time without an offset, a lowercase `t` or `z`, a day that doesn’t exist (`"2026-02-30"`), other formats, and numbers.
 - For a `json`: a value JSON can’t write, such as a `BigInt`, an object that refers to itself, a function, or a symbol.
 
-:::warning[TIP]
+:::note
 A `json` attribute stores what `JSON.stringify` writes: a `Map` becomes `{}` and `NaN` becomes `null`. Convert them before assigning. After a save, the record holds what was stored.
 :::
 
@@ -230,7 +230,7 @@ Build a record without touching the database with `build`:
 
 `assign(attrs)` sets several attributes without saving. `update(attrs)` assigns, then saves.
 
-:::warning[TIP]
+:::note
 A record keeps the database it was built or loaded through, for its later saves and association loads. A record made with `new User()` has none, so build records with `User.build(…)`.
 :::
 
@@ -293,7 +293,7 @@ export class Post extends ApplicationRecord {
 
 In a Model declared with `define`, write it on the attribute: `id: { type: "string", null: false, generateId: true }`.
 
-:::warning[TIP]
+:::note
 For one attribute with its own format, use a `default`: ``shareToken: { default: () => `share_${uuidv7()}` }``. A value made from other attributes, such as a slug, belongs in a [callback](./callbacks), since `generateId` never sees the record.
 :::
 
@@ -320,7 +320,7 @@ Records know what’s changed since they were loaded or last saved:
 
 An update writes only the attributes that changed, and a save with nothing changed sends nothing.
 
-:::warning[TIP]
+:::note
 Changes are found by comparing stored values, so editing a `json` value or a `Date` in place counts as a change.
 :::
 
@@ -358,7 +358,7 @@ A Model’s own list replaces the base class’s:
 
 `attributes()` still returns every attribute, so you can send a hidden one on purpose.
 
-:::warning[TIP]
+:::note
 A name a Model doesn’t have throws `InvalidModel` when the Model is first used, so a typo can’t leave an attribute in your responses. The base class’s names are the exception: a Model without that attribute ignores them.
 :::
 
@@ -416,7 +416,7 @@ Errors [
 
 Printing can’t wait for D1, so to see the records, `await` it or call `toArray()`. A filtered attribute’s value in `params` prints as `[FILTERED]`.
 
-:::warning[TIP]
+:::note
 Printing shows attributes only, so it never loads an association. [Hidden attributes](#hiding-attributes) still print: they keep values out of `toJSON()`, not out of your console.
 :::
 
