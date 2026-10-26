@@ -7,15 +7,16 @@ const page = "site/docs/(basics)/validations.mdx";
 const validationsPage = readFileSync(join(import.meta.dirname, "../..", page), "utf8");
 
 /**
- * Each `type: message` the guide's built-in messages table lists, with straight apostrophes and
- * plain braces: MDX needs `%\{count}` where the library writes `%{count}`.
+ * Each `type: message` the guide's built-in messages table lists, with straight apostrophes, and
+ * each placeholder out of the inline code that keeps MDX from reading `%{count}` as an expression.
  */
 function guideRows(): string[] {
   const section = validationsPage
     .split(/^(?=### )/m)
     .find((part) => part.startsWith("### Finding a built-in message"));
   return [...(section ?? "").matchAll(/^\| `(\w+)` +\|[^|]*\| (.+?) +\|$/gm)].map(
-    (match) => `${match[1]}: ${(match[2] ?? "").replaceAll("’", "'").replaceAll("\\{", "{")}`,
+    (match) =>
+      `${match[1]}: ${(match[2] ?? "").replaceAll("’", "'").replaceAll(/`(%\{\w+\})`/g, "$1")}`,
   );
 }
 
