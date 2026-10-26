@@ -76,8 +76,14 @@ void main() {
   vec2 fromCentre = p - centre;
   float d = length(fromCentre);
   float angle = atan(fromCentre.y, fromCentre.x);
-  float rays = pow(abs(cos(angle * 3.0 + t * 1.5)), 30.0) + 0.6 * pow(abs(cos(angle * 5.0 - t)), 60.0);
-  float burst = 1.5 * exp(-d * d * 45.0) + 0.7 * rays * exp(-d * 3.5);
+  float rays = pow(abs(cos(angle * 3.0 + t * 1.5)), 16.0) + 0.6 * pow(abs(cos(angle * 5.0 - t)), 30.0);
+  // A long glow smeared along the diagonal, swaying a little, under a broad core and a soft halo.
+  float tilt = -0.785 + 0.2 * sin(t * 0.5);
+  vec2 along = vec2(cos(tilt), sin(tilt));
+  float a = dot(fromCentre, along);
+  float b = dot(fromCentre, vec2(-along.y, along.x));
+  float smear = exp(-(a * a * 3.0 + b * b * 40.0));
+  float burst = 1.3 * exp(-d * d * 22.0) + 0.7 * smear + 0.35 * exp(-d * d * 5.0) + 0.4 * rays * exp(-d * 2.5);
 
   // Strands: thin ridges where a second, oppositely warped field crosses its midpoint, shown
   // where a slow third field lets them through, and brighter near the burst.
@@ -87,13 +93,15 @@ void main() {
 
   // Light turns hotter as it brightens: teal, then magenta, then white at the core.
   float heat = strands + burst;
-  vec3 glow = mix(teal, magenta, smoothstep(0.55, 1.0, heat));
-  glow = mix(glow, core, smoothstep(1.15, 1.5, heat));
-  color += glow * min(heat, 1.3);
+  vec3 glow = mix(teal, magenta, smoothstep(0.3, 1.0, heat));
+  glow = mix(glow, core, smoothstep(0.9, 1.8, heat));
+  color += glow * heat;
 
   float highlight = pow(clamp(dot(normal, normalize(key + vec3(0.0, 0.0, 1.0))), 0.0, 1.0), 40.0);
   color += mix(pale, teal, 0.4) * 0.5 * pow(1.0 - z, 3.0) + vec3(0.4 * highlight);
-  gl_FragColor = vec4(min(color, 1.0) * coverage, coverage);
+  // Bright light rolls off towards white rather than clipping at it.
+  color = 1.0 - exp(-1.25 * color);
+  gl_FragColor = vec4(color * coverage, coverage);
 }
 `;
 
