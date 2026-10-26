@@ -7,28 +7,6 @@ A Model describes one table. Its attributes come from your migrations, through t
 
 ## Defining Models
 
-:::note
-`ApplicationRecord` is the base class for all your app’s Models. It holds your tables’ attributes from the generated schema, and the methods, callbacks, and scopes you write on it are shared by every Model. `d1-record schema` writes it for you, as [Generating `ApplicationRecord`](#generating-applicationrecord) shows.
-:::
-
-Extend your app’s `ApplicationRecord`:
-
-<include>/_excerpts/guide/models/generated.ts</include>
-
-The class name names the table, so `Product` reads and writes `products`. The table’s attributes, primary key, and types come from `src/db/schema.ts`.
-
-[`d1-record schema`](./command-line#d1-record-schema) writes that file from your migrations and your Models. Run it after you add a Model or a migration. [`d1-record g model`](./generators) runs it for you.
-
-A subclass shares its parent’s table:
-
-```ts
-import { Product } from "./models";
-
-export class FeaturedProduct extends Product {}
-```
-
-You can still set `static primaryKey`, as long as it names an attribute.
-
 ### Generating `ApplicationRecord`
 
 The first time you run `d1-record schema`, it writes `src/models/application-record.ts`:
@@ -45,6 +23,26 @@ export abstract class ApplicationRecord extends Model {
 It’s an ordinary class, and yours to edit. The schema it holds gives each Model its attributes and the D1 binding its queries use. Methods, callbacks, and scopes you write on it are every Model’s. See [Shared behavior](./shared-behavior).
 
 `ApplicationRecord` has no table of its own, so you can’t query it.
+
+### Extending `ApplicationRecord`
+
+Define each Model by extending `ApplicationRecord`:
+
+<include>/_excerpts/guide/models/generated.ts</include>
+
+The class name names the table, so `Product` reads and writes `products`. The table’s attributes, primary key, and types come from `src/db/schema.ts`.
+
+[`d1-record schema`](./command-line#d1-record-schema) writes that file from your migrations and your Models. Run it after you add a Model or a migration. [`d1-record g model`](./generators) runs it for you.
+
+A subclass shares its parent’s table:
+
+```ts
+import { Product } from "./models";
+
+export class FeaturedProduct extends Product {}
+```
+
+You can still set `static primaryKey`, as long as it names an attribute.
 
 ### Overriding attributes
 
