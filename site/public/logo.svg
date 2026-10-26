@@ -30,19 +30,19 @@
   <circle cx="20" cy="20" r="20" fill="url(#d1r-ball)"/>
   <g clip-path="url(#d1r-clip)" fill="none" stroke-linecap="round">
     <g stroke="#33d9b3" filter="url(#d1r-glow)" stroke-width="1.6" opacity="0.5">
-      <path d="M14 13c5 1 9-3 14-2s7 4 11 3"/>
+      <path d="M19.3 21c5 1 9-3 14-2s7 4 11 3"/>
       <path d="M1 23c4-2 6 3 10 2s5-6 9-5"/>
     </g>
     <g stroke="#b8ffe9" stroke-width="0.4" opacity="0.8">
-      <path d="M14 13c5 1 9-3 14-2s7 4 11 3"/>
+      <path d="M19.3 21c5 1 9-3 14-2s7 4 11 3"/>
       <path d="M1 23c4-2 6 3 10 2s5-6 9-5"/>
     </g>
   </g>
   <g fill="url(#d1r-ray)" clip-path="url(#d1r-clip)">
-    <rect x="1.6" y="13.6" width="24" height="0.8" transform="rotate(-30 13.6 14)"/>
-    <rect x="4.6" y="13.7" width="18" height="0.6" transform="rotate(35 13.6 14)"/>
-    <rect x="6.6" y="13.75" width="14" height="0.5" transform="rotate(95 13.6 14)"/>
+    <rect x="7.3" y="20.6" width="24" height="0.8" transform="rotate(-30 19.3 21)"/>
+    <rect x="10.3" y="20.7" width="18" height="0.6" transform="rotate(35 19.3 21)"/>
+    <rect x="12.3" y="20.75" width="14" height="0.5" transform="rotate(95 19.3 21)"/>
   </g>
-  <circle cx="13.6" cy="14" r="7.5" fill="url(#d1r-burst)"/>
+  <circle cx="19.3" cy="21" r="7.5" fill="url(#d1r-burst)"/>
   <circle cx="20" cy="20" r="20" fill="url(#d1r-rim)" style="mix-blend-mode:screen"/>
 </svg>
