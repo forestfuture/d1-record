@@ -8,8 +8,9 @@ void main() { gl_Position = vec4(position, 0.0, 1.0); }
 `;
 
 // A sphere lit from the upper left. Inside it, two layers of value noise warp a third, so bands
-// of light drift through the glass, seen deeper at the centre than at the rim. Magenta streaks
-// cross the bands, and a burst of light rays out from the centre.
+// of light drift through the glass, seen deeper at the centre than at the rim. Glowing strands
+// cross the bands, and a burst of light wanders around the upper left; the brighter the light,
+// the hotter its colour, from teal through magenta to white.
 const FRAGMENT = `
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
@@ -55,32 +56,42 @@ void main() {
   vec2 warp = vec2(layers(inside + vec2(t, -t)), layers(inside + vec2(5.2 - t, 1.3 + t)));
   float light = layers(inside * 1.3 + 2.4 * warp + t);
 
-  // Thin ridges where a second, oppositely warped field crosses its midpoint: the magenta streaks,
-  // each a bright line in a soft glow, shown only where a slow third field lets them through.
-  float ridge = 1.0 - abs(2.0 * layers(inside * 1.1 - 1.7 * warp - t) - 1.0);
-  float through = smoothstep(0.5, 0.68, layers(inside * 0.7 + vec2(3.1, 7.4) + 0.5 * t));
-  float streak = (pow(ridge, 40.0) + 0.35 * pow(ridge, 8.0)) * through;
-
   vec3 pale = vec3(0.64, 0.87, 0.56);
   vec3 forest = vec3(0.1, 0.42, 0.1);
   vec3 shade = vec3(0.03, 0.17, 0.05);
+  vec3 teal = vec3(0.2, 0.85, 0.7);
   vec3 magenta = vec3(0.84, 0.23, 0.69);
-  vec3 core = vec3(1.0, 0.97, 0.88);
-  vec3 color = mix(pale, forest, smoothstep(0.2, 0.65, light));
-  color = mix(color, shade, 0.8 * smoothstep(0.62, 0.9, light));
+  vec3 core = vec3(1.0, 0.97, 0.92);
 
+  // A dark green body with a few pale clouds, lit from the upper left.
+  vec3 color = mix(shade, forest, smoothstep(0.25, 0.75, light));
+  color = mix(color, pale, 0.35 * smoothstep(0.68, 0.95, light));
   vec3 key = normalize(vec3(-0.5, 0.6, 0.65));
   color *= 0.55 + 0.6 * clamp(dot(normal, key), 0.0, 1.0);
-  color = mix(color, magenta, 0.75 * streak) + magenta * 0.25 * streak;
 
-  // The burst: a glow at the centre, and two sets of rays turning slowly against each other.
-  float angle = atan(p.y, p.x);
+  // The burst wanders slowly around the upper left: a glow, and two sets of rays turning slowly
+  // against each other.
+  vec2 centre = vec2(-0.32, 0.3) + 0.16 * vec2(cos(t * 0.9), sin(t * 0.7));
+  vec2 fromCentre = p - centre;
+  float d = length(fromCentre);
+  float angle = atan(fromCentre.y, fromCentre.x);
   float rays = pow(abs(cos(angle * 3.0 + t * 1.5)), 30.0) + 0.6 * pow(abs(cos(angle * 5.0 - t)), 60.0);
-  float burst = exp(-r * r * 30.0) + 0.8 * rays * exp(-r * 3.0);
-  color += mix(magenta, core, exp(-r * r * 12.0)) * burst;
+  float burst = 1.5 * exp(-d * d * 45.0) + 0.7 * rays * exp(-d * 3.5);
+
+  // Strands: thin ridges where a second, oppositely warped field crosses its midpoint, shown
+  // where a slow third field lets them through, and brighter near the burst.
+  float ridge = 1.0 - abs(2.0 * layers(inside * 1.1 - 1.7 * warp - t) - 1.0);
+  float through = smoothstep(0.4, 0.65, layers(inside * 0.7 + vec2(3.1, 7.4) + 0.5 * t));
+  float strands = (pow(ridge, 30.0) + 0.3 * pow(ridge, 6.0)) * through * (0.6 + 1.4 * exp(-d * 2.0));
+
+  // Light turns hotter as it brightens: teal, then magenta, then white at the core.
+  float heat = strands + burst;
+  vec3 glow = mix(teal, magenta, smoothstep(0.55, 1.0, heat));
+  glow = mix(glow, core, smoothstep(1.15, 1.5, heat));
+  color += glow * min(heat, 1.3);
 
   float highlight = pow(clamp(dot(normal, normalize(key + vec3(0.0, 0.0, 1.0))), 0.0, 1.0), 40.0);
-  color += mix(pale, magenta, 0.35) * 0.6 * pow(1.0 - z, 3.0) + vec3(0.6 * highlight);
+  color += mix(pale, teal, 0.4) * 0.5 * pow(1.0 - z, 3.0) + vec3(0.4 * highlight);
   gl_FragColor = vec4(min(color, 1.0) * coverage, coverage);
 }
 `;
