@@ -1,0 +1,59 @@
+---
+title: Read replicas
+description: "With D1 read replication, keep each user's reads at least as new as their own writes: withSession opens a D1 Session for each request and carries its bookmark in a cookie or a header."
+---
+
+With [D1 read replication](https://developers.cloudflare.com/d1/best-practices/read-replication/), reads can come from a nearby replica that may be a moment behind. A D1 **Session** keeps each user’s reads at least as new as their own writes.
+
+## Opening a Session for each request
+
+Wrap each request in `withSession`, passing it the request and your D1 binding:
+
+<include>/_excerpts/guide/connecting/session.ts</include>
+
+Every query inside it goes through the request’s Session. That includes uniqueness checks, association loads, preloads, and batches. Records loaded there keep using it.
+
+`withSession` keeps the Session’s bookmark in a `d1-bookmark` cookie. The user’s next request sends it back, and its Session starts from there. If your handler throws, the error reaches you unchanged and no cookie is set.
+
+:::warning[TIP]
+The cookie is `HttpOnly`, `Secure`, and `SameSite=Lax`, with `Path=/`. To name it something else, pass `{ cookie: "name" }` before your handler.
+:::
+
+:::warning[TIP]
+For a second D1 database, call `withSession` again inside the first one. Give each its own cookie name.
+:::
+
+:::warning[TIP]
+`withSession` needs Node.js compatibility, which is on by default for compatibility dates from 2026-08-04. For an earlier date, add `"compatibility_flags": ["nodejs_compat"]`.
+:::
+
+## Carrying the bookmark in a header
+
+If your clients aren’t browsers, carry the bookmark in a header instead:
+
+<include>/_excerpts/guide/connecting/session-header.ts</include>
+
+Each response has the bookmark in its `x-d1-bookmark` header. Clients send that header with their next request.
+
+:::warning[TIP]
+A browser app on another origin can only read the header if your CORS response lists it in `Access-Control-Expose-Headers`.
+:::
+
+## Choosing where a Session starts
+
+A request without a bookmark starts at the nearest instance. To start it at the primary instead, pass `{ start: "first-primary" }`. A request with a bookmark always starts from its bookmark. If D1 can’t use the bookmark, the Session starts from `start` instead. This happens when someone changes the cookie.
+
+`connect(env.DB, { session })` takes D1’s own values:
+
+| `session`               | The first query goes to                                                                |
+| ----------------------- | -------------------------------------------------------------------------------------- |
+| `"first-unconstrained"` | The nearest instance, primary or replica. The fastest, but may read slightly old data. |
+| `"first-primary"`       | The primary, so it sees every write made so far.                                       |
+| A bookmark              | An instance at least as new as the moment the bookmark was taken.                      |
+
+After the first query, each query reads data at least as new as the one before, including the request’s own writes.
+
+- **Your handler gets the request’s database** as its argument. Use it for `db.batch(…)` and `db.model(…)`.
+- **To log the request’s queries**, pass `onQuery` to `withSession`, as you would to `connect`.
+- **To carry the bookmark yourself**, use `db.bookmark()`. It’s the Session’s latest bookmark. It’s `null` before the first query, and throws `NoSession` on a database opened without a Session.
+- **To mix the primary and replicas**, open two databases, and use `db.model(…)` with each.

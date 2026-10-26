@@ -4,7 +4,7 @@ import type { ParseArgsOptionsConfig } from "node:util";
 import { describe, expect, test } from "vite-plus/test";
 import { everySubcommand } from "../../cli/main.ts";
 
-const page = "site/guide/command-line.md";
+const page = "site/docs/(basics)/command-line.mdx";
 const commandLinePage = readFileSync(join(import.meta.dirname, "../..", page), "utf8");
 
 /** Flags left out of both sides: the guide shows `--help` in its intro, not in a table. */

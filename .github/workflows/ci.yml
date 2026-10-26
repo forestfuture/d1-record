@@ -42,8 +42,9 @@ jobs:
       - run: pnpm pack --out "$RUNNER_TEMP/d1-record.tgz"
 
   docs:
-    # Deploys the documentation site to docs.forestfuture.dev/d1-record (site/wrangler.jsonc),
-    # only from main and only once the checks above have passed.
+    # Deploys the documentation site to d1-record.forestfuture.dev (site/wrangler.jsonc) and the
+    # docs.forestfuture.dev library list (site/host/wrangler.jsonc), only from main and only once the
+    # checks above have passed.
     needs: check
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -61,6 +62,11 @@ jobs:
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           # Workers Scripts: Edit on the account, and Workers Routes: Edit on the forestfuture.dev zone.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DOCS_API_TOKEN }}
+      - run: vp exec wrangler deploy --config host/wrangler.jsonc
+        working-directory: site
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DOCS_API_TOKEN }}
 
   # Releasing (docs/agents/releasing.md): once the checks pass on main, Changesets either opens or

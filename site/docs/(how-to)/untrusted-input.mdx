@@ -1,0 +1,53 @@
+---
+title: Untrusted input
+description: "Permit only the fields you want from a request, return a 400 for values that can't be used, and check request values before you query with them."
+---
+
+A request can send any fields it likes. Pick the ones you want before they reach a Model.
+
+## Permitting fields
+
+Only permit the fields you want from a request:
+
+<include>/_excerpts/guide/untrusted-input/permit.ts</include>
+
+:::warning[TIP]
+`permit` can also read `FormData` or `URLSearchParams`.
+:::
+
+Permitted values are cast to their attribute’s types, so `"42"` becomes `42` for an integer. [Models](./models#casting-assigned-values) lists what each type accepts. A page number from a query string can go straight to [`paginate`](./querying#paginating), which casts it too.
+
+<Callout type="info" title="Beyond Rails" icon="/ruby.svg">
+
+Rails’ `params.permit` only filters keys. d1-record’s also casts each value, and checks that each name is an attribute.
+
+</Callout>
+
+## Using a schema library
+
+If you validate requests with a schema library such as [Zod](https://zod.dev) or [Valibot](https://valibot.dev), pass the parsed result to the Model:
+
+```ts
+import { z } from "zod";
+
+const SignUp = z.object({ email: z.string(), handle: z.string().min(3) });
+
+const fields = SignUp.parse(await request.json());
+const account = await Account.create(fields);
+```
+
+## Returning a 400
+
+A value that can’t be cast throws a `TypeError`, and a body that isn’t JSON throws a `SyntaxError`. Return a 400 for either:
+
+<include>/_excerpts/guide/untrusted-input/bad-request.ts</include>
+
+## Querying with request values
+
+Check that a value is a string before you query with it. JSON can send `null`, and `findBy({ token: null })` matches rows whose token is NULL:
+
+<include>/_excerpts/guide/untrusted-input/null-check.ts</include>
+
+:::warning[TIP]
+A value that can’t be cast matches nothing, so `whereNot({ id: "abc" })` excludes nothing.
+:::

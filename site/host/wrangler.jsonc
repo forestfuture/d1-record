@@ -1,0 +1,9 @@
+// docs.forestfuture.dev: the page listing ForestFuture's libraries, each with a docs site of its own.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "forestfuture-docs",
+  "compatibility_date": "2026-09-01",
+  "assets": { "directory": "public", "html_handling": "drop-trailing-slash" },
+  "workers_dev": false,
+  "routes": [{ "pattern": "docs.forestfuture.dev/*", "zone_name": "forestfuture.dev" }],
+}

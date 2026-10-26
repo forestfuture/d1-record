@@ -1,0 +1,53 @@
+---
+title: AI agents
+sidebar:
+  label: Using with AI agents
+description: "Point coding agents at d1-record's docs, install its agent skill, and point your project's AGENTS.md or CLAUDE.md at the guide."
+---
+
+Coding agents follow d1-record’s conventions best with its guide at hand and its rules in context. The agent skill brings both, and is what most projects need. The rest are for agents that can’t load a skill, or for a pointer that’s always in context.
+
+## Giving your agent the docs
+
+| Resource                                                                 | What it is                                                                                                                                   |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`llms.txt`](https://docs.forestfuture.dev/d1-record/llms.txt)           | An index of the guide, each page linked as Markdown, following [llmstxt.org](https://llmstxt.org). Start here when an agent can fetch pages. |
+| [`llms-full.txt`](https://docs.forestfuture.dev/d1-record/llms-full.txt) | The whole guide in one Markdown file, about 20K tokens.                                                                                      |
+| Any page + `.md`                                                         | Every page as Markdown: [`/guide/associations.md`](https://docs.forestfuture.dev/d1-record/guide/associations.md).                           |
+| `node_modules/@forestfuture/d1-record/llms-full.txt`                     | The same guide, shipped in the package. It matches the version you’ve installed, and an agent can read it without fetching anything.         |
+
+## Installing the agent skill
+
+Install d1-record’s [agent skill](https://github.com/forestfuture/d1-record/blob/main/skills/d1-record/SKILL.md): its rules, the shapes of a Model and a Worker, and the mistakes to watch for, with pointers into the guide. Agents that support skills, such as Claude Code, Cursor, Codex, and [others](https://skills.sh), load it when they work on d1-record code:
+
+```sh
+npx skills add forestfuture/d1-record
+```
+
+To install the copy shipped with your installed version, sync skills from `node_modules`:
+
+```sh
+npx skills experimental_sync
+```
+
+:::warning[TIP]
+The skills CLI marks `experimental_sync` as experimental, so its name may change.
+:::
+
+## Pointing AGENTS.md at the guide
+
+Agents read `AGENTS.md`, or `CLAUDE.md` for Claude Code, at the start of every task, while a skill loads only when the agent decides it applies. To make sure the guide is always in reach, add one line to yours:
+
+```md
+Before writing code with `@forestfuture/d1-record`, read the part of `node_modules/@forestfuture/d1-record/llms-full.txt` for the task.
+```
+
+The line names the guide shipped with your installed version, so it stays correct after an upgrade.
+
+## Using the rules without a skill
+
+Skip this section if you’ve installed the skill: the block below is the skill’s rules, and the agent would read them twice. For an agent that reads only `AGENTS.md` or `CLAUDE.md`, paste it into yours:
+
+<include lang="md">/_excerpts/skill-rules.md</include>
+
+Copy it again after upgrading d1-record, since the rules can change.
