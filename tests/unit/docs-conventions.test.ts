@@ -1,11 +1,7 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
+import { guidePages } from "../support/guide-pages.ts";
 
-const docs = join(import.meta.dirname, "../../site/docs");
-const pages = readdirSync(docs, { recursive: true, encoding: "utf8" })
-  .filter((name) => /\.mdx?$/.test(name) && !name.startsWith("_"))
-  .map((name) => ({ name, text: readFileSync(join(docs, name), "utf8") }));
+const pages = guidePages();
 
 /** How every Rails box opens: Blume's info callout, with the Ruby icon beside its title. */
 const railsBox = /^<Callout type="info" title="(Compared with|Beyond) Rails" icon="\/ruby\.svg">$/;

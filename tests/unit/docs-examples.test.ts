@@ -1,13 +1,11 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
-import { exampleBlock, site } from "../../site/excerpts.ts";
+import { exampleBlock, site, writeExcerpts } from "../../site/excerpts.ts";
+import { guidePages } from "../support/guide-pages.ts";
 
-/** The guide's pages, as [name, text]: every Markdown or MDX file under site/docs but the excerpts. */
-const pages = readdirSync(join(site, "docs"), { recursive: true, encoding: "utf8" })
-  .filter((name) => /\.mdx?$/.test(name) && !name.startsWith("_"))
-  .map((name) => [name, readFileSync(join(site, "docs", name), "utf8")] as const);
+const pages = guidePages();
 
 // The guide's examples come from type-checked files; each is shown with the imports it uses.
 describe("the guide's example blocks", () => {
@@ -83,28 +81,21 @@ export class Comment extends ApplicationRecord {}`);
     expect(exampleBlock(file, "read")).toBe("const posts = await db.model(Post).toArray();");
   });
 
-  test("every excerpt a guide page includes is a snippet file, or a region of one", () => {
-    const includes = pages.flatMap(([page, text]) =>
+  test("every excerpt a guide page includes is one the site's build writes", () => {
+    const excerpts = mkdtempSync(join(tmpdir(), "excerpts-"));
+    writeExcerpts(site, excerpts);
+    const includes = pages.flatMap(({ name: page, text }) =>
       // A formatter may wrap an <include> across lines; Blume still splices it.
       [...text.matchAll(/^<include[^>]*>\s*\/_excerpts\/(\S+?)\s*<\/include>$/gm)].map(
-        ([, path]) => ({
-          page,
-          path: path!,
-        }),
+        ([, path]) => `${page}: ${path}`,
       ),
     );
-    const missing = includes.filter(({ path }) => {
-      if (path === "skill-rules.md") return false;
-      if (existsSync(join(site, "snippets", path))) return false;
-      const region = /^(.+)\/([\w-]+)\.ts$/.exec(path);
-      return (
-        region === null ||
-        exampleBlock(join(site, "snippets", `${region[1]}.ts`), region[2]!) === undefined
-      );
-    });
+    const missing = includes.filter(
+      (include) => !existsSync(join(excerpts, include.split(": ")[1]!)),
+    );
 
     expect(includes.length).toBeGreaterThan(80);
-    expect(missing.map(({ page, path }) => `${page}: ${path}`)).toEqual([]);
+    expect(missing).toEqual([]);
   });
 
   test("an example written inline in a page imports whatever it uses from the package", () => {
@@ -118,7 +109,7 @@ export class Comment extends ApplicationRecord {}`);
           .trim(),
       ),
     );
-    const unimported = pages.flatMap(([page, text]) =>
+    const unimported = pages.flatMap(({ name: page, text }) =>
       [...text.matchAll(/```ts[^\n]*\n([\s\S]*?)```/g)].flatMap(([, code]) =>
         exported
           // A bare name, not a property such as `binding.batch`.
