@@ -3,11 +3,5 @@
   // their own (snippets/tsconfig.json).
   "extends": "../tsconfig.json",
   "compilerOptions": { "types": ["node"], "jsx": "react-jsx" },
-  "include": [
-    "blume.config.ts",
-    "components.ts",
-    "components/**/*.tsx",
-    "excerpts.ts",
-    "docs/**/meta.ts"
-  ]
+  "include": ["blume.config.ts", "components.ts", "components", "excerpts.ts", "docs/**/meta.ts"]
 }
