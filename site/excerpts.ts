@@ -111,13 +111,13 @@ function skillRules(site: string): string {
 }
 
 /**
- * Rewrites docs/_excerpts from snippets/: `guide/models/declare.ts` is snippets/guide/models.ts's
- * `declare` region as exampleBlock shows it, and `guide/models.ts` the file itself. Blume publishes
- * no `_` folder, and an <include> must read from inside the content root.
+ * Rewrites `out` (docs/_excerpts) from snippets/: `guide/models/declare.ts` is
+ * snippets/guide/models.ts's `declare` region as exampleBlock shows it, `guide/models.ts` the file
+ * itself, and `skill-rules.md` the agent skill's rules. Blume publishes no `_` folder, and an
+ * <include> must read from inside the content root.
  */
-export function writeExcerpts(site: string): void {
+export function writeExcerpts(site: string, out = join(site, "docs/_excerpts")): void {
   const snippets = join(site, "snippets");
-  const out = join(site, "docs/_excerpts");
   rmSync(out, { recursive: true, force: true });
   cpSync(snippets, out, { recursive: true });
   for (const name of readdirSync(snippets, { recursive: true, encoding: "utf8" })) {
