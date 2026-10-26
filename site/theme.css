@@ -1,39 +1,4 @@
-/* The guide's smallest text is 16px. Blume's defaults go down to 10px: body copy at 14px, code
-   and tables at 13px, and labels and badges smaller still. */
-
-:root {
-  --text-xs: 1rem;
-  --text-sm: 1rem;
-}
-
-/* Page copy, and the parts the typography plugin sizes against it. */
-.prose,
-.prose :where(h4, pre, table),
-.prose :where(pre[data-language])::before,
-.prose kbd {
+.prose {
   font-size: 1rem;
-}
-
-.prose
-  :where(code, kbd, figcaption, pre, table, h2 code, h3 code):not(
-    :where([class~="not-prose"], [class~="not-prose"] *)
-  ) {
-  font-size: 1em;
-}
-
-/* Blume's own labels: code-block expanders, tooltips, badges. Some of Blume's CSS comes after this
-   file, so :root makes these win. */
-:root
-  :is(
-    [data-blume-code-expand],
-    .blume-api-description code,
-    .text-\[0\.625rem\],
-    .text-\[0\.65rem\],
-    .text-\[0\.6875rem\],
-    .text-\[0\.7rem\],
-    .\[\&_a\]\:text-\[0\.7rem\] a,
-    small
-  ),
-:root [data-blume-tooltip]::after {
-  font-size: 1rem;
+  line-height: calc(1.5 / 1);
 }
