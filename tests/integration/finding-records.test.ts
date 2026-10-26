@@ -1,14 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
-import { connect, D1RecordError, Model, RecordNotFound } from "../../src/index.ts";
+import { connect, D1RecordError, RecordNotFound } from "../../src/index.ts";
+import { User } from "../fixtures/models/user.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
-
-class User extends Model.define({
-  id: { type: "integer", null: false },
-  email: { type: "string", null: false },
-  role: "string",
-}) {
-  static table = "users";
-}
 
 describe("finding records", () => {
   let binding: TestDatabase;

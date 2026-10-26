@@ -1,14 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
-import { connect, MissingAttribute, Model } from "../../src/index.ts";
+import { connect, MissingAttribute } from "../../src/index.ts";
+import { User } from "../fixtures/models/user.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
-
-class User extends Model.define({
-  id: { type: "integer", null: false },
-  email: { type: "string", null: false },
-  role: "string",
-}) {
-  static table = "users";
-}
 
 describe("partial records", () => {
   let binding: TestDatabase;

@@ -1,30 +1,16 @@
 import fc from "fast-check";
 import { describe, expect, test } from "vite-plus/test";
-import { connect, hasMany, Model, UnknownAssociation, UnknownAttribute } from "../../src/index.ts";
+import { connect, UnknownAssociation, UnknownAttribute } from "../../src/index.ts";
+import { users as userAttributes } from "../fixtures/DB.ts";
+import { User } from "../fixtures/models/user.ts";
 import { PURE_RUNS } from "../support/properties.ts";
-
-class Post extends Model.define({
-  id: { type: "integer", null: false },
-  userId: { type: "integer", null: false },
-  title: { type: "string", null: false },
-}) {
-  static table = "posts";
-}
-
-class User extends Model.define({
-  id: { type: "integer", null: false },
-  email: { type: "string", null: false },
-}) {
-  static table = "users";
-
-  posts = hasMany(Post, { foreignKey: "userId" });
-}
 
 // No D1 needed: these calls check their names before they query.
 const users = connect({} as never).model(User);
 const user = users.build({ id: 1, email: "ada@example.com" });
 
-const own = new Set(["id", "email", "posts"]);
+// The fixture User's attributes and associations.
+const own = new Set([...Object.keys(userAttributes), "posts", "profile"]);
 
 // Names an app might take from a URL (`?include=`, `?sort=`) or a JSON body: every member that
 // objects, functions and arrays inherit, and any other text. None is one of the Model's own

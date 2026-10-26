@@ -1,54 +1,14 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 import {
   AssociationNotLoaded,
-  belongsTo,
   connect,
-  hasMany,
-  hasOne,
   IncompatibleRelation,
-  Model,
   type QueryEvent,
 } from "../../src/index.ts";
+import { Post } from "../fixtures/models/post.ts";
+import { Profile } from "../fixtures/models/profile.ts";
+import { User } from "../fixtures/models/user.ts";
 import { createTestDatabase, type TestDatabase } from "../support/d1.ts";
-
-class User extends Model.define({
-  id: { type: "integer", null: false },
-  email: { type: "string", null: false },
-}) {
-  static table = "users";
-
-  posts = hasMany(Post, { foreignKey: "userId" });
-  profile = hasOne(Profile, { foreignKey: "userId" });
-}
-
-class Post extends Model.define({
-  id: { type: "integer", null: false },
-  userId: { type: "integer", null: false },
-  title: { type: "string", null: false },
-}) {
-  static table = "posts";
-
-  author = belongsTo(User, { foreignKey: "userId" });
-  comments = hasMany(Comment, { foreignKey: "postId" });
-
-  static titled = this.scope((q, title: string) => q.where({ title }));
-}
-
-class Comment extends Model.define({
-  id: { type: "integer", null: false },
-  postId: "integer",
-  body: "string",
-}) {
-  static table = "comments";
-}
-
-class Profile extends Model.define({
-  id: { type: "integer", null: false },
-  userId: { type: "integer", null: false },
-  bio: "string",
-}) {
-  static table = "profiles";
-}
 
 describe("preloading with includes", () => {
   let binding: TestDatabase;
@@ -91,15 +51,15 @@ describe("preloading with includes", () => {
   });
 
   test("belongsTo and hasOne preload too, with null where there's nothing", async () => {
-    const posts = await db().model(Post).includes("author").order({ id: "asc" }).toArray();
+    const posts = await db().model(Post).includes("user").order({ id: "asc" }).toArray();
     const users = await db().model(User).includes("profile").order({ id: "asc" }).toArray();
     expect(queries).toHaveLength(4);
     queries.length = 0;
 
-    const authors = await Promise.all(posts.map(async (post) => (await post.author())?.email));
+    const emails = await Promise.all(posts.map(async (post) => (await post.user())?.email));
     const bios = await Promise.all(users.map(async (user) => (await user.profile())?.bio ?? null));
 
-    expect(authors).toEqual(["a@example.com", "a@example.com", "b@example.com"]);
+    expect(emails).toEqual(["a@example.com", "a@example.com", "b@example.com"]);
     expect(bios).toEqual([null, "Bee", null]);
     expect(queries).toHaveLength(0);
   });
@@ -192,11 +152,11 @@ describe("preloading with includes", () => {
     const posts = await db()
       .model(Post)
       .select("title")
-      .includes("author")
+      .includes("user")
       .order({ id: "asc" })
       .toArray();
 
-    expect(posts.map((post) => post.loaded("author")?.email)).toEqual([
+    expect(posts.map((post) => post.loaded("user")?.email)).toEqual([
       "a@example.com",
       "a@example.com",
       "b@example.com",
@@ -245,8 +205,8 @@ describe("preloading with includes", () => {
   test("includes can't be combined with select(...).distinct(), in either order", () => {
     const posts = db().model(Post);
 
-    expect(() => posts.select("title").distinct().includes("author")).toThrow(IncompatibleRelation);
-    expect(() => posts.includes("author").select("title").distinct()).toThrow(/includes.*distinct/);
+    expect(() => posts.select("title").distinct().includes("user")).toThrow(IncompatibleRelation);
+    expect(() => posts.includes("user").select("title").distinct()).toThrow(/includes.*distinct/);
   });
 
   test("chaining a scope on a preloaded hasMany queries as normal", async () => {
