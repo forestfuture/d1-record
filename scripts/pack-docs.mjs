@@ -4,6 +4,6 @@
 import { copyFileSync } from "node:fs";
 
 copyFileSync(
-  new URL("../site/.vitepress/dist/d1-record/llms-full.txt", import.meta.url),
+  new URL("../site/dist/llms-full.txt", import.meta.url),
   new URL("../llms-full.txt", import.meta.url),
 );

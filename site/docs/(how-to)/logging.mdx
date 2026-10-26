@@ -1,0 +1,97 @@
+---
+title: Logging
+description: "See the SQL your Worker sends to D1: every query app-wide, one request's queries with its ID, only in development, in Workers Logs, and as Server-Timing."
+---
+
+Log the SQL your Worker sends to D1 with an `onQuery` listener. It’s called once for every statement, writes and batches included, with:
+
+| Field           |                                                                  |
+| --------------- | ---------------------------------------------------------------- |
+| `model`         | The Model’s class name, such as `"Product"`                      |
+| `sql`, `params` | The statement and its bound values                               |
+| `durationMs`    | How long it took; in a batch, D1’s own timing for each statement |
+| `meta`          | D1’s result metadata (rows read and written, …)                  |
+| `error`         | D1’s error, when it failed                                       |
+
+Send these wherever you like. A listener never changes a query’s outcome: one that throws is logged with `console.error`, and the query’s result stands.
+
+Set a listener in one of two places:
+
+|                           | Where                                                 | Knows the request? |
+| ------------------------- | ----------------------------------------------------- | ------------------ |
+| **Every query, app-wide** | `static override onQuery` on your app’s base class    | No                 |
+| **One request’s queries** | `connect(env.DB, { onQuery })`, run in `withDatabase` | Yes                |
+
+If both are set, the request’s listener runs first, then the base class’s.
+
+## Logging every query
+
+Set `onQuery` on your app’s base class, in `application-record.ts`, to see every statement of every Model:
+
+<include>/_excerpts/guide/connecting/app-wide.ts</include>
+
+It can’t tell requests apart. A Model can set its own `static override onQuery`, which replaces the base class’s for that Model.
+
+## Logging one request’s queries
+
+To group a request’s queries, open its database with a listener that knows the request, and run the request inside `withDatabase`:
+
+<include>/_excerpts/guide/connecting/per-request.ts</include>
+
+Logged as JSON, each line can be filtered by `requestId` in [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/). Turn them on with `"observability": { "enabled": true }` in your Wrangler config.
+
+:::warning[TIP]
+`withDatabase` needs Node.js compatibility, which is on by default for compatibility dates from 2026-08-04. For an earlier date, add `"compatibility_flags": ["nodejs_compat"]`.
+:::
+
+## Logging only in development
+
+Check a variable that only `.dev.vars` sets, such as `LOG_SQL=1`. For one request’s listener:
+
+<include>/_excerpts/guide/connecting/development.ts</include>
+
+The app-wide listener reads the variable from `cloudflare:workers` when a query runs:
+
+<include>/_excerpts/guide/connecting/app-wide-development.ts</include>
+
+## Timing queries in the browser
+
+To see a request’s database time in the browser’s developer tools, add it up, and send it as a `Server-Timing` header:
+
+<include>/_excerpts/guide/connecting/server-timing.ts</include>
+
+## Keeping secrets out of the logs
+
+Listeners see the values of passwords, tokens, keys, and emails as `"[FILTERED]"`, while D1 still gets the real values. [Models](./models#filtering-attributes) lists the attributes filtered by default, and everywhere their values are hidden.
+
+### Filtering more attributes
+
+Name them on your app’s base class, spreading in the defaults:
+
+<include>/_excerpts/guide/filtering/add.ts</include>
+
+A string matches any attribute whose snake_case name contains it, so `"iban"` also covers `ibanNumber`. Use a RegExp to match one name exactly.
+
+### Seeing a filtered attribute
+
+To see one while debugging, leave it out of the list in development:
+
+```ts
+import { Model } from "@forestfuture/d1-record";
+import { schema } from "../db/schema";
+
+export abstract class ApplicationRecord extends Model {
+  static override schema = schema;
+  static override filterAttributes = Model.filterAttributes.filter((entry) => entry !== "email");
+}
+```
+
+### Filtering `sql` fragments
+
+A bare value inside an `sql` fragment has no attribute, so it’s logged as given. Write a secret as `column("token").value(token)`, or compare it with a condition such as `where({ token })`, and it’s filtered. Otherwise, leave `params` out of what you log.
+
+<Callout type="info" title="Compared with Rails" icon="/ruby.svg">
+
+Rails filters by its app-wide `filter_parameters`, against parameter and column names. d1-record keeps the list on the Model (`static filterAttributes`, inherited from your base class), and matches each entry against the attribute’s snake_case name, so `"_key"` filters `apiKey`. A RegExp may match either form. It also hides filtered values in cast errors and in `RecordNotFound`, which Rails’ filter doesn’t cover.
+
+</Callout>

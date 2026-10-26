@@ -10,6 +10,11 @@ overrides:
   # majors are lifted, to their patched releases; remove once miniflare ships them.
   "undici@>=7 <7.29.1": ^7.29.1
   "sharp@>=0.35 <0.35.4": ^0.35.4
+  # Dev-only advisories in the docs site's tree (#241), each pinned exactly by the package that
+  # brings it in: @vercel/routing-utils, @vercel/cli-config and @tailwindcss/typography.
+  "path-to-regexp@>=4 <6.3.0": ^6.3.0
+  "zod@>=4 <4.6.6": ^4.6.6
+  "postcss-selector-parser@<7.1.6": ^7.1.6
 peerDependencyRules:
   allowAny:
     - vite

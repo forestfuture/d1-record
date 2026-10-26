@@ -1,0 +1,452 @@
+---
+title: Models
+description: "Reference for Models: extending ApplicationRecord, overriding and narrowing attributes, declaring attributes yourself with define, table names, attributes and types, casting assigned values, building records, permit, timestamps, change tracking, SQL fragments, serialization, and filtered attributes."
+---
+
+A Model describes one table. Its attributes come from your migrations, through the generated schema, so the Model only declares behavior.
+
+## Defining Models
+
+Extend your app’s `ApplicationRecord`:
+
+<include>/_excerpts/guide/models/generated.ts</include>
+
+The class name names the table, so `Product` reads and writes `products`. The table’s attributes, primary key, and types come from `src/db/schema.ts`.
+
+[`d1-record schema`](./command-line#d1-record-schema) writes that file from your migrations and your Models. Run it after you add a Model or a migration. [`d1-record g model`](./generators) runs it for you.
+
+A subclass shares its parent’s table:
+
+```ts
+import { Product } from "./models";
+
+export class FeaturedProduct extends Product {}
+```
+
+You can still set `static primaryKey`, as long as it names an attribute.
+
+### Generating `ApplicationRecord`
+
+The first time you run `d1-record schema`, it writes `src/models/application-record.ts`:
+
+```ts
+import { Model } from "@forestfuture/d1-record";
+import { schema } from "../db/schema";
+
+export abstract class ApplicationRecord extends Model {
+  static override schema = schema;
+}
+```
+
+It’s an ordinary class, and yours to edit. The schema it holds gives each Model its attributes and the D1 binding its queries use. Methods, callbacks, and scopes you write on it are every Model’s. See [Shared behavior](./shared-behavior).
+
+`ApplicationRecord` has no table of its own, so you can’t query it.
+
+### Overriding attributes
+
+Generated attributes are usually all you need. When a column holds something its type doesn’t say, such as a boolean in a plain `INTEGER`, override the attribute in `static attributes`:
+
+<include>/_excerpts/guide/overrides/overrides.ts</include>
+
+Write the object `as const`, so TypeScript keeps each type name. Without it, the class is a compile error.
+
+An override is one of these:
+
+| Override                                  | Does                                                                                                  |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `"boolean"` (a type name)                 | Reads and writes the attribute as that type                                                           |
+| `{ type?, null?, default?, generateId? }` | Replaces those parts of the generated attribute; `null: false` makes it non-null in TypeScript        |
+| `false`                                   | Ignores the column: it’s never typed, read, or written, and queries name their columns instead of `*` |
+
+An override of an attribute the table doesn’t have throws `InvalidModel`, and `d1-record schema` reports it. So does an override that changes a column or ignores the primary key.
+
+- **Changing a `type`** drops the generated default or `generateId`, so the column’s own default applies unless you give one.
+- **A `default` and `generateId`** replace each other, so an attribute has one or the other. `generateId` is only for strings.
+- **A `default`** isn’t type-checked yet ([#74](https://github.com/forestfuture/d1-record/issues/74)). One that returns a value the type can’t cast throws `TypeError` when a record is built.
+- **Ignoring a `NOT NULL` column** without a default makes inserts fail, so give it a default in a migration first.
+
+### Narrowing types
+
+To give an attribute a narrower type than its column’s, declare it in the class:
+
+```ts
+import { ApplicationRecord } from "./application-record";
+
+export class Post extends ApplicationRecord {
+  declare status: "draft" | "published";
+}
+```
+
+`post.status` is now typed `"draft" | "published"`, when you read it and when you assign it. `where` and `build` still take any string, and nothing checks the value read from D1. To check what’s saved, add a [validation](./validations): `this.validates("status", { inclusion: ["draft", "published"] })`.
+
+## Declaring attributes yourself
+
+For a view, or a table your migrations don’t make, declare the attributes with `define`. TypeScript infers the record’s properties from the object:
+
+<include>/_excerpts/guide/models/declare.ts</include>
+
+An attribute is a type name, or `{ type, column?, null?, default? }`. To share your base class’s behavior and binding, call `define` on it: `ApplicationRecord.define({...})`.
+
+## Naming tables
+
+A Model takes its table name from its class: snake_case, pluralized.
+
+| Class      | Table        |
+| ---------- | ------------ |
+| `User`     | `users`      |
+| `BlogPost` | `blog_posts` |
+| `Category` | `categories` |
+| `Person`   | `people`     |
+| `Sheep`    | `sheep`      |
+
+To use another name, set `static table`:
+
+```ts
+import { ApplicationRecord } from "./application-record";
+
+export class Account extends ApplicationRecord {
+  static override table = "billing_accounts";
+}
+```
+
+A subclass shares its parent’s table. A class with no name to take one from must set `static table`.
+
+:::warning[TIP]
+Pluralization follows English rules, quirks included: `Human` becomes `humen` and `Leaf` becomes `leafs`. There’s no way to add your own rules, so set `table` instead.
+:::
+
+<Expandable title="Bundlers and class names">
+
+Wrangler keeps class names by default, even when minifying. If a bundler renames `User` to `e`, the first query throws `InvalidModel`, because no Model named `e` is in the generated schema. Keep class names in your bundler’s settings.
+
+</Expandable>
+
+## Mapping columns
+
+Attributes are camelCase, and map to snake_case columns:
+
+| Attribute           | Column                |
+| ------------------- | --------------------- |
+| `createdAt`         | `created_at`          |
+| `externalAccountId` | `external_account_id` |
+| `htmlURL`           | `html_url`            |
+| `userID`            | `user_id`             |
+| `sha256Hash`        | `sha256_hash`         |
+
+To map an attribute to a column with another name, give it `{ column: "..." }`. Conditions, ordering, and association keys always name attributes; only SQL fragments name columns.
+
+## Attribute types
+
+| Type       | JavaScript     | Stored in D1 as                             |
+| ---------- | -------------- | ------------------------------------------- |
+| `string`   | `string`       | `TEXT`                                      |
+| `integer`  | `number`       | `INTEGER`                                   |
+| `real`     | `number`       | `REAL`                                      |
+| `boolean`  | `boolean`      | `INTEGER`, `0` or `1`                       |
+| `datetime` | `Date`         | `TEXT`, ISO-8601, or an `INTEGER` Unix time |
+| `json`     | any JSON value | `TEXT`, as JSON                             |
+
+An attribute can be `null` unless it’s declared `null: false`, and its TypeScript type includes `| null` to match.
+
+A `datetime` read from text with no time zone, such as SQLite’s `DEFAULT CURRENT_TIMESTAMP` writes, is UTC in any time zone.
+
+:::warning[TIP]
+A column that holds both ISO text and SQLite’s date text compares as text. See [Comparing dates in two forms](./adopt-a-database#comparing-dates-in-two-forms).
+:::
+
+:::warning[TIP]
+Store `json` attributes in a `TEXT` column, as [D1 recommends](https://developers.cloudflare.com/d1/sql-api/query-json/#types), and add `CHECK (json_valid(settings))` to have D1 reject invalid JSON. A column declared `JSON` works too.
+:::
+
+:::warning[TIP]
+A `datetime` can be kept as a Unix time in an `INTEGER` column, as Drizzle writes it. Declare it with `storage: "unixSeconds"` or `"unixMilliseconds"`; [Reading Unix timestamps](./adopt-a-database#reading-unix-timestamps) shows how.
+:::
+
+## Casting assigned values
+
+Every value is cast to its attribute’s type when it’s assigned, so text from JSON, a form, or a query string becomes the right type:
+
+<include>/_excerpts/guide/models/casting.ts</include>
+
+Values are cast wherever they’re assigned: `build`, `create`, `assign`, `update`, a property setter, a default, [`permit`](#permitting-fields), and the values given to `insert`, `insertAll`, `upsert`, `upsertAll`, and `updateAll`. `null` is always NULL. Only unambiguous values are accepted:
+
+| Type       | Accepts                                                                                                                                |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `boolean`  | `true`, `false`, `1`, `0`, `"1"`, `"0"`, and `"true"`, `"false"`, `"on"`, `"off"` in any case                                          |
+| `integer`  | a safe integer, or a string that’s wholly one, with an optional sign and spaces around it: `"42"`, `" -7 "`, `"+3"`                    |
+| `real`     | a finite number, or a string that’s wholly one, with an optional sign, point, and exponent: `"1.5"`, `".5"`, `"5."`, `"-2e3"`          |
+| `string`   | a string                                                                                                                               |
+| `datetime` | a valid `Date`; a date, `"2026-01-02"` (midnight UTC); or a date and time with `Z` or a `±HH:MM` offset: `"2026-01-02T09:30:00+02:00"` |
+| `json`     | any value JSON can write                                                                                                               |
+
+Anything else throws `TypeError` naming the Model and the attribute, and the attribute keeps its value. The error shows at most 60 characters of the value, and none of a [filtered attribute](#filtering-attributes)’s. Among the values refused:
+
+- `""` for every type but `string`.
+- `1.7`, `"12abc"`, `"1e3"`, and integers past `Number.MAX_SAFE_INTEGER`, for an `integer`.
+- `NaN` and `Infinity`.
+- A number, boolean, or `Date` for a `string`.
+- For a `datetime`: a time without an offset, a lowercase `t` or `z`, a day that doesn’t exist (`"2026-02-30"`), other formats, and numbers.
+- For a `json`: a value JSON can’t write, such as a `BigInt`, an object that refers to itself, a function, or a symbol.
+
+:::warning[TIP]
+A `json` attribute stores what `JSON.stringify` writes: a `Map` becomes `{}` and `NaN` becomes `null`. Convert them before assigning. After a save, the record holds what was stored.
+:::
+
+A stored cell is checked the same way, when the record loads or `pluck` reads it. One that isn’t the attribute’s type fails with the same error, shows the same value, and fails a list that holds it whole. These cells fail:
+
+- For a `boolean`: anything but `0` and `1`.
+- For an `integer`: text, a fraction, or a number outside the safe integer range.
+- For a `real`: anything but a finite number.
+- For a `string`: anything but text.
+- For a `datetime`: text that isn’t a date or a date and time (`"garbage"`, `"12"`), or a number. A number is a [Unix time](./adopt-a-database#reading-unix-timestamps), which needs a `storage`.
+- For a `datetime` with a `storage`: anything but a number, or one past what a `Date` can hold.
+- For a `json`: text that isn’t JSON.
+
+See [Fixing cells of the wrong type](./adopt-a-database#fixing-cells-of-the-wrong-type).
+
+### Casting conditions and keys
+
+Conditions are cast the same way, so `where({ quantity: "42" })` finds 42. A condition value that can’t be cast matches nothing, so `find("abc")` on an integer key throws `RecordNotFound`.
+
+- A condition reads a number as its digits for a `string` attribute, and a record built from that Relation starts with what it matched: `where({ label: 7 }).build()` has the label `"7"`.
+- A key copied from another record through an association is cast too, so an integer key written into a text foreign key becomes its digits.
+- A `json` value JSON can’t write matches nothing, never the rows whose cell is `NULL`. In a list, it’s left out and the rest still match.
+
+<Callout type="info" title="Beyond Rails" icon="/ruby.svg">
+
+Rails casts leniently: `"12abc"` becomes `12`, `1.7` becomes `1`, any other text is `true`, and `""` is `nil`. d1-record refuses each, so `isAdmin=no` from a form can’t save `true`, and an empty field can’t silently become `null`.
+
+</Callout>
+
+## Building records
+
+Build a record without touching the database with `build`:
+
+<include>/_excerpts/guide/models/build.ts</include>
+
+- **Defaults** and [generated ids](#generating-ids) run at `build()`, so a key generated in code exists before the record is saved. That lets records that point at each other be saved together, in one atomic batch.
+- **Unassigned attributes** read as `null`, and aren’t written on insert, so the column’s database default applies. After the insert, the record loads what D1 stored.
+- **Unknown attributes** throw `UnknownAttribute`, and `undefined` throws `TypeError`. Use `null` to store NULL.
+
+`assign(attrs)` sets several attributes without saving. `update(attrs)` assigns, then saves.
+
+:::warning[TIP]
+A record keeps the database it was built or loaded through, for its later saves and association loads. A record made with `new User()` has none, so build records with `User.build(…)`.
+:::
+
+### Permitting fields
+
+Keep only the attributes you name from untrusted input with `permit`. It casts each value as assigning would, and its result goes straight into `build`, `create`, or `update`:
+
+```ts
+const permitted = Account.permit(await request.json(), "email", "handle");
+const account = await Account.create(permitted);
+```
+
+It reads three kinds of input:
+
+| Input             | Read                                                             |
+| ----------------- | ---------------------------------------------------------------- |
+| a plain object    | its own keys only, so `__proto__` and inherited keys never count |
+| `FormData`        | each field; a repeated key takes its last value                  |
+| `URLSearchParams` | each parameter; a repeated key takes its last value              |
+
+- **Keys you don’t name** are dropped. A named attribute the input doesn’t have is left out, and a `null` is kept.
+- **A name that isn’t an attribute** is a compile error, and throws `UnknownAttribute`.
+- **`TypeError`** is thrown for a value that can’t be cast, a file from a form, and any other input: an array, a `Map`, `Headers`, a class instance, `null`, or a string.
+
+[Untrusted input](./untrusted-input) shows `permit` in a Worker.
+
+## Generating ids
+
+A `TEXT` primary key gets its value from the Model’s `generateId` when you don’t give one. By default, that’s a UUID:
+
+```ts
+const post = Post.build({ title: "Hello" });
+post.id; // "3b241101-e2bb-4255-8caf-4136c566a962"
+```
+
+To use another kind of id across your app, override `generateId` on your app’s base class:
+
+```ts
+import { Model } from "@forestfuture/d1-record";
+import { uuidv7 } from "uuidv7";
+import { schema } from "../db/schema";
+
+export abstract class ApplicationRecord extends Model {
+  static override schema = schema;
+  static override generateId = () => uuidv7();
+}
+```
+
+`generateId` gets the attribute’s name, so it can prefix ids: `` `${attribute}_${uuidv7()}` ``.
+
+To generate another string attribute the same way, turn it on with an override:
+
+```ts
+import { ApplicationRecord } from "./application-record";
+
+export class Post extends ApplicationRecord {
+  static override attributes = { publicId: { generateId: true } } as const;
+}
+```
+
+In a Model declared with `define`, write it on the attribute: `id: { type: "string", null: false, generateId: true }`.
+
+:::warning[TIP]
+For one attribute with its own format, use a `default`: ``shareToken: { default: () => `share_${uuidv7()}` }``. A value made from other attributes, such as a slug, belongs in a [callback](./callbacks), since `generateId` never sees the record.
+:::
+
+<Callout type="info" title="Beyond Rails" icon="/ruby.svg">
+
+Rails has no `generateId`. Its UUID keys come from the database (`gen_random_uuid()` in PostgreSQL), which D1 can’t do for a key a batch needs before the row is written. See [Primary keys](./coming-from-rails#primary-keys).
+
+</Callout>
+
+## Using timestamps
+
+Declare `createdAt` and `updatedAt` as `datetime` attributes, and they’re managed for you. Both are set when a record is created, and `updatedAt` whenever a save changes something. A save with nothing to change leaves `updatedAt` alone, and a timestamp you assign yourself is kept.
+
+## Tracking changes
+
+Records know what’s changed since they were loaded or last saved:
+
+<include>/_excerpts/guide/models/dirty.ts</include>
+
+- `isChanged()`, `changed()`, `changedAttributes()`, and `changes()` describe the unsaved changes.
+- `attributeWas`, `isAttributeChanged`, and `willSaveChangeTo` look at one attribute’s unsaved change. Use them in before-callbacks.
+- `savedChanges()`, `savedChangeTo`, `hasSavedChangeTo`, and `attributeBeforeLastSave` look at the last save. Use them in after-callbacks, where the record is already clean.
+- `restoreAttributes()` undoes unsaved changes, to every attribute or the ones you name.
+
+An update writes only the attributes that changed, and a save with nothing changed sends nothing.
+
+:::warning[TIP]
+Changes are found by comparing stored values, so editing a `json` value or a `Date` in place counts as a change.
+:::
+
+## Writing SQL fragments
+
+For anything the query methods can’t express, write an `sql` tagged template. Values are always bound, and `column()` looks up an attribute’s column:
+
+```ts
+import { column, sql } from "@forestfuture/d1-record";
+
+const recent = await User.where(sql`${column("createdAt")} > ${since}`).toArray();
+```
+
+A plain string is rejected. To write a `Date`, boolean, or JSON value the way an attribute stores it, see [Writing SQL fragments](./querying#writing-sql-fragments).
+
+## Serializing records
+
+`toJSON()` gives a record’s attributes with dates as ISO strings, so `Response.json(user)` just works. `attributes()` gives the same object with JavaScript values:
+
+<include>/_excerpts/guide/models/json.ts</include>
+
+Associations are never included, so a response never loads more than you asked for.
+
+## Hiding attributes
+
+Keep an attribute out of `toJSON()` by naming it in `static hiddenAttributes` on your app’s base class:
+
+<include>/_excerpts/guide/hidden-attributes/base.ts</include>
+
+Every Model built on the base class then leaves it out of `Response.json(user)`. By default, nothing is hidden, and each name must match an attribute exactly.
+
+A Model’s own list replaces the base class’s:
+
+<include>/_excerpts/guide/hidden-attributes/extend.ts</include>
+
+`attributes()` still returns every attribute, so you can send a hidden one on purpose.
+
+:::warning[TIP]
+A name a Model doesn’t have throws `InvalidModel` when the Model is first used, so a typo can’t leave an attribute in your responses. The base class’s names are the exception: a Model without that attribute ignores them.
+:::
+
+<Callout type="info" title="Beyond Rails" icon="/ruby.svg">
+
+Rails’ `serializable_hash(except:)` is per call, and `filter_attributes` only covers logs and inspection. d1-record keeps a class-level list, so `Response.json(user)` is safe without each call site remembering to strip the attribute.
+
+</Callout>
+
+## Filtering attributes
+
+`onQuery` listeners and error messages show a filtered attribute’s values as `"[FILTERED]"`. D1 still gets the real values. [Logging](./logging#keeping-secrets-out-of-the-logs) shows how to change the list.
+
+- **Which attributes:** `static filterAttributes`, a list of strings and RegExps, inherited from your app’s base class. By default, it’s `passw`, `email`, `secret`, `token`, `_key`, `crypt`, `salt`, `certificate`, `otp`, `ssn`, `cvv`, `cvc`. Setting it replaces the list; `[]` filters nothing.
+- **Matching:** a string matches when the attribute’s snake_case name contains it, in any case: `passwordDigest` (`password_digest`) contains `passw`, and `apiKey` (`api_key`) contains `_key`. A RegExp matches the attribute or its snake_case name.
+- **Hidden in `QueryEvent.params`:** the values bound for the attribute in inserts (in a multi-row insert’s JSON, its column in every row), updates, `updateAll`, conditions, lists and comparisons, and a filtered primary key in a record’s `UPDATE` and `DELETE`.
+- **Hidden in errors:** a cast error’s value, and a filtered primary key in `RecordNotFound`.
+- **Not hidden:** a bare value inside an `sql` fragment, which has no attribute (write it as `column("token").value(token)` to filter it); and `toJSON()` and `attributes()`, which are your data, not logs ([Hiding attributes](#hiding-attributes) keeps names out of `toJSON()`).
+
+<Callout type="info" title="Compared with Rails" icon="/ruby.svg">
+
+The default list is Rails’ own `filter_parameters` list, and the filtered values read as they do in Rails’ logs.
+
+</Callout>
+
+## Printing records
+
+`console.log(user)`, a failed test, and the console show a record’s class and attributes:
+
+```text
+User { id: 1, name: 'Johnny' (was 'Alice'), email: [FILTERED], role: 'admin' }
+```
+
+- **Filtered attributes** print as `[FILTERED]`, without quotes so it can’t be mistaken for a string, and in a distinct color when the terminal shows colors. An attribute with no value still prints `null`.
+- **Unsaved changes** print the new value and the old one: `'Johnny' (was 'Alice')`. Once the record is saved, the flag goes. A changed filtered attribute prints `[FILTERED] (changed)`, and so does a column a partial record never loaded: `'Johnny' (changed)`. A new record flags nothing, since all of it is unsaved.
+- **A partial record** prints only the columns it loaded.
+
+A Relation prints the SELECT it would send, without sending it:
+
+```text
+Relation<User> {
+  sql: 'SELECT * FROM "users" WHERE (("role" = ?))',
+  params: [ 'admin' ]
+}
+```
+
+A record’s `errors` print each failure, so a failed `save()` shows why in the console:
+
+```text
+Errors [
+  { attribute: 'name', type: 'blank', message: "can't be blank" },
+  { attribute: 'email', type: 'too_short', message: 'is too short' }
+]
+```
+
+Printing can’t wait for D1, so to see the records, `await` it or call `toArray()`. A filtered attribute’s value in `params` prints as `[FILTERED]`.
+
+:::warning[TIP]
+Printing shows attributes only, so it never loads an association. [Hidden attributes](#hiding-attributes) still print: they keep values out of `toJSON()`, not out of your console.
+:::
+
+<Callout type="info" title="Compared with Rails" icon="/ruby.svg">
+
+A record prints as Rails’ `inspect` does, with `[FILTERED]` for filtered attributes. A Rails Relation runs its query to print its records, which a synchronous `console.log` can’t do here.
+
+</Callout>
+
+<Callout type="info" title="Beyond Rails" icon="/ruby.svg">
+
+Rails doesn’t mark unsaved changes when it prints a record. d1-record does, so a pending edit is visible in the console before you save it.
+
+</Callout>
+
+## Sharing behavior
+
+A subclass, such as `class Admin extends User`, inherits a copy of its parent’s attributes, validations, callbacks, scopes, and associations. Declaring more on the child never changes the parent. Single-table inheritance isn’t supported.
+
+To share methods, callbacks, and scopes across every Model, write them on your app’s base class. See [Shared behavior](./shared-behavior).
+
+## Checking declarations
+
+The first time a Model is used, by its first query or `db.model(X)`, its declaration is checked. It throws `InvalidModel` for:
+
+- A Model `d1-record schema` hasn’t seen, or whose table has changed since. Run it again.
+- No table name: an empty `table`, or a class with no name to infer one from.
+- An override of an attribute the table doesn’t have.
+- A `primaryKey` that isn’t an attribute.
+- An attribute named like a record method, such as `save` or `attributes`.
+- A class field that hides an attribute, such as `email!: string` in the class body.
+
+After that, a Model’s declarations are fixed, so request code can’t change them.

@@ -24,8 +24,9 @@
       "ignoreBinaries": ["pgrep"],
     },
     "site": {
-      // Examples are included into pages by Markdown (<<<), not imported.
-      "entry": ["snippets/**/*.ts"],
+      // Examples reach pages through the excerpts the site's build writes, not through imports;
+      // Blume loads its config and each group's meta.ts itself.
+      "entry": ["snippets/**/*.ts", "blume.config.ts", "docs/**/meta.ts"],
     },
   },
 }
