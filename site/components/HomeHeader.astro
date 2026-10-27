@@ -52,8 +52,10 @@ const { route } = Astro.props;
     font-size: 1.875rem;
   }
 
-  /* The static logo stays under the canvas until the orb's first frame covers it. */
+  /* The static logo stays under the canvas until the orb has faded in over it, and comes back at
+     once if the orb stops drawing. */
   [data-home-orb]:has(canvas[data-drawn]) > span {
     visibility: hidden;
+    transition: visibility 0s 300ms;
   }
 </style>
