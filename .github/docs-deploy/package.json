@@ -1,0 +1,15 @@
+{
+  "name": "d1-record-docs-deploy",
+  "private": true,
+  "description": "The pinned Wrangler that CI's docs-deploy job runs, apart from the workspace's dependencies.",
+  "devDependencies": {
+    "wrangler": "4.151.3"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.6.0",
+      "onFail": "download"
+    }
+  }
+}
