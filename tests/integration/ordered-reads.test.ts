@@ -120,7 +120,9 @@ describe("an order that can't change the answer isn't sent (#215)", () => {
 describe("exists() with distinct() and an offset reads the rows toArray() would (#222)", () => {
   let binding: TestDatabase;
   let dispose: () => Promise<void>;
-  const posts = () => connect(binding).model(Post);
+  const events: QueryEvent[] = [];
+  const posts = () => connect(binding, { onQuery: (event) => events.push(event) }).model(Post);
+  const titles = () => posts().select("title");
 
   beforeAll(async () => {
     ({ db: binding, dispose } = await createTestDatabase());
@@ -138,5 +140,39 @@ describe("exists() with distinct() and an offset reads the rows toArray() would 
 
     expect(await titles.exists()).toBe(true);
     expect([await titles.isEmpty(), await titles.hasAny()]).toEqual([false, true]);
+  });
+
+  test("distinct() without a select counts whole rows, which are all distinct", async () => {
+    expect(await posts().distinct().offset(1).exists()).toBe(true);
+    expect(await posts().distinct().offset(3).exists()).toBe(false);
+  });
+
+  test("past the last distinct row, there are none", async () => {
+    expect(await titles().distinct().offset(2).exists()).toBe(false);
+    expect(await titles().distinct().offset(2).isEmpty()).toBe(true);
+  });
+
+  test("with a limit and an offset, it agrees with toArray()", async () => {
+    expect(await titles().distinct().limit(1).offset(1).exists()).toBe(true);
+    expect(await titles().distinct().limit(5).offset(2).exists()).toBe(false);
+  });
+
+  test("exists(conditions) applies them before the distinct rows and the offset", async () => {
+    const pastFirst = titles().distinct().offset(1);
+
+    expect(await pastFirst.exists({ title: "B" })).toBe(false);
+    expect(await pastFirst.where({ title: "B" }).toArray()).toEqual([]);
+    expect(await pastFirst.exists({ title: ["A", "B"] })).toBe(true);
+  });
+
+  test("without both distinct() and an offset, it still sends SELECT 1", async () => {
+    events.length = 0;
+    await titles().offset(1).exists();
+    await titles().distinct().exists();
+
+    expect(events.map((event) => event.sql)).toEqual([
+      'SELECT 1 FROM "posts" LIMIT ? OFFSET ?',
+      'SELECT DISTINCT 1 FROM "posts" LIMIT ?',
+    ]);
   });
 });
