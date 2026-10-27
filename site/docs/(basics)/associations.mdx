@@ -1,0 +1,215 @@
+---
+title: Associations
+description: "belongsTo, hasMany, and hasOne: inferred foreign keys, reading, preloading with includes, autosave, writing through associations, scopes, and dependent strategies."
+---
+
+Associations connect Models: `belongsTo`, `hasMany`, and `hasOne`.
+
+## Defining associations
+
+Declare each association as a field, passing the target Model’s class. The field’s name is the association’s name:
+
+<include>/_excerpts/guide/associations/declare.ts</include>
+
+Models can refer to each other in any order. A subclass inherits its parent’s associations, and can redeclare one to change it.
+
+## belongsTo
+
+Use `belongsTo` on the Model whose table holds the foreign key. A post belongs to its author:
+
+<include>/_excerpts/guide/associations/belongs-to.ts</include>
+
+- **`await record.author()`** reads the associated record, or `null`.
+- **`record.author.set(user)`** points the record at another record, and `set(null)` clears it. It’s written when the record is saved.
+- **`record.author.build(attrs)`** builds a record to point at. It’s validated with the record, and saved before it, so the foreign key can be filled in.
+- **`record.author.create(attrs)`** and **`createOrThrow(attrs)`** save a new record at once, and point at it. The record itself isn’t saved.
+
+| Option       | Does                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------- |
+| `foreignKey` | The attribute on this record that holds the link. Defaults to the association’s name + `Id` |
+| `primaryKey` | The attribute on the target it points at. Defaults to the target’s primary key              |
+| `scope`      | Narrows the target, `(q) => q.where(…)`. See [Scoping associations](#scoping-associations)  |
+
+## hasMany
+
+Use `hasMany` on the Model the other table’s foreign key points at. A user has many posts:
+
+<include>/_excerpts/guide/associations/has-many.ts</include>
+
+- **`record.posts()`** is a Relation of the associated records, with every Relation method and the target’s scopes.
+- **`record.posts().build(attrs)`** builds a record with the owner’s key, saved with the owner. See [Autosaving](#autosaving).
+- **`record.posts().create(attrs)`** and **`createOrThrow(attrs)`** save a new record at once. The owner must already be saved.
+- **`insert`, `updateAll`, and `deleteAll`** write to the owner’s records. See [Writing many rows](#writing-many-rows).
+
+| Option       | Does                                                                                                             |
+| ------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `foreignKey` | The attribute on the target’s records that holds the link. Defaults to this Model’s class name + `Id`            |
+| `primaryKey` | The attribute on this record the foreign key points at. Defaults to the primary key                              |
+| `scope`      | Narrows or orders the records, `(q) => q.order(…)`. See [Scoping associations](#scoping-associations)            |
+| `dependent`  | What destroying the owner does to the records. See [Destroying dependent records](#destroying-dependent-records) |
+
+## hasOne
+
+Use `hasOne` like `hasMany`, when there’s at most one record. A user has one profile:
+
+<include>/_excerpts/guide/associations/has-one.ts</include>
+
+- **`await record.profile()`** reads the associated record, or `null`. If several records point at the owner, it’s the first by the scope’s order, then the primary key.
+- **`record.profile.build(attrs)`** builds a record with the owner’s key, saved with the owner.
+- **`record.profile.create(attrs)`** and **`createOrThrow(attrs)`** save a new record at once. The owner must already be saved.
+
+`hasOne` takes the same options as `hasMany`.
+
+## Naming foreign keys
+
+A foreign key names an attribute, such as `authorId`, rather than a column. By default, it’s inferred:
+
+- **`belongsTo`** uses the association’s name + `Id`. `author = belongsTo(Author)` uses the record’s own `authorId`.
+- **`hasMany` and `hasOne`** use the Model’s class name + `Id`, on the target. `Author`’s associations use `authorId`, `BlogPost`’s use `blogPostId`, and `APIKey`’s use `apiKeyId`.
+
+If the name doesn’t follow the convention, pass `foreignKey`:
+
+```ts
+import { belongsTo } from "@forestfuture/d1-record";
+
+export class Post extends ApplicationRecord {
+  author = belongsTo(User, { foreignKey: "userId" });
+}
+```
+
+Keys are checked the first time a Model is used, and a missing attribute throws `InvalidModel`.
+
+<Expandable title="Bundlers and class names">
+
+Wrangler keeps class names by default, even when minifying. If a bundler renames `Author` to `e`, the inferred `eId` doesn’t exist, and the first use of the Model throws `InvalidModel`, saying where the key came from. Pass `foreignKey`, or keep class names in your bundler’s settings.
+
+</Expandable>
+
+## Caching loaded records
+
+A loaded association is cached on the record. Reading `author()` again doesn’t query, and neither does `articles().toArray()` once the collection is loaded:
+
+<include>/_excerpts/guide/associations/read.ts</include>
+
+- Changing a foreign key makes the next read query again.
+- `reload()` clears the cache, and `await record.reloadAssociation("articles")` reloads one association.
+- A write through a `hasMany` clears its loaded collection: `insert`, `upsert`, `updateAll` and `deleteAll`, alone or in `db.batch`, even after `where` or `order`, or with the association joined by `or()`, `merge()` or a scope. `create` through the association itself adds the new record instead, so the next read still doesn’t query.
+- A write made another way, such as `Article.where({ authorId: author.id }).deleteAll()`, doesn’t touch a loaded collection: reload the association to see it.
+
+<Callout type="info" title="Beyond Rails" icon="/ruby.svg">
+
+After `author.articles().where({ title: "Untitled" }).deleteAll()`, you’d expect `author.articles()` not to hold the untitled articles any more, and here it doesn’t. In Rails it still does, until you reload: only a write on the association itself (`author.articles.delete_all`) resets what it has loaded, while a write after `where`, `or`, `merge` or a scope runs on a separate relation. In d1-record any write built from `author.articles()` clears it, at the cost of one query on the next read.
+
+</Callout>
+
+:::note
+A `belongsTo` whose foreign key is `null`, or an association on an unsaved owner, reads without a query.
+:::
+
+## Preloading associations
+
+Load an association for every record at once with `includes`, with one query per association however many records there are:
+
+<include>/_excerpts/guide/associations/preload.ts</include>
+
+Nest with an object: `includes({ articles: "comments" })` or `includes({ articles: ["comments", "tags"] })`.
+
+The whole tree goes to D1 with the authors’ own query, in one round trip. The example above sends four queries. A nested query that would bind more than D1’s 100 values waits for the records above it, and takes one more round trip.
+
+:::note
+With a `limit` or `offset`, `includes` ends the order with the primary key, so the preloads find the same records the query loads.
+:::
+
+<Callout type="info" title="Beyond Rails" icon="/ruby.svg">
+
+Rails sends each association’s preload query on its own, so every association adds a round trip. Here the whole tree takes one.
+
+</Callout>
+
+:::note
+`hasMany` and `hasOne` find their records by the foreign key, both with `includes` and when you read one record’s association, such as `author.articles()`. Add an index to the foreign key column. Otherwise D1 reads every row of the table for each lookup, and bills you for each row it reads. A `references` column from the [generators](./generators) is indexed already, and you can add an index to any other foreign key yourself:
+
+```sql
+CREATE INDEX index_articles_on_author_id ON articles (author_id);
+```
+
+`includes` also runs the query’s own conditions again for each association it preloads. With a `limit` or `offset`, it runs the query’s order again as well. Index the columns the query filters and sorts by, too. Otherwise D1 reads those rows again for every association, and bills you each time.
+
+:::
+
+`record.loaded("profile")` reads a preloaded association synchronously, and throws `AssociationNotLoaded` if it wasn’t loaded, so a template never sends a query. `record.isLoaded("profile")` checks first.
+
+## Creating related records
+
+Records built or created through a `hasMany` get the owner’s key:
+
+<include>/_excerpts/guide/associations/create-through.ts</include>
+
+### Autosaving
+
+A record built through an association is saved with its owner. Build a whole graph, then save the owner:
+
+<include>/_excerpts/guide/associations/autosave.ts</include>
+
+The built records are validated with the owner. An invalid article makes the author invalid (“Articles is invalid”), with its own errors on the article.
+
+When the owner’s key is generated in code, as here, everything is written in one atomic batch.
+
+:::warning[Keys D1 generates]
+When D1 generates the key, with an `INTEGER PRIMARY KEY`, the key doesn’t exist until the owner is written. So the owner is written first, and its records follow in the next batch, a level at a time. The batches aren’t atomic together: if a record fails at the second level, the save throws with the owner already saved. Generate keys in code wherever a graph must save all at once.
+:::
+
+## Scoping associations
+
+Narrow or order an association’s records with `scope`:
+
+<include>/_excerpts/guide/associations/scoped.ts</include>
+
+The scope applies to reads and preloads alike, and records created through the association take its equality values. `q` is the target’s Relation, with its attributes and scopes.
+
+:::note
+A scope that uses `limit`, `offset`, or `distinct` can’t be preloaded, since it would apply to every owner’s records together. `includes` throws `IncompatibleRelation` before it sends any preload.
+:::
+
+<Expandable title="A Model’s association to itself, scoped with its own scopes">
+
+TypeScript can’t infer this one case: `children = hasMany(Category, { scope: (q) => q.top() })` inside `Category`, where `top` is one of `Category`’s scopes. Write the field’s type out:
+
+<include>/_excerpts/guide/associations/self-referencing.ts</include>
+
+</Expandable>
+
+## Destroying dependent records
+
+Set what destroying the owner does to its records with `dependent`:
+
+| Strategy                   | What happens                                                                            |
+| -------------------------- | --------------------------------------------------------------------------------------- |
+| `"destroy"`                | Each record is destroyed with its own callbacks and dependents                          |
+| `"deleteAll"` / `"delete"` | The records are deleted in one statement, without callbacks (`"delete"` for a `hasOne`) |
+| `"nullify"`                | Their foreign keys are set to `NULL`                                                    |
+| `"restrictWithException"`  | The destroy throws `DeleteRestriction` while there are records                          |
+| `"restrictWithError"`      | The destroy returns `false`, with an error on the owner’s `base`                        |
+
+Everything a destroy does, the owner’s DELETE included, is written in one atomic batch. Strategies run after the owner’s `beforeDestroy` callbacks, so an `abort()` leaves the records alone.
+
+:::note
+Without a strategy, it’s up to the database. If the table declares the foreign key with `REFERENCES`, destroying an owner whose records still point at it throws `InvalidForeignKey`.
+:::
+
+## Writing many rows
+
+`insert`, `updateAll`, and `deleteAll` work through a `hasMany`, scoped to the owner’s records, and so do their `to…` forms for a batch:
+
+<include>/_excerpts/guide/associations/statements.ts</include>
+
+`deleteAll()` on the association follows its `dependent` strategy: it deletes the records for `"destroy"` or `"deleteAll"`, and otherwise sets their foreign keys to `NULL`. See [Bulk writes and batches](./batches).
+
+## Not built yet
+
+These features aren’t in d1-record yet. The code shows the shape they’re likely to take.
+
+- **Associations through another** ([#59](https://github.com/forestfuture/d1-record/issues/59)): `projects = hasMany(Project, { through: "assignments" })`, a user’s projects reached through their assignments.
+- **Polymorphic associations** ([#60](https://github.com/forestfuture/d1-record/issues/60)): `commentable = belongsTo([Post, Photo])`, with `comments = hasMany(Comment, { as: "commentable" })` on each.
+- **Counter caches** ([#61](https://github.com/forestfuture/d1-record/issues/61)): `post = belongsTo(Post, { counterCache: true })`, keeping a `commentsCount` on each post, updated in the same atomic batch as the write.
+- **Inverse associations** ([#62](https://github.com/forestfuture/d1-record/issues/62)): after `await post.comments().toArray()`, each `comment.post()` returns that same post, without a query.

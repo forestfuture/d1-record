@@ -1,0 +1,72 @@
+---
+title: Bulk writes and batches
+description: "Reference for bulk writes (insert, insertAll, upsert, updateAll, deleteAll) and atomic batch([...]) of their to… forms and records' toSave()/toDestroy()."
+---
+
+Bulk writes change many rows in one SQL statement. A batch sends several writes to D1 at once, and they’re all written, or none of them.
+
+## Writing many rows
+
+Call a bulk write on a Relation. It runs straight away, without validations or callbacks:
+
+<include>/_excerpts/guide/batches/statements.ts</include>
+
+- **`updateAll(changes)`** takes attributes or an `sql` fragment, and resolves to the number of rows updated. It leaves `updatedAt` alone. With a `limit` or `offset`, the Relation’s order picks which rows are written.
+- **`deleteAll()`** resolves to the number of rows deleted. On `none()`, both send nothing and resolve to `0`.
+- **`insert(attrs)`** writes one row, and resolves to D1’s `meta`. Declared defaults, timestamps, and a Relation’s equality conditions fill what isn’t given.
+
+### Inserting many rows
+
+Insert many rows in one statement with `insertAll`:
+
+<include>/_excerpts/guide/batches/insert-all.ts</include>
+
+- **`insertAll(rows)`** inserts every row, however many, up to D1’s 2 MB per bound value. Every row must have the same attributes. A duplicate throws and writes nothing.
+- **`{ onDuplicate: "skip" }`** skips rows that clash with a unique index.
+- **`upsert(attrs)`** and **`upsertAll(rows)`** update a row that clashes with the primary key, or with the unique index named by `uniqueBy`. Only the attributes you give are updated, and `updatedAt` is set.
+
+<Callout type="info" title="Compared with Rails" icon="/ruby.svg">
+
+These are Rails’ `insert_all`, `upsert_all`, `update_all`, and `delete_all`, with two differences. Declared defaults fill what an insert isn’t given, since on D1 defaults are where keys are generated. And skipping duplicates is something you opt in to, so a duplicate is never silently lost.
+
+</Callout>
+
+## Batching writes
+
+Each bulk write has a `to…` form that prepares it instead of running it: `toInsert`, `toInsertAll`, `toUpsert`, `toUpsertAll`, `toUpdateAll`, and `toDeleteAll`. Pass them to `batch` to write them atomically:
+
+<include>/_excerpts/guide/batches/batch.ts</include>
+
+`batch` resolves to each entry’s result, in order.
+
+- **Keys:** rows in one batch can only point at each other through keys that exist before it’s sent, so generate keys in code, with [`generateId`](./models#generating-ids).
+- **Inspecting:** a prepared write’s `toSql()` shows the SQL and values it will send, [without sending them](./querying#seeing-a-querys-sql).
+- **Databases:** a batch runs on the database its entries were built on. Entries from two databases throw `IncompatibleRelation`.
+
+:::note
+D1 can’t keep a transaction open across `await`s, so there’s no `transaction()` block. A batch is how you make writes atomic.
+:::
+
+## Batching records
+
+Add a record’s save or destroy to a batch with `toSave()` and `toDestroy()`. Its validations and callbacks still run:
+
+<include>/_excerpts/guide/batches/records.ts</include>
+
+When the batch runs:
+
+1. Each record, in order, is validated and runs its before-callbacks. The first that’s invalid or aborts throws `RecordInvalid`, `RecordNotSaved`, or `RecordNotDestroyed`, and nothing is sent.
+2. Every write goes to D1 as one atomic batch. If D1 refuses it with a constraint error, nothing is written, and every record keeps its unsaved state.
+3. Each record takes its saved state, then its after-callbacks run.
+
+A record’s autosaved associations and `dependent` strategies join the same batch. A record listed twice, or already saved by its owner’s autosave, is written once.
+
+<Callout type="info" title="Compared with Rails" icon="/ruby.svg">
+
+In a Rails transaction, one record’s `after_save` runs before the next record’s `before_save`. In a batch, every before-callback runs first.
+
+</Callout>
+
+Statements and records mix in one batch. From the [Getting started](./getting-started) project, this publishes every draft and destroys a user with their posts:
+
+<include>/_excerpts/getting-started/src/publish/batch.ts</include>

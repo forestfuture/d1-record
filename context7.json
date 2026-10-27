@@ -4,7 +4,7 @@
   "public_key": "pk_bJAmxfR5pjyhpbAlvUg8v",
   "projectTitle": "d1-record",
   "description": "A Rails-inspired Active Record for Cloudflare Workers and D1: models with validations, callbacks, associations, and change tracking; lazy, composable queries; and a predictable save lifecycle.",
-  "folders": ["site/guide", "docs"],
+  "folders": ["site/docs", "docs"],
   "excludeFolders": ["docs/agents", "docs/adr"],
   "excludeFiles": [
     "CONTRIBUTING.md",

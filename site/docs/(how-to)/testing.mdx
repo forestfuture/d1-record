@@ -1,0 +1,91 @@
+---
+title: Testing
+description: "Test Models and your Worker against a real D1 database with Vitest and Miniflare: create the tables from your migrations, and give the code a database with withDatabase."
+---
+
+Test your Models and Worker against a real D1 database, with your migrations applied. [Miniflare](https://developers.cloudflare.com/workers/testing/miniflare/) runs Cloudflare’s runtime, D1 included, inside Node:
+
+```sh
+npm install --save-dev vitest miniflare@4
+```
+
+## Creating a test database
+
+Start Miniflare with a D1 database, and apply a folder of migrations to it, in order:
+
+```ts test/d1.ts
+import { readdirSync, readFileSync } from "node:fs";
+import { Miniflare } from "miniflare";
+
+export async function testDatabase(folder = "migrations") {
+  const mf = new Miniflare({ modules: true, script: "export default {}", d1Databases: ["DB"] });
+  const binding = await mf.getD1Database("DB");
+  for (const file of readdirSync(folder).sort()) {
+    // Each migration's statements, without its comments, applied together.
+    const statements = readFileSync(`${folder}/${file}`, "utf8")
+      .replace(/^\s*--.*$/gm, "")
+      .split(/;\s*$/m)
+      .map((statement) => statement.trim())
+      .filter(Boolean);
+    if (statements.length > 0)
+      await binding.batch(statements.map((statement) => binding.prepare(statement)));
+  }
+  return { binding, dispose: () => mf.dispose() };
+}
+```
+
+## Testing Models
+
+Outside a Worker there’s no binding, so run the test’s code inside `withDatabase`:
+
+```ts test/users.test.ts
+import { connect, withDatabase } from "@forestfuture/d1-record";
+import { afterAll, beforeAll, expect, test } from "vitest";
+import { User } from "../src/models/user";
+import { testDatabase } from "./d1";
+
+let database: Awaited<ReturnType<typeof testDatabase>>;
+beforeAll(async () => (database = await testDatabase()));
+afterAll(() => database.dispose());
+
+test("emails are saved in lowercase", async () => {
+  await withDatabase(connect(database.binding), async () => {
+    const user = await User.create({ email: "Ada@Example.com" });
+    expect((await User.find(user.id)).email).toBe("ada@example.com");
+  });
+});
+```
+
+Outside a Worker, the database given to `withDatabase` serves every Model, whatever binding its base class names. For code that takes a database explicitly, pass it one: `connect(database.binding).model(User)`.
+
+## Testing your Worker
+
+Call your Worker’s `fetch` handler inside `withDatabase` too, and its queries use the test’s database:
+
+```ts test/worker.test.ts
+import { connect, withDatabase } from "@forestfuture/d1-record";
+import { afterAll, beforeAll, expect, test } from "vitest";
+import worker from "../src/index";
+import { testDatabase } from "./d1";
+
+let database: Awaited<ReturnType<typeof testDatabase>>;
+beforeAll(async () => (database = await testDatabase()));
+afterAll(() => database.dispose());
+
+test("GET lists users", async () => {
+  const response = await withDatabase(connect(database.binding), () =>
+    worker.fetch(new Request("https://example.com/")),
+  );
+  expect(response.status).toBe(200);
+});
+```
+
+Each test file gets its own database.
+
+:::note
+If your Worker uses [`withSession`](./read-your-own-writes), call `fetch` without `withDatabase`. Pass the test’s database as `env.DB` instead, and `withSession` opens it for the request.
+:::
+
+:::note
+To run tests inside the Workers runtime itself, use Cloudflare’s [Vitest integration](https://developers.cloudflare.com/workers/testing/vitest-integration/).
+:::

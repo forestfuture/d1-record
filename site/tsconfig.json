@@ -1,11 +1,7 @@
 {
-  // The site's own config and theme (Node); the examples have their own (snippets/tsconfig.json).
+  // The site's own config, folder meta, excerpt writer (Node) and components; the examples have
+  // their own (snippets/tsconfig.json).
   "extends": "../tsconfig.json",
-  "compilerOptions": { "types": ["node", "vitepress/client"] },
-  "include": [
-    ".vitepress/config.ts",
-    ".vitepress/llms.ts",
-    ".vitepress/examples.ts",
-    ".vitepress/theme"
-  ]
+  "compilerOptions": { "types": ["node"], "jsx": "react-jsx", "lib": ["es2023", "dom"] },
+  "include": ["blume.config.ts", "components.ts", "components", "excerpts.ts", "docs/**/meta.ts"]
 }

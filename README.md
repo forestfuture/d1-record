@@ -86,7 +86,7 @@ export class Post extends ApplicationRecord {
 
 ### 4. Use them in your Worker
 
-Queries start from the Model, and use its binding during the request: there’s nothing to connect. (For a D1 Session or per-request logging, see [Connections](https://docs.forestfuture.dev/d1-record/guide/connecting).)
+Queries start from the Model, and use its binding during the request: there’s nothing to connect. (For a D1 Session or per-request logging, see [Connections](https://d1-record.forestfuture.dev/connecting).)
 
 ```ts
 // src/index.ts
@@ -164,13 +164,13 @@ d1-record follows [semantic versioning](https://semver.org). While it’s on 0.x
 
 ## For AI agents
 
-The guide is also published for coding agents: [`llms.txt`](https://docs.forestfuture.dev/d1-record/llms.txt), [`llms-full.txt`](https://docs.forestfuture.dev/d1-record/llms-full.txt), and every page as Markdown. The package ships the guide for its own version (`node_modules/@forestfuture/d1-record/llms-full.txt`) and an [agent skill](skills/d1-record/SKILL.md) (`npx skills add forestfuture/d1-record`). See [AI agents](https://docs.forestfuture.dev/d1-record/guide/ai-agents).
+The guide is also published for coding agents: [`llms.txt`](https://d1-record.forestfuture.dev/llms.txt), [`llms-full.txt`](https://d1-record.forestfuture.dev/llms-full.txt), and every page as Markdown. The package ships the guide for its own version (`node_modules/@forestfuture/d1-record/llms-full.txt`) and an [agent skill](skills/d1-record/SKILL.md) (`npx skills add forestfuture/d1-record`). See [AI agents](https://d1-record.forestfuture.dev/ai-agents).
 
 ## Documentation
 
-The guide is being built in [`site/`](site/) for [docs.forestfuture.dev/d1-record](https://docs.forestfuture.dev/d1-record). Until it’s live:
+The guide is at [d1-record.forestfuture.dev](https://d1-record.forestfuture.dev), built from [`site/`](site/). In the repository:
 
-- [`site/guide/`](site/guide/): the guide pages, from getting started to D1’s limits.
+- [`site/docs/`](site/docs/): the guide pages, from getting started to D1’s limits.
 - [`docs/contract.md`](docs/contract.md): the full public behavior, which the tests prove.
 - [`GLOSSARY.md`](GLOSSARY.md): the domain glossary (Model, Record, Relation, Association, Batch, …).
 - [`docs/adr/`](docs/adr/): the architecture decisions and why they were made.
@@ -186,7 +186,7 @@ vp test                   # unit and integration tests against a real local D1
 vp pack                   # build the library into dist/
 vp run check:public-types # after vp pack: the published types expose no internals
 vp run test:remote        # the smoke suite against a real remote D1 (see docs/agents/remote-smoke.md)
-vp run docs:dev           # the documentation site, at localhost:5173/d1-record/
+vp run docs:dev           # the documentation site, at localhost:4321
 ```
 
 How issues are worked, from agreeing the design to review, is in [`docs/agents/workflow.md`](docs/agents/workflow.md).

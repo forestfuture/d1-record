@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ForestFuture docs</title>
+    <meta name="description" content="Documentation for ForestFuture's open source libraries." />
+    <meta name="theme-color" content="#2f6b3f" />
+    <style>
+      :root {
+        --bg: #ffffff;
+        --text: #1f2a24;
+        --muted: #5b6b61;
+        --brand: #2f6b3f;
+        --border: #dfe6e1;
+        --card: #f6f8f6;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1b1d1c;
+          --text: #e6ece8;
+          --muted: #9aa9a0;
+          --brand: #8cc79a;
+          --border: #2f3532;
+          --card: #232625;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        line-height: 1.6;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 64px 16px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 2rem;
+        line-height: 1.2;
+      }
+      p.lead {
+        margin: 0 0 40px;
+        color: var(--muted);
+      }
+      ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 16px;
+      }
+      a.library {
+        display: block;
+        padding: 20px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--card);
+        color: inherit;
+        text-decoration: none;
+      }
+      a.library:hover,
+      a.library:focus-visible {
+        border-color: var(--brand);
+      }
+      a.library strong {
+        display: block;
+        color: var(--brand);
+        font-size: 1.1rem;
+      }
+      a.library span {
+        color: var(--muted);
+      }
+      footer {
+        margin-top: 48px;
+        color: var(--muted);
+      }
+      footer a {
+        color: var(--brand);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>ForestFuture docs</h1>
+      <p class="lead">Documentation for ForestFuture's open source libraries.</p>
+      <ul>
+        <li>
+          <a class="library" href="https://d1-record.forestfuture.dev">
+            <strong>d1-record</strong>
+            <span>A Rails-inspired Active Record for Cloudflare Workers and D1.</span>
+          </a>
+        </li>
+      </ul>
+      <footer>
+        A <a href="https://forestfuture.dev">ForestFuture</a> project ·
+        <a href="https://github.com/forestfuture">GitHub</a>
+      </footer>
+    </main>
+  </body>
+</html>

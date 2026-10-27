@@ -1,0 +1,57 @@
+---
+title: Active Record for Cloudflare D1
+description: Models, validations, callbacks, associations, and composable queries for Cloudflare Workers, in the spirit of Ruby on Rails, and honest about what D1 can and can’t do.
+mode: center
+sidebar:
+  label: Overview
+---
+
+```package-install
+npm install @forestfuture/d1-record
+```
+
+<CardGroup cols={2}>
+  <Card title="Get started" href="/getting-started" icon="rocket" cta="Read the tutorial">
+    From an empty Worker to two related Models in about ten minutes.
+  </Card>
+  <Card title="Coming from Rails" href="/coming-from-rails" icon="gem" cta="See what’s different">
+    What carries over from Active Record, and what D1 changes.
+  </Card>
+</CardGroup>
+
+## A Model and its queries
+
+<CodeGroup>
+
+<include meta="Model">/_excerpts/getting-started/src/models/user.ts</include>
+
+<include meta="Querying">/_excerpts/guide/querying/where.ts</include>
+
+<include meta="Saving">/_excerpts/guide/persistence/save.ts</include>
+
+<include meta="Batches">/_excerpts/guide/batches/batch.ts</include>
+
+<include meta="Table">/_excerpts/getting-started/migrations/0002_create_posts.sql</include>
+
+</CodeGroup>
+
+## What’s inside
+
+<CardGroup cols={2}>
+  <Card title="Models, declared once" href="/models" icon="database">
+    Typed attributes come from your tables, camelCase in your code and snake_case in SQL, with
+    defaults, timestamps, dates, and JSON converted both ways.
+  </Card>
+  <Card title="Lazy, composable queries" href="/querying" icon="list-filter">
+    Conditions, ordering, pagination, scopes, and preloading with one query per association, never
+    N+1. Hand-written SQL goes through a tagged template, so values are always bound.
+  </Card>
+  <Card title="A predictable lifecycle" href="/persistence" icon="refresh-cw">
+    `save`, `create`, `update`, and `destroy` run validations and callbacks in a predictable order,
+    with dirty tracking and dependent strategies. Methods that throw end in `OrThrow`.
+  </Card>
+  <Card title="Atomic where D1 allows" href="/batches" icon="layers">
+    D1 can’t hold a transaction open across awaits, so `batch` writes a set of statements and
+    records all at once, or not at all. Keys generated in code let a whole graph save in one batch.
+  </Card>
+</CardGroup>

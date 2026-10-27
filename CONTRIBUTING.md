@@ -45,7 +45,7 @@ A change to public behavior or the public API updates, in the same pull request,
 
 - **`docs/contract.md`**: the section for the behavior. Its _Guide_ and _Code_ line names the pages and modules to check.
 - **`GLOSSARY.md`**: a new term, or a term whose meaning changed.
-- **`site/guide/`**: the page for the behavior, and its examples in `site/snippets/` (see [Documentation](#documentation)).
+- **`site/docs/`**: the guide page for the behavior, and its examples in `site/snippets/` (see [Documentation](#documentation)).
 - **`src/index.ts`**: a new public name is exported here; an internal one is marked `/** @internal */`, and `vp run check:public-types` keeps it out of the published types.
 - **`skills/d1-record/SKILL.md`**: the agent skill's rules, when the change alters how an app should write code with d1-record.
 - **`README.md`**: its quick look and feature list, when they show the behavior.
@@ -58,13 +58,13 @@ A change users will notice (new behavior, a fix, a breaking change, a deprecatio
 
 ## Documentation
 
-The guide is in `site/guide/` (a VitePress site, `vp run docs:dev`), and a change in behavior updates its page too.
+The guide is in `site/docs/` (a [Blume](https://useblume.dev) site at [d1-record.forestfuture.dev](https://d1-record.forestfuture.dev), `vp run docs:dev`), and a change in behavior updates its page too. Each page sits in its sidebar group's folder (`(basics)/models.mdx` is `/models`), ordered by the group's `meta.ts`.
 
 - **Pages are organized by [Diátaxis](https://diataxis.fr/)**: tutorial, how-to guides, reference and background. A new page, or a page's new structure, starts from the `documentation-writer` skill: decide its type, audience and goal, and agree the outline in the issue.
-- **Write in the guide's voice** ([docs-voice.md](docs/agents/docs-voice.md)): open with what the reader does, assume a competent developer, keep examples short, and put side facts in warning boxes.
+- **Write in the guide's voice** ([docs-voice.md](docs/agents/docs-voice.md)): open with what the reader does, assume a competent developer, keep examples short, and put side facts in notes.
 - **Examples use d1-record's syntax**, even for features not built yet. Rails syntax appears only when comparing.
-- **Where d1-record goes beyond Rails or differs from it**, a tip box says so.
-- **Larger examples live in `site/snippets/`**, where `vp check` type-checks them against the library and `tests/integration/site-examples.test.ts` runs them against D1. An example written inline in a page imports what it uses.
+- **Where d1-record goes beyond Rails or differs from it**, a Rails box says so.
+- **Larger examples live in `site/snippets/`**, where `vp check` type-checks them against the library and `tests/integration/site-examples.test.ts` runs them against D1. A page embeds one with `<include>`, from the excerpts `site/excerpts.ts` writes. An example written inline in a page imports what it uses.
 
 ## Naming and attribution
 

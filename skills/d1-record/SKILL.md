@@ -29,7 +29,7 @@ d1-record (`@forestfuture/d1-record`) is a Rails-style Active Record for Cloudfl
 
 ## More in the guide
 
-The installed package's `llms-full.txt` is one Markdown file, a `#` heading per page. For the latest release instead, https://docs.forestfuture.dev/d1-record/llms.txt lists every page as Markdown, with what each covers. A behavior neither covers is specified in `docs/contract.md` at https://github.com/forestfuture/d1-record.
+The installed package's `llms-full.txt` is one Markdown file, a `#` heading per page. For the latest release instead, https://d1-record.forestfuture.dev/llms.txt lists every page as Markdown, with what each covers. A behavior neither covers is specified in `docs/contract.md` at https://github.com/forestfuture/d1-record.
 
 ## Shapes to follow
 

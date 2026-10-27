@@ -1,8 +1,11 @@
-import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
-import { exampleBlock, site } from "../../site/.vitepress/examples.ts";
+import { exampleBlock, site, writeExcerpts } from "../../site/excerpts.ts";
+import { guidePages } from "../support/guide-pages.ts";
+
+const pages = guidePages();
 
 // The guide's examples come from type-checked files; each is shown with the imports it uses.
 describe("the guide's example blocks", () => {
@@ -78,20 +81,21 @@ export class Comment extends ApplicationRecord {}`);
     expect(exampleBlock(file, "read")).toBe("const posts = await db.model(Post).toArray();");
   });
 
-  test("every region a guide page includes exists", () => {
-    const pages = readdirSync(join(site, "guide")).filter((name) => name.endsWith(".md"));
-    const includes = pages.flatMap((page) =>
-      [
-        ...readFileSync(join(site, "guide", page), "utf8").matchAll(
-          /^<<< @\/(\S+?\.ts)#([\w-]+)\{/gm,
-        ),
-      ].map(([, path, region]) => ({ page, path: path!, region: region! })),
+  test("every excerpt a guide page includes is one the site's build writes", () => {
+    const excerpts = mkdtempSync(join(tmpdir(), "excerpts-"));
+    writeExcerpts(site, excerpts);
+    const includes = pages.flatMap(({ name: page, text }) =>
+      // A formatter may wrap an <include> across lines; Blume still splices it.
+      [...text.matchAll(/^<include[^>]*>\s*\/_excerpts\/(\S+?)\s*<\/include>$/gm)].map(
+        ([, path]) => `${page}: ${path}`,
+      ),
+    );
+    const missing = includes.filter(
+      (include) => !existsSync(join(excerpts, include.split(": ")[1]!)),
     );
 
-    expect(includes.length).toBeGreaterThan(20);
-    for (const { page, path, region } of includes) {
-      expect(exampleBlock(join(site, path), region), `${page}: ${path}#${region}`).toBeDefined();
-    }
+    expect(includes.length).toBeGreaterThan(80);
+    expect(missing).toEqual([]);
   });
 
   test("an example written inline in a page imports whatever it uses from the package", () => {
@@ -105,11 +109,8 @@ export class Comment extends ApplicationRecord {}`);
           .trim(),
       ),
     );
-    const pages = readdirSync(join(site, "guide")).filter((name) => name.endsWith(".md"));
-    const unimported = pages.flatMap((page) =>
-      [
-        ...readFileSync(join(site, "guide", page), "utf8").matchAll(/```ts[^\n]*\n([\s\S]*?)```/g),
-      ].flatMap(([, code]) =>
+    const unimported = pages.flatMap(({ name: page, text }) =>
+      [...text.matchAll(/```ts[^\n]*\n([\s\S]*?)```/g)].flatMap(([, code]) =>
         exported
           // A bare name, not a property such as `binding.batch`.
           .filter((name) => name && new RegExp(`(?<![.\\w])${name}\\b`).test(code!))

@@ -1,20 +1,18 @@
 {
   "name": "d1-record-site",
   "private": true,
-  "description": "The d1-record documentation site, deployed to docs.forestfuture.dev/d1-record.",
+  "description": "The d1-record documentation site, deployed to d1-record.forestfuture.dev.",
   "type": "module",
   "scripts": {
-    "dev": "vitepress dev",
-    "build": "vitepress build",
-    "preview": "vitepress build && wrangler dev",
-    "deploy": "vitepress build && wrangler deploy"
+    "dev": "node excerpts.ts && blume dev",
+    "build": "node excerpts.ts && blume build && blume validate --strict",
+    "preview": "vp run build && wrangler dev",
+    "deploy": "vp run build && wrangler deploy"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261006.1",
-    "@types/markdown-it-container": "4.0.1",
-    "markdown-it-container": "4.0.0",
-    "vitepress": "2.0.0-alpha.20",
-    "vitepress-plugin-llms": "1.14.0",
+    "@types/react": "19.3.0",
+    "blume": "2.2.5",
     "wrangler": "^4.147.0"
   }
 }

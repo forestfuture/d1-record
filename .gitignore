@@ -4,8 +4,8 @@ dist
 .DS_Store
 .env*
 .vitest/
-site/.vitepress/dist
-site/.vitepress/cache
+site/.blume
+site/docs/_excerpts
 .wrangler
 /llms-full.txt
 /tests/.scratch

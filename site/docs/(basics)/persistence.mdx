@@ -1,0 +1,89 @@
+---
+title: Persistence
+description: "save, create, update, and destroy, their OrThrow variants, what each returns or throws, lifecycle state, and reload."
+---
+
+Records are saved, updated, and destroyed with `save`, `create`, `update`, and `destroy`.
+
+## Saving records
+
+Save a record with `save`. It validates the record, runs its callbacks, and resolves to `true` or `false`:
+
+<include>/_excerpts/guide/persistence/save.ts</include>
+
+A new record is inserted, and a persisted one updates only the attributes that changed. `save` resolves to `false` for one of two reasons:
+
+- **Validation failed.** The reasons are in `record.errors`.
+- **A callback aborted** with [`abort()`](./callbacks#stopping-a-save). The reason is in `record.abortReason`.
+
+`create(attrs)` builds and saves a record, and resolves to it whether it saved or not. Check `isPersisted()` or `errors`. `update(attrs)` assigns, then saves.
+
+## Throwing on failure
+
+When a failure is exceptional, use the `OrThrow` version of each method:
+
+<include>/_excerpts/guide/persistence/or-throw.ts</include>
+
+Instead of returning `false`, they throw:
+
+- `RecordInvalid` when validation failed, with the record on `error.record`.
+- `RecordNotSaved` when a callback aborted a save, with the abort’s reason as its message.
+- `RecordNotDestroyed` from `destroyOrThrow()`, when a callback aborted the destroy or a `restrictWithError` association refused it.
+
+<Callout type="info" title="Compared with Rails" icon="/ruby.svg">
+
+The `OrThrow` methods are Rails’ `save!`, `create!`, `update!`, and `destroy!`.
+
+</Callout>
+
+### What each method returns
+
+| Method                                   | Resolves to                           | Throws                                                |
+| ---------------------------------------- | ------------------------------------- | ----------------------------------------------------- |
+| `save()` / `update(attrs)`               | `true` / `false`                      | constraint errors, `RecordDestroyed`                  |
+| `saveOrThrow()` / `updateOrThrow(attrs)` | `true`                                | same as above, plus `RecordInvalid`, `RecordNotSaved` |
+| `create(attrs)`                          | record, persisted or not              | constraint errors                                     |
+| `createOrThrow(attrs)`                   | persisted record                      | same as above, plus `RecordInvalid`, `RecordNotSaved` |
+| `destroy()`                              | destroyed record, or `false` on abort | constraint errors, `RecordDestroyed`                  |
+| `destroyOrThrow()`                       | destroyed record                      | same as above, plus `RecordNotDestroyed`              |
+| `find(id)`                               | record                                | `RecordNotFound`                                      |
+| `findBy(conds)`                          | record or `null`                      | none                                                  |
+| `findByOrThrow(conds)`                   | record                                | `RecordNotFound`                                      |
+
+`false` only ever means validation failed or a callback aborted. Every method throws for anything else:
+
+- **Constraint errors**, such as `RecordNotUnique`, since the database refused the write. See [Errors](./errors#constraint-errors).
+- **An error thrown by a callback**, other than `abort()`, even from an after-callback once the record is saved.
+- **D1’s own errors.**
+
+## Destroying records
+
+Destroy a record with `destroy`:
+
+<include>/_excerpts/guide/persistence/destroy.ts</include>
+
+It runs the destroy callbacks and the associations’ [`dependent` options](./associations#destroying-dependent-records), then deletes the row. A destroyed record’s attributes stay readable, but setting one, or calling `save`, `update`, `destroy`, or `reload`, throws `RecordDestroyed`.
+
+:::note
+If another request already deleted the row, `save` and `destroy` still succeed.
+:::
+
+## Checking a record’s state
+
+| State                                            | `isNewRecord()` | `isPersisted()` | `isDestroyed()` |
+| ------------------------------------------------ | --------------- | --------------- | --------------- |
+| New (from `build()`, or after a failed `create`) | `true`          | `false`         | `false`         |
+| Persisted (loaded, or after a successful save)   | `false`         | `true`          | `false`         |
+| Destroyed (after a successful `destroy()`)       | `false`         | `false`         | `true`          |
+
+## Reloading records
+
+Load a record’s row again with `reload`, discarding unsaved changes and loaded associations:
+
+<include>/_excerpts/guide/persistence/reload.ts</include>
+
+It throws `RecordNotFound` if the row is gone, or the record was never saved.
+
+## Writing many rows
+
+To insert, update, or delete many rows at once, without validations and callbacks, use `insertAll`, `upsertAll`, `updateAll`, and `deleteAll`. See [Bulk writes and batches](./batches).
