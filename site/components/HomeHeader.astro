@@ -31,14 +31,16 @@ const { route } = Astro.props;
 }
 
 <script>
-  import { startOrb } from "./orb.ts";
-
   // Blume swaps pages without reloading, so the orb starts on each arrival at the home page, once
-  // per canvas, and stops before the page is swapped out.
-  const start = () => {
+  // per canvas, and stops before the page is swapped out. Every page loads this script, so the
+  // orb's own code loads only once the home page shows.
+  const start = async () => {
     const canvas = document.querySelector<HTMLCanvasElement>("[data-home-orb] canvas:not([data-started])");
     if (!canvas) return;
     canvas.dataset.started = "";
+    const { startOrb } = await import("./orb.ts");
+    // The reader may have left the home page while the code loaded.
+    if (!canvas.isConnected) return;
     document.addEventListener("astro:before-swap", startOrb(canvas), { once: true });
   };
   start();

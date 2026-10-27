@@ -11,7 +11,7 @@ void main() { gl_Position = vec4(position, 0.0, 1.0); }
 // set of bent parallel lines, turn and drift through the ball and fade in and out, glowing teal,
 // green, or magenta. A burst at the lower right pulses and turns, and strands brighten near it;
 // the brightest light turns magenta, then white. Only the light rolls off towards white, so the
-// green body keeps its colour.
+// green body keeps its color.
 const FRAGMENT = `
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
@@ -50,7 +50,7 @@ float layers(vec2 p) {
   return sum;
 }
 
-vec3 strandColour(float i) {
+vec3 strandColor(float i) {
   float k = mod(i, 3.0);
   if (k < 0.5) return TEAL;
   if (k < 1.5) return LEAF;
@@ -67,7 +67,7 @@ vec3 strand(vec2 q, float i, float t) {
   float lane = abs(fract((dot(q, across) + bend) * 0.9 + 0.17 * i + t * 0.06) - 0.5) * 2.0;
   float line = 0.035 / (lane + 0.035) - 0.034;
   float life = 0.5 + 0.5 * sin(t * 0.55 + i * 1.7);
-  return strandColour(i) * max(line, 0.0) * life * life;
+  return strandColor(i) * max(line, 0.0) * life * life;
 }
 
 void main() {
@@ -84,16 +84,16 @@ void main() {
   vec2 warp = vec2(noise(q * 0.9 + vec2(0.3 * t, 0.0)), noise(q * 0.9 + vec2(4.1, 0.3 * t))) - 0.5;
   q += 1.1 * warp;
 
-  // The burst sits halfway from the centre to the edge, down and to the right, at time 0 (the
+  // The burst sits halfway from the center to the edge, down and to the right, at time 0 (the
   // still frame), and wanders around that point. It pulses, and its smeared glow turns.
-  vec2 centre = vec2(0.35, -0.35) + 0.12 * vec2(sin(t * 0.5), sin(t * 0.37));
-  vec2 fromCentre = p - centre;
-  float d = length(fromCentre);
+  vec2 center = vec2(0.35, -0.35) + 0.12 * vec2(sin(t * 0.5), sin(t * 0.37));
+  vec2 fromCenter = p - center;
+  float d = length(fromCenter);
   float pulse = 0.75 + 0.25 * sin(t * 1.1) * sin(t * 0.63 + 1.0);
   float tilt = -0.785 + 0.6 * sin(t * 0.3);
   vec2 along = vec2(cos(tilt), sin(tilt));
-  float a = dot(fromCentre, along);
-  float b = dot(fromCentre, vec2(-along.y, along.x));
+  float a = dot(fromCenter, along);
+  float b = dot(fromCenter, vec2(-along.y, along.x));
   float smear = exp(-(a * a * 2.5 + b * b * 35.0));
   float burst = pulse * (0.8 * exp(-d * d * 30.0) + 0.5 * smear);
   float halo = pulse * exp(-d * d * 6.0);
@@ -166,8 +166,13 @@ function prepare(gl: WebGLRenderingContext, canvas: HTMLCanvasElement) {
  */
 export function startOrb(canvas: HTMLCanvasElement): () => void {
   const gl = canvas.getContext("webgl", { alpha: true, premultipliedAlpha: true });
-  const time = gl && prepare(gl, canvas);
-  if (!gl || !time) return () => {};
+  if (!gl) return () => {};
+  const release = () => gl.getExtension("WEBGL_lose_context")?.loseContext();
+  const time = prepare(gl, canvas);
+  if (!time) {
+    release();
+    return () => {};
+  }
 
   const still = window.matchMedia("(prefers-reduced-motion: reduce)");
   let visible = true;
@@ -197,13 +202,24 @@ export function startOrb(canvas: HTMLCanvasElement): () => void {
     update();
   });
 
-  observer.observe(canvas);
-  still.addEventListener("change", update);
-  update();
-  return () => {
+  const stop = () => {
     cancelAnimationFrame(frame);
     observer.disconnect();
     still.removeEventListener("change", update);
-    gl.getExtension("WEBGL_lose_context")?.loseContext();
+  };
+  // If the browser takes the context back, the canvas goes blank: stop, and show the static logo.
+  const lost = () => {
+    stop();
+    delete canvas.dataset.drawn;
+  };
+
+  observer.observe(canvas);
+  still.addEventListener("change", update);
+  canvas.addEventListener("webglcontextlost", lost, { once: true });
+  update();
+  return () => {
+    stop();
+    canvas.removeEventListener("webglcontextlost", lost);
+    release();
   };
 }
