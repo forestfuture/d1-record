@@ -35,3 +35,15 @@ updates:
       # The types follow the Node the repo runs (.node-version), so only its minors and patches.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+
+  # The Wrangler that CI's docs-deploy job runs (#243), with a lockfile of its own and outside the
+  # workspace, so the job holding the docs token never installs the site's dependencies.
+  - package-ecosystem: npm
+    directory: /.github/docs-deploy
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      docs-deploy:
+        patterns: ["*"]

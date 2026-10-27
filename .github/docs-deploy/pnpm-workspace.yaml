@@ -1,0 +1,5 @@
+# The Wrangler that CI's docs-deploy job runs (#243). This file makes the folder a workspace of its
+# own, so the root's `vp install` never sees it and its install never reads the site's lockfile.
+# Wrangler is pinned exactly; Dependabot (.github/dependabot.yml) keeps it current.
+packages:
+  - .
