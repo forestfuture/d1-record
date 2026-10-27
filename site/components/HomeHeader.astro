@@ -22,6 +22,13 @@ const { route } = Astro.props;
           aria-hidden="true"
           class="absolute inset-0 size-full opacity-0 transition-opacity duration-300 data-[drawn]:opacity-100"
         />
+        <noscript>
+          <style is:inline>
+            [data-home-orb] > span {
+              visibility: visible !important;
+            }
+          </style>
+        </noscript>
       </div>
       <p class="font-display font-semibold text-4xl text-foreground tracking-[-0.05em] sm:text-5xl">
         {data.config.title}
@@ -33,10 +40,12 @@ const { route } = Astro.props;
 <script>
   // Blume swaps pages without reloading, so the orb starts on each arrival at the home page, once
   // per canvas, and stops before the page is swapped out. Every page loads this script, so the
-  // orb's own code loads only once the home page shows.
+  // orb's own code loads only once the home page shows, and only for readers who haven't asked
+  // for reduced motion.
+  const motion = window.matchMedia("(prefers-reduced-motion: no-preference)");
   const start = async () => {
     const canvas = document.querySelector<HTMLCanvasElement>("[data-home-orb] canvas:not([data-started])");
-    if (!canvas) return;
+    if (!canvas || !motion.matches) return;
     canvas.dataset.started = "";
     const { startOrb } = await import("./orb.ts");
     // The reader may have left the home page while the code loaded.
@@ -45,6 +54,7 @@ const { route } = Astro.props;
   };
   start();
   document.addEventListener("astro:page-load", start);
+  motion.addEventListener("change", start);
 </script>
 
 <style is:global>
@@ -52,10 +62,17 @@ const { route } = Astro.props;
     font-size: 1.875rem;
   }
 
-  /* The static logo stays under the canvas until the orb has faded in over it, and comes back at
-     once if the orb stops drawing. */
-  [data-home-orb]:has(canvas[data-drawn]) > span {
-    visibility: hidden;
-    transition: visibility 0s 300ms;
+  /* The orb fades in from transparent. The static logo shows instead for readers who ask for
+     reduced motion, where the orb can't draw, and without JavaScript (the noscript above). */
+  @media (prefers-reduced-motion: no-preference) {
+    [data-home-orb]:not(:has(canvas[data-failed])) > span {
+      visibility: hidden;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-home-orb] > canvas {
+      display: none;
+    }
   }
 </style>
