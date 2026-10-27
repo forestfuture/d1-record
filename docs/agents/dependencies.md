@@ -18,3 +18,7 @@ Dependabot is told to leave `vite-plus` and `@vitest/coverage-v8` alone, because
 2. Run `vp install`, then `vp toolchain` to read the vitest it bundles.
 3. Pin `@vitest/coverage-v8` in `package.json` to that vitest version, exactly. `vp test --coverage` refuses any other.
 4. Run `vp run validate`.
+
+## The docs deploy's Wrangler
+
+CI's `docs-deploy` job runs its own Wrangler, pinned exactly in `.github/docs-deploy/package.json`, so the job holding the docs token never installs the workspace ([cloudflare-tokens.md](cloudflare-tokens.md)). Dependabot bumps it apart from the workspace's `wrangler`. To bump it by hand, change the version there and run `pnpm install --ignore-scripts` in that folder.
