@@ -3,3 +3,7 @@
 # Wrangler is pinned exactly; Dependabot (.github/dependabot.yml) keeps it current.
 packages:
   - .
+overrides:
+  # Advisories fixed in 7.30.1, in the copy miniflare brings in. wrangler deploy bundles its own HTTP
+  # client and doesn't load it; remove once miniflare ships 7.30.1 or later.
+  "undici@>=7 <7.30.1": ^7.30.1
