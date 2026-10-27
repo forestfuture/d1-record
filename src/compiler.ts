@@ -310,9 +310,13 @@ function queryToCount(query: QueryDescription): QueryDescription {
 /**
  * `SELECT 1 …` for whether any row `query` describes exists, within its limit and offset. The
  * order is left out: it can't change whether a row exists, even past an offset (#215).
+ * `DISTINCT 1` would make the matches one row, which an offset skips, so a distinct query with
+ * an offset keeps its own select list: the rows `toArray()` reads (#222).
  */
 export function compileExists(query: QueryDescription): CompiledSql {
-  return compileSelect({ ...query, order: [] }, "1");
+  const unordered = { ...query, order: [] };
+  if (query.distinct && query.offset !== undefined) return compileSelect(unordered);
+  return compileSelect(unordered, "1");
 }
 
 /** `attr >= ?`, `attr BETWEEN ? AND ?`, …, with the values converted like the attribute's. */
