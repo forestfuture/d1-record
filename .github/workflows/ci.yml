@@ -71,9 +71,12 @@ jobs:
 
   # Deploys the guide to d1-record.forestfuture.dev (site/wrangler.jsonc) and the docs.forestfuture.dev
   # library list (site/host/wrangler.jsonc, whose page is committed, not built). It never installs the
-  # workspace: Wrangler comes from .github/docs-deploy, its own frozen lockfile, with install scripts off.
+  # workspace: Wrangler comes from .github/docs-deploy, which has a lockfile of its own, installed
+  # frozen with install scripts off.
   docs-deploy:
     needs: docs-build
+    # Repeated, so the token job never follows a wider docs-build condition.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     concurrency:
       group: docs
@@ -104,6 +107,7 @@ jobs:
           package_json_file: .github/docs-deploy/package.json
       - run: pnpm install --frozen-lockfile --ignore-scripts
         working-directory: .github/docs-deploy
+      # Wrangler runs from site/, outside that folder's workspace, so pnpm exec can't reach it there.
       - run: echo "$GITHUB_WORKSPACE/.github/docs-deploy/node_modules/.bin" >> "$GITHUB_PATH"
       - run: wrangler deploy
         working-directory: site

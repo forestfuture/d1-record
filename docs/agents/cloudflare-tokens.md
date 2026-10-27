@@ -7,6 +7,8 @@ The repository's GitHub Actions use two Cloudflare API tokens, each with only th
 | `CLOUDFLARE_API_TOKEN`      | The remote D1 smoke suite: `vp run test:remote`, and the **Remote D1 smoke** workflow (by hand) | Account → **D1** → Edit<br>Account → **Workers Scripts** → Edit                                    | The account                                       |
 | `CLOUDFLARE_DOCS_API_TOKEN` | The documentation deploy: the `docs-deploy` job in `ci.yml`, on pushes to `main`                | Account → **Workers Scripts** → Edit<br>Zone → **Workers Routes** → Edit<br>Zone → **Zone** → Read | The account, and the zone `forestfuture.dev` only |
 
+The token can replace any Worker in the account, so the job that holds it runs only a pinned Wrangler, never the site's dependencies. The `docs-build` job builds the guide with no secrets and hands the deploy job its files. The deploy job installs Wrangler from `.github/docs-deploy`, which has a lockfile of its own, with install scripts off.
+
 Both workflows also need these secrets, which aren't tokens:
 
 | GitHub secret           | Value                                                                        |
@@ -22,8 +24,6 @@ Both workflows also need these secrets, which aren't tokens:
   - Docs token: it creates and updates two Workers and uploads their files: `d1-record-docs`, the guide (`site/wrangler.jsonc`), and `forestfuture-docs`, the library list at `docs.forestfuture.dev` (`site/host/wrangler.jsonc`).
 - **Workers Routes → Edit**: attaches `d1-record.forestfuture.dev/*` to the guide's Worker and `docs.forestfuture.dev/*` to the library list's.
 - **Zone → Read**: the route names its zone by name (`forestfuture.dev`), and Wrangler looks up the zone's ID.
-
-The token can replace any Worker in the account, so the job that holds it runs only a pinned Wrangler, never the site's dependencies. The `docs-build` job builds the guide with no secrets and hands the deploy job its files. The deploy job installs Wrangler from `.github/docs-deploy`, a lockfile of its own, with install scripts off.
 
 **User → User Details → Read** isn't needed. Wrangler only prints a warning without it, and leaving it out gives Wrangler less to print when something fails. Actions logs are readable by anyone who can see the repository.
 
