@@ -116,3 +116,27 @@ describe("an order that can't change the answer isn't sent (#215)", () => {
     expect((await third.limit(1).toArray()).map((post) => post.id)).toEqual([3]);
   });
 });
+
+describe("exists() with distinct() and an offset reads the rows toArray() would (#222)", () => {
+  let binding: TestDatabase;
+  let dispose: () => Promise<void>;
+  const posts = () => connect(binding).model(Post);
+
+  beforeAll(async () => {
+    ({ db: binding, dispose } = await createTestDatabase());
+    await binding.batch([
+      binding.prepare("INSERT INTO users (id, email) VALUES (1, 'a@example.com')"),
+      binding.prepare(
+        "INSERT INTO posts (id, user_id, title) VALUES (1, 1, 'A'), (2, 1, 'B'), (3, 1, 'B')",
+      ),
+    ]);
+  });
+  afterAll(() => dispose());
+
+  test("a distinct select past an offset finds the distinct rows left", async () => {
+    const titles = posts().select("title").distinct().offset(1);
+
+    expect(await titles.exists()).toBe(true);
+    expect([await titles.isEmpty(), await titles.hasAny()]).toEqual([false, true]);
+  });
+});
