@@ -1,5 +1,24 @@
 # @forestfuture/d1-record
 
+## 0.5.0
+
+### Minor Changes
+
+- [#234](https://github.com/forestfuture/d1-record/pull/234) [`26d65f1`](https://github.com/forestfuture/d1-record/commit/26d65f1c951838ae54488bd7192edc910bbba28a) Thanks [@christopherstyles](https://github.com/christopherstyles)! - A Model now extends your app’s base class with nothing on the `extends` line: `class Post extends ApplicationRecord {}`. Its table comes from its class name, or `static override table = "…"`, and its attributes from the generated schema. `ApplicationRecord` is an abstract class extending `Model` that holds the schema, and `record instanceof ApplicationRecord` is true.
+
+  - `d1-record schema` now loads your Model files too, as the console does, so code at a Model file’s top level runs when it does. Run it after adding or renaming a Model. A Model it hasn’t seen throws `InvalidModel`, and its statics are a compile error. `--check` and `--watch` cover Models.
+  - Overrides move into the class: `static override attributes = { available: "boolean" } as const`. `declare status: "draft" | "published"` narrows an attribute’s type.
+  - `static abstract = true` marks a class between `ApplicationRecord` and some Models that shares their behavior.
+  - Breaking: `modelFor`, `ApplicationRecord("table")`, `Model.Base` (use `Model`), `static binding` (the binding is in the generated schema), and `static tableName` (use `static table`) are gone. `Model({...})` is now `Model.define({...})`, and `ApplicationRecord.define({...})` builds on your base class. Regenerate the schema, and replace `application-record.ts` with the new template.
+
+### Patch Changes
+
+- [#244](https://github.com/forestfuture/d1-record/pull/244) [`3840ccb`](https://github.com/forestfuture/d1-record/commit/3840ccbd7118bd5723bbc825a43c4431615c91db) Thanks [@christopherstyles](https://github.com/christopherstyles)! - The guide moves to [d1-record.forestfuture.dev](https://d1-record.forestfuture.dev), with each page at the top level (`/models`, `/querying`), and the pages under `docs.forestfuture.dev/d1-record` are gone. The `llms-full.txt` the package ships is now written by the new site: each page starts with its title and source URL, and links between pages are written from the site's root (`/models`).
+
+- [#230](https://github.com/forestfuture/d1-record/pull/230) [`f57ac32`](https://github.com/forestfuture/d1-record/commit/f57ac325a41bb72602410f3a1feac56fc74ab6b4) Thanks [@christopherstyles](https://github.com/christopherstyles)! - `includes()` sends the whole tree with the records' own query, in one round trip, however deep: each association's query finds its owners' keys with a subquery, not with keys bound after the level above comes back. `includes({ posts: "comments" })` was three round trips and is now one, and every level reads the same data. With a `limit` or `offset`, a query with `includes` now ends its order with the primary key, so its preloads find the records it loads. So `take()` and a `limit()` with no order now come back in primary-key order. Each preload runs the query's conditions again, and its order with a `limit` or `offset`, so index what a query with `includes` filters and sorts by. A nested query that would bind more than D1's 100 values takes one more round trip. `paginate()` sends its count, its page and the page's preloads in one batch.
+
+- [#238](https://github.com/forestfuture/d1-record/pull/238) [`d71d63c`](https://github.com/forestfuture/d1-record/commit/d71d63c58d198cb5119dd81b66d74813b37f3464) Thanks [@christopherstyles](https://github.com/christopherstyles)! - `withSession` now answers a request whose bookmark D1 can’t use, such as a forged cookie. D1 rejects that bookmark on the Session’s first statement. The Session then starts again from `start`, the statement is sent again, and the response gets a fresh bookmark. Before, every request carrying the bookmark failed until the cookie changed. A bookmark given to `connect(env.DB, { session })` still throws. In D1’s error, a long bookmark is cut short.
+
 ## 0.4.1
 
 ### Patch Changes
