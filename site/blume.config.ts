@@ -7,7 +7,7 @@ export default defineConfig({
   lastModified: "git",
   // Blume's own header shows it on the 404 page; components/HeaderLogo.astro replaces that header
   // logo everywhere else.
-  logo: "/logo.svg",
+  logo: "/icon.svg",
   // Cloudflare Web Analytics counts page views, turned on for the zone in the dashboard. Adding
   // Blume's cloudflare() adapter as well would count each view twice. It has no event API, so the
   // page rating stays off until its votes have somewhere to go.
