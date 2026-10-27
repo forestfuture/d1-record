@@ -1,6 +1,5 @@
-// The home page's orb: a forest-green ball of moving light, drawn with WebGL over the
-// static logo. Where WebGL is missing the static logo stays, and for readers who ask for reduced
-// motion the orb holds one still frame.
+// The home page's orb: a forest-green ball of moving light, drawn with WebGL. Where it can't
+// draw, the canvas is marked `data-failed` and the static logo shows instead.
 
 const VERTEX = `
 attribute vec2 position;
@@ -85,7 +84,7 @@ void main() {
   q += 1.1 * warp;
 
   // The burst sits halfway from the center to the edge, down and to the right, at time 0 (the
-  // still frame), and wanders around that point. It pulses, and its smeared glow turns.
+  // first frame), and wanders around that point. It pulses, and its smeared glow turns.
   vec2 center = vec2(0.35, -0.35) + 0.12 * vec2(sin(t * 0.5), sin(t * 0.37));
   vec2 fromCenter = p - center;
   float d = length(fromCenter);
@@ -117,10 +116,6 @@ void main() {
   gl_FragColor = vec4(min(color, 1.0) * coverage, coverage);
 }
 `;
-
-/** The moment the still frame shows, and the animation starts from, in seconds. At 0 the burst
- * sits exactly at its point in the shader. */
-const START = 0;
 
 function compile(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {
   const shader = gl.createShader(type);
@@ -160,19 +155,34 @@ function prepare(gl: WebGLRenderingContext, canvas: HTMLCanvasElement) {
   return gl.getUniformLocation(program, "time");
 }
 
+function fail(canvas: HTMLCanvasElement) {
+  delete canvas.dataset.drawn;
+  canvas.dataset.failed = "";
+}
+
+function release(gl: WebGLRenderingContext) {
+  gl.getExtension("WEBGL_lose_context")?.loseContext();
+}
+
+/** The orb's WebGL context and time uniform on `canvas`, or null with the canvas marked failed. */
+function open(canvas: HTMLCanvasElement) {
+  const gl = canvas.getContext("webgl", { alpha: true, premultipliedAlpha: true });
+  const time = gl && prepare(gl, canvas);
+  if (gl && time) return { gl, time };
+  if (gl) release(gl);
+  fail(canvas);
+  return null;
+}
+
 /**
- * Draws the orb on `canvas`, animated while it's on screen, and marks the canvas `data-drawn`
- * once a frame shows. Returns a function that stops it and frees the WebGL context.
+ * Animates the orb on `canvas` while it's on screen and the reader hasn't asked for reduced
+ * motion, and marks the canvas `data-drawn` once a frame shows, or `data-failed` if it can't
+ * draw. Returns a function that stops it and frees the WebGL context.
  */
 export function startOrb(canvas: HTMLCanvasElement): () => void {
-  const gl = canvas.getContext("webgl", { alpha: true, premultipliedAlpha: true });
-  if (!gl) return () => {};
-  const release = () => gl.getExtension("WEBGL_lose_context")?.loseContext();
-  const time = prepare(gl, canvas);
-  if (!time) {
-    release();
-    return () => {};
-  }
+  const orb = open(canvas);
+  if (!orb) return () => {};
+  const { gl, time } = orb;
 
   const still = window.matchMedia("(prefers-reduced-motion: reduce)");
   let visible = true;
@@ -188,14 +198,13 @@ export function startOrb(canvas: HTMLCanvasElement): () => void {
   const loop = (now: number) => {
     elapsed += last ? now - last : 0;
     last = now;
-    draw(START + elapsed / 1000);
+    draw(elapsed / 1000);
     frame = requestAnimationFrame(loop);
   };
   const update = () => {
     cancelAnimationFrame(frame);
     last = 0;
-    if (still.matches) draw(START);
-    else if (visible) frame = requestAnimationFrame(loop);
+    if (visible && !still.matches) frame = requestAnimationFrame(loop);
   };
   const observer = new IntersectionObserver(([entry]) => {
     visible = entry?.isIntersecting ?? true;
@@ -210,7 +219,7 @@ export function startOrb(canvas: HTMLCanvasElement): () => void {
   // If the browser takes the context back, the canvas goes blank: stop, and show the static logo.
   const lost = () => {
     stop();
-    delete canvas.dataset.drawn;
+    fail(canvas);
   };
 
   observer.observe(canvas);
@@ -220,6 +229,6 @@ export function startOrb(canvas: HTMLCanvasElement): () => void {
   return () => {
     stop();
     canvas.removeEventListener("webglcontextlost", lost);
-    release();
+    release(gl);
   };
 }
