@@ -21,6 +21,6 @@ Dependabot is told to leave `vite-plus` and `@vitest/coverage-v8` alone, because
 
 ## Bumping the docs deploy's Wrangler
 
-CI's `docs-deploy` job runs its own Wrangler, pinned exactly in `.github/docs-deploy/package.json`, so the job holding the docs token never installs the workspace ([cloudflare-tokens.md](cloudflare-tokens.md)). Dependabot bumps it apart from the workspace's `wrangler`. To bump it by hand, change the version there and run `pnpm install --ignore-scripts` in that folder. The `check` job dry-runs both docs deploys with it, so a pull request that breaks it fails there, before it reaches `main`.
+CI's `docs-deploy` job runs its own Wrangler, pinned exactly in `.github/docs-deploy/package.json`, so the job holding the docs token never installs the workspace ([cloudflare-tokens.md](cloudflare-tokens.md)). Dependabot bumps it apart from the workspace's `wrangler`. To bump it by hand, change the version there and run `pnpm install --ignore-scripts` in that folder. The `check` job dry-runs both docs deploys with it, so a pull request that breaks that Wrangler fails `check` before it reaches `main`.
 
 That folder also names pnpm's version in its `devEngines`, so a pnpm bump changes it there as well as in the root `package.json`.
