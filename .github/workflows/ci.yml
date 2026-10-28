@@ -27,6 +27,15 @@ jobs:
       - run: vp run docs:build
       # The tarball holds exactly the library, its docs for agents (llms-full.txt, skills/d1-record/SKILL.md) and metadata.
       - run: vp run check:package
+      # docs-deploy's own Wrangler, installed as that job installs it, deploys the site built above
+      # without uploading it, so a bump of .github/docs-deploy that breaks the deploy fails here and
+      # not on main. A dry run needs no token (#253).
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+        working-directory: .github/docs-deploy
+      - run: ../.github/docs-deploy/node_modules/.bin/wrangler deploy --dry-run
+        working-directory: site
+      - run: ../.github/docs-deploy/node_modules/.bin/wrangler deploy --dry-run --config host/wrangler.jsonc
+        working-directory: site
 
   # Packs the library as release-pack does (#80): dependencies installed without their install
   # scripts or the shared cache. A release that couldn't be built that way fails here first.
