@@ -136,13 +136,13 @@ describe("exists() with distinct() and an offset reads the rows toArray() would 
   afterAll(() => dispose());
 
   test("a distinct select past an offset finds the distinct rows left", async () => {
-    const titles = posts().select("title").distinct().offset(1);
+    const pastFirst = titles().distinct().offset(1);
 
-    expect(await titles.exists()).toBe(true);
-    expect([await titles.isEmpty(), await titles.hasAny()]).toEqual([false, true]);
+    expect(await pastFirst.exists()).toBe(true);
+    expect([await pastFirst.isEmpty(), await pastFirst.hasAny()]).toEqual([false, true]);
   });
 
-  test("distinct() without a select counts whole rows, which are all distinct", async () => {
+  test("distinct() without a select treats whole rows as distinct", async () => {
     expect(await posts().distinct().offset(1).exists()).toBe(true);
     expect(await posts().distinct().offset(3).exists()).toBe(false);
   });
@@ -152,7 +152,7 @@ describe("exists() with distinct() and an offset reads the rows toArray() would 
     expect(await titles().distinct().offset(2).isEmpty()).toBe(true);
   });
 
-  test("with a limit and an offset, it agrees with toArray()", async () => {
+  test("with a limit and an offset, it finds the distinct row left, and none past it", async () => {
     expect(await titles().distinct().limit(1).offset(1).exists()).toBe(true);
     expect(await titles().distinct().limit(5).offset(2).exists()).toBe(false);
   });
@@ -165,6 +165,8 @@ describe("exists() with distinct() and an offset reads the rows toArray() would 
     expect(await pastFirst.exists({ title: ["A", "B"] })).toBe(true);
   });
 
+  // SQL text, though not a safety property: #222 asks that every other Relation's exists() send
+  // the same SQL as before, and the rows D1 reads can't tell the two queries apart.
   test("without both distinct() and an offset, it still sends SELECT 1", async () => {
     events.length = 0;
     await titles().offset(1).exists();

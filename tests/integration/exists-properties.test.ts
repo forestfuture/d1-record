@@ -19,8 +19,10 @@ const POSTS = [
 
 const selections = [undefined, ["title"], ["published"], ["title", "published"]] as const;
 const conditions = [undefined, { published: true }, { title: "B" }, { title: ["A", "C"] }] as const;
+const orders = [undefined, { title: "asc" }, { id: "desc" }] as const;
 
-// exists() is a cheaper toArray().length > 0: whatever the Relation, they agree (#222).
+// exists() is a cheaper toArray().length > 0: whatever the Relation, its order included, they
+// agree (#222).
 describe("exists(), for any Relation", { timeout: SLOW_TIMEOUT }, () => {
   let binding: TestDatabase;
   let dispose: () => Promise<void>;
@@ -43,17 +45,19 @@ describe("exists(), for any Relation", { timeout: SLOW_TIMEOUT }, () => {
     select: fc.constantFrom(...selections),
     distinct: fc.boolean(),
     where: fc.constantFrom(...conditions),
+    order: fc.constantFrom(...orders),
     limit: fc.option(fc.nat({ max: 10 }), { nil: undefined }),
     offset: fc.option(fc.nat({ max: 10 }), { nil: undefined }),
   });
 
   test("is whether toArray() returns any record", async () => {
     await fc.assert(
-      fc.asyncProperty(relations, async ({ select, distinct, where, limit, offset }) => {
+      fc.asyncProperty(relations, async ({ select, distinct, where, order, limit, offset }) => {
         let relation = posts();
         if (select !== undefined) relation = relation.select(...select);
         if (distinct) relation = relation.distinct();
         if (where !== undefined) relation = relation.where(where);
+        if (order !== undefined) relation = relation.order(order);
         if (limit !== undefined) relation = relation.limit(limit);
         if (offset !== undefined) relation = relation.offset(offset);
 
