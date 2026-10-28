@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-vp
       - run: vp check
       # Every test, and branch coverage of the library and command line above its floor
@@ -27,6 +29,17 @@ jobs:
       - run: vp run docs:build
       # The tarball holds exactly the library, its docs for agents (llms-full.txt, skills/d1-record/SKILL.md) and metadata.
       - run: vp run check:package
+      # docs-deploy's own Wrangler, installed frozen with install scripts off, checks the site built
+      # above as a deploy would, without uploading it or needing a token. So a bump of
+      # .github/docs-deploy that breaks it fails here, not on main (#253).
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+        working-directory: .github/docs-deploy
+      # Wrangler runs from site/, outside that folder's workspace, so pnpm exec can't reach it there.
+      - run: echo "$GITHUB_WORKSPACE/.github/docs-deploy/node_modules/.bin" >> "$GITHUB_PATH"
+      - run: wrangler deploy --dry-run
+        working-directory: site
+      - run: wrangler deploy --dry-run --config host/wrangler.jsonc
+        working-directory: site
 
   # Packs the library as release-pack does (#80): dependencies installed without their install
   # scripts or the shared cache. A release that couldn't be built that way fails here first.
