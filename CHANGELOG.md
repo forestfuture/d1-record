@@ -1,5 +1,13 @@
 # @forestfuture/d1-record
 
+## 0.5.1
+
+### Patch Changes
+
+- [#252](https://github.com/forestfuture/d1-record/pull/252) [`ebf0bf7`](https://github.com/forestfuture/d1-record/commit/ebf0bf72c3a9d8e4bde28ea6a0ad58cdefcf68cd) Thanks [@christopherstyles](https://github.com/christopherstyles)! - `exists()`, `isEmpty()` and `hasAny()` now give the right answer after `distinct()` with an offset. `Post.select("title").distinct().offset(1).exists()` was `false` even when `toArray()` returned records, because every match counted as one row and the offset skipped it.
+
+- [#257](https://github.com/forestfuture/d1-record/pull/257) [`2163b15`](https://github.com/forestfuture/d1-record/commit/2163b154383e24f43581d6639f32cad88d0933ed) Thanks [@christopherstyles](https://github.com/christopherstyles)! - The agent skill no longer sends agents to web pages. They read only the `llms-full.txt` shipped in the package, which matches the installed version.
+
 ## 0.5.0
 
 ### Minor Changes
