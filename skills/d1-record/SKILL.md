@@ -9,7 +9,7 @@ description: d1-record (`@forestfuture/d1-record`), a Rails-style Active Record 
 
 <!-- #region rules -->
 
-d1-record (`@forestfuture/d1-record`) is a Rails-style Active Record for Cloudflare D1. Its guide for the installed version is `node_modules/@forestfuture/d1-record/llms-full.txt`: read the part for the task before writing code with it.
+d1-record (`@forestfuture/d1-record`) is a Rails-style Active Record for Cloudflare D1. Its guide for the installed version is `node_modules/@forestfuture/d1-record/llms-full.txt`, one Markdown file with a `#` heading per page: read the part for the task before writing code with it.
 
 - Create tables with the generators, never by hand-declaring attributes: `npx d1-record g model Post user:references 'title:string!'` writes the migration and the Model; `npx d1-record g migration AddSlugToPosts slug:string:unique` writes a change. Apply them with `npx wrangler d1 migrations apply <db> --local`. After a hand-written migration, run `npx d1-record schema`. Never edit the generated `src/db/schema.ts`.
 - A Model extends the app's base class: `class Post extends ApplicationRecord {}`. Its table comes from its class name (`Post` → `posts`), or `static override table = "…"`, and its attributes from the schema, so it declares only behavior. Run `npx d1-record schema` after adding or renaming a Model, as after a migration: a Model it hasn't seen throws `InvalidModel`. Change how a column is read with an override in the class, `static override attributes = { metadata: "json" } as const`, never by editing the schema. An `INTEGER` holding a Unix time (Drizzle's `timestamp` modes) is `{ type: "datetime", storage: "unixSeconds" }` or `"unixMilliseconds"`. A cell that isn't its attribute's type (a number in an ISO `datetime`, text in an `integer`) fails the load with a `TypeError` naming the attribute: correct the override, don't catch it.
@@ -26,10 +26,6 @@ d1-record (`@forestfuture/d1-record`) is a Rails-style Active Record for Cloudfl
 - Check what writes return. `save()` and `update()` resolve to `false` when validation fails (reasons in `record.errors`) or a callback aborts (`record.abortReason`). `destroy()` resolves to `false` when a callback aborts, or a `restrictWithError` association refuses (reason in `record.errors`). The `…OrThrow` methods throw instead. Constraint errors, such as `RecordNotUnique`, always throw.
 
 <!-- #endregion rules -->
-
-## More in the guide
-
-The installed package's `llms-full.txt` is one Markdown file, a `#` heading per page. For the latest release instead, https://d1-record.forestfuture.dev/llms.txt lists every page as Markdown, with what each covers. A behavior neither covers is specified in `docs/contract.md` at https://github.com/forestfuture/d1-record.
 
 ## Shapes to follow
 
