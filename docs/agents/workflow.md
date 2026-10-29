@@ -1,6 +1,6 @@
 # Working on an issue
 
-The process every issue in this repo follows, whoever or whatever picks it up. It has two **human checkpoints**. At both, the agent stops and waits, and never assumes approval.
+The process every issue in this repo follows, whoever or whatever picks it up. It has two **human checkpoints**: agreeing the seams before any test (step 2), and merging the pull request (step 5). At both, the agent stops and waits, and never assumes approval. Between them the agent works on its own: it acts on the review findings that survive verification, and opens the pull request itself.
 
 The skills named below are in `.claude/skills/`. Claude Code loads them automatically. Other agents should read the named `SKILL.md` and follow it.
 
@@ -58,22 +58,70 @@ Rules that matter here:
 
 ## 4. Review
 
-Run the `code-review` skill, with `main` (the branch's merge-base) as the fixed point and the issue as the spec. The standards sources are `CONTRIBUTING.md`, `CODING_STANDARDS.md` and [docs-voice.md](docs-voice.md). Commits from before the pull-request flow sit inside older ranges, so for those, give both reviewers the issue's own commits (`git log --grep='(#N)'`) and tell them to ignore the rest. Present the Standards and Spec reports to the human, with a proposed fix for each finding. Fix what the human approves, each fix as its own red → green slice (or as a refactor, with tests staying green). Findings deferred on purpose go into issues or comments, not into silence.
+Run the `code-review` skill, with `main` (the branch's merge-base) as the fixed point and the issue as the spec. The standards sources are `CONTRIBUTING.md`, `CODING_STANDARDS.md` and [docs-voice.md](docs-voice.md). Commits from before the pull-request flow sit inside older ranges, so for those, give both reviewers the issue's own commits (`git log --grep='(#N)'`) and tell them to ignore the rest.
 
-**Security.** When the change touches SQL compilation, attribute assignment or conversion, code generation or file writing in the CLI, or CI and release, also run the `differential-review` skill over the same range, and present its findings as a third report. Write its report file outside the repo. The whole library gets a `security-review` before each release that changes those areas; each one adds a dated entry to the guide's Security page.
+**Security.** When the change touches SQL compilation, attribute assignment or conversion, code generation or file writing in the CLI, or CI and release, also run the `differential-review` skill over the same range, as a third report. Write its report file outside the repo. The whole library gets a `security-review` before each release that changes those areas; each one adds a dated entry to the guide's Security page.
+
+### Verify each finding
+
+Hand every finding from every report to one fresh-context sub-agent, with the diff command, the issue, and the standards sources. Its job is to refute each finding: read the code at the cited file and line, and return **real**, **not real** or **unsure**, with the evidence. Then tag each finding:
+
+- **Important**: a real defect, spec gap or standards breach in code this branch changed. Fix it.
+- **Nit**: real, small and cheap. Fix it.
+- **Pre-existing**: real, in code this branch didn't change. Open a `deferred` issue and leave the code alone.
+- **Rejected**: refuted, or already enforced by tooling. Drop it, with a one-line reason.
+
+Fix each finding as its own red → green slice (or as a refactor, with tests staying green), one commit per fix, so the pull request shows each fix by itself.
+
+### Escalate decisions
+
+Stop and ask the human, with a recommendation in the `grilling` skill's format, only for a finding that:
+
+- changes a public name, `docs/contract.md` or an ADR;
+- moves scope to or from another issue;
+- is a high- or critical-severity security finding;
+- the verifier marks **unsure**, or whose fix has more than one reasonable answer.
+
+Act on every other finding without asking, and keep working while an escalated one waits.
+
+### Converge
+
+After the fixes, review once more, over the fix commits only (`git diff <last-commit-before-fixes>..HEAD`), and verify any new findings the same way. Two rounds is the cap: a finding still open after the second round goes to the human, as a sign the approach needs rethinking. A finding already handled isn't raised again.
+
+Keep a **findings log** as you go: each finding, its tag, and its outcome (the fixing commit, the rejection reason, or the deferred issue). It becomes the pull request's Review section.
+
+### Turn repeats into checks
+
+A **mechanical** finding (a fixed pattern, a banned API, an import shape, a file location) is a **check candidate**: a lint rule or test could catch it every time, as the `retro` skill classifies them. List check candidates in the Review section. When one already appears in an earlier merged pull request (`gh pr list --state merged --search "<keyword> in:body"`), it has repeated, so open a `ready-for-agent` issue to build the check. A repeated judgement call becomes a line in `CODING_STANDARDS.md` instead.
 
 ## 5. Finish — ✋ human checkpoint
 
 - Full validation: `vp run validate` runs these in CI's order and prints one line per step (the failing step's output after it): `vp check`, `vp run coverage` (`vp test` with a branch-coverage floor, set in `vite.config.ts`), `vp pack` (with attw and publint), `vp run check:public-types` (after `vp pack`: the published types expose no internals; mark internals `/** @internal */`), `vp run knip`, `vp run docs:build` (`blume build`, then `blume validate --strict`: no dead links or broken anchors), `vp run check:package`. After a merge to `main`, CI deploys the site once the checks pass (the Cloudflare tokens it uses are in [cloudflare-tokens.md](cloudflare-tokens.md)).
-- **Never push or merge without the human's approval.** Pushing over SSH may need the human to unlock their key. If a push fails with `agent refused operation`, ask them to run `git push` themselves.
-- Push the branch and open a pull request that says `Closes #<issue>`, with its body written by the `pr` skill. `main` allows a pull request only, merged by rebase once `check` passes.
+- Once validation passes and no escalated finding is waiting, push the branch and open the pull request yourself. Push with an explicit refspec, `git push -u origin <branch>:<branch>`, so a branch that tracks `origin/main` can't push to `main`. If a push fails with `agent refused operation`, the human's SSH key is locked: ask them to run `git push`.
+- The pull request says `Closes #<issue>`, and its body is written by the `pr` skill, with a Review section after Evidence, built from the findings log:
+
+  ```markdown
+  ## Review
+
+  <N> findings: <n> fixed, <n> rejected, <n> deferred. (Or: "No findings.")
+
+  | Finding                         | Tag             | Outcome             |
+  | ------------------------------- | --------------- | ------------------- |
+  | `<file>:<line>` <what is wrong> | Important / Nit | Fixed in <sha>      |
+  | `<file>:<line>` <what is wrong> | Rejected        | <why it isn't real> |
+  | `<file>:<line>` <what is wrong> | Pre-existing    | #<deferred issue>   |
+
+  **Check candidates:** <mechanical findings a lint rule or test could catch, or "none">
+  ```
+
+- **Merging is the human's.** Wait for their go-ahead; `main` takes a pull request only, merged by rebase once `check` passes.
 - After the merge, wait for CI on `main` to pass (`gh run watch`), then close the issue with a summary comment (if `Closes` didn't): what was delivered, the decisions made (link any `deferred` issues), and what the review found and fixed.
-- The human may then run `/retro` on the session. It suggests changes to the agent's environment (checks, standards, steering files), not to the code.
+- The human may then run `/retro` on the session. It suggests changes to the agent's environment (checks, standards, steering files), not to the code. The Review section's check candidates are its first leads.
 
 ## Shortcuts
 
-The `implement` skill chains steps 3–4 (`tdd`, then `code-review`). This document adds the repo-specific parts around it: the checkpoints, the D1 seam, the contract, and closing the issue.
+The `implement` skill chains steps 3–4 (`tdd`, then `code-review`). This document adds the repo-specific parts around it: the checkpoints, the D1 seam, the contract, verifying the findings, and closing the issue.
 
-For a parent issue with sub-issues, the human can run `/implement-spec` instead. It builds the sub-issues in parallel worktrees and merges them onto one integration branch. Agree the seams and open decisions for each sub-issue first (step 2), and treat opening and merging the pull request from the integration branch like a push: only with the human's approval.
+For a parent issue with sub-issues, the human can run `/implement-spec` instead. It builds the sub-issues in parallel worktrees and merges them onto one integration branch. Agree the seams and open decisions for each sub-issue first (step 2). Review the integration branch as in step 4, open its pull request as in step 5, and leave the merge to the human.
 
 To turn a discussion into an issue, the human can run `/to-spec`. It writes a spec from what the conversation has already settled, checks the test seams with the human, and opens it as a `ready-for-agent` issue.
