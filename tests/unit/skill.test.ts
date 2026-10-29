@@ -37,6 +37,12 @@ describe("the agent skill (skills/d1-record/SKILL.md)", () => {
     expect(existsSync(new URL("../../SKILL.md", import.meta.url))).toBe(false);
   });
 
+  // skills.sh's Snyk audit flags a skill that sends the agent to a web page as a prompt injection
+  // risk (#256).
+  test("has no links to web pages", () => {
+    expect(read(skillPath)).not.toMatch(/https?:\/\//);
+  });
+
   test("is named for its directory", () => {
     expect(read(skillPath)).toMatch(/^---\nname: d1-record\n/);
   });
